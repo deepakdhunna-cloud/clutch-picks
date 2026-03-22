@@ -1,0 +1,41 @@
+{
+  "cli": {
+    "version": "18.4.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY": "appl_ttiiqmHPmKTuvfALCxMccyWRjcE",
+        "EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY": "goog_qpsKxRjYMoggqPCnnJBukFkeFbq",
+        "EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY": "test_ySGTdedRmOLfYFyuTHWENpeZmiX",
+        "EXPO_PUBLIC_BACKEND_URL": "https://plush-helm.vibecode.run",
+        "EXPO_PUBLIC_VIBECODE_BACKEND_URL": "https://plush-helm.vibecode.run",
+        "BACKEND_URL": "https://plush-helm.vibecode.run",
+        "EXPO_PUBLIC_EXAMPLE_ENV_VAR": "test"
+      },
+      "ios": {
+        "distribution": "store"
+      },
+      "android": {
+        "distribution": "store"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6759183746"
+      }
+    }
+  }
+}
