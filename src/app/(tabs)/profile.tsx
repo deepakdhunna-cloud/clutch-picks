@@ -17,7 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSession } from '@/lib/auth/use-session';
 import { useUserStats, useUserPicks } from '@/hooks/usePicks';
-import { useSocialStats } from '@/hooks/useSocial';
+
 import { useGames } from '@/hooks/useGames';
 import { api } from '@/lib/api/api';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
@@ -46,9 +46,9 @@ interface Rarity {
 
 function getRarity(winRate: number): Rarity {
   if (winRate >= 75) return {
-    tier: 'GOAT', color: '#D4B896', colorDim: '#A8906E',
-    gradColors: ['#D4B896', '#8A7050', '#D4B896', '#A89070', '#D4B896'],
-    innerBg: '#0E0D0B', glowColor: 'rgba(212,184,150,0.18)',
+    tier: 'GOAT', color: '#E8936A', colorDim: '#C4785A',
+    gradColors: ['#E8936A', '#7A9DB8', '#E8936A', '#7A9DB8', '#E8936A'],
+    innerBg: '#0C0808', glowColor: 'rgba(232,147,106,0.22)',
   };
   if (winRate >= 65) return {
     tier: 'MVP', color: '#E8936A', colorDim: '#C4785A',
@@ -167,9 +167,9 @@ function HexMeshBackground() {
             <Path
               key={hIdx}
               d={hexPath(cx, cy, r - 1)}
-              fill="rgba(255,255,255,0.015)"
-              stroke="rgba(255,255,255,0.06)"
-              strokeWidth={0.5}
+              fill="rgba(14,18,28,0.5)"
+              stroke="rgba(40,55,80,0.35)"
+              strokeWidth={0.7}
             />
           ))}
         </Svg>
@@ -285,7 +285,7 @@ function GradingSlab({
   return (
     <View style={slabStyles.slabOuter}>
       <LinearGradient
-        colors={['#2C2E34', '#22242A', '#2C2E34']}
+        colors={['transparent', `${BG}90`, BG, BG, `${BG}90`, 'transparent']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -321,8 +321,6 @@ const slabStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   slabHeader: {
@@ -383,6 +381,7 @@ const cardStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    backgroundColor: 'transparent',
   },
   tierBadgePhoto: {
     position: 'absolute',
@@ -624,7 +623,7 @@ export default function ProfileScreen() {
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useUserStats();
   const { data: picks } = useUserPicks();
-  const { data: socialStats } = useSocialStats(userId);
+  const socialStats = { followersCount: 0, followingCount: 0 };
   const { data: allGames } = useGames();
 
   useFocusEffect(
@@ -732,18 +731,13 @@ export default function ProfileScreen() {
           <Text style={[cardStyles.tierBadgeText, { color: rarity.color }]}>{rarity.tier}</Text>
         </View>
         {/* Avatar */}
-        <View style={[cardStyles.avatarContainer, { borderColor: `${rarity.color}40` }]}>
+        <View style={[cardStyles.avatarContainer, { borderColor: rarity.color }]}>
           {userImage ? (
             <Image source={{ uri: userImage }} style={cardStyles.avatarImage} />
           ) : (
-            <LinearGradient
-              colors={[`${rarity.color}30`, `${rarity.colorDim}15`]}
-              style={cardStyles.avatarFallbackNew}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
+            <View style={[cardStyles.avatarFallbackNew, { backgroundColor: '#0A0A0E' }]}>
               <Text style={[cardStyles.avatarInitial, { color: rarity.color }]}>{initial}</Text>
-            </LinearGradient>
+            </View>
           )}
         </View>
       </View>
@@ -796,18 +790,17 @@ export default function ProfileScreen() {
     <>
       <View style={s.backHeader}>
         <Text style={[s.backTitle, { color: `${rarity.color}90` }]}>CAREER STATS</Text>
-        <Text style={s.cardNum}>CLUTCH PICKS</Text>
       </View>
 
       {/* Sport breakdown */}
       <View style={{ gap: 6, paddingHorizontal: 16, marginTop: 6 }}>
         {sportBreakdown.length > 0 ? sportBreakdown.map((sr) => (
           <View key={sr.sport} style={s.sportRow}>
-            <Text style={[s.sportName, { color: `${rarity.color}90` }]}>{sr.sport}</Text>
+            <Text style={[s.sportName, { color: 'rgba(255,255,255,0.5)' }]}>{sr.sport}</Text>
             <View style={s.sportTrack}>
-              <View style={[s.sportFill, { width: `${sr.rate}%`, backgroundColor: sr.rate >= 60 ? `${TEAL}80` : sr.rate >= 50 ? `${TEAL}50` : `${CORAL}80` }]} />
+              <View style={[s.sportFill, { width: `${sr.rate}%`, backgroundColor: sr.rate >= 60 ? `${TEAL}80` : sr.rate >= 50 ? `${TEAL}50` : 'rgba(255,255,255,0.15)' }]} />
             </View>
-            <Text style={[s.sportRate, { color: sr.rate >= 60 ? `${TEAL}CC` : sr.rate >= 50 ? 'rgba(255,255,255,0.6)' : `${CORAL}CC` }]}>{sr.rate}%</Text>
+            <Text style={[s.sportRate, { color: sr.rate >= 60 ? `${TEAL}CC` : sr.rate >= 50 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)' }]}>{sr.rate}%</Text>
             <Text style={s.sportWins}>{sr.wins}W</Text>
           </View>
         )) : (
@@ -826,12 +819,12 @@ export default function ProfileScreen() {
             const isLoss = p.result === 'loss';
             const rc = isWin ? `${TEAL}CC` : isLoss ? `${CORAL}AA` : 'rgba(255,255,255,0.2)';
             return (
-              <View key={p.id} style={[s.backPick, { borderLeftColor: rc }]}>
+              <View key={p.id} style={s.backPick}>
                 <Text style={[s.backPickR, { color: rc }]}>{isWin ? 'W' : isLoss ? 'L' : '·'}</Text>
                 <Text style={s.backPickTeam} numberOfLines={1}>
                   {p.team} <Text style={s.backPickVs}>vs {p.vs}</Text>
                 </Text>
-                {p.sport ? <Text style={[s.backPickSport, { color: `${rarity.color}70` }]}>{p.sport}</Text> : null}
+                {p.sport ? <Text style={[s.backPickSport, { color: 'rgba(255,255,255,0.3)' }]}>{p.sport}</Text> : null}
               </View>
             );
           })}
@@ -841,7 +834,7 @@ export default function ProfileScreen() {
       {/* Best streak */}
       <View style={s.bestRow}>
         <Text style={s.bestLabel}>BEST STREAK</Text>
-        <Text style={[s.bestValue, { color: rarity.color }]}>W{bestStreak}</Text>
+        <Text style={[s.bestValue, { color: TEAL }]}>W{bestStreak}</Text>
       </View>
     </>
   );
@@ -886,9 +879,8 @@ export default function ProfileScreen() {
                 recentPicks.slice(0, 3).map((p) => {
                   const isWin = p.result === 'win';
                   const isLoss = p.result === 'loss';
-                  const rc = isWin ? TEAL : isLoss ? CORAL : 'rgba(255,255,255,0.3)';
                   return (
-                    <View key={p.id} style={[s.pickCard, { borderLeftColor: rc }]}>
+                    <View key={p.id} style={s.pickCard}>
                       <View style={{ width: 40, height: 44, position: 'relative' }}>
                         <JerseyIcon
                           teamCode={p.team}
@@ -897,24 +889,6 @@ export default function ProfileScreen() {
                           sport={p.jerseyType}
                           size={40}
                         />
-                        {/* W/L badge overlaid on jersey bottom-right */}
-                        <View style={{
-                          position: 'absolute',
-                          bottom: -2,
-                          right: -4,
-                          width: 18,
-                          height: 18,
-                          borderRadius: 9,
-                          backgroundColor: isWin ? `${TEAL}25` : isLoss ? `${CORAL}25` : 'rgba(255,255,255,0.08)',
-                          borderWidth: 1.5,
-                          borderColor: isWin ? `${TEAL}50` : isLoss ? `${CORAL}50` : 'rgba(255,255,255,0.15)',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <Text style={{ fontSize: 8, fontWeight: '900', color: isWin ? TEAL : isLoss ? CORAL : 'rgba(255,255,255,0.4)' }}>
-                            {isWin ? 'W' : isLoss ? 'L' : '·'}
-                          </Text>
-                        </View>
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -923,9 +897,20 @@ export default function ProfileScreen() {
                         </View>
                         <Text style={s.pickMeta}>vs {p.vs} · {p.dateStr}</Text>
                       </View>
-                      <View style={[s.pickBadge, { backgroundColor: `${rc}12` }]}>
-                        <Text style={[s.pickBadgeText, { color: rc }]}>{isWin ? 'WIN' : isLoss ? 'LOSS' : 'PENDING'}</Text>
-                      </View>
+                      {/* Ribbon badge */}
+                      {isWin ? (
+                        <View style={s.ribbonWin}>
+                          <Text style={s.ribbonText}>WIN</Text>
+                        </View>
+                      ) : isLoss ? (
+                        <View style={s.ribbonLoss}>
+                          <Text style={s.ribbonText}>LOSS</Text>
+                        </View>
+                      ) : (
+                        <View style={s.ribbonTbd}>
+                          <Text style={s.ribbonTextTbd}>TBD</Text>
+                        </View>
+                      )}
                     </View>
                   );
                 })
@@ -1016,7 +1001,7 @@ const s = StyleSheet.create({
   sportFill: { height: '100%', borderRadius: 2 },
   sportRate: { fontSize: 12, fontWeight: '800', width: 34, textAlign: 'right' },
   sportWins: { fontSize: 10, color: 'rgba(255,255,255,0.2)', width: 24, textAlign: 'right' },
-  backPick: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderLeftWidth: 3, backgroundColor: 'rgba(255,255,255,0.015)' },
+  backPick: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.015)' },
   backPickR: { fontSize: 10, fontWeight: '900', width: 14 },
   backPickTeam: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.7)', flex: 1 },
   backPickVs: { color: 'rgba(255,255,255,0.2)', fontWeight: '500' },
@@ -1029,16 +1014,21 @@ const s = StyleSheet.create({
   picksHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   picksTitle: { fontSize: 16, fontWeight: '800', color: '#FFF' },
   picksAll: { fontSize: 12, fontWeight: '600', color: TEAL },
-  pickCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', borderLeftWidth: 3 },
+  pickCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   pickDot: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   pickDotText: { fontSize: 11, fontWeight: '800' },
   pickTeam: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   pickSport: { fontSize: 10, fontWeight: '700', color: CORAL, backgroundColor: `${CORAL}15`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
   pickMeta: { fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 3 },
-  pickBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
-  pickBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
   emptyPicks: { alignItems: 'center', paddingVertical: 32, gap: 6 },
   emptyTitle: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.4)' },
   emptySub: { fontSize: 12, color: 'rgba(255,255,255,0.2)' },
+
+  // Ribbon badges
+  ribbonWin: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, backgroundColor: `${TEAL}18`, borderWidth: 1, borderColor: `${TEAL}35` },
+  ribbonLoss: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, backgroundColor: `${CORAL}18`, borderWidth: 1, borderColor: `${CORAL}35` },
+  ribbonTbd: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: `${TEAL}20`, borderTopColor: `${TEAL}25`, borderBottomColor: `${CORAL}25`, borderLeftColor: `${TEAL}20`, borderRightColor: `${CORAL}20` },
+  ribbonText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 },
+  ribbonTextTbd: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.35)', letterSpacing: 1 },
 });
