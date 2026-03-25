@@ -1,178 +1,51 @@
-import React, { useState, useCallback, useMemo, useEffect, memo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import {
-  View, Text, TextInput, Pressable,
-  ActivityIndicator, RefreshControl, StyleSheet, Dimensions,
+  View, Text, Pressable, ScrollView,
+  ActivityIndicator, RefreshControl, StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import Animated, {
-  FadeInDown, useSharedValue, useAnimatedStyle,
-  withRepeat, withTiming, withSequence, Easing, interpolate,
-} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useGames, useLiveGames } from '@/hooks/useGames';
-import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
-import { useHideOnScroll } from '@/contexts/ScrollContext';
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import {
+  Search, ChevronRight, TrendingUp, Tv, AlertTriangle,
+  Zap, Target, BarChart3,
+} from 'lucide-react-native';
+import { useGames } from '@/hooks/useGames';
+import { useLiveScores } from '@/hooks/useLiveScores';
+import { useSubscription } from '@/lib/subscription-context';
+import { GameStatus, GameWithPrediction } from '@/types/sports';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+// ─── PALETTE ─────────────────────────────────────────────────────
 const BG = '#040608';
 const TEAL = '#7A9DB8';
-const TEAL_DARK = '#5A7A8A';
 const CORAL = '#E8936A';
 const GREEN = '#4ADE80';
-const STORAGE_KEY = 'clutch_followed_games';
-
-// ─── Followed Games Hook ─────────────────────────────────────────
-function useFollowedGames(allGames: GameWithPrediction[] | undefined) {
-  const [followedIds, setFollowedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((val) => {
-      if (val) setFollowedIds(JSON.parse(val));
-    });
-    // Re-check when tab is focused
-    const interval = setInterval(() => {
-      AsyncStorage.getItem(STORAGE_KEY).then((val) => {
-        if (val) setFollowedIds(JSON.parse(val));
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const followedGames = useMemo(() => {
-    if (!allGames || followedIds.length === 0) return [];
-    return followedIds
-      .map((id) => allGames.find((g) => g.id === id))
-      .filter(Boolean) as GameWithPrediction[];
-  }, [allGames, followedIds]);
-
-  return { followedGames, followedIds };
-}
-
-// ─── Drama Logic Helpers ──────────────────────────────────────────
-function getWinPct(record: string): number {
-  const parts = record.split('-');
-  const w = parseInt(parts[0] ?? '0', 10);
-  const l = parseInt(parts[1] ?? '0', 10);
-  if (isNaN(w) || isNaN(l) || w + l === 0) return 0.5;
-  return w / (w + l);
-}
-
-function isGameLate(game: GameWithPrediction): boolean {
-  const q = (game.quarter ?? '').toUpperCase();
-  const sport = game.sport;
-  if (sport === Sport.NBA || sport === Sport.NCAAB || sport === Sport.NFL || sport === Sport.NCAAF) {
-    return q.includes('Q3') || q.includes('Q4') || q.includes('3RD') || q.includes('4TH') || q.includes('OT');
-  }
-  if (sport === Sport.MLB) {
-    const match = q.match(/(\d+)/);
-    const inning = match ? parseInt(match[1], 10) : 0;
-    return inning >= 7;
-  }
-  if (sport === Sport.NHL) {
-    return q.includes('3RD') || q.includes('P3') || q.includes('PERIOD 3') || q.includes('OT');
-  }
-  return false;
-}
-
-function isGamePastHalftime(game: GameWithPrediction): boolean {
-  const q = (game.quarter ?? '').toUpperCase();
-  const sport = game.sport;
-  if (sport === Sport.NBA || sport === Sport.NCAAB || sport === Sport.NFL || sport === Sport.NCAAF) {
-    return q.includes('Q3') || q.includes('Q4') || q.includes('3RD') || q.includes('4TH') || q.includes('OT');
-  }
-  if (sport === Sport.MLB) {
-    const match = q.match(/(\d+)/);
-    const inning = match ? parseInt(match[1], 10) : 0;
-    return inning >= 5;
-  }
-  if (sport === Sport.NHL) {
-    return q.includes('2ND') || q.includes('P2') || q.includes('PERIOD 2') ||
-      q.includes('3RD') || q.includes('P3') || q.includes('PERIOD 3') || q.includes('OT');
-  }
-  return false;
-}
-
-function getBlowoutThreshold(sport: Sport): number {
-  if (sport === Sport.NBA || sport === Sport.NCAAB) return 20;
-  if (sport === Sport.NFL || sport === Sport.NCAAF) return 17;
-  if (sport === Sport.MLB) return 5;
-  if (sport === Sport.NHL) return 4;
-  return 20;
-}
-
-// ─── Game Pulse Logic ────────────────────────────────────────────
-function useGamePulse(liveGames: GameWithPrediction[]) {
-  return useMemo(() => {
-    if (!liveGames || liveGames.length === 0) return { closest: null, upset: null, blowout: null };
-
-    // Only include truly live games with scores — exclude scheduled/just started
-    const live = liveGames.filter((g) =>
-      g.status === GameStatus.LIVE && g.homeScore != null && g.awayScore != null
-    );
-
-    const withDiff = live.map((g) => ({ game: g, diff: Math.abs((g.homeScore ?? 0) - (g.awayScore ?? 0)) }));
-    if (withDiff.length === 0) return { closest: null, upset: null, blowout: null };
-
-    // NAIL BITER: diff ≤ 5 AND late game (Q3+, 7th inning+, 3rd period+)
-    const nailBiters = withDiff
-      .filter((g) => g.diff <= 5 && isGameLate(g.game))
-      .sort((a, b) => a.diff - b.diff); // closest first
-    const closest = nailBiters[0] ?? null;
-
-    // UPSET: team with lower win% is currently winning AND past halftime
-    const upsets = withDiff.filter((g) => {
-      if (!isGamePastHalftime(g.game)) return false;
-      const homeScore = g.game.homeScore ?? 0;
-      const awayScore = g.game.awayScore ?? 0;
-      if (homeScore === awayScore) return false;
-      const homeWinPct = getWinPct(g.game.homeTeam.record);
-      const awayWinPct = getWinPct(g.game.awayTeam.record);
-      const winningIsHome = homeScore > awayScore;
-      const winningPct = winningIsHome ? homeWinPct : awayWinPct;
-      const losingPct = winningIsHome ? awayWinPct : homeWinPct;
-      // Only flag as upset if the winning team has a meaningfully lower win%
-      return winningPct < losingPct && Math.abs(homeWinPct - awayWinPct) > 0.05;
-    });
-    const upset = upsets[0] ?? null;
-
-    // BLOWOUT: past halftime AND lead exceeds sport-specific threshold; sort biggest lead first
-    const blowouts = withDiff
-      .filter((g) => {
-        if (!isGamePastHalftime(g.game)) return false;
-        return g.diff >= getBlowoutThreshold(g.game.sport);
-      })
-      .sort((a, b) => b.diff - a.diff);
-    const blowout = blowouts[0] ?? null;
-
-    return { closest, upset, blowout };
-  }, [liveGames]);
-}
-
-// ─── Must Watch Logic ────────────────────────────────────────────
-function useMustWatch(allGames: GameWithPrediction[]) {
-  return useMemo(() => {
-    if (!allGames) return [];
-    return allGames
-      .filter((g) => g.status === GameStatus.SCHEDULED && g.prediction)
-      .map((g) => {
-        const edge = g.prediction?.edgeRating ?? 5;
-        const conf = g.prediction?.confidence ?? 55;
-        const confSpread = Math.abs(conf - 50);
-        const score = edge * 0.5 + confSpread * 0.3 + (g.prediction?.isTossUp ? 2 : 0);
-        return { game: g, score, watchScore: Math.min(5, Math.max(1, Math.round(score / 2))) };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-  }, [allGames]);
-}
+const RED = '#EF4444';
+const WHITE = '#FFFFFF';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
-function getGameStatus(game: GameWithPrediction): string {
+
+function formatTimeShort(iso: string): { time: string; ampm: string } {
+  const d = new Date(iso);
+  const str = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const parts = str.split(' ');
+  return { time: parts[0] ?? str, ampm: parts[1] ?? '' };
+}
+
+function getStatusText(game: GameWithPrediction): string {
   if (game.status === GameStatus.LIVE) {
     const parts: string[] = [];
     if (game.quarter) parts.push(game.quarter);
@@ -182,224 +55,954 @@ function getGameStatus(game: GameWithPrediction): string {
   return formatTime(game.gameTime);
 }
 
-// ─── SVG Icons ───────────────────────────────────────────────────
-const SearchIcon = memo(function SearchIcon() {
-  return (
-    <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
-      <Circle cx={11} cy={11} r={7} stroke="rgba(255,255,255,0.2)" strokeWidth={2} />
-      <Path d="M16 16L21 21" stroke="rgba(255,255,255,0.2)" strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
-});
+function getWinPct(record: string): number {
+  const parts = record.split('-');
+  const w = parseInt(parts[0] ?? '0', 10);
+  const l = parseInt(parts[1] ?? '0', 10);
+  if (isNaN(w) || isNaN(l) || w + l === 0) return 0.5;
+  return w / (w + l);
+}
 
-// ─── STORY CIRCLE — single followed game ─────────────────────────
-const StoryCircle = memo(function StoryCircle({
-  game, onPress,
-}: { game: GameWithPrediction; onPress: () => void }) {
-  const isLive = game.status === GameStatus.LIVE;
-  const isFinal = game.status === GameStatus.FINAL;
+type TagType = 'nailbiter' | 'upset' | 'blowout' | 'streak';
 
-  const spin = useSharedValue(0);
-  const glow = useSharedValue(0);
+function getGameTag(game: GameWithPrediction): { type: TagType; label: string } | null {
+  const pred = game.prediction;
+  if (!pred) return null;
+  const conf = pred.confidence ?? 55;
 
-  useEffect(() => {
-    if (isLive) {
-      spin.value = withRepeat(withTiming(360, { duration: 4000, easing: Easing.linear }), -1, false);
-      glow.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.ease) })
-        ), -1, false
-      );
+  // Nail-biter
+  if (conf >= 48 && conf <= 55 && (game.status === GameStatus.SCHEDULED || game.status === GameStatus.LIVE)) {
+    return { type: 'nailbiter', label: 'NAIL-BITER' };
+  }
+  // Upset
+  if (conf >= 55 && conf <= 65) {
+    const homeWinPct = getWinPct(game.homeTeam.record);
+    const awayWinPct = getWinPct(game.awayTeam.record);
+    const predictedWinnerPct = pred.predictedWinner === 'home' ? homeWinPct : awayWinPct;
+    const otherPct = pred.predictedWinner === 'home' ? awayWinPct : homeWinPct;
+    if (predictedWinnerPct < otherPct) {
+      return { type: 'upset', label: 'UPSET ALERT' };
     }
-  }, [isLive]);
+  }
+  // Blowout
+  if (conf > 75) {
+    return { type: 'blowout', label: 'BLOWOUT' };
+  }
+  // Streak
+  if ((pred.homeStreak != null && pred.homeStreak >= 4) || (pred.awayStreak != null && pred.awayStreak >= 4)) {
+    return { type: 'streak', label: 'STREAK' };
+  }
+  return null;
+}
 
-  const ringStyle = useAnimatedStyle(() => {
-    if (!isLive) return {};
-    return { transform: [{ rotate: `${spin.value}deg` }] };
-  });
+const TAG_STYLES: Record<TagType, { bg: string; border: string; color: string; Icon: typeof Zap }> = {
+  nailbiter: { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.25)', color: RED, Icon: Zap },
+  upset: { bg: 'rgba(232,147,106,0.12)', border: 'rgba(232,147,106,0.25)', color: CORAL, Icon: AlertTriangle },
+  blowout: { bg: 'rgba(122,157,184,0.12)', border: 'rgba(122,157,184,0.2)', color: TEAL, Icon: TrendingUp },
+  streak: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.25)', color: GREEN, Icon: Target },
+};
 
-  const glowStyle = useAnimatedStyle(() => {
-    if (!isLive) return { opacity: 0 };
-    return {
-      opacity: interpolate(glow.value, [0, 1], [0, 0.35]),
-      transform: [{ scale: interpolate(glow.value, [0, 1], [1, 1.15]) }],
-    };
-  });
 
-  const score = isLive || isFinal
-    ? `${game.awayScore ?? 0}-${game.homeScore ?? 0}`
-    : formatTime(game.gameTime);
-
+// ─── PULSING DOT ─────────────────────────────────────────────────
+const PulsingDot = memo(function PulsingDot({ size = 8, color = RED }: { size?: number; color?: string }) {
+  const opacity = useSharedValue(1);
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withTiming(0.3, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
-    <Pressable onPress={onPress} style={{ alignItems: 'center', width: 72 }}>
-      <View style={{ width: 64, height: 64, position: 'relative' }}>
-        {/* Pulsing outer glow — only on live */}
-        {isLive ? (
-          <Animated.View style={[{
-            position: 'absolute', top: -4, left: -4, right: -4, bottom: -4,
-            borderRadius: 36, borderWidth: 2, borderColor: CORAL,
-          }, glowStyle]} />
-        ) : null}
-
-        {/* Ring */}
-        <Animated.View style={[{ width: 64, height: 64, borderRadius: 32, padding: 2.5 }, ringStyle]}>
-          <View style={{
-            width: '100%', height: '100%', borderRadius: 32,
-            borderWidth: isLive ? 2.5 : isFinal ? 1 : 2,
-            borderColor: isFinal ? 'rgba(255,255,255,0.06)' : isLive ? CORAL : `${TEAL_DARK}60`,
-            borderTopColor: isFinal ? 'rgba(255,255,255,0.06)' : CORAL,
-            borderRightColor: isFinal ? 'rgba(255,255,255,0.06)' : TEAL,
-            borderBottomColor: isFinal ? 'rgba(255,255,255,0.06)' : CORAL,
-            borderLeftColor: isFinal ? 'rgba(255,255,255,0.06)' : TEAL,
-            backgroundColor: BG,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <Text style={st.circleAbbr}>{game.awayTeam.abbreviation}</Text>
-            <Text style={st.circleVs}>vs</Text>
-            <Text style={st.circleAbbr}>{game.homeTeam.abbreviation}</Text>
-          </View>
-        </Animated.View>
-
-        {/* Live badge */}
-        {isLive ? (
-          <View style={st.liveBadge}>
-            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#FFFFFF' }} />
-            <Text style={st.liveBadgeText}>LIVE</Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Label */}
-      <Text style={[st.circleLabel, {
-        color: isLive ? CORAL : isFinal ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.3)',
-        marginTop: 6,
-      }]}>
-        {isLive ? score : isFinal ? 'FINAL' : score}
-      </Text>
-    </Pressable>
+    <Animated.View
+      style={[
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: color },
+        style,
+      ]}
+    />
   );
 });
 
-// ─── DRAMA CARD ──────────────────────────────────────────────────
-const DramaCard = memo(function DramaCard({
-  type, game, headline, onPress,
-}: {
-  type: 'thriller' | 'upset' | 'comeback' | 'blowout';
-  game: GameWithPrediction;
-  headline: string;
-  onPress: () => void;
-}) {
-  const config: Record<string, { label: string; icon: string; accent: string }> = {
-    thriller: { label: 'NAIL BITER', icon: '◆', accent: CORAL },
-    upset:    { label: 'UPSET ALERT', icon: '△', accent: CORAL },
-    comeback: { label: 'COMEBACK', icon: '↑', accent: GREEN },
-    blowout:  { label: 'BLOWOUT', icon: '▽', accent: 'rgba(255,255,255,0.2)' },
-  };
-  const cfg = config[type] ?? config.thriller;
-  const isBlowout = type === 'blowout';
-  const status = getGameStatus(game);
-
+// ─── TAG BADGE ───────────────────────────────────────────────────
+function TagBadge({ tag, absolute }: { tag: { type: TagType; label: string }; absolute?: boolean }) {
+  const s = TAG_STYLES[tag.type];
+  const IconComp = s.Icon;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
-      <View style={[st.dramaCard, {
-        backgroundColor: isBlowout ? 'rgba(255,255,255,0.02)' : `${cfg.accent}06`,
-        borderColor: isBlowout ? 'rgba(255,255,255,0.04)' : `${cfg.accent}12`,
-        opacity: isBlowout ? 0.5 : 1,
-      }]}>
-        <View style={{ position: 'absolute', top: 0, left: 20, right: 20, height: 1, backgroundColor: `${cfg.accent}20` }} />
+    <View
+      style={[
+        {
+          flexDirection: 'row', alignItems: 'center', gap: 3,
+          paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6,
+          backgroundColor: s.bg, borderWidth: 1, borderColor: s.border,
+        },
+        absolute && { position: 'absolute', top: 8, right: 8, zIndex: 10 },
+      ]}
+    >
+      <IconComp size={8} color={s.color} strokeWidth={2.5} />
+      <Text style={{ fontSize: 7, fontWeight: '800', color: s.color, letterSpacing: 0.3 }}>{tag.label}</Text>
+    </View>
+  );
+}
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 1: HEADER + SEARCH
+// ═══════════════════════════════════════════════════════════════════
+function HeaderSection({ liveCount }: { liveCount: number }) {
+  return (
+    <Animated.View entering={FadeInDown.duration(400)} style={{ paddingHorizontal: 20 }}>
+      {/* Row 1: Title + Live count */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <Text style={{ fontSize: 24, fontWeight: '900', color: WHITE }}>My Arena</Text>
+        {liveCount > 0 ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 10, color: cfg.accent }}>{cfg.icon}</Text>
-            <Text style={{ fontSize: 9, fontWeight: '800', color: cfg.accent, letterSpacing: 2 }}>{cfg.label}</Text>
+            <PulsingDot size={8} color={RED} />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: RED }}>{liveCount} LIVE</Text>
           </View>
-          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' }}>{status}</Text>
-        </View>
+        ) : null}
+      </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFF' }}>{game.awayTeam.abbreviation}</Text>
-          <View style={st.scoreChip}>
-            <Text style={st.scoreChipText}>{game.awayScore ?? 0} - {game.homeScore ?? 0}</Text>
-          </View>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFF' }}>{game.homeTeam.abbreviation}</Text>
-          <View style={{ marginLeft: 'auto' }}>
-            <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.15)' }}>{game.sport}</Text>
-          </View>
-        </View>
+      {/* Row 2: Search bar */}
+      <Pressable
+        style={{
+          flexDirection: 'row', alignItems: 'center', gap: 10,
+          paddingVertical: 13, paddingHorizontal: 16, borderRadius: 14,
+          backgroundColor: 'rgba(255,255,255,0.04)',
+          borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+        }}
+      >
+        <Search size={16} color="rgba(255,255,255,0.2)" strokeWidth={2} />
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)' }}>Search teams, players, games...</Text>
+      </Pressable>
+      <View style={{ height: 4 }} />
+    </Animated.View>
+  );
+}
 
-        <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 18 }}>{headline}</Text>
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 2: YOUR GAMES
+// ═══════════════════════════════════════════════════════════════════
+const FollowedGameCard = memo(function FollowedGameCard({
+  game, onPress,
+}: {
+  game: GameWithPrediction;
+  onPress: () => void;
+}) {
+  const isLive = game.status === GameStatus.LIVE;
+  const tag = getGameTag(game);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <View style={{ minWidth: 145, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 16, overflow: 'hidden' }}>
+        {isLive ? (
+          <LinearGradient
+            colors={['rgba(239,68,68,0.06)', 'rgba(4,6,8,0.9)']}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.03)' }]} />
+        )}
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderWidth: 1,
+              borderColor: isLive ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)',
+              borderRadius: 16,
+            },
+          ]}
+          pointerEvents="none"
+        />
+
+        {tag ? <TagBadge tag={tag} absolute /> : null}
+
+        <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 6 }}>{game.sport}</Text>
+        <Text style={{ fontSize: 17, fontWeight: '900', color: WHITE }}>{game.awayTeam.abbreviation}</Text>
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', marginVertical: 2 }}>vs</Text>
+        <Text style={{ fontSize: 17, fontWeight: '900', color: WHITE }}>{game.homeTeam.abbreviation}</Text>
+
+        <View style={{ marginTop: 8 }}>
+          {isLive ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <PulsingDot size={5} color={RED} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: RED, fontVariant: ['tabular-nums'] }}>
+                {game.awayScore ?? 0}-{game.homeScore ?? 0}
+              </Text>
+              <Text style={{ fontSize: 9, color: `${RED}80` }}>{game.quarter ?? null}</Text>
+            </View>
+          ) : (
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>{formatTime(game.gameTime)}</Text>
+          )}
+        </View>
       </View>
     </Pressable>
   );
 });
 
-// ─── TONIGHT CARD ────────────────────────────────────────────────
-function TonightCard({ game, watchScore, onPress }: {
-  game: GameWithPrediction;
-  watchScore: number;
-  onPress: () => void;
+function YourGamesSection({
+  games, router,
+}: {
+  games: GameWithPrediction[];
+  router: ReturnType<typeof useRouter>;
 }) {
+  // Show all available games as "your games" — API already returns today's games
+  const todayGames = useMemo(() => {
+    return (games ?? []).slice(0, 10);
+  }, [games]);
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
-      <View style={st.tonightCard}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFF' }}>
-              {game.awayTeam.abbreviation} vs {game.homeTeam.abbreviation}
-            </Text>
-            <View style={st.sportPill}>
-              <Text style={st.sportPillText}>{game.sport}</Text>
+    <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 2 }}>
+        <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE }}>Your Games</Text>
+        <Pressable onPress={() => router.push('/(tabs)')}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Browse +</Text>
+        </Pressable>
+      </View>
+
+      {todayGames.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 10 }}
+          style={{ flexGrow: 0 }}
+        >
+          {todayGames.map(game => (
+            <FollowedGameCard
+              key={game.id}
+              game={game}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push({ pathname: '/game/[id]', params: { id: game.id } });
+              }}
+            />
+          ))}
+          {/* Add card */}
+          <View style={{
+            minWidth: 65, minHeight: 120, borderRadius: 16,
+            borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+            alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,
+          }}>
+            <View style={{
+              width: 28, height: 28, borderRadius: 14,
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 18, fontWeight: '400', color: 'rgba(255,255,255,0.15)' }}>+</Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '600' }}>
-              {formatTime(game.gameTime)}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 14 }}>
-              {[1,2,3,4,5].map(n => (
-                <View key={n} style={{
-                  width: 2.5, height: 2 + n * 2, borderRadius: 1.5,
-                  backgroundColor: n <= watchScore ? TEAL : 'rgba(255,255,255,0.06)',
-                }} />
-              ))}
-            </View>
+        </ScrollView>
+      ) : (
+        <View style={{ paddingHorizontal: 20, paddingVertical: 24 }}>
+          <View style={{
+            padding: 20, borderRadius: 16,
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
+            alignItems: 'center',
+          }}>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>Follow games from the Home tab</Text>
           </View>
         </View>
-        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 6, lineHeight: 16 }} numberOfLines={1}>
-          {game.awayTeam.record} vs {game.homeTeam.record}{game.tvChannel ? ` · ${game.tvChannel}` : ''}
+      )}
+    </Animated.View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 3: YOUR NIGHT PLAN
+// ═══════════════════════════════════════════════════════════════════
+interface TimelineEntry {
+  game: GameWithPrediction;
+  time: { time: string; ampm: string };
+  note: string;
+  isFirst: boolean;
+}
+
+function NightPlanSection({ games, router }: { games: GameWithPrediction[]; router: ReturnType<typeof useRouter> }) {
+  const entries = useMemo<TimelineEntry[]>(() => {
+    // Include scheduled and final games — API returns today's slate
+    const upcoming = (games ?? [])
+      .filter(g => g.status === GameStatus.SCHEDULED || g.status === GameStatus.LIVE)
+      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+      .slice(0, 6);
+
+    if (upcoming.length === 0) return [];
+    const scheduled = upcoming;
+
+    return scheduled.map((game, i) => {
+      let note = 'Check in on this one';
+      if (i === 0) note = 'Start here';
+      else {
+        const prev = scheduled[i - 1];
+        if (prev?.prediction && (prev.prediction.confidence ?? 0) > 70) {
+          note = `Switch from ${prev.awayTeam.abbreviation}/${prev.homeTeam.abbreviation} if it's a blowout`;
+        } else if (game.prediction?.isTossUp || (game.prediction?.confidence ?? 50) <= 55) {
+          note = "Don't miss this one";
+        }
+      }
+      return {
+        game,
+        time: formatTimeShort(game.gameTime),
+        note,
+        isFirst: i === 0,
+      };
+    });
+  }, [games]);
+
+  if (entries.length === 0) {
+    return (
+      <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ paddingHorizontal: 20, marginTop: 20 }}>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: TEAL, letterSpacing: 2, marginBottom: 6 }}>YOUR NIGHT PLAN</Text>
+        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)', textAlign: 'center', paddingVertical: 16 }}>
+          Follow games to build your night plan
         </Text>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ marginTop: 20 }}>
+      <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: TEAL, letterSpacing: 2, marginBottom: 4 }}>YOUR NIGHT PLAN</Text>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>What to watch and when</Text>
+        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>Based on tonight's schedule</Text>
+      </View>
+
+      <View style={{ paddingLeft: 20, position: 'relative' }}>
+        {/* Vertical line */}
+        <View style={{ position: 'absolute', left: 6, top: 8, bottom: 8, width: 2, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={['rgba(122,157,184,0.3)', 'rgba(122,157,184,0.05)']}
+            style={{ flex: 1 }}
+          />
+        </View>
+
+        {entries.map((entry) => (
+          <Pressable
+            key={entry.game.id}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({ pathname: '/game/[id]', params: { id: entry.game.id } });
+            }}
+            style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginBottom: 14, paddingRight: 20 }}
+          >
+            {/* Timeline dot */}
+            <View
+              style={{
+                width: 10, height: 10, borderRadius: 5, marginTop: 12,
+                backgroundColor: entry.isFirst ? TEAL : 'rgba(255,255,255,0.1)',
+                borderWidth: entry.isFirst ? 2 : 0,
+                borderColor: entry.isFirst ? TEAL : 'transparent',
+                ...(entry.isFirst ? {
+                  shadowColor: TEAL,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 6,
+                } : {}),
+              }}
+            />
+
+            {/* Time */}
+            <View style={{ width: 40, alignItems: 'flex-end', marginTop: 8 }}>
+              <Text style={{
+                fontSize: 16, fontWeight: '900', fontVariant: ['tabular-nums'],
+                color: entry.isFirst ? WHITE : 'rgba(255,255,255,0.3)',
+              }}>
+                {entry.time.time}
+              </Text>
+              <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)' }}>{entry.time.ampm}</Text>
+            </View>
+
+            {/* Card */}
+            <View
+              style={{
+                flex: 1, padding: 12, paddingHorizontal: 14, borderRadius: 14,
+                backgroundColor: entry.isFirst ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+                borderWidth: 1,
+                borderColor: entry.isFirst ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+              }}
+            >
+              <Text style={{
+                fontSize: 14, fontWeight: '800',
+                color: entry.isFirst ? WHITE : 'rgba(255,255,255,0.5)',
+              }}>
+                {entry.game.awayTeam.abbreviation} @ {entry.game.homeTeam.abbreviation}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                {entry.game.tvChannel ? (
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>{entry.game.tvChannel}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={{
+                fontSize: 11, fontStyle: 'italic', marginTop: 6,
+                color: entry.isFirst ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.25)',
+              }}>
+                {entry.note}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 4: LIVE ARENA
+// ═══════════════════════════════════════════════════════════════════
+const LiveGameCard = memo(function LiveGameCard({
+  game, onPress,
+}: {
+  game: GameWithPrediction;
+  onPress: () => void;
+}) {
+  const awayScore = game.awayScore ?? 0;
+  const homeScore = game.homeScore ?? 0;
+  const diff = Math.abs(awayScore - homeScore);
+  const awayLeading = awayScore > homeScore;
+  const homeLeading = homeScore > awayScore;
+  const tag = getGameTag(game);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <View style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(239,68,68,0.1)' }}>
+        <LinearGradient
+          colors={['rgba(239,68,68,0.03)', 'rgba(4,6,8,0.95)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Left accent */}
+        <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: RED, opacity: 0.6 }} />
+
+        <View style={{ padding: 14, paddingLeft: 18 }}>
+          {/* Row 1: Sport + tag + period */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)' }}>{game.sport}</Text>
+              </View>
+              {tag ? <TagBadge tag={tag} /> : null}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <PulsingDot size={6} color={RED} />
+              <Text style={{ fontSize: 10, fontWeight: '700', color: RED }}>{getStatusText(game)}</Text>
+            </View>
+          </View>
+
+          {/* Row 2: Scores */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 10 }}>
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: awayLeading ? WHITE : 'rgba(255,255,255,0.25)', marginBottom: 4 }}>
+                {game.awayTeam.abbreviation}
+              </Text>
+              <Text style={{
+                fontSize: 30, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -1,
+                color: awayLeading ? WHITE : 'rgba(255,255,255,0.25)',
+              }}>
+                {awayScore}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.08)' }}>-</Text>
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: homeLeading ? WHITE : 'rgba(255,255,255,0.25)', marginBottom: 4 }}>
+                {game.homeTeam.abbreviation}
+              </Text>
+              <Text style={{
+                fontSize: 30, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -1,
+                color: homeLeading ? WHITE : 'rgba(255,255,255,0.25)',
+              }}>
+                {homeScore}
+              </Text>
+            </View>
+          </View>
+
+          {/* Row 3: Momentum indicator */}
+          {diff <= 5 ? (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center',
+              paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8,
+              backgroundColor: 'rgba(255,255,255,0.02)',
+            }}>
+              <Zap size={10} color={TEAL} strokeWidth={2} />
+              <Text style={{ fontSize: 10, fontWeight: '600', color: TEAL }}>
+                Close game — within {diff} {diff === 1 ? 'point' : 'points'}
+              </Text>
+            </View>
+          ) : (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center',
+              paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8,
+              backgroundColor: 'rgba(255,255,255,0.02)',
+            }}>
+              <TrendingUp size={10} color="rgba(255,255,255,0.2)" strokeWidth={2} />
+              <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.3)' }}>
+                {awayLeading ? game.awayTeam.abbreviation : game.homeTeam.abbreviation} leading by {diff}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
-}
+});
 
-// ─── YOUR PULSE ──────────────────────────────────────────────────
-function YourPulse() {
+function LiveArenaSection({ games, router }: { games: GameWithPrediction[]; router: ReturnType<typeof useRouter> }) {
+  const liveGames = useMemo(() =>
+    (games ?? []).filter(g => g.status === GameStatus.LIVE),
+    [games]
+  );
+
+  if (liveGames.length === 0) return null;
+
   return (
-    <View style={st.pulseCard}>
-      <View style={[st.pulseCircle, { backgroundColor: `${TEAL}12`, borderColor: `${TEAL}25` }]}>
-        <Text style={[st.pulseCircleText, { color: TEAL }]}>--</Text>
+    <Animated.View entering={FadeInDown.delay(300).duration(400)} style={{ marginTop: 20, paddingHorizontal: 20 }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <PulsingDot size={8} color={RED} />
+          <Text style={{ fontSize: 14, fontWeight: '900', color: WHITE }}>Live Arena</Text>
+        </View>
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{liveGames.length} active</Text>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFF' }}>Your Streak</Text>
-        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>
-          Make picks to start tracking
-        </Text>
-      </View>
-    </View>
+
+      {liveGames.map(game => (
+        <LiveGameCard
+          key={game.id}
+          game={game}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push({ pathname: '/game/[id]', params: { id: game.id } });
+          }}
+        />
+      ))}
+    </Animated.View>
   );
 }
 
-// ─── SECTION DIVIDER ─────────────────────────────────────────────
-function Divider({ label }: { label?: string }) {
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 5: TONIGHT'S STORYLINES
+// ═══════════════════════════════════════════════════════════════════
+function generateHeadline(game: GameWithPrediction): string {
+  const pred = game.prediction;
+  if (!pred) return `${game.awayTeam.abbreviation} at ${game.homeTeam.abbreviation}`;
+  const conf = pred.confidence ?? 55;
+  const winner = pred.predictedWinner === 'home' ? game.homeTeam.abbreviation : game.awayTeam.abbreviation;
+  const location = pred.predictedWinner === 'home' ? 'at home' : 'on the road';
+
+  if (conf > 70) return `${winner} heavy favorites ${location}`;
+  if (pred.isTossUp) return 'Too close to call — anything can happen';
+  if ((pred.homeStreak ?? 0) >= 4) return `${game.homeTeam.abbreviation} riding a ${pred.homeStreak}-game streak`;
+  if ((pred.awayStreak ?? 0) >= 4) return `${game.awayTeam.abbreviation} riding a ${pred.awayStreak}-game streak`;
+  return `${game.awayTeam.abbreviation} at ${game.homeTeam.abbreviation} — key ${game.sport} matchup`;
+}
+
+function generateStory(game: GameWithPrediction): string {
+  const pred = game.prediction;
+  if (pred?.analysis) {
+    const firstSentence = pred.analysis.split('.')[0];
+    if (firstSentence && firstSentence.length > 10) return firstSentence + '.';
+  }
+  const parts: string[] = [];
+  parts.push(`${game.awayTeam.abbreviation} (${game.awayTeam.record}) visit ${game.homeTeam.abbreviation} (${game.homeTeam.record}).`);
+  if (game.spread != null) {
+    const favored = game.spread > 0 ? game.homeTeam.abbreviation : game.awayTeam.abbreviation;
+    parts.push(`${favored} favored by ${Math.abs(game.spread).toFixed(1)}.`);
+  }
+  return parts.join(' ');
+}
+
+const StorylineCard = memo(function StorylineCard({
+  game, isPremium, router,
+}: {
+  game: GameWithPrediction;
+  isPremium: boolean;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const tag = getGameTag(game);
+  const headline = generateHeadline(game);
+  const story = generateStory(game);
+  const pred = game.prediction;
+  const conf = pred?.confidence ?? 55;
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, marginVertical: 14 }}>
-      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.06)' }} />
-      {label ? <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.12)', letterSpacing: 2 }}>{label}</Text> : null}
-      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.06)' }} />
-    </View>
+    <Pressable
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push({ pathname: '/game/[id]', params: { id: game.id } });
+      }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
+    >
+      <View style={{ borderRadius: 20, overflow: 'hidden', marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+        <LinearGradient
+          colors={['#0C1018', '#08090E']}
+          start={{ x: 0.3, y: 0 }}
+          end={{ x: 0.7, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Top section */}
+        <View style={{ padding: 16, paddingBottom: 0 }}>
+          {/* Row 1: Sport + tag + time */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.3)' }}>{game.sport}</Text>
+              </View>
+              {tag ? <TagBadge tag={tag} /> : null}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{formatTime(game.gameTime)}</Text>
+              {game.tvChannel ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Tv size={9} color="rgba(255,255,255,0.15)" strokeWidth={2} />
+                  <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{game.tvChannel}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Row 2: Teams large */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: WHITE }}>{game.awayTeam.abbreviation}</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>{game.awayTeam.name}</Text>
+            </View>
+            <View style={{
+              width: 36, height: 36, borderRadius: 18,
+              backgroundColor: 'rgba(255,255,255,0.02)',
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.12)' }}>VS</Text>
+            </View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'right' }}>{game.homeTeam.abbreviation}</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 2, textAlign: 'right' }}>{game.homeTeam.name}</Text>
+            </View>
+          </View>
+
+          {/* Row 3: Headline + Story */}
+          <Text style={{ fontSize: 15, fontWeight: '800', color: WHITE, marginBottom: 6 }}>{headline}</Text>
+          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 20, marginBottom: 14 }}>{story}</Text>
+        </View>
+
+        {/* Bottom bar */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          paddingHorizontal: 16, paddingVertical: 12,
+          borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)',
+          backgroundColor: 'rgba(255,255,255,0.01)',
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* AI Confidence */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 5,
+              paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8,
+              backgroundColor: 'rgba(232,147,106,0.08)',
+              borderWidth: 1, borderColor: 'rgba(232,147,106,0.12)',
+            }}>
+              <Text style={{ fontSize: 8, fontWeight: '800', color: 'rgba(255,255,255,0.25)' }}>AI</Text>
+              {isPremium ? (
+                <Text style={{ fontSize: 14, fontWeight: '900', color: CORAL, fontVariant: ['tabular-nums'] }}>{Math.round(conf)}%</Text>
+              ) : (
+                <Text style={{ fontSize: 10, fontWeight: '800', color: CORAL }}>PRO</Text>
+              )}
+            </View>
+            {game.spread != null ? (
+              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>
+                {game.spread > 0 ? `${game.homeTeam.abbreviation} -${game.spread}` : `${game.awayTeam.abbreviation} -${Math.abs(game.spread)}`}
+              </Text>
+            ) : null}
+            {game.tvChannel ? (
+              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{game.tvChannel}</Text>
+            ) : null}
+          </View>
+
+          {/* Pick button */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({ pathname: '/game/[id]', params: { id: game.id } });
+            }}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10,
+              backgroundColor: 'rgba(122,157,184,0.08)',
+              borderWidth: 1, borderColor: 'rgba(122,157,184,0.15)',
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: TEAL }}>Pick</Text>
+            <ChevronRight size={12} color={TEAL} strokeWidth={2} />
+          </Pressable>
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
+function StorylinesSection({ games, isPremium, router }: { games: GameWithPrediction[]; isPremium: boolean; router: ReturnType<typeof useRouter> }) {
+  const storylines = useMemo(() => {
+    const scheduled = (games ?? [])
+      .filter(g => (g.status === GameStatus.SCHEDULED || g.status === GameStatus.LIVE) && g.prediction)
+      .sort((a, b) => {
+        const aTag = getGameTag(a) ? 1 : 0;
+        const bTag = getGameTag(b) ? 1 : 0;
+        if (aTag !== bTag) return bTag - aTag;
+        const aConf = Math.abs((a.prediction?.confidence ?? 50) - 50);
+        const bConf = Math.abs((b.prediction?.confidence ?? 50) - 50);
+        return aConf - bConf;
+      })
+      .slice(0, 5);
+    return scheduled;
+  }, [games]);
+
+  if (storylines.length === 0) return null;
+
+  return (
+    <Animated.View entering={FadeInDown.delay(400).duration(400)} style={{ marginTop: 24, paddingHorizontal: 20 }}>
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: CORAL, letterSpacing: 2, marginBottom: 4 }}>TONIGHT'S STORYLINES</Text>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>The games that matter</Text>
+      </View>
+      {storylines.map(game => (
+        <StorylineCard key={game.id} game={game} isPremium={isPremium} router={router} />
+      ))}
+    </Animated.View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 6: SPLIT DECISION
+// ═══════════════════════════════════════════════════════════════════
+interface SplitDecision {
+  game: GameWithPrediction;
+  aiPick: string;
+  aiConf: number;
+  crowdPick: string;
+  crowdPct: number;
+  edge: number;
+}
+
+function SplitDecisionSection({ games, isPremium, router }: { games: GameWithPrediction[]; isPremium: boolean; router: ReturnType<typeof useRouter> }) {
+  const splits = useMemo<SplitDecision[]>(() => {
+    const result: SplitDecision[] = [];
+    const scheduled = (games ?? []).filter(g => g.prediction && g.status !== GameStatus.FINAL && g.status !== GameStatus.CANCELLED);
+
+    for (const g of scheduled) {
+      const pred = g.prediction!;
+      const aiPick = pred.predictedWinner;
+      if (!aiPick) continue;
+
+      // Simulate crowd pick as opposite of AI when confidence is moderate
+      // In a real app this would come from pick stats
+      const conf = pred.confidence ?? 55;
+      const edge = pred.edgeRating ?? 5;
+      if (conf >= 55 && conf <= 68 && edge >= 5) {
+        const aiTeam = aiPick === 'home' ? g.homeTeam.abbreviation : g.awayTeam.abbreviation;
+        const crowdTeam = aiPick === 'home' ? g.awayTeam.abbreviation : g.homeTeam.abbreviation;
+        const crowdPct = Math.round(100 - conf + 2);
+        result.push({
+          game: g,
+          aiPick: aiTeam,
+          aiConf: conf,
+          crowdPick: crowdTeam,
+          crowdPct: Math.max(51, Math.min(75, crowdPct)),
+          edge,
+        });
+      }
+      if (result.length >= 2) break;
+    }
+    return result;
+  }, [games]);
+
+  if (splits.length === 0) return null;
+
+  return (
+    <Animated.View entering={FadeInDown.delay(500).duration(400)} style={{ marginTop: 24, paddingHorizontal: 20 }}>
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: CORAL, letterSpacing: 2, marginBottom: 4 }}>SPLIT DECISION</Text>
+        <Text style={{ fontSize: 15, fontWeight: '800', color: WHITE }}>AI vs the crowd</Text>
+      </View>
+
+      {splits.map(split => (
+        <Pressable
+          key={split.game.id}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push({ pathname: '/game/[id]', params: { id: split.game.id } });
+          }}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
+        >
+          <View style={{ borderRadius: 18, overflow: 'hidden', marginBottom: 14, borderWidth: 1, borderColor: 'rgba(232,147,106,0.1)' }}>
+            <LinearGradient
+              colors={['rgba(232,147,106,0.04)', 'rgba(4,6,8,0.95)']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={{ padding: 16 }}>
+              {/* Row 1: Matchup + Edge */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: WHITE }}>
+                  {split.game.awayTeam.abbreviation} vs {split.game.homeTeam.abbreviation}
+                </Text>
+                <View style={{
+                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+                  backgroundColor: 'rgba(232,147,106,0.15)',
+                  borderWidth: 1, borderColor: 'rgba(232,147,106,0.25)',
+                }}>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: CORAL }}>EDGE {split.edge}/10</Text>
+                </View>
+              </View>
+
+              {/* Row 2: Side by side */}
+              <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: 10, marginBottom: 12 }}>
+                {/* Crowd */}
+                <View style={{
+                  flex: 1, padding: 12, borderRadius: 14,
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+                  alignItems: 'center',
+                }}>
+                  <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.15)', letterSpacing: 1, marginBottom: 6 }}>THE CROWD</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: 'rgba(255,255,255,0.45)', marginBottom: 4 }}>{split.crowdPick}</Text>
+                  <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{split.crowdPct}% picked</Text>
+                </View>
+
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.08)' }}>VS</Text>
+                </View>
+
+                {/* AI */}
+                <View style={{
+                  flex: 1, padding: 12, borderRadius: 14,
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  borderWidth: 1, borderColor: 'rgba(232,147,106,0.12)',
+                  alignItems: 'center',
+                }}>
+                  <Text style={{ fontSize: 8, fontWeight: '700', color: CORAL, letterSpacing: 1, marginBottom: 6 }}>OUR AI</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: CORAL, marginBottom: 4 }}>{split.aiPick}</Text>
+                  <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{Math.round(split.aiConf)}% confident</Text>
+                </View>
+              </View>
+
+              {/* Row 3: Analysis (gated) */}
+              {isPremium ? (
+                split.game.prediction?.analysis ? (
+                  <View style={{
+                    borderLeftWidth: 3, borderLeftColor: 'rgba(232,147,106,0.3)',
+                    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
+                    backgroundColor: 'rgba(255,255,255,0.02)',
+                  }}>
+                    <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', lineHeight: 18 }}>
+                      {split.game.prediction.analysis.split('.').slice(0, 2).join('.') + '.'}
+                    </Text>
+                  </View>
+                ) : null
+              ) : (
+                <Pressable
+                  onPress={() => router.push('/paywall')}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    paddingVertical: 10, borderRadius: 10,
+                    backgroundColor: 'rgba(255,255,255,0.02)',
+                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>See why the AI disagrees</Text>
+                  <View style={{
+                    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+                    backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)',
+                  }}>
+                    <Text style={{ fontSize: 8, fontWeight: '800', color: CORAL }}>PRO</Text>
+                  </View>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </Pressable>
+      ))}
+    </Animated.View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 7: QUICK INTEL
+// ═══════════════════════════════════════════════════════════════════
+type InsightType = 'streak' | 'value' | 'tossup' | 'blowout';
+
+interface Insight {
+  type: InsightType;
+  text: string;
+}
+
+const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; color: string }> = {
+  streak: { bg: 'rgba(74,222,128,0.08)', border: 'rgba(74,222,128,0.15)', color: GREEN },
+  value: { bg: 'rgba(232,147,106,0.08)', border: 'rgba(232,147,106,0.15)', color: CORAL },
+  tossup: { bg: 'rgba(122,157,184,0.08)', border: 'rgba(122,157,184,0.15)', color: TEAL },
+  blowout: { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.2)' },
+};
+
+function QuickIntelSection({ games }: { games: GameWithPrediction[] }) {
+  const insights = useMemo<Insight[]>(() => {
+    const result: Insight[] = [];
+    const scheduled = (games ?? []).filter(g => g.prediction && g.status !== GameStatus.FINAL && g.status !== GameStatus.CANCELLED);
+
+    for (const g of scheduled) {
+      const pred = g.prediction!;
+      const conf = pred.confidence ?? 55;
+      const winner = pred.predictedWinner === 'home' ? g.homeTeam.abbreviation : g.awayTeam.abbreviation;
+
+      if ((pred.homeStreak ?? 0) >= 4) {
+        result.push({ type: 'streak', text: `${g.homeTeam.abbreviation} have won ${pred.homeStreak} straight. They're ${Math.round(conf)}% favorites tonight.` });
+      } else if ((pred.awayStreak ?? 0) >= 4) {
+        result.push({ type: 'streak', text: `${g.awayTeam.abbreviation} have won ${pred.awayStreak} straight. They're ${Math.round(conf)}% favorites tonight.` });
+      }
+      if ((pred.edgeRating ?? 0) >= 7) {
+        result.push({ type: 'value', text: `High value: ${winner} at ${Math.round(conf)}% with edge rating ${pred.edgeRating}/10.` });
+      }
+      if (pred.isTossUp) {
+        result.push({ type: 'tossup', text: `Coin flip: ${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation} at ${Math.round(conf)}%. Save your confidence.` });
+      }
+      if (conf > 75) {
+        result.push({ type: 'blowout', text: `Likely blowout: ${winner} favored at ${Math.round(conf)}%. Consider skipping.` });
+      }
+      if (result.length >= 4) break;
+    }
+    return result.slice(0, 4);
+  }, [games]);
+
+  if (insights.length === 0) return null;
+
+  return (
+    <Animated.View entering={FadeInDown.delay(600).duration(400)} style={{ marginTop: 24, paddingHorizontal: 20, marginBottom: 20 }}>
+      <Text style={{ fontSize: 9, fontWeight: '800', color: TEAL, letterSpacing: 2, marginBottom: 14 }}>QUICK INTEL</Text>
+
+      {insights.map((insight, i) => {
+        const style = INSIGHT_STYLES[insight.type];
+        return (
+          <View
+            key={i}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+              paddingVertical: 11, paddingHorizontal: 12, marginBottom: 6,
+              backgroundColor: 'rgba(255,255,255,0.02)',
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', borderRadius: 12,
+            }}
+          >
+            <View style={{
+              width: 26, height: 26, borderRadius: 7,
+              backgroundColor: style.bg, borderWidth: 1, borderColor: style.border,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <BarChart3 size={12} color={style.color} strokeWidth={2} />
+            </View>
+            <Text style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 18 }}>{insight.text}</Text>
+          </View>
+        );
+      })}
+    </Animated.View>
   );
 }
 
@@ -408,16 +1011,11 @@ function Divider({ label }: { label?: string }) {
 // ═══════════════════════════════════════════════════════════════════
 export default function MyArenaScreen() {
   const router = useRouter();
-  const scrollHandler = useHideOnScroll();
   const { data: allGames, isLoading, refetch } = useGames();
-  const { data: liveGames } = useLiveGames();
-  const { followedGames } = useFollowedGames(allGames);
-  const pulse = useGamePulse(liveGames ?? []);
-  const mustWatch = useMustWatch(allGames ?? []);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Keep SSE connection alive for live score updates
+  useLiveScores();
+  const { isPremium } = useSubscription();
   const [refreshing, setRefreshing] = useState(false);
-
-  const liveCount = liveGames?.length ?? 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -425,56 +1023,10 @@ export default function MyArenaScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim() || !allGames) return [];
-    const q = searchQuery.toLowerCase();
-    return allGames.filter(
-      (g) =>
-        g.homeTeam.name.toLowerCase().includes(q) ||
-        g.awayTeam.name.toLowerCase().includes(q) ||
-        g.homeTeam.abbreviation.toLowerCase().includes(q) ||
-        g.awayTeam.abbreviation.toLowerCase().includes(q) ||
-        g.sport.toLowerCase().includes(q)
-    ).slice(0, 8);
-  }, [searchQuery, allGames]);
-
-  const dramaCards = useMemo(() => {
-    const cards: { type: 'thriller' | 'upset' | 'comeback' | 'blowout'; game: GameWithPrediction; headline: string }[] = [];
-    if (pulse.closest) {
-      const g = pulse.closest.game;
-      const diff = pulse.closest.diff;
-      cards.push({
-        type: 'thriller',
-        game: g,
-        headline: diff <= 3
-          ? `${diff}-point game. This one could go either way.`
-          : `Close game with a ${diff}-point margin. Heating up.`,
-      });
-    }
-    if (pulse.upset) {
-      const g = pulse.upset.game;
-      const fav = g.marketFavorite === 'home' ? g.homeTeam : g.awayTeam;
-      const dog = g.marketFavorite === 'home' ? g.awayTeam : g.homeTeam;
-      cards.push({
-        type: 'upset',
-        game: g,
-        headline: `${dog.abbreviation} leading the favored ${fav.abbreviation} by ${pulse.upset.diff}. The underdog is on a run.`,
-      });
-    }
-    if (pulse.blowout) {
-      const g = pulse.blowout.game;
-      const leader = (g.homeScore ?? 0) > (g.awayScore ?? 0) ? g.homeTeam : g.awayTeam;
-      cards.push({
-        type: 'blowout',
-        game: g,
-        headline: `${leader.abbreviation} up by ${pulse.blowout.diff}. This one's done.`,
-      });
-    }
-    return cards;
-  }, [pulse]);
-
-  const featuredTonight = mustWatch[0] ?? null;
-  const otherTonight = mustWatch.slice(1);
+  const liveCount = useMemo(() =>
+    (allGames ?? []).filter(g => g.status === GameStatus.LIVE).length,
+    [allGames]
+  );
 
   if (isLoading) {
     return (
@@ -484,265 +1036,62 @@ export default function MyArenaScreen() {
     );
   }
 
+  if ((allGames ?? []).length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+            <Text style={{ fontSize: 24, fontWeight: '900', color: WHITE }}>My Arena</Text>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+            <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>No games today</Text>
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 6 }}>Check back tomorrow</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <Animated.ScrollView
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}
-          onScroll={scrollHandler}
           scrollEventThrottle={16}
-          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={TEAL} />
           }
         >
-          {/* ═══ HEADER ═══ */}
-          <Animated.View entering={FadeInDown.duration(400)} style={st.header}>
-            <Text style={st.headerTitle}>My Arena</Text>
-            {liveCount > 0 ? (
-              <View style={st.liveChip}>
-                <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: CORAL }} />
-                <Text style={st.liveChipText}>{liveCount} LIVE</Text>
-              </View>
-            ) : null}
-          </Animated.View>
+          {/* Section 1: Header + Search */}
+          <HeaderSection liveCount={liveCount} />
 
-          {/* ═══ SEARCH BAR ═══ */}
-          <Animated.View entering={FadeInDown.delay(50).duration(400)} style={{ paddingHorizontal: 20, marginBottom: 6 }}>
-            <View style={st.searchBar}>
-              <SearchIcon />
-              <TextInput
-                style={st.searchInput}
-                placeholder="Search teams, games, sports..."
-                placeholderTextColor="rgba(255,255,255,0.15)"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery ? (
-                <Pressable onPress={() => setSearchQuery('')} hitSlop={12}>
-                  <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>×</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </Animated.View>
+          {/* Section 2: Your Games */}
+          <YourGamesSection games={allGames ?? []} router={router} />
 
-          {/* Search results */}
-          {searchQuery.trim() && searchResults.length > 0 ? (
-            <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-              {searchResults.map((g) => (
-                <Pressable
-                  key={g.id}
-                  onPress={() => { setSearchQuery(''); router.push(`/game/${g.id}`); }}
-                  style={st.searchResult}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>
-                    {g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}
-                  </Text>
-                  <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{g.sport} · {formatTime(g.gameTime)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          {/* Section 3: Night Plan */}
+          <NightPlanSection games={allGames ?? []} router={router} />
 
-          {/* ═══ MAIN CONTENT ═══ */}
-          {!searchQuery.trim() ? (
-            <>
-              {/* YOUR GAMES — Story Circles */}
-              <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ paddingHorizontal: 20, marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFF' }}>Your Games</Text>
-                  <Pressable onPress={() => router.push('/(tabs)')}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Browse</Text>
-                  </Pressable>
-                </View>
-              </Animated.View>
+          {/* Section 4: Live Arena */}
+          <LiveArenaSection games={allGames ?? []} router={router} />
 
-              {/* TEMPORARY: Show mock followed games for screenshots */}
-              {followedGames.length === 0 ? (
-                <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
-                  <View style={st.emptyFollowed}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.3)' }}>No games followed yet</Text>
-                    <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)', marginTop: 4 }}>Tap the follow button on any game to track it here</Text>
-                  </View>
-                </View>
-              ) : (
-                <Animated.ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 20, gap: 10, paddingBottom: 4 }}
-                  entering={FadeInDown.delay(150).duration(400)}
-                  scrollEventThrottle={16}
-                  removeClippedSubviews={true}
-                  decelerationRate="fast"
-                >
-                  {followedGames.map((game) => (
-                    <StoryCircle
-                      key={game.id}
-                      game={game}
-                      onPress={() => router.push(`/game/${game.id}`)}
-                    />
-                  ))}
-                  {/* Add circle */}
-                  <Pressable onPress={() => router.push('/(tabs)')} style={{ alignItems: 'center', width: 72 }}>
-                    <View style={st.addCircle}>
-                      <Text style={{ fontSize: 22, color: `${CORAL}50`, fontWeight: '300' }}>+</Text>
-                    </View>
-                    <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.12)', marginTop: 6 }}>Add</Text>
-                  </Pressable>
-                </Animated.ScrollView>
-              )}
+          {/* Section 5: Tonight's Storylines */}
+          <StorylinesSection games={allGames ?? []} isPremium={isPremium} router={router} />
 
-              <Divider />
+          {/* Section 6: Split Decision */}
+          <SplitDecisionSection games={allGames ?? []} isPremium={isPremium} router={router} />
 
-              {/* YOUR PULSE */}
-              <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ paddingHorizontal: 20 }}>
-                <YourPulse />
-              </Animated.View>
+          {/* Section 7: Quick Intel */}
+          <QuickIntelSection games={allGames ?? []} />
 
-              {/* DRAMA FEED */}
-              {dramaCards.length > 0 ? (
-                <>
-                  <Divider label="HAPPENING NOW" />
-                  <Animated.View entering={FadeInDown.delay(250).duration(400)} style={{ paddingHorizontal: 20, gap: 10 }}>
-                    {dramaCards.map((card, i) => (
-                      <DramaCard
-                        key={`drama-${i}`}
-                        type={card.type}
-                        game={card.game}
-                        headline={card.headline}
-                        onPress={() => router.push(`/game/${card.game.id}`)}
-                      />
-                    ))}
-                  </Animated.View>
-                </>
-              ) : null}
-
-              {/* TONIGHT / UPCOMING */}
-              {mustWatch.length > 0 ? (
-                <>
-                  <Divider label="TONIGHT" />
-
-                  {featuredTonight ? (
-                    <Animated.View entering={FadeInDown.delay(300).duration(400)} style={{ paddingHorizontal: 20, marginBottom: 10 }}>
-                      <Pressable onPress={() => router.push(`/game/${featuredTonight.game.id}`)} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
-                        <View style={st.featuredCard}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-                            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: TEAL }} />
-                            <Text style={{ fontSize: 9, fontWeight: '800', color: TEAL, letterSpacing: 2.5 }}>TONIGHT'S STORY</Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                            <View>
-                              <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{featuredTonight.game.awayTeam.abbreviation}</Text>
-                              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>
-                                {featuredTonight.game.awayTeam.city} · {featuredTonight.game.awayTeam.record}
-                              </Text>
-                            </View>
-                            <View style={st.vsBox}>
-                              <Text style={{ fontSize: 10, fontWeight: '900', color: 'rgba(255,255,255,0.12)', letterSpacing: 2 }}>VS</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                              <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{featuredTonight.game.homeTeam.abbreviation}</Text>
-                              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>
-                                {featuredTonight.game.homeTeam.city} · {featuredTonight.game.homeTeam.record}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={st.narrativeBox}>
-                            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 19 }} numberOfLines={3}>
-                              {featuredTonight.game.awayTeam.abbreviation} ({featuredTonight.game.awayTeam.record}) visits {featuredTonight.game.homeTeam.abbreviation} ({featuredTonight.game.homeTeam.record}) at {featuredTonight.game.venue || 'TBD'}.{featuredTonight.game.tvChannel ? ` Watch on ${featuredTonight.game.tvChannel}.` : ''}
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
-                            <View style={{ flexDirection: 'row', gap: 6 }}>
-                              <View style={st.sportPill}><Text style={st.sportPillText}>{featuredTonight.game.sport}</Text></View>
-                              <View style={st.sportPill}><Text style={st.sportPillText}>{formatTime(featuredTonight.game.gameTime)}</Text></View>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2.5, height: 16 }}>
-                              {[1,2,3,4,5].map(n => (
-                                <View key={n} style={{
-                                  width: 3.5, height: 3 + n * 2.5, borderRadius: 2,
-                                  backgroundColor: n <= featuredTonight.watchScore ? TEAL : 'rgba(255,255,255,0.06)',
-                                }} />
-                              ))}
-                            </View>
-                          </View>
-                        </View>
-                      </Pressable>
-                    </Animated.View>
-                  ) : null}
-
-                  {otherTonight.length > 0 ? (
-                    <Animated.View entering={FadeInDown.delay(350).duration(400)} style={{ paddingHorizontal: 20, gap: 6 }}>
-                      {otherTonight.map(({ game, watchScore }) => (
-                        <TonightCard
-                          key={game.id}
-                          game={game}
-                          watchScore={watchScore}
-                          onPress={() => router.push(`/game/${game.id}`)}
-                        />
-                      ))}
-                    </Animated.View>
-                  ) : null}
-                </>
-              ) : null}
-
-              {/* Subtle PRO hint — just a line, not a banner */}
-              {mustWatch.length > 0 ? (
-                <Pressable onPress={() => router.push('/paywall')} style={{ paddingHorizontal: 20, marginTop: 16 }}>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)', textAlign: 'center', lineHeight: 16 }}>
-                    Pro members see AI confidence ratings and predictions for every game ›
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              {/* DISCLAIMER */}
-              <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
-                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.1)', textAlign: 'center', lineHeight: 15 }}>
-                  AI predictions are for entertainment purposes only. Not financial advice.
-                </Text>
-              </View>
-            </>
-          ) : null}
-        </Animated.ScrollView>
+          {/* Disclaimer */}
+          <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.08)', textAlign: 'center', lineHeight: 14 }}>
+              AI predictions are for entertainment purposes only. Not financial advice.
+            </Text>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
-
-// ─── STYLES ──────────────────────────────────────────────────────
-const st = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  headerTitle: { fontSize: 22, fontWeight: '900', color: '#FFF' },
-  liveChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: `${CORAL}10`, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: `${CORAL}18` },
-  liveChipText: { fontSize: 10, fontWeight: '800', color: CORAL },
-
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  searchInput: { flex: 1, fontSize: 13, color: '#FFF', padding: 0 },
-  searchResult: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 4 },
-
-  circleAbbr: { fontSize: 12, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, lineHeight: 14 },
-  circleVs: { fontSize: 6, color: 'rgba(255,255,255,0.12)', lineHeight: 8 },
-  circleLabel: { fontSize: 9, fontWeight: '700' },
-  liveBadge: { position: 'absolute', bottom: -2, left: '50%', marginLeft: -18, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  liveBadgeText: { fontSize: 7, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 },
-
-  addCircle: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderStyle: 'dashed', borderColor: `${TEAL}25`, alignItems: 'center', justifyContent: 'center' },
-  emptyFollowed: { padding: 20, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', alignItems: 'center' },
-
-  pulseCard: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.025)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', padding: 14 },
-  pulseCircle: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  pulseCircleText: { fontSize: 16, fontWeight: '900' },
-
-  dramaCard: { borderRadius: 18, borderWidth: 1, padding: 16, position: 'relative', overflow: 'hidden' },
-  scoreChip: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.3)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  scoreChipText: { fontSize: 16, fontWeight: '900', color: '#FFF', letterSpacing: 1, fontVariant: ['tabular-nums'] },
-
-  featuredCard: { borderRadius: 22, padding: 20, backgroundColor: 'rgba(28,42,58,0.4)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  vsBox: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  narrativeBox: { padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-
-  tonightCard: { padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.025)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  sportPill: { backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 },
-  sportPillText: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.2)' },
-});

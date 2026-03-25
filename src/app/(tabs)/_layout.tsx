@@ -4,22 +4,15 @@ import { Home, User } from 'lucide-react-native';
 import { GlassBottomNav } from '@/components/GlassBottomNav';
 import { ScrollProvider } from '@/contexts/ScrollContext';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
-import { useLiveScores } from '@/hooks/useLiveScores';
 
 // Field goal post icon matching the "U" from the CLUTCH logo
 function FieldGoalIcon({ size = 24, color = '#FFFFFF', strokeWidth = 1.5 }: { size?: number; color?: string; strokeWidth?: number }) {
-  const scale = size / 24;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* Left upright */}
       <Path d="M6 2 L6 16" stroke={color} strokeWidth={strokeWidth * 1.2} strokeLinecap="round" />
-      {/* Right upright */}
       <Path d="M18 2 L18 16" stroke={color} strokeWidth={strokeWidth * 1.2} strokeLinecap="round" />
-      {/* Crossbar */}
       <Path d="M6 16 L18 16" stroke={color} strokeWidth={strokeWidth * 1.2} strokeLinecap="round" />
-      {/* Center post going down */}
       <Path d="M12 16 L12 22" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
-      {/* Football going through - pointed oval shape */}
       <Path
         d="M9 9 Q12 6 15 9 Q12 12 9 9"
         fill={color}
@@ -30,7 +23,9 @@ function FieldGoalIcon({ size = 24, color = '#FFFFFF', strokeWidth = 1.5 }: { si
 }
 
 export default function TabLayout() {
-  const { isConnected } = useLiveScores();
+  // NOTE: useLiveScores was removed — it called setLiveScores() on every SSE event
+  // which re-rendered the entire tab layout (all icons, nav bar, frozen tabs) and caused crashes.
+  // Live scores still work via polling in useGames().
   return (
     <ScrollProvider>
       <Tabs
@@ -42,7 +37,8 @@ export default function TabLayout() {
           tabBarLabelPosition: 'below-icon',
           headerShown: false,
           lazy: true,
-          freezeOnBlur: true,
+          // NOTE: freezeOnBlur removed — it caused native crashes when combined
+          // with reanimated animations in the GlassBottomNav and tab screens.
         }}
       >
         <Tabs.Screen
@@ -76,12 +72,15 @@ export default function TabLayout() {
           options={{
             title: 'My Arena',
             tabBarIcon: ({ focused }) => (
-              <Svg width={24} height={24} viewBox="0 0 32 32" fill="none">
-                <Circle cx={16} cy={16} r={14} stroke="#FFFFFF" strokeWidth={focused ? 2 : 1.2} fill="none" opacity={0.25} />
-                <Circle cx={16} cy={16} r={9} stroke="#FFFFFF" strokeWidth={focused ? 2 : 1.2} fill="none" opacity={0.4} />
-                <Circle cx={16} cy={16} r={4} stroke="#FFFFFF" strokeWidth={focused ? 2 : 1.2} fill="none" opacity={0.6} />
-                <Line x1={16} y1={2} x2={16} y2={16} stroke="#FFFFFF" strokeWidth={focused ? 2 : 1.2} strokeLinecap="round" />
-                <Circle cx={16} cy={6} r={2} fill="#FFFFFF" />
+              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                {/* Radar rings */}
+                <Circle cx={12} cy={12} r={10} stroke="#FFFFFF" strokeWidth={focused ? 1.8 : 1.2} fill="none" opacity={0.2} />
+                <Circle cx={12} cy={12} r={6} stroke="#FFFFFF" strokeWidth={focused ? 1.8 : 1.2} fill="none" opacity={0.35} />
+                <Circle cx={12} cy={12} r={2} fill="#FFFFFF" opacity={focused ? 0.9 : 0.6} />
+                {/* Sweep line */}
+                <Line x1={12} y1={2} x2={12} y2={12} stroke="#FFFFFF" strokeWidth={focused ? 2 : 1.2} strokeLinecap="round" opacity={0.7} />
+                {/* Signal dot */}
+                <Circle cx={15} cy={7} r={1.5} fill="#FFFFFF" opacity={focused ? 0.8 : 0.5} />
               </Svg>
             ),
           }}
