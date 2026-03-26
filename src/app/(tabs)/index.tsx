@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   FadeInDown,
@@ -11,10 +11,11 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import React, { useState, useCallback, useEffect, useMemo, memo, useRef } from 'react';
-import { ChevronRight, Check, ChevronDown, X, Search, Layers } from 'lucide-react-native';
+import { ChevronRight, X, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Line, Rect, Circle } from 'react-native-svg';
-import { SportCard, GameCard, TeamJerseyCompact, getSportIcon, getTicketColor, TICKET_COLORS } from '@/components/sports';
+import Svg, { Path } from 'react-native-svg';
+import { PicksBadge } from '@/components/shared/PicksBadge';
+import { SportCard, GameCard, getTicketColor } from '@/components/sports';
 import CompactLiveCard from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
 import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
@@ -22,17 +23,8 @@ import { getTeamColors } from '@/lib/team-colors';
 import { useGames, useLiveGames } from '@/hooks/useGames';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
-import { useSubscription } from '@/lib/subscription-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
-
-// Helper to adjust color brightness
-function adjustColorBrightness(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-}
 
 // Field goal post to replace "U" - with football going through - memoized
 const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: string; size?: number }) {
@@ -132,142 +124,14 @@ const HomeHeader = React.memo(function HomeHeader({
       <Animated.View
         entering={FadeInDown.duration(400)}
         className="px-5 pt-5 pb-3"
+        style={{ alignItems: 'center' }}
       >
-        <View
-          className="flex-row items-center justify-center"
-          style={{
-            shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.4,
-            shadowRadius: 8,
-          }}
-        >
-          {/* CLUTCH - Bold sporty text with 3D layered effect */}
-          <View className="flex-row items-end">
-            {/* CL part */}
-            <View className="relative">
-              {/* Shadow layer */}
-              <Text
-                className="absolute text-[42px] uppercase"
-                style={{
-                  fontWeight: '900',
-                  letterSpacing: 2,
-                  color: '#000000',
-                  left: 3,
-                  top: 3,
-                }}
-              >
-                CL
-              </Text>
-              {/* Mid layer - blue */}
-              <Text
-                className="absolute text-[42px] uppercase"
-                style={{
-                  fontWeight: '900',
-                  letterSpacing: 2,
-                  color: '#7A9DB8',
-                  left: 1.5,
-                  top: 1.5,
-                }}
-              >
-                CL
-              </Text>
-              {/* Main text */}
-              <Text
-                className="text-[42px] text-white uppercase"
-                style={{
-                  fontWeight: '900',
-                  letterSpacing: 2,
-                }}
-              >
-                CL
-              </Text>
-            </View>
-
-            {/* Field Goal U - with 3D shadow effect */}
-            <View style={{ marginBottom: 4, marginHorizontal: -1 }}>
-              {/* Shadow layer */}
-              <View style={{ position: 'absolute', left: 3, top: 3 }}>
-                <FieldGoalU color="#000000" size={42} />
-              </View>
-              {/* Mid layer - blue */}
-              <View style={{ position: 'absolute', left: 1.5, top: 1.5 }}>
-                <FieldGoalU color="#7A9DB8" size={42} />
-              </View>
-              {/* Main */}
-              <FieldGoalU color="#FFFFFF" size={42} />
-            </View>
-
-            {/* TCH part */}
-            <View className="relative">
-              {/* Shadow layer */}
-              <Text
-                className="absolute text-[42px] uppercase"
-                style={{
-                  fontWeight: '900',
-                  letterSpacing: 2,
-                  color: '#000000',
-                  left: 3,
-                  top: 3,
-                }}
-              >
-                TCH
-              </Text>
-              {/* Mid layer - blue */}
-              <Text
-                className="absolute text-[42px] uppercase"
-                style={{
-                  fontWeight: '900',
-                  letterSpacing: 2,
-                  color: '#7A9DB8',
-                  left: 1.5,
-                  top: 1.5,
-                }}
-              >
-                TCH
-              </Text>
-              {/* Main text */}
-              <Text
-                className="text-[42px] text-white uppercase"
-                style={{
-                  fontWeight: '900',
-                  letterSpacing: 2,
-                }}
-              >
-                TCH
-              </Text>
-            </View>
-          </View>
-
-          {/* PICKS Badge */}
-          <View
-            style={{
-              marginLeft: 12,
-              backgroundColor: 'rgba(90, 122, 138, 0.3)',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderRadius: 10,
-              borderWidth: 2,
-              borderColor: '#5A7A8A',
-              shadowColor: '#000000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.5,
-              shadowRadius: 6,
-              elevation: 6,
-            }}
-          >
-            <Text
-              className="text-xl uppercase"
-              style={{
-                fontWeight: '800',
-                letterSpacing: 4,
-                color: '#FFFFFF',
-              }}
-            >
-              PICKS
-            </Text>
-          </View>
-
+        <View style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12 }}>
+          <Image
+            source={require('@/assets/clutch-logo-horizontal.png')}
+            style={{ width: 300, height: 300 * (523 / 3352) }}
+            resizeMode="contain"
+          />
         </View>
       </Animated.View>
 
@@ -455,224 +319,67 @@ const HomeHeader = React.memo(function HomeHeader({
           entering={FadeInDown.delay(100).duration(500)}
           style={{ marginBottom: 20, marginTop: 8 }}
         >
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: 20,
-              paddingBottom: 10,
-              marginBottom: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: 'rgba(220,38,38,0.15)',
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
-                <Animated.View
-                  style={[ring1Style, {
-                    position: 'absolute', width: 14, height: 14, borderRadius: 7,
-                    borderWidth: 1, borderColor: '#DC2626',
-                  }]}
-                />
-                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }} />
+          <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                  <Animated.View
+                    style={[ring1Style, {
+                      position: 'absolute', width: 14, height: 14, borderRadius: 7,
+                      borderWidth: 1, borderColor: '#DC2626',
+                    }]}
+                  />
+                  <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }} />
+                </View>
+                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 }}>
+                  Live Now
+                </Text>
               </View>
-              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 }}>
-                Live Now
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+                {liveGamesPreview.length}
               </Text>
             </View>
-            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
-              {liveGamesPreview.length}
-            </Text>
+            <View style={{ width: 32, height: 2, borderRadius: 1, backgroundColor: 'rgba(220,38,38,0.5)', marginTop: 6 }} />
           </View>
 
-          {/* Liquid Glass Live Sport Filter Pills */}
+          {/* Sport filter pills */}
           {availableLiveSports.length > 1 ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 12, paddingTop: 2 }}
               style={{ flexGrow: 0 }}
-              scrollEventThrottle={16}
-              removeClippedSubviews={true}
               decelerationRate="fast"
             >
-              {/* All pill */}
-              <Pressable
-                onPress={() => setSelectedLiveSportFilter(null)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] })}
-              >
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    paddingVertical: 6,
-                    paddingLeft: 6,
-                    paddingRight: 14,
-                    borderRadius: 22,
-                    overflow: 'hidden',
-                    backgroundColor: !selectedLiveSportFilter ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
-                    borderWidth: 1,
-                    borderColor: !selectedLiveSportFilter ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.06)',
-                    ...(!selectedLiveSportFilter ? {
-                      shadowColor: '#FFFFFF',
-                      shadowOpacity: 0.1,
-                      shadowRadius: 12,
-                      shadowOffset: { width: 0, height: 2 },
-                      elevation: 4,
-                    } : {}),
-                  }}
-                >
-                  {/* Glass highlight overlay */}
-                  {!selectedLiveSportFilter ? (
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: '50%',
-                        backgroundColor: 'rgba(255,255,255,0.06)',
-                        borderTopLeftRadius: 22,
-                        borderTopRightRadius: 22,
-                      }}
-                    />
-                  ) : null}
-                  {/* Mini icon circle */}
-                  <View
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 15,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: !selectedLiveSportFilter ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
-                      borderWidth: 1,
-                      borderColor: !selectedLiveSportFilter ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
-                    }}
-                  >
-                    <Layers size={13} color={!selectedLiveSportFilter ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} />
-                  </View>
-                  {/* Text column */}
-                  <View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: '700',
-                        color: !selectedLiveSportFilter ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
-                      }}
-                    >
-                      All
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        fontWeight: '600',
-                        color: !selectedLiveSportFilter ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)',
-                        marginTop: 1,
-                      }}
-                    >
-                      {liveGamesPreview.length} live
-                    </Text>
-                  </View>
+              {/* All pill — navy blue */}
+              <Pressable onPress={() => setSelectedLiveSportFilter(null)}>
+                <View style={{
+                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+                  backgroundColor: '#1C2A3A',
+                  borderWidth: 1, borderColor: !selectedLiveSportFilter ? '#3A4E62' : '#2A3A4E',
+                }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                    All ({liveGamesPreview.length})
+                  </Text>
                 </View>
               </Pressable>
 
-              {/* Per-sport glass pills */}
+              {/* Per-sport pills — ticket colors */}
               {availableLiveSports.map((sport) => {
                 const isChipSelected = selectedLiveSportFilter === sport;
-                const chipColor = SPORT_META[sport].color;
+                const ticketColor = getTicketColor(sport);
+                const isLight = ticketColor === '#C2C4C8';
                 const count = liveSportCounts.get(sport) ?? 0;
-
                 return (
-                  <Pressable
-                    key={sport}
-                    onPress={() => setSelectedLiveSportFilter(isChipSelected ? null : sport)}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] })}
-                  >
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 8,
-                        paddingVertical: 6,
-                        paddingLeft: 6,
-                        paddingRight: 14,
-                        borderRadius: 22,
-                        overflow: 'hidden',
-                        backgroundColor: isChipSelected ? chipColor + '25' : 'rgba(255,255,255,0.04)',
-                        borderWidth: 1,
-                        borderColor: isChipSelected ? chipColor + '55' : 'rgba(255,255,255,0.06)',
-                        ...(isChipSelected ? {
-                          shadowColor: chipColor,
-                          shadowOpacity: 0.25,
-                          shadowRadius: 12,
-                          shadowOffset: { width: 0, height: 2 },
-                          elevation: 6,
-                        } : {}),
-                      }}
-                    >
-                      {/* Glass highlight overlay */}
-                      {isChipSelected ? (
-                        <View
-                          pointerEvents="none"
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '50%',
-                            backgroundColor: 'rgba(255,255,255,0.06)',
-                            borderTopLeftRadius: 22,
-                            borderTopRightRadius: 22,
-                          }}
-                        />
-                      ) : null}
-                      {/* Mini sport icon circle */}
-                      <View
-                        style={{
-                          width: 30,
-                          height: 30,
-                          borderRadius: 15,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: isChipSelected ? chipColor : 'rgba(255,255,255,0.05)',
-                          borderWidth: 1,
-                          borderColor: isChipSelected ? 'transparent' : 'rgba(255,255,255,0.06)',
-                          ...(isChipSelected ? {
-                            shadowColor: chipColor,
-                            shadowOpacity: 0.5,
-                            shadowRadius: 6,
-                            shadowOffset: { width: 0, height: 2 },
-                          } : {}),
-                        }}
-                      >
-                        {getSportIcon(sport, 15, isChipSelected ? '#FFFFFF' : 'rgba(220,220,225,0.45)')}
-                      </View>
-                      {/* Text column */}
-                      <View>
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: '700',
-                            color: isChipSelected ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
-                          }}
-                        >
-                          {sport}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            fontWeight: '600',
-                            color: isChipSelected ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)',
-                            marginTop: 1,
-                          }}
-                        >
-                          {count} live
-                        </Text>
-                      </View>
+                  <Pressable key={sport} onPress={() => setSelectedLiveSportFilter(isChipSelected ? null : sport)}>
+                    <View style={{
+                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+                      backgroundColor: ticketColor,
+                      borderWidth: 1, borderColor: isChipSelected ? '#FFF' : ticketColor,
+                    }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#040608' : '#FFFFFF' }}>
+                        {sport} ({count})
+                      </Text>
                     </View>
                   </Pressable>
                 );
@@ -732,40 +439,34 @@ const HomeHeader = React.memo(function HomeHeader({
         <>
           {/* "Today's Games" / Sport Name header */}
           <Animated.View entering={FadeInRight.delay(280).duration(500)} style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginBottom: 8 }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingBottom: 10,
-                borderBottomWidth: 1,
-                borderBottomColor: selectedSportFilter ? getTicketColor(selectedSportFilter) + '15' : 'rgba(255,255,255,0.06)',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {selectedSportFilter ? (
-                  <View
-                    style={{
-                      width: 22,
-                      height: 28,
-                      borderTopLeftRadius: 5,
-                      borderTopRightRadius: 5,
-                      borderBottomLeftRadius: 2,
-                      borderBottomRightRadius: 2,
-                      backgroundColor: getTicketColor(selectedSportFilter),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFF' }}>
-                      {gameCounts?.[selectedSportFilter] ?? 0}
-                    </Text>
-                  </View>
-                ) : null}
-                <Text style={{ color: '#FFFFFF', fontSize: responsive.isTablet ? responsive.headerSize : headerFontSize, fontWeight: '800', letterSpacing: 0.5 }}>
-                  {selectedSportFilter ? `${SPORT_META[selectedSportFilter].name}` : "Today"}
-                </Text>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {selectedSportFilter ? (
+                    <View
+                      style={{
+                        width: 8,
+                        height: 12,
+                        borderTopLeftRadius: 5,
+                        borderTopRightRadius: 5,
+                        borderBottomLeftRadius: 2,
+                        borderBottomRightRadius: 2,
+                        backgroundColor: getTicketColor(selectedSportFilter),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 5, fontWeight: '900', color: '#FFF' }}>
+                        {gameCounts?.[selectedSportFilter] ?? 0}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text style={{ color: '#FFFFFF', fontSize: responsive.isTablet ? responsive.headerSize : headerFontSize, fontWeight: '800', letterSpacing: 0.5 }}>
+                    {selectedSportFilter ? `${SPORT_META[selectedSportFilter].name}` : "Today"}
+                  </Text>
+                </View>
               </View>
+              <View style={{ width: 32, height: 2, borderRadius: 1, backgroundColor: selectedSportFilter ? getTicketColor(selectedSportFilter) + '80' : 'rgba(255,255,255,0.15)', marginTop: 6 }} />
             </View>
           </Animated.View>
         </>
@@ -941,9 +642,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
-  const { isPremium, isLoading: isSubLoading } = useSubscription();
   const { isTablet, contentPadding: horizontalPadding, headerSize: headerFontSize, numColumns } = responsive;
-  const contentMaxWidth = isTablet ? 600 : undefined;
   const flatListRef = useRef<any>(null);
   const lastRefreshRef = useRef<number>(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -1129,34 +828,6 @@ export default function HomeScreen() {
     });
   }, [todaysGames]);
 
-  // Get available sports for today (sports that have non-live games)
-  const availableSports = useMemo(() => {
-    if (!nonLiveGames.length) return [];
-    const sportsWithGames = new Set<Sport>();
-    nonLiveGames.forEach((game) => {
-      sportsWithGames.add(game.sport as Sport);
-    });
-    return allSports.filter((sport) => sportsWithGames.has(sport));
-  }, [nonLiveGames]);
-
-  // Group non-live games by sport for sectioned display
-  const gamesBySport = useMemo(() => {
-    if (!nonLiveGames.length) return new Map<Sport, GameWithPrediction[]>();
-    const grouped = new Map<Sport, GameWithPrediction[]>();
-    nonLiveGames.forEach((game) => {
-      const sport = game.sport as Sport;
-      if (!grouped.has(sport)) {
-        grouped.set(sport, []);
-      }
-      grouped.get(sport)!.push(game);
-    });
-    // Sort games within each sport by time
-    grouped.forEach((games) => {
-      games.sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
-    });
-    return grouped;
-  }, [nonLiveGames]);
-
   // Build flat list data for virtualized rendering
   type SectionHeaderItem = { type: 'sport-header'; sport: Sport; gameCount: number; key: string };
   type DateSectionItem = { type: 'date-header'; label: string; count: number; key: string };
@@ -1292,17 +963,17 @@ export default function HomeScreen() {
             {/* Full ticket stub — matches filter button exactly */}
             <View
               style={{
-                width: 70,
-                height: 86,
-                borderRadius: 12,
+                width: 50,
+                height: 62,
+                borderRadius: 10,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
               <View
                 style={{
-                  width: 66,
-                  height: 82,
+                  width: 46,
+                  height: 58,
                   borderTopLeftRadius: 10,
                   borderTopRightRadius: 10,
                   borderBottomLeftRadius: 4,
@@ -1374,12 +1045,12 @@ export default function HomeScreen() {
                 </View>
 
                 {/* Sport name */}
-                <View style={{ alignItems: 'center', paddingTop: 10 }}>
+                <View style={{ alignItems: 'center', paddingTop: 6 }}>
                   <Text
                     style={{
-                      fontSize: 15,
+                      fontSize: 10,
                       fontWeight: '900',
-                      letterSpacing: 1,
+                      letterSpacing: 0.5,
                       color: textColor,
                     }}
                   >
@@ -1388,30 +1059,16 @@ export default function HomeScreen() {
                 </View>
 
                 {/* Game count */}
-                <View style={{ alignItems: 'center', marginTop: 2 }}>
+                <View style={{ alignItems: 'center', marginTop: 1 }}>
                   <Text
                     style={{
-                      fontSize: 22,
+                      fontSize: 16,
                       fontWeight: '900',
                       color: textColor,
                       fontVariant: ['tabular-nums'],
                     }}
                   >
                     {item.gameCount}
-                  </Text>
-                </View>
-
-                {/* ADMIT ONE */}
-                <View style={{ alignItems: 'center', marginTop: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 6,
-                      fontWeight: '700',
-                      letterSpacing: 2.5,
-                      color: textDimColor,
-                    }}
-                  >
-                    ADMIT ONE
                   </Text>
                 </View>
               </View>
@@ -1447,43 +1104,22 @@ export default function HomeScreen() {
         '#FFFFFF';
       return (
         <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 16, marginBottom: 10 } : { paddingHorizontal: 20, marginTop: 16, marginBottom: 10 }}>
-          {isLive ? (
-            /* Live Now — red bar matching homepage Live Now section */
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingBottom: 10,
-                borderBottomWidth: 1,
-                borderBottomColor: 'rgba(220,38,38,0.15)',
-              }}
-            >
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 }}>Live Now</Text>
+                {isLive ? (
+                  <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }} />
+                ) : (
+                  <View style={{ width: 3, height: 16, borderRadius: 2, backgroundColor: accentColor }} />
+                )}
+                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 }}>
+                  {isLive ? 'Live Now' : item.label}
+                </Text>
               </View>
               <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{item.count}</Text>
             </View>
-          ) : (
-            /* Other section headers — consistent style */
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingBottom: 10,
-                borderBottomWidth: 1,
-                borderBottomColor: accentColor + '15',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 3, height: 16, borderRadius: 2, backgroundColor: accentColor }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 }}>{item.label}</Text>
-              </View>
-              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{item.count}</Text>
-            </View>
-          )}
+            <View style={{ width: 32, height: 2, borderRadius: 1, backgroundColor: accentColor + '80', marginTop: 6 }} />
+          </View>
         </View>
       );
     }
@@ -1517,8 +1153,17 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#040608' }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
       <GridBackground />
+      {/* Subtle coral and teal ambient washes */}
+      <LinearGradient
+        colors={['rgba(232,147,106,0.04)', 'transparent', 'rgba(122,157,184,0.03)']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0.8, y: 0 }}
+        end={{ x: 0.2, y: 1 }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        pointerEvents="none"
+      />
       <Animated.FlatList
         key={numColumns}
         ref={flatListRef}

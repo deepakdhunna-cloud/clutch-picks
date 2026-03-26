@@ -111,7 +111,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
   useEffect(() => {
     if (isLoading || !onboardingChecked) return;
 
-    const inAuthGroup = segments[0] === 'sign-in' || segments[0] === 'verify-otp' || segments[0] === 'welcome' || segments[0] === 'onboarding';
+    const inAuthGroup = segments[0] === 'sign-in' || segments[0] === 'sign-up' || segments[0] === 'verify-otp' || segments[0] === 'welcome' || segments[0] === 'onboarding';
     const inPublicGroup = segments[0] === 'privacy-policy' || segments[0] === 'terms';
 
     if (session?.user && inAuthGroup && segments[0] !== 'onboarding') {
@@ -146,6 +146,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
         <Stack screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 200, gestureEnabled: true, fullScreenGestureEnabled: true }}>
           <Stack.Screen name="welcome" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="sign-in" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="sign-up" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="verify-otp" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="(tabs)" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="game/[id]" options={{ freezeOnBlur: true }} />
@@ -175,7 +176,7 @@ export default function RootLayout() {
         <SplashProvider>
           <ErrorBoundary>
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+              <StatusBar style="light" />
               <RootLayoutNav colorScheme={colorScheme} />
             </GestureHandlerRootView>
           </ErrorBoundary>

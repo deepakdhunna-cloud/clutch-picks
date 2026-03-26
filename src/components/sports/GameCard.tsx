@@ -1,4 +1,4 @@
-import { View, Text, Pressable, TouchableOpacity, TouchableWithoutFeedback, Modal, Linking, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Modal, Linking, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   FadeInUp,
@@ -6,14 +6,12 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
-  withSpring,
   Easing,
   interpolate,
   cancelAnimation,
 } from 'react-native-reanimated';
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { cn } from '@/lib/cn';
 import { GameWithPrediction, GameStatus, SPORT_META, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { PredictionBadge } from './PredictionBadge';
@@ -22,15 +20,12 @@ import { Calendar, Clock, Tv, TrendingUp, Star, ChevronRight, Check } from 'luci
 import { useMakePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle, Ellipse, Path, Line } from 'react-native-svg';
 import { usePrefetchGame } from '@/hooks/useGames';
 
 interface GameCardProps {
   game: GameWithPrediction;
   index?: number;
 }
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Compact Pulsing Live Badge component
 const PulsingLiveBadge = memo(function PulsingLiveBadge() {
@@ -82,74 +77,6 @@ const PulsingLiveBadge = memo(function PulsingLiveBadge() {
     </View>
   );
 });
-
-// Mini sport icons for team badges
-function MiniFootball({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      <Ellipse cx="12" cy="12" rx="8" ry="5" stroke={color} strokeWidth="2" fill="none" />
-      <Line x1="12" y1="7.5" x2="12" y2="16.5" stroke={color} strokeWidth="1.5" />
-    </Svg>
-  );
-}
-
-function MiniBasketball({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="8" stroke={color} strokeWidth="2" fill="none" />
-      <Line x1="12" y1="4" x2="12" y2="20" stroke={color} strokeWidth="1.5" />
-      <Line x1="4" y1="12" x2="20" y2="12" stroke={color} strokeWidth="1.5" />
-    </Svg>
-  );
-}
-
-function MiniBaseball({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="8" stroke={color} strokeWidth="2" fill="none" />
-      <Path d="M6 7C8.5 10 8.5 14 6 17" stroke={color} strokeWidth="1.5" fill="none" />
-      <Path d="M18 7C15.5 10 15.5 14 18 17" stroke={color} strokeWidth="1.5" fill="none" />
-    </Svg>
-  );
-}
-
-function MiniHockey({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      <Path d="M6 5L6 15L10 15" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <Circle cx="16" cy="15" r="4" stroke={color} strokeWidth="2" fill="none" />
-    </Svg>
-  );
-}
-
-function MiniSoccer({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="8" stroke={color} strokeWidth="2" fill="none" />
-      <Path d="M12 8L9 10L10 14L14 14L15 10Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round" fill="none" />
-    </Svg>
-  );
-}
-
-function getSportMiniIcon(sport: Sport, color: string) {
-  switch (sport) {
-    case Sport.NFL:
-    case Sport.NCAAF:
-      return <MiniFootball color={color} />;
-    case Sport.NBA:
-    case Sport.NCAAB:
-      return <MiniBasketball color={color} />;
-    case Sport.MLB:
-      return <MiniBaseball color={color} />;
-    case Sport.NHL:
-      return <MiniHockey color={color} />;
-    case Sport.MLS:
-    case Sport.EPL:
-      return <MiniSoccer color={color} />;
-    default:
-      return <MiniSoccer color={color} />;
-  }
-}
 
 function formatGameTime(dateString: string): { date: string; time: string } {
   const date = new Date(dateString);
@@ -241,15 +168,6 @@ function handleTvChannelPress(channel: string) {
   Linking.openURL(url);
 }
 
-// Helper to adjust color brightness
-function adjustColor(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
-  return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
-}
-
 // Animated tappable jersey component with premium feel
 const TappableJersey = memo(function TappableJersey({
   team,
@@ -258,7 +176,7 @@ const TappableJersey = memo(function TappableJersey({
   isSelected,
   onSelect,
   isDisabled,
-  side,
+  side: _side,
   isLoser,
   isWinner,
   size = 48,
@@ -275,61 +193,50 @@ const TappableJersey = memo(function TappableJersey({
   size?: number;
 }) {
   const scale = useSharedValue(1);
+  const selectionProgress = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    selectionProgress.value = withTiming(isSelected && !isLoser && !isWinner ? 1 : 0, {
+      duration: 300, easing: Easing.inOut(Easing.ease),
+    });
+  }, [isSelected, isLoser, isWinner]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
+  const jerseyLiftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(selectionProgress.value, [0, 1], [0, -3]) }],
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: selectionProgress.value,
+    transform: [{ scale: interpolate(selectionProgress.value, [0, 1], [0.8, 1]) }],
+  }));
+
   const handlePress = useCallback(() => {
     if (isDisabled) return;
-
-    // Premium haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Bounce animation
-    scale.value = withSpring(0.92, { damping: 15 }, () => {
-      scale.value = withSpring(1.03, { damping: 12 }, () => {
-        scale.value = withSpring(1, { damping: 10 });
-      });
+    scale.value = withTiming(0.95, { duration: 150, easing: Easing.out(Easing.ease) }, () => {
+      scale.value = withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) });
     });
-
     onSelect();
   }, [isDisabled, onSelect, scale]);
 
-  const shadowStyle = useMemo(() => {
-    const baseStyle = {
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
-      shadowRadius: 12,
-      elevation: 12,
-    };
-
-    if (isSelected) {
-      return {
-        ...baseStyle,
-        shadowColor: '#E8936A',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.9,
-        shadowRadius: 12,
-        elevation: 10,
-      };
-    }
-
-    return baseStyle;
-  }, [isSelected]);
+  const shadowStyle = useMemo(() => ({
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 12,
+  }), []);
 
   return (
-    <TouchableWithoutFeedback onPress={handlePress} disabled={isDisabled}>
+    <Pressable onPress={handlePress} disabled={isDisabled}>
       <Animated.View style={[containerStyle, styles.jerseyAnimatedContainer]}>
-        <View style={{ position: 'relative' }}>
-          {/* Jersey with subtle dim for loser - keeps design visible */}
-          <View
-            style={[
-              shadowStyle,
-              isLoser ? { opacity: 0.5 } : undefined,
-            ]}
-          >
+        <View style={{ position: 'relative', alignItems: 'center' }}>
+          {/* Jersey — smoothly lifts when selected */}
+          <Animated.View style={[shadowStyle, isLoser ? { opacity: 0.5 } : undefined, jerseyLiftStyle]}>
             <JerseyIcon
               teamCode={team.abbreviation}
               primaryColor={teamColors.primary}
@@ -337,24 +244,23 @@ const TappableJersey = memo(function TappableJersey({
               size={size}
               sport={sportEnumToJersey(sport)}
             />
-          </View>
+          </Animated.View>
 
-          {/* Grayscale overlay for loser - follows jersey shape */}
+          {/* Grayscale overlay for loser */}
           {isLoser ? (
-            <View
-              pointerEvents="none"
-              style={styles.loserOverlay}
-            />
+            <View pointerEvents="none" style={styles.loserOverlay} />
           ) : null}
 
-          {/* Small checkmark badge when selected (only if game not final) */}
-          {isSelected && !isLoser && !isWinner ? (
-            <View style={styles.checkmarkBadge}>
-              <Check size={8} color="#000" strokeWidth={3} />
-            </View>
-          ) : null}
+          {/* "YOUR PICK" label — fades in smoothly */}
+          <Animated.View style={[{
+            marginTop: 2,
+            backgroundColor: teamColors.primary,
+            paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+          }, labelStyle]}>
+            <Text style={{ fontSize: 6, fontWeight: '900', color: '#040608', letterSpacing: 1 }}>YOUR PICK</Text>
+          </Animated.View>
 
-          {/* Winner "W" badge - positioned below jersey */}
+          {/* Winner badge */}
           {isWinner ? (
             <View style={styles.winnerBadge}>
               <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900' }}>W</Text>
@@ -362,62 +268,7 @@ const TappableJersey = memo(function TappableJersey({
           ) : null}
         </View>
       </Animated.View>
-    </TouchableWithoutFeedback>
-  );
-});
-
-// Animated pulsing score for live games - simplified for performance
-const AnimatedLiveScore = memo(function AnimatedLiveScore({ score }: { score: number }) {
-  return (
-    <Text
-      style={{
-        fontSize: 26,
-        fontWeight: '900',
-        color: '#FFFFFF',
-        textAlign: 'center',
-      }}
-    >
-      {score}
-    </Text>
-  );
-});
-
-// Live game card glow effect - white glow to indicate live
-const LiveCardGlow = memo(function LiveCardGlow({ glowColor = 'rgba(255, 255, 255, 0.6)' }: { glowColor?: string }) {
-  const borderOpacity = useSharedValue(0.3);
-
-  useEffect(() => {
-    borderOpacity.value = withRepeat(
-      withTiming(0.9, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-    return () => {
-      cancelAnimation(borderOpacity);
-    };
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: borderOpacity.value,
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        {
-          position: 'absolute',
-          top: -3,
-          left: -3,
-          right: -3,
-          bottom: -3,
-          borderRadius: 20,
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderColor: glowColor,
-        },
-        animatedStyle,
-      ]}
-    />
+    </Pressable>
   );
 });
 
@@ -441,34 +292,29 @@ const SelectionConfirmModal = memo(function SelectionConfirmModal({
   const [showCheckmark, setShowCheckmark] = useState(false);
   const modalScale = useSharedValue(0.9);
   const jerseyScale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0);
   const checkmarkScale = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      modalScale.value = withSpring(1, { damping: 15, stiffness: 200 });
+      modalScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+      jerseyScale.value = 1;
       setIsConfirming(false);
       setShowCheckmark(false);
-      glowOpacity.value = 0;
       checkmarkScale.value = 0;
     } else {
-      modalScale.value = 0.9;
+      modalScale.value = 0.95;
       jerseyScale.value = 1;
-      glowOpacity.value = 0;
       checkmarkScale.value = 0;
     }
   }, [visible]);
 
   const modalStyle = useAnimatedStyle(() => ({
     transform: [{ scale: modalScale.value }],
+    opacity: interpolate(modalScale.value, [0.95, 1], [0, 1]),
   }));
 
   const jerseyStyle = useAnimatedStyle(() => ({
     transform: [{ scale: jerseyScale.value }],
-  }));
-
-  const glowContainerStyle = useAnimatedStyle(() => ({
-    shadowOpacity: glowOpacity.value,
   }));
 
   const checkmarkStyle = useAnimatedStyle(() => ({
@@ -478,36 +324,29 @@ const SelectionConfirmModal = memo(function SelectionConfirmModal({
 
   const handleConfirm = useCallback(() => {
     setIsConfirming(true);
-
-    // Same haptic as game card
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Same bounce animation as game card jersey: 0.92 -> 1.03 -> 1
-    jerseyScale.value = withSpring(0.92, { damping: 15 }, () => {
-      jerseyScale.value = withSpring(1.03, { damping: 12 }, () => {
-        jerseyScale.value = withSpring(1, { damping: 10 });
-      });
+    // Gentle scale up — smooth and slow
+    jerseyScale.value = withTiming(1.08, { duration: 400, easing: Easing.out(Easing.ease) }, () => {
+      jerseyScale.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) });
     });
 
-    // Fade in the glow (same as game card selected state)
-    glowOpacity.value = withTiming(0.9, { duration: 250 });
-
-    // Show checkmark badge after bounce starts
+    // Checkmark fades in after jersey peaks
     setTimeout(() => {
       setShowCheckmark(true);
-      checkmarkScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-    }, 150);
+      checkmarkScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    }, 400);
 
-    // Success haptic when complete
+    // Success haptic at the peak
     setTimeout(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 300);
+    }, 500);
 
-    // Delay closing to show the full animation
+    // Hold for a moment so user sees the confirmation, then close
     setTimeout(() => {
       onConfirm();
-    }, 500);
-  }, [onConfirm, jerseyScale, glowOpacity, checkmarkScale]);
+    }, 1100);
+  }, [onConfirm, jerseyScale, checkmarkScale]);
 
   if (!team) return null;
 
@@ -519,81 +358,83 @@ const SelectionConfirmModal = memo(function SelectionConfirmModal({
       statusBarTranslucent
       onRequestClose={onCancel}
     >
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.9)' }}>
-        <TouchableWithoutFeedback onPress={isConfirming ? undefined : onCancel}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.85)' }}>
+        <Pressable onPress={isConfirming ? undefined : onCancel}>
           <View style={styles.modalFullscreenOverlay} />
-        </TouchableWithoutFeedback>
+        </Pressable>
 
-        {/* Modal - Pure black */}
         <Animated.View style={[modalStyle]}>
-          <View style={styles.modalContainer}>
-            {/* Team Jersey with glow - same style as game card */}
-            <View style={styles.modalJerseyRelative}>
-              {/* Jersey with glow shadow (same as game card selected state) */}
-              <Animated.View
-                style={[
-                  jerseyStyle,
-                  glowContainerStyle,
-                  {
-                    shadowColor: '#E8936A',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowRadius: 15,
-                    elevation: 12,
-                  },
-                ]}
-              >
+          <View style={{
+            backgroundColor: '#0C1018',
+            borderRadius: 24, padding: 28, paddingTop: 32,
+            width: 280, alignItems: 'center',
+            borderWidth: 1.5, borderColor: `${teamColors.primary}30`,
+            shadowColor: teamColors.primary, shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.2, shadowRadius: 30,
+          }}>
+            {/* Team color accent line at top */}
+            <View style={{ position: 'absolute', top: 0, left: 40, right: 40, height: 3, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 }}>
+              <LinearGradient
+                colors={['transparent', teamColors.primary, 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ flex: 1 }}
+              />
+            </View>
+
+            {/* Jersey */}
+            <View style={{ position: 'relative', alignItems: 'center', marginBottom: 20 }}>
+              <Animated.View style={[jerseyStyle, isConfirming ? { transform: [{ translateY: -6 }] } : undefined]}>
                 <JerseyIcon
                   teamCode={team.abbreviation}
                   primaryColor={teamColors.primary}
                   secondaryColor={teamColors.secondary}
-                  size={75}
+                  size={85}
                   sport={sportEnumToJersey(sport)}
                 />
               </Animated.View>
 
-              {/* Checkmark badge - same as game card */}
+              {/* Confirmed checkmark */}
               {showCheckmark ? (
-                <Animated.View
-                  style={[
-                    checkmarkStyle,
-                    styles.modalCheckmarkBadge,
-                  ]}
-                >
-                  <Check size={11} color="#000" strokeWidth={3} />
+                <Animated.View style={[checkmarkStyle, {
+                  position: 'absolute', bottom: -6, right: 0,
+                  width: 22, height: 22, borderRadius: 11,
+                  backgroundColor: '#7A9DB8', alignItems: 'center', justifyContent: 'center',
+                  borderWidth: 2, borderColor: '#0C1018',
+                }]}>
+                  <Check size={10} color="#FFF" strokeWidth={3} />
                 </Animated.View>
               ) : null}
             </View>
 
             {/* Team name */}
-            <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 4, textAlign: 'center' }}>
               {team.name}
             </Text>
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 24 }}>
-              {isConfirming ? 'Winner selected!' : 'Select as winner?'}
+            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginBottom: 4 }}>
+              {team.record}
+            </Text>
+            <Text style={{ color: isConfirming ? '#7A9DB8' : 'rgba(255,255,255,0.45)', fontSize: 14, fontWeight: '600', marginBottom: 24 }}>
+              {isConfirming ? 'Pick locked in' : 'Pick this team to win?'}
             </Text>
 
             {/* Buttons */}
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                onPress={onCancel}
-                activeOpacity={0.7}
-                disabled={isConfirming}
-                style={[styles.modalCancelButton, { opacity: isConfirming ? 0.3 : 1 }]}
-              >
-                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleConfirm}
-                activeOpacity={0.8}
-                disabled={isConfirming}
-                style={[styles.modalConfirmButton, { backgroundColor: isConfirming ? '#4CAF50' : '#E8936A' }]}
-              >
-                <Text style={{ color: isConfirming ? '#FFF' : '#000', fontSize: 15, fontWeight: '700' }}>
-                  {isConfirming ? 'Done' : 'Confirm'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {!isConfirming ? (
+              <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+                <Pressable
+                  onPress={onCancel}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center' }}
+                >
+                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleConfirm}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: teamColors.primary, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '700' }}>Lock It In</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </Animated.View>
       </View>
@@ -607,13 +448,11 @@ const LiveGameLayout = memo(function LiveGameLayout({
   awayTeamColors,
   homeTeamColors,
   sportMeta,
-  pickStats,
 }: {
   game: GameWithPrediction;
   awayTeamColors: { primary: string; secondary: string };
   homeTeamColors: { primary: string; secondary: string };
   sportMeta: typeof SPORT_META[Sport];
-  pickStats: { homeWinChance: number; awayWinChance: number };
 }) {
   const router = useRouter();
   const prefetchGame = usePrefetchGame();
@@ -631,19 +470,58 @@ const LiveGameLayout = memo(function LiveGameLayout({
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
       <Pressable onPress={handlePress} className="active:opacity-85">
-        <View
-          style={{
-            borderRadius: 18,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.12)',
-            shadowColor: '#000',
-            shadowOpacity: 0.4,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: 8,
-          }}
-        >
+        {/* Red glow for live */}
+        <View style={{
+          borderRadius: 22,
+          shadowColor: '#DC2626',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.18,
+          shadowRadius: 22,
+          elevation: 6,
+        }}>
+        {/* Depth shadow */}
+        <View style={{
+          borderRadius: 22,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 16 },
+          shadowOpacity: 0.95,
+          shadowRadius: 32,
+          elevation: 30,
+        }}>
+        {/* Glass border — dark reflective with team colors */}
+        <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={[
+              `${awayTeamColors.primary}90`,
+              `${awayTeamColors.primary}50`,
+              '#0D1118',
+              '#080C12',
+              '#0D1118',
+              `${homeTeamColors.primary}50`,
+              `${homeTeamColors.primary}90`,
+            ]}
+            locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22 }}
+          />
+          {/* Inner bevel — specular highlight top, deep shadow bottom */}
+          <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
+            <LinearGradient
+              colors={[
+                `${awayTeamColors.primary}60`,
+                'rgba(255,255,255,0.12)',
+                '#080C12',
+                'rgba(0,0,0,0.6)',
+                `${homeTeamColors.primary}50`,
+              ]}
+              locations={[0, 0.2, 0.5, 0.8, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 19 }}
+            />
+          {/* Card body */}
+          <View style={{ borderRadius: 18, overflow: 'hidden' }}>
           {/* Dark base */}
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(4,5,10,0.85)' }} />
 
@@ -694,12 +572,12 @@ const LiveGameLayout = memo(function LiveGameLayout({
               </View>
 
               {game.tvChannel ? (
-                <TouchableOpacity
+                <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
                     handleTvChannelPress(game.tvChannel!);
                   }}
-                  activeOpacity={0.7}
+
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -715,7 +593,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4 }}>
                     {game.tvChannel}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7 }}>
                   <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '600' }}>IN PROGRESS</Text>
@@ -735,9 +613,9 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ marginLeft: 10, flex: 1 }}>
                 <Text
                   style={{
-                    color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
+                    color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                     fontSize: 14,
-                    fontWeight: awayWinning ? '800' : '600',
+                    fontWeight: awayWinning ? '800' : '500',
                     letterSpacing: 0.3,
                   }}
                   numberOfLines={1}
@@ -745,15 +623,15 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   {game.awayTeam.name}
                 </Text>
                 {game.awayTeam.record ? (
-                  <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: '500', marginTop: 1 }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: '500', marginTop: 1 }}>
                     {game.awayTeam.record}
                   </Text>
                 ) : null}
               </View>
               <Text style={{
-                color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
+                color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                 fontSize: 22,
-                fontWeight: awayWinning ? '900' : '600',
+                fontWeight: awayWinning ? '900' : '500',
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
@@ -774,9 +652,9 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ marginLeft: 10, flex: 1 }}>
                 <Text
                   style={{
-                    color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
+                    color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                     fontSize: 14,
-                    fontWeight: homeWinning ? '800' : '600',
+                    fontWeight: homeWinning ? '800' : '500',
                     letterSpacing: 0.3,
                   }}
                   numberOfLines={1}
@@ -784,15 +662,15 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   {game.homeTeam.name}
                 </Text>
                 {game.homeTeam.record ? (
-                  <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: '500', marginTop: 1 }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: '500', marginTop: 1 }}>
                     {game.homeTeam.record}
                   </Text>
                 ) : null}
               </View>
               <Text style={{
-                color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
+                color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                 fontSize: 22,
-                fontWeight: homeWinning ? '900' : '600',
+                fontWeight: homeWinning ? '900' : '500',
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
@@ -833,6 +711,10 @@ const LiveGameLayout = memo(function LiveGameLayout({
               </View>
             </View>
           </View>
+        </View>
+        </View>
+        </View>
+        </View>
         </View>
       </Pressable>
     </View>
@@ -959,11 +841,14 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       makePick({
         gameId: game.id,
         pickedTeam: pendingSelection,
+        homeTeam: game.homeTeam.abbreviation,
+        awayTeam: game.awayTeam.abbreviation,
+        sport: game.sport,
       });
     }
     setShowConfirmModal(false);
     setPendingSelection(null);
-  }, [pendingSelection, game.id, makePick]);
+  }, [pendingSelection, game.id, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.sport, makePick]);
 
   const handleCancelSelection = useCallback(() => {
     setShowConfirmModal(false);
@@ -992,7 +877,6 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         awayTeamColors={awayTeamColors}
         homeTeamColors={homeTeamColors}
         sportMeta={sportMeta}
-        pickStats={pickStats}
       />
     );
   }
@@ -1015,12 +899,42 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       )}
 
       <Pressable onPress={handlePress} style={{ flex: 1 }}>
-      {/* Premium dark glass container with deep shadows */}
+      {/* Depth shadow */}
       <View style={styles.cardShadowContainer}>
-        {/* Inner card with subtle glass border */}
-        <View style={styles.cardInnerBorder}>
-        {/* Premium dark glass card */}
-        <View style={{ position: 'relative' }}>
+      {/* Glass border — dark reflective with team colors */}
+      <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[
+            `${awayTeamColors.primary}90`,
+            `${awayTeamColors.primary}50`,
+            '#0D1118',
+            '#080C12',
+            '#0D1118',
+            `${homeTeamColors.primary}50`,
+            `${homeTeamColors.primary}90`,
+          ]}
+          locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22 }}
+        />
+        {/* Inner bevel — specular highlight on top edge, deep shadow on bottom */}
+        <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={[
+              `${awayTeamColors.primary}60`,
+              'rgba(255,255,255,0.12)',
+              '#080C12',
+              'rgba(0,0,0,0.6)',
+              `${homeTeamColors.primary}50`,
+            ]}
+            locations={[0, 0.2, 0.5, 0.8, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 19 }}
+          />
+        {/* Card body */}
+        <View style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
           {/* Away team color - bottom left corner fading up */}
           <LinearGradient
             colors={[`${awayTeamColors.primary}${colorOpacities.away.opacity}`, `${awayTeamColors.primary}${colorOpacities.away.opacityLight}`, `${awayTeamColors.primary}18`, 'transparent']}
@@ -1369,17 +1283,17 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     ) : null}
 
                     {game.tvChannel ? (
-                      <TouchableOpacity
+                      <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
                           handleTvChannelPress(game.tvChannel!);
                         }}
-                        activeOpacity={0.7}
+      
                         style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(90,122,138,0.6)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(90,122,138,0.8)' }}
                       >
                         <Tv size={10} color="#FFFFFF" />
                         <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600', marginLeft: 4 }}>{game.tvChannel}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     ) : null}
                   </View>
                 </View>
@@ -1425,8 +1339,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
             </View>
           </View>
         </View>
-          </View>
         </View>
+        </View>
+      </View>
       </Pressable>
     </Animated.View>
   );
@@ -1562,24 +1477,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 10,
   },
-  // GameCard main card
+  // GameCard main card — hyper glass raised border
   cardShadowContainer: {
-    borderRadius: 18,
+    borderRadius: 22,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.8,
-    shadowRadius: 24,
-    elevation: 24,
-  },
-  cardInnerBorder: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderTopColor: 'rgba(255,255,255,0.18)',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.95,
+    shadowRadius: 32,
+    elevation: 30,
   },
   cardOverflowContainer: {
     overflow: 'hidden',
+    borderRadius: 18,
   },
   cardContentPadding: {
     padding: 12,

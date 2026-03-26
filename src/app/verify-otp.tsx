@@ -1,20 +1,29 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, TextInput, Pressable, StyleSheet,
   StatusBar, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
+import { AuthBackground } from '@/components/AuthBackground';
 
 const BG = '#040608';
 const TEAL = '#7A9DB8';
 const TEAL_DARK = '#5A7A8A';
 const CORAL = '#E8936A';
 const CODE_LENGTH = 6;
+
+function BackArrow({ size = 20 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M15 18L9 12L15 6" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
 
 function ShieldCheckIcon({ size = 36 }: { size?: number }) {
   return (
@@ -45,12 +54,10 @@ export default function VerifyOTP() {
 
   const isComplete = code.length === CODE_LENGTH;
 
-  // Auto-verify if OTP was passed via deep link
   useEffect(() => {
     if (initialOtp && initialOtp.length === CODE_LENGTH && email) {
       handleVerifyCode(initialOtp);
     } else {
-      // Immediate focus for faster code entry
       inputRef.current?.focus();
     }
   }, []);
@@ -82,7 +89,8 @@ export default function VerifyOTP() {
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
       await invalidateSession();
-      router.replace('/(tabs)');
+      const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
+      router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
     }
   };
 
@@ -106,133 +114,167 @@ export default function VerifyOTP() {
   const codeDigits = code.split('').concat(Array(CODE_LENGTH - code.length).fill(''));
 
   return (
-    <View style={st.root}>
+    <View style={s.root}>
       <StatusBar barStyle="light-content" />
-      <View style={[st.glow, { top: -60, alignSelf: 'center', backgroundColor: `${TEAL}08` }]} />
+      <AuthBackground faint />
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+      </View>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-          <View style={st.content}>
-            <View style={{ height: 8 }} />
-            <TouchableOpacity onPress={() => router.back()} style={{ alignSelf: 'flex-start' }}>
-              <Text style={st.backText}>← Back</Text>
-            </TouchableOpacity>
+        <View style={s.content}>
+          {/* Back button */}
+          <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32, alignSelf: 'flex-start' }}>
+            <Pressable onPress={() => router.back()} hitSlop={16} style={s.backBtn}>
+              <BackArrow />
+            </Pressable>
+          </Animated.View>
 
-            <View style={{ height: 32 }} />
-
-            <View style={st.iconContainer}>
+          {/* Header */}
+          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ alignItems: 'center', width: '100%' }}>
+            <View style={s.iconContainer}>
               <ShieldCheckIcon size={36} />
             </View>
-
             <View style={{ height: 16 }} />
-            <Text style={st.headline}>Verify Your Email</Text>
+            <Text style={s.title}>Verify Your Email</Text>
             <View style={{ height: 8 }} />
-            <Text style={st.sentLabel}>Code sent to</Text>
+            <Text style={s.subtitle}>Code sent to</Text>
             <View style={{ height: 4 }} />
-            <Text style={st.emailLabel}>{email ?? 'your email'}</Text>
+            <Text style={s.emailLabel}>{email ?? 'your email'}</Text>
+          </Animated.View>
 
-            <View style={{ height: 32 }} />
+          <View style={{ height: 32 }} />
 
-            <View style={{ position: 'relative', width: '100%', alignItems: 'center' }}>
-              <TextInput
-                ref={inputRef}
-                value={code}
-                onChangeText={(text) => {
-                  const cleaned = text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH);
-                  setCode(cleaned);
-                  setError(null);
-                }}
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                autoComplete="one-time-code"
-                autoFocus
-                maxLength={CODE_LENGTH}
-                style={{
-                  position: 'absolute',
-                  width: 300,
-                  height: 54,
-                  opacity: 0.01,
-                  fontSize: 22,
-                  letterSpacing: 24,
-                  zIndex: 1,
-                }}
-              />
+          {/* Code input */}
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ position: 'relative', width: '100%', alignItems: 'center' }}>
+            <TextInput
+              ref={inputRef}
+              value={code}
+              onChangeText={(text) => {
+                const cleaned = text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH);
+                setCode(cleaned);
+                setError(null);
+              }}
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={CODE_LENGTH}
+              style={{
+                position: 'absolute',
+                width: 300,
+                height: 54,
+                opacity: 0.01,
+                fontSize: 22,
+                letterSpacing: 24,
+                zIndex: 1,
+              }}
+            />
 
-              <View style={st.codeRow} pointerEvents="none">
-                {codeDigits.map((digit, i) => {
-                  const isFilled = digit !== '';
-                  const isActive = i === code.length && !isComplete;
-                  return (
-                    <View key={i} style={[st.codeBox, isFilled && st.codeBoxFilled, isActive && st.codeBoxActive]}>
-                      {isFilled ? (
-                        <Text style={st.codeDigit}>{digit}</Text>
-                      ) : isActive ? (
-                        <View style={st.cursor} />
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </View>
+            <View style={s.codeRow} pointerEvents="none">
+              {codeDigits.map((digit, i) => {
+                const isFilled = digit !== '';
+                const isActive = i === code.length && !isComplete;
+                return (
+                  <View key={i} style={[s.codeBox, isFilled && s.codeBoxFilled, isActive && s.codeBoxActive]}>
+                    {isFilled ? (
+                      <Text style={s.codeDigit}>{digit}</Text>
+                    ) : isActive ? (
+                      <View style={s.cursor} />
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
+          </Animated.View>
 
-            <View style={{ height: 12 }} />
-            <Text style={st.hintText}>Your code will auto-suggest above the keyboard</Text>
+          <View style={{ height: 12 }} />
+          <Text style={s.hintText}>Your code will auto-suggest above the keyboard</Text>
 
-            {error ? (
-              <>
-                <View style={{ height: 8 }} />
-                <Text style={st.errorText}>{error}</Text>
-              </>
-            ) : null}
+          {error ? (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <View style={{ height: 8 }} />
+              <Text style={s.errorText}>{error}</Text>
+            </Animated.View>
+          ) : null}
 
-            <View style={{ height: 24 }} />
+          <View style={{ height: 24 }} />
 
-            <View style={st.resendRow}>
-              <TouchableOpacity onPress={handleResend} disabled={isResending}>
-                <Text style={[st.resendText, isResending && { color: 'rgba(255,255,255,0.25)' }]}>
-                  {isResending ? 'Sending...' : 'Resend Code'}
-                </Text>
-              </TouchableOpacity>
-              <Text style={st.timerText}>· {timerDisplay}</Text>
-            </View>
+          {/* Resend */}
+          <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.resendRow}>
+            <Pressable onPress={handleResend} disabled={isResending}>
+              <Text style={[s.resendText, isResending && { color: 'rgba(255,255,255,0.25)' }]}>
+                {isResending ? 'Sending...' : 'Resend Code'}
+              </Text>
+            </Pressable>
+            <Text style={s.timerText}>· {timerDisplay}</Text>
+          </Animated.View>
 
-            <View style={{ flex: 1, minHeight: 32 }} />
+          <View style={{ flex: 1, minHeight: 32 }} />
 
-            <TouchableOpacity onPress={handleVerify} disabled={!isComplete || isLoading} activeOpacity={0.85} style={{ width: '100%', height: 54, borderRadius: 14, overflow: 'hidden', opacity: isComplete ? 1 : 0.4 }}>
-              <LinearGradient colors={[TEAL_DARK, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Verify button */}
+          <Animated.View entering={FadeInDown.delay(400).duration(400)} style={{ width: '100%' }}>
+            <Pressable
+              onPress={handleVerify}
+              disabled={!isComplete || isLoading}
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : !isComplete ? 0.4 : 1 })}
+            >
+              <View style={s.submitBtn}>
                 {isLoading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Verify My Account</Text>
+                  <Text style={s.submitBtnText}>Verify My Account</Text>
                 )}
-              </LinearGradient>
-            </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Animated.View>
 
-            <View style={{ height: 36 }} />
-          </View>
-        </SafeAreaView>
+          <View style={{ height: 36 }} />
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
-const st = StyleSheet.create({
+const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
-  glow: { position: 'absolute', width: 300, height: 300, borderRadius: 150 },
   content: { flex: 1, paddingHorizontal: 24, alignItems: 'center' },
-  backText: { color: CORAL, fontSize: 14, fontWeight: '600' },
-  iconContainer: { width: 68, height: 68, borderRadius: 22, backgroundColor: `${CORAL}12`, borderWidth: 1, borderColor: `${CORAL}25`, alignItems: 'center', justifyContent: 'center' },
-  headline: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
-  sentLabel: { fontSize: 13, color: 'rgba(255,255,255,0.4)' },
-  emailLabel: { fontSize: 14, fontWeight: '700', color: CORAL },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  iconContainer: {
+    width: 68, height: 68, borderRadius: 22,
+    backgroundColor: `${TEAL}12`, borderWidth: 1, borderColor: `${TEAL}35`,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: 28, fontWeight: '900', color: '#FFFFFF' },
+  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.4)', lineHeight: 21 },
+  emailLabel: { fontSize: 14, fontWeight: '700', color: TEAL },
   codeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  codeBox: { width: 44, height: 54, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.03)', alignItems: 'center', justifyContent: 'center' },
+  codeBox: {
+    width: 44, height: 54, borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   codeBoxFilled: { borderColor: `${TEAL}50`, backgroundColor: `${TEAL}08` },
-  codeBoxActive: { borderWidth: 2, borderColor: CORAL, backgroundColor: `${CORAL}08`, shadowColor: CORAL, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+  codeBoxActive: {
+    borderWidth: 2, borderColor: TEAL, backgroundColor: `${TEAL}08`,
+    shadowColor: TEAL, shadowOpacity: 0.2, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 }, elevation: 4,
+  },
   codeDigit: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
-  cursor: { width: 2, height: 22, backgroundColor: CORAL, borderRadius: 1 },
+  cursor: { width: 2, height: 22, backgroundColor: TEAL, borderRadius: 1 },
   hintText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   errorText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
   resendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   resendText: { fontSize: 13, fontWeight: '700', color: CORAL },
   timerText: { fontSize: 12, color: 'rgba(255,255,255,0.3)' },
+  submitBtn: {
+    backgroundColor: `${TEAL}20`, borderRadius: 14, height: 54,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: `${TEAL}AA`,
+  },
+  submitBtnText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
 });

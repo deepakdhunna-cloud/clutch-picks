@@ -8,8 +8,6 @@ import {
   ActivityIndicator,
   StyleSheet,
   Modal,
-  TouchableWithoutFeedback,
-  TouchableOpacity,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,9 +21,9 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
+  interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, {
   Path,
   Line,
@@ -37,10 +35,12 @@ import Svg, {
   Circle,
 } from 'react-native-svg';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
+import { Sport } from '@/types/sports';
 import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { useSubscription } from '@/lib/subscription-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Tappable Jersey component for hero section - matches GameCard style
 const TappableJerseyHero = React.memo(function TappableJerseyHero({
@@ -59,56 +59,50 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   sport: string;
 }) {
   const scale = useSharedValue(1);
+  const selectionProgress = useSharedValue(isSelected ? 1 : 0);
   const teamColors = getTeamColors(team.abbreviation, sport as any, team.color);
+
+  useEffect(() => {
+    selectionProgress.value = withTiming(isSelected ? 1 : 0, {
+      duration: 300, easing: Easing.inOut(Easing.ease),
+    });
+  }, [isSelected]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
+  const jerseyLiftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(selectionProgress.value, [0, 1], [0, -4]) }],
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: selectionProgress.value,
+    transform: [{ scale: interpolate(selectionProgress.value, [0, 1], [0.8, 1]) }],
+  }));
+
   const handlePress = useCallback(() => {
     if (isDisabled) return;
-
-    // Premium haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Bounce animation matching GameCard
-    scale.value = withSpring(0.92, { damping: 15 }, () => {
-      scale.value = withSpring(1.03, { damping: 12 }, () => {
-        scale.value = withSpring(1, { damping: 10 });
-      });
+    scale.value = withTiming(0.95, { duration: 150, easing: Easing.out(Easing.ease) }, () => {
+      scale.value = withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) });
     });
-
     onSelect();
   }, [isDisabled, onSelect, scale]);
 
-  const shadowStyle = useMemo(() => {
-    const baseStyle = {
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.8,
-      shadowRadius: 16,
-      elevation: 16,
-    };
-
-    if (isSelected) {
-      return {
-        ...baseStyle,
-        shadowColor: '#E8936A',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.9,
-        shadowRadius: 16,
-        elevation: 14,
-      };
-    }
-
-    return baseStyle;
-  }, [isSelected]);
+  const shadowStyle = useMemo(() => ({
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
+    elevation: 16,
+  }), []);
 
   return (
     <Pressable onPress={handlePress} disabled={isDisabled}>
       <Animated.View style={[containerStyle, { alignItems: 'center', justifyContent: 'center' }]}>
-        <View style={{ position: 'relative' }}>
-          <View style={shadowStyle}>
+        <View style={{ position: 'relative', alignItems: 'center' }}>
+          <Animated.View style={[shadowStyle, jerseyLiftStyle]}>
             <JerseyIcon
               teamCode={team.abbreviation}
               primaryColor={teamColors.primary}
@@ -116,26 +110,17 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
               size={92}
               sport={jerseyType}
             />
-          </View>
+          </Animated.View>
 
-          {/* Checkmark badge when selected */}
-          {isSelected ? (
-            <View style={{
-              position: 'absolute',
-              bottom: -4,
-              right: -4,
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              backgroundColor: '#E8936A',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 2,
-              borderColor: '#080810',
-            }}>
-              <Text style={{ color: '#000', fontSize: 11, fontWeight: '900' }}>✓</Text>
-            </View>
-          ) : null}
+          {/* "YOUR PICK" label — fades in smoothly */}
+          <Animated.View style={[{
+            marginTop: 2,
+            backgroundColor: `${teamColors.primary}20`,
+            paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6,
+            borderWidth: 1, borderColor: `${teamColors.primary}40`,
+          }, labelStyle]}>
+            <Text style={{ fontSize: 8, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.5 }}>YOUR PICK</Text>
+          </Animated.View>
         </View>
       </Animated.View>
     </Pressable>
@@ -635,17 +620,6 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
               <View style={{ width: 52, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
             </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={[styles.statTile, { flex: 1 }]}>
-              <Text style={styles.statTileLabel}>Spread</Text>
-              <View style={{ width: 28, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
-            </View>
-            <View style={[styles.statTile, { flex: 1 }]}>
-              <Text style={styles.statTileLabel}>Over/Under</Text>
-              <View style={{ width: 40, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
-            </View>
-          </View>
-
           {/* Unlock CTA inside the card */}
           <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(232,147,106,0.1)' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(232,147,106,0.08)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.15)' }}>
@@ -814,16 +788,6 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction
             <Text style={[styles.statTileValue, { color: valueColor }]}>{valueLabel}</Text>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={[styles.statTile, { flex: 1 }]}>
-            <Text style={styles.statTileLabel}>Spread</Text>
-            <Text style={[styles.statTileValue, { color: '#FFFFFF' }]}>{prediction.spread > 0 ? '+' : ''}{prediction.spread}</Text>
-          </View>
-          <View style={[styles.statTile, { flex: 1 }]}>
-            <Text style={styles.statTileLabel}>Over/Under</Text>
-            <Text style={[styles.statTileValue, { color: '#FFFFFF' }]}>{prediction.overUnder}</Text>
-          </View>
-        </View>
       </View>
     </View>
   );
@@ -832,7 +796,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction
 function MarketOdds({ game }: { game: Game }) {
   const { homeTeam, awayTeam, prediction } = game;
   if (!prediction) return null;
-  const items = [{ label: `${homeTeam.abbreviation} ML`, value: prediction.marketFavorite === 'home' ? '145' : '+122', delta: '5', dc: '#FF5C5C' }, { label: `${awayTeam.abbreviation} ML`, value: prediction.marketFavorite === 'away' ? '145' : '+122', delta: '3', dc: '#4ADE80' }, { label: 'Spread', value: String(prediction.spread), delta: '', dc: 'rgba(255,255,255,0.2)' }, { label: 'O/U', value: String(prediction.overUnder), delta: '', dc: 'rgba(255,255,255,0.2)' }];
+  const items = [{ label: `${homeTeam.abbreviation} ML`, value: prediction.marketFavorite === 'home' ? '145' : '+122', delta: '5', dc: '#FF5C5C' }, { label: `${awayTeam.abbreviation} ML`, value: prediction.marketFavorite === 'away' ? '145' : '+122', delta: '3', dc: '#4ADE80' }];
   return (
     <View>
       <Text style={styles.sectionLabel}>Market Odds</Text>
@@ -894,6 +858,7 @@ function PickConfirmModal({
   team,
   teamColor,
   jerseyType,
+  sport,
   isChanging,
   onConfirm,
   onCancel,
@@ -902,33 +867,36 @@ function PickConfirmModal({
   team: GameTeam | null;
   teamColor: string;
   jerseyType: ReturnType<typeof sportEnumToJersey>;
+  sport: Sport;
   isChanging?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [showCheckmark, setShowCheckmark] = useState(false);
-  const modalScale = useSharedValue(0.9);
+  const modalScale = useSharedValue(0.95);
   const jerseyScale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0);
   const checkmarkScale = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      modalScale.value = withSpring(1, { damping: 15, stiffness: 200 });
+      modalScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+      jerseyScale.value = 1;
       setIsConfirming(false);
       setShowCheckmark(false);
-      glowOpacity.value = 0;
       checkmarkScale.value = 0;
-      jerseyScale.value = 1;
     } else {
-      modalScale.value = 0.9;
+      modalScale.value = 0.95;
+      jerseyScale.value = 1;
+      checkmarkScale.value = 0;
     }
   }, [visible]);
 
-  const modalStyle = useAnimatedStyle(() => ({ transform: [{ scale: modalScale.value }] }));
+  const modalStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: modalScale.value }],
+    opacity: interpolate(modalScale.value, [0.95, 1], [0, 1]),
+  }));
   const jerseyStyle = useAnimatedStyle(() => ({ transform: [{ scale: jerseyScale.value }] }));
-  const glowStyle = useAnimatedStyle(() => ({ shadowOpacity: glowOpacity.value }));
   const checkmarkStyle = useAnimatedStyle(() => ({
     transform: [{ scale: checkmarkScale.value }],
     opacity: checkmarkScale.value,
@@ -937,55 +905,63 @@ function PickConfirmModal({
   const handleConfirm = useCallback(() => {
     setIsConfirming(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    jerseyScale.value = withSpring(0.92, { damping: 15 }, () => {
-      jerseyScale.value = withSpring(1.03, { damping: 12 }, () => {
-        jerseyScale.value = withSpring(1, { damping: 10 });
-      });
+
+    // Gentle scale up
+    jerseyScale.value = withTiming(1.08, { duration: 400, easing: Easing.out(Easing.ease) }, () => {
+      jerseyScale.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) });
     });
-    glowOpacity.value = withTiming(0.9, { duration: 250 });
+
+    // Checkmark after jersey peaks
     setTimeout(() => {
       setShowCheckmark(true);
-      checkmarkScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-    }, 150);
+      checkmarkScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    }, 400);
+
+    // Success haptic
     setTimeout(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 300);
-    setTimeout(() => { onConfirm(); }, 500);
+    }, 500);
+
+    // Hold then close
+    setTimeout(() => { onConfirm(); }, 1100);
   }, [onConfirm]);
 
   if (!team) return null;
+  const resolvedColors = getTeamColors(team.abbreviation, sport, teamColor);
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.88)' }}>
-        <TouchableWithoutFeedback onPress={isConfirming ? undefined : onCancel}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.85)' }}>
+        <Pressable onPress={isConfirming ? undefined : onCancel}>
           <View style={StyleSheet.absoluteFillObject} />
-        </TouchableWithoutFeedback>
+        </Pressable>
         <Animated.View style={modalStyle}>
           <View style={styles.pickModal}>
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              <Animated.View style={[jerseyStyle, glowStyle, { shadowColor: '#E8936A', shadowOffset: { width: 0, height: 0 }, shadowRadius: 15, elevation: 12 }]}>
-                <JerseyIcon teamCode={team.abbreviation} sport={jerseyType} size={80} primaryColor={team.color} />
+              <Animated.View style={[jerseyStyle, { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.8, shadowRadius: 16, elevation: 12 }]}>
+                <JerseyIcon teamCode={team.abbreviation} sport={jerseyType} size={80} primaryColor={resolvedColors.primary} secondaryColor={resolvedColors.secondary} />
               </Animated.View>
               {showCheckmark ? (
-                <Animated.View style={[checkmarkStyle, { position: 'absolute', bottom: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#E8936A', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#000' }]}>
-                  <Text style={{ color: '#000', fontSize: 11, fontWeight: '900' }}>✓</Text>
+                <Animated.View style={[checkmarkStyle, { position: 'absolute', bottom: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#7A9DB8', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#0C1018' }]}>
+                  <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '900' }}>✓</Text>
                 </Animated.View>
               ) : null}
             </View>
             <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 5, textAlign: 'center' }}>{team.city} {team.name}</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 24, textAlign: 'center' }}>
-              {isConfirming ? (isChanging ? 'Pick changed!' : 'Winner selected!') : (isChanging ? 'Switch your pick?' : 'Select as winner?')}
+            <Text style={{ color: isConfirming ? '#7A9DB8' : 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600', marginBottom: 24, textAlign: 'center' }}>
+              {isConfirming ? (isChanging ? 'Pick changed!' : 'Pick locked in') : (isChanging ? 'Switch your pick?' : 'Pick this team to win?')}
             </Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity onPress={onCancel} disabled={isConfirming} activeOpacity={0.7}
-                style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center', opacity: isConfirming ? 0.3 : 1 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleConfirm} disabled={isConfirming} activeOpacity={0.8}
-                style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: isConfirming ? '#4CAF50' : '#E8936A', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: isConfirming ? '#fff' : '#000', fontSize: 15, fontWeight: '700' }}>{isConfirming ? 'Done' : (isChanging ? 'Switch' : 'Confirm')}</Text>
-              </TouchableOpacity>
-            </View>
+            {!isConfirming ? (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable onPress={onCancel}
+                  style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={handleConfirm}
+                  style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: resolvedColors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '700' }}>Lock It In</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </Animated.View>
       </View>
@@ -1109,9 +1085,17 @@ export default function GameDetailScreen() {
               <View style={styles.scorePanelOuter}>
                 <View style={styles.scorePanel}>
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                    <Text style={[styles.scoreNumber, { color: '#fff', textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>{game.homeScore ?? ''}</Text>
+                    <Text style={[styles.scoreNumber, {
+                      color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.3)',
+                      fontWeight: (game.homeScore ?? 0) >= (game.awayScore ?? 0) ? '900' : '600',
+                      textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+                    }]}>{game.homeScore ?? ''}</Text>
                     <Text style={styles.scoreSep}>–</Text>
-                    <Text style={[styles.scoreNumber, { color: 'rgba(255,255,255,0.75)', textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>{game.awayScore ?? ''}</Text>
+                    <Text style={[styles.scoreNumber, {
+                      color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.3)',
+                      fontWeight: (game.awayScore ?? 0) >= (game.homeScore ?? 0) ? '900' : '600',
+                      textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+                    }]}>{game.awayScore ?? ''}</Text>
                   </View>
                   {isLive && game.quarter && game.clock
                     ? <Text style={[styles.scoreClock, { textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>{game.quarter} · {game.clock}</Text>
@@ -1141,7 +1125,6 @@ export default function GameDetailScreen() {
           </View>
           {prediction && isPremium ? (
             <>
-              <View style={{ paddingTop: 20 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View>
               <View style={{ marginBottom: 22 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} /></View>
               <View style={{ marginBottom: 22 }}><MarketOdds game={game} /></View>
               <View style={{ marginBottom: 22 }}><RecentForm game={game} /></View>
@@ -1205,10 +1188,17 @@ export default function GameDetailScreen() {
         team={pendingPick === 'home' ? homeTeam : pendingPick === 'away' ? awayTeam : null}
         teamColor={pendingPick === 'home' ? homeTeam.color : awayTeam.color}
         jerseyType={jerseyType}
+        sport={game.sport as Sport}
         isChanging={!!userPick && userPick.pickedTeam !== pendingPick}
         onConfirm={() => {
           if (pendingPick && id) {
-            makePick.mutate({ gameId: id, pickedTeam: pendingPick });
+            makePick.mutate({
+              gameId: id,
+              pickedTeam: pendingPick,
+              homeTeam: game.homeTeam.abbreviation,
+              awayTeam: game.awayTeam.abbreviation,
+              sport: game.sport,
+            });
           }
           setPendingPick(null);
         }}
@@ -1244,8 +1234,8 @@ const styles = StyleSheet.create({
   tvBadge: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
   tvText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  sectionLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' },
-  sectionMicroLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.8, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' },
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase' },
+  sectionMicroLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' },
   chartLegendText: { fontSize: 9, color: 'rgba(255,255,255,0.35)', fontWeight: '700' },
   chartContainer: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   tableContainer: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },

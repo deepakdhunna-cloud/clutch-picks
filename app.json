@@ -50,6 +50,12 @@
     "icon": "./icon.png",
     "splash": {
       "backgroundColor": "#000000"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b5cf834a-3d27-4472-a672-21c09c4c40e2"
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
 import { View, Text } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
+import { PicksBadge } from '@/components/shared/PicksBadge';
 
 interface ClutchHeaderProps {
   subtitle?: string;
@@ -162,34 +163,7 @@ export function ClutchHeader({ subtitle }: ClutchHeaderProps) {
           </View>
         </View>
 
-        {/* PICKS Badge */}
-        <View
-          style={{
-            marginLeft: 12,
-            backgroundColor: 'rgba(90, 122, 138, 0.3)',
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: 10,
-            borderWidth: 2,
-            borderColor: '#5A7A8A',
-            shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.5,
-            shadowRadius: 6,
-            elevation: 6,
-          }}
-        >
-          <Text
-            className="text-xl uppercase"
-            style={{
-              fontWeight: '800',
-              letterSpacing: 4,
-              color: '#FFFFFF',
-            }}
-          >
-            PICKS
-          </Text>
-        </View>
+        <PicksBadge size="md" />
       </View>
 
       {/* Subtitle */}
