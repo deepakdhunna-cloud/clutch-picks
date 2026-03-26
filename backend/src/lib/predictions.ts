@@ -13,14 +13,14 @@ import { enqueueWrite } from "./writeQueue";
 // ─── Calibration ───────────────────────────────────────────────────────────
 // Sport-specific calibration: different sports have different predictability
 const SPORT_CALIBRATION: Record<string, { dampener: number; ceiling: number; tossUpCeiling: number }> = {
-  NBA:   { dampener: 0.70, ceiling: 88, tossUpCeiling: 54 },
-  NFL:   { dampener: 0.55, ceiling: 82, tossUpCeiling: 53 },
-  NCAAF: { dampener: 0.60, ceiling: 85, tossUpCeiling: 53 },
-  NCAAB: { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 },
-  MLB:   { dampener: 0.45, ceiling: 75, tossUpCeiling: 53 },
-  NHL:   { dampener: 0.55, ceiling: 80, tossUpCeiling: 53 },
-  MLS:   { dampener: 0.55, ceiling: 78, tossUpCeiling: 53 },
-  EPL:   { dampener: 0.60, ceiling: 82, tossUpCeiling: 53 },
+  NBA:   { dampener: 0.85, ceiling: 88, tossUpCeiling: 54 },
+  NFL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 53 },
+  NCAAF: { dampener: 0.75, ceiling: 85, tossUpCeiling: 53 },
+  NCAAB: { dampener: 0.80, ceiling: 87, tossUpCeiling: 54 },
+  MLB:   { dampener: 0.55, ceiling: 75, tossUpCeiling: 53 },
+  NHL:   { dampener: 0.65, ceiling: 80, tossUpCeiling: 53 },
+  MLS:   { dampener: 0.65, ceiling: 78, tossUpCeiling: 53 },
+  EPL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 53 },
 };
 function getCalibration(sport: string) {
   return SPORT_CALIBRATION[sport] ?? { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 };
@@ -575,58 +575,58 @@ export interface SportFactorWeights {
 const SPORT_FACTOR_WEIGHTS: Record<string, SportFactorWeights> = {
   NBA: {
     winPct: 0.03, recentForm: 0.09, homeAwaySplit: 0.06, pointDiff: 0.09,
-    streak: 0.02, restDays: 0.06, scoringTrend: 0.03, defenseTrend: 0.03,
-    headToHead: 0.03, strengthOfSchedule: 0.05, elo: 0.16, injuries: 0.12,
-    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.00,
+    streak: 0.01, restDays: 0.06, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.03, strengthOfSchedule: 0.05, elo: 0.16, injuries: 0.13,
+    advancedMetrics: 0.16, startingPitcher: 0.00, weather: 0.00,
     situational: 0.04, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.05,
   },
   NFL: {
     winPct: 0.04, recentForm: 0.07, homeAwaySplit: 0.07, pointDiff: 0.09,
-    streak: 0.02, restDays: 0.05, scoringTrend: 0.03, defenseTrend: 0.04,
-    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.13, injuries: 0.15,
-    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.04,
+    streak: 0.01, restDays: 0.05, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.13, injuries: 0.16,
+    advancedMetrics: 0.17, startingPitcher: 0.00, weather: 0.04,
     situational: 0.02, refereeTendency: 0.00, clutchFactor: 0.03, matchupInteraction: 0.03,
   },
   MLB: {
     winPct: 0.04, recentForm: 0.06, homeAwaySplit: 0.04, pointDiff: 0.07,
-    streak: 0.02, restDays: 0.01, scoringTrend: 0.04, defenseTrend: 0.04,
-    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.12, injuries: 0.12,
-    advancedMetrics: 0.10, startingPitcher: 0.12, weather: 0.03,
+    streak: 0.01, restDays: 0.01, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.12, injuries: 0.13,
+    advancedMetrics: 0.18, startingPitcher: 0.12, weather: 0.03,
     situational: 0.02, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.04,
   },
   NHL: {
     winPct: 0.04, recentForm: 0.10, homeAwaySplit: 0.05, pointDiff: 0.09,
-    streak: 0.03, restDays: 0.04, scoringTrend: 0.03, defenseTrend: 0.04,
-    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.15, injuries: 0.13,
-    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.00,
+    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.15, injuries: 0.15,
+    advancedMetrics: 0.17, startingPitcher: 0.00, weather: 0.00,
     situational: 0.04, refereeTendency: 0.00, clutchFactor: 0.03, matchupInteraction: 0.04,
   },
   NCAAB: {
     winPct: 0.04, recentForm: 0.08, homeAwaySplit: 0.11, pointDiff: 0.08,
-    streak: 0.02, restDays: 0.04, scoringTrend: 0.04, defenseTrend: 0.04,
-    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.20, injuries: 0.08,
-    advancedMetrics: 0.03, startingPitcher: 0.00, weather: 0.00,
+    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.20, injuries: 0.09,
+    advancedMetrics: 0.11, startingPitcher: 0.00, weather: 0.00,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
   },
   NCAAF: {
     winPct: 0.04, recentForm: 0.08, homeAwaySplit: 0.08, pointDiff: 0.09,
-    streak: 0.03, restDays: 0.06, scoringTrend: 0.03, defenseTrend: 0.04,
-    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.18, injuries: 0.08,
-    advancedMetrics: 0.03, startingPitcher: 0.00, weather: 0.04,
+    streak: 0.01, restDays: 0.06, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.18, injuries: 0.10,
+    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.04,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.04,
   },
   MLS: {
     winPct: 0.05, recentForm: 0.12, homeAwaySplit: 0.09, pointDiff: 0.08,
-    streak: 0.03, restDays: 0.04, scoringTrend: 0.04, defenseTrend: 0.04,
-    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.09,
-    advancedMetrics: 0.02, startingPitcher: 0.00, weather: 0.02,
+    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.11,
+    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.02,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
   },
   EPL: {
     winPct: 0.05, recentForm: 0.12, homeAwaySplit: 0.09, pointDiff: 0.08,
-    streak: 0.03, restDays: 0.04, scoringTrend: 0.04, defenseTrend: 0.04,
-    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.09,
-    advancedMetrics: 0.02, startingPitcher: 0.00, weather: 0.02,
+    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
+    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.11,
+    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.02,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
   },
 };
@@ -933,7 +933,7 @@ function eloOnlyModel(homeElo: number, awayElo: number, sport: string): SubModel
   const { homeWinProb } = getEloPrediction(homeElo, awayElo, sport);
   const prob100 = clamp(Math.round(homeWinProb * 100), 8, 92);
   // Confidence = how far from 50, dampened — Elo alone is moderate signal
-  const rawConf = 50 + Math.abs(prob100 - 50) * 0.55;
+  const rawConf = 50 + Math.abs(prob100 - 50) * 0.35;
   return { homeWinProb: prob100, confidence: clamp(Math.round(rawConf), 50, 80) };
 }
 
@@ -973,7 +973,7 @@ function recentFormModel(
   const prob100 = clamp(Math.round(rawProb * 100), 8, 92);
 
   // Recent form is moderate-reliability signal; dampen confidence similarly to composite
-  const rawConf = 50 + Math.abs(prob100 - 50) * 0.50;
+  const rawConf = 50 + Math.abs(prob100 - 50) * 0.30;
   return { homeWinProb: prob100, confidence: clamp(Math.round(rawConf), 50, 80) };
 }
 
@@ -1645,6 +1645,7 @@ export async function generatePrediction(
     "strengthOfSchedule",
     "elo",
     "streak",
+    "clutchFactor",
   ]);
 
   let homeWeightedSum = 0;
@@ -1660,7 +1661,8 @@ export async function generatePrediction(
   // homeWeightedSum is in [-1, 1]; use sigmoid for natural probability spread
   // More moderate scaling - prevents clustering at extremes
   const sigmoidScale = SIGMOID_SCALING[sportKey] ?? 4.5;
-  const rawHomeProb = 1 / (1 + Math.exp(-homeWeightedSum * sigmoidScale));
+  const compositeDifferential = homeWeightedSum - awayWeightedSum;
+  const rawHomeProb = 1 / (1 + Math.exp(-compositeDifferential * sigmoidScale));
   const rawAwayProb = 1 - rawHomeProb;
   // Scale to percentage
   const homeWinProbability = clamp(Math.round(rawHomeProb * 100), 8, 92);
@@ -1714,9 +1716,7 @@ export async function generatePrediction(
   const ensemble       = ensemblePrediction(compositeSubModel, eloSubModel, formSubModel, sportKey);
 
   // Apply ensemble divergence penalty on top of the existing confidence
-  const postEnsembleConf = ensemble.divergenceFlag
-    ? clamp(confidence - 10, 50, isTossUp ? cal.tossUpCeiling : cal.ceiling)
-    : confidence;
+  const postEnsembleConf = Math.min(confidence, ensemble.confidence);
   // Lineup confirmation modifier: unconfirmed lineups = uncertainty tax
   const lineupPenalties: Record<string, number> = { MLB: -8, NFL: -6, NBA: -4, NHL: -5, NCAAB: -3, NCAAF: -4, MLS: -3, EPL: -3 };
   const maxLineupPenalty = lineupPenalties[sportKey] ?? -4;
