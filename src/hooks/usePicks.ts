@@ -9,6 +9,9 @@ export interface Pick {
   gameId: string;
   pickedTeam: 'home' | 'away';
   result?: 'win' | 'loss' | 'pending';
+  homeTeam?: string | null;
+  awayTeam?: string | null;
+  sport?: string | null;
   createdAt: string;
 }
 
@@ -68,7 +71,7 @@ export function useMakePick() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { gameId: string; pickedTeam: 'home' | 'away' }) =>
+    mutationFn: (data: { gameId: string; pickedTeam: 'home' | 'away'; homeTeam?: string; awayTeam?: string; sport?: string }) =>
       api.post<Pick>('/api/picks', data),
     onSuccess: () => {
       // Immediately invalidate picks and stats queries to refetch

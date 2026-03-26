@@ -13,7 +13,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   Search, ChevronRight, TrendingUp, Tv, AlertTriangle,
@@ -22,6 +22,7 @@ import {
 import { useGames } from '@/hooks/useGames';
 import { useLiveScores } from '@/hooks/useLiveScores';
 import { useSubscription } from '@/lib/subscription-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GameStatus, GameWithPrediction } from '@/types/sports';
 
 // ─── PALETTE ─────────────────────────────────────────────────────
@@ -240,15 +241,19 @@ const FollowedGameCard = memo(function FollowedGameCard({
 });
 
 function YourGamesSection({
-  games, router,
+  games, router, followedGameIds,
 }: {
   games: GameWithPrediction[];
   router: ReturnType<typeof useRouter>;
+  followedGameIds: Set<string>;
 }) {
-  // Show all available games as "your games" — API already returns today's games
+  // Filter to only games the user has followed
   const todayGames = useMemo(() => {
-    return (games ?? []).slice(0, 10);
-  }, [games]);
+    if (followedGameIds.size === 0) return [];
+    return (games ?? []).filter(
+      (g) => followedGameIds.has(g.id)
+    ).slice(0, 10);
+  }, [games, followedGameIds]);
 
   return (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>
@@ -300,7 +305,7 @@ function YourGamesSection({
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
             alignItems: 'center',
           }}>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>Follow games from the Home tab</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>Tap Follow on any game to add it here</Text>
           </View>
         </View>
       )}
@@ -1015,13 +1020,39 @@ export default function MyArenaScreen() {
   // Keep SSE connection alive for live score updates
   useLiveScores();
   const { isPremium } = useSubscription();
+  const [followedGameIds, setFollowedGameIds] = useState<Set<string>>(new Set());
+
+  // Load followed game IDs from AsyncStorage
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('clutch_followed_games');
+        const list: string[] = raw ? JSON.parse(raw) : [];
+        setFollowedGameIds(new Set(list));
+      } catch {}
+    })();
+  }, []);
+
+  // Re-check follows when screen comes into focus (user may have followed/unfollowed from game detail)
+  const refreshFollows = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('clutch_followed_games');
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      setFollowedGameIds(new Set(list));
+    } catch {}
+  }, []);
+  // Refresh followed games when tab comes into focus
+  useFocusEffect(useCallback(() => {
+    refreshFollows();
+  }, [refreshFollows]));
+
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refreshFollows()]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, refreshFollows]);
 
   const liveCount = useMemo(() =>
     (allGames ?? []).filter(g => g.status === GameStatus.LIVE).length,
@@ -1067,7 +1098,7 @@ export default function MyArenaScreen() {
           <HeaderSection liveCount={liveCount} />
 
           {/* Section 2: Your Games */}
-          <YourGamesSection games={allGames ?? []} router={router} />
+          <YourGamesSection games={allGames ?? []} router={router} followedGameIds={followedGameIds} />
 
           {/* Section 3: Night Plan */}
           <NightPlanSection games={allGames ?? []} router={router} />

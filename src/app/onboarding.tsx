@@ -272,7 +272,7 @@ function AIDemo() {
           </View>
         </View>
       ))}
-      <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.12)', textAlign: 'center', marginTop: 6 }}>19 factors analyzed per game with Pro</Text>
+      <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.12)', textAlign: 'center', marginTop: 6 }}>20 factors analyzed per game with Pro</Text>
     </View>
   );
 }
@@ -302,7 +302,7 @@ function ProfileDemo() {
   const total = wins + losses;
   const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
   const tier = pct >= 75 ? 'GOAT' : pct >= 65 ? 'MVP' : pct >= 55 ? 'ALL-STAR' : pct >= 45 ? 'STARTER' : 'ROOKIE';
-  const tierColor = pct >= 75 ? '#D4B896' : pct >= 65 ? CORAL : pct >= 55 ? CORAL : pct >= 45 ? TEAL : '#8A8A90';
+  const tierColor = pct >= 75 ? CORAL : pct >= 65 ? CORAL : pct >= 55 ? CORAL : pct >= 45 ? TEAL : '#8A8A90';
 
   return (
     <View style={{ width: 240 }}>
@@ -350,7 +350,7 @@ function ProfileDemo() {
 const SLIDES = [
   { Demo: LiveCardDemo, title: 'Every Game. One Place.', body: 'Live scores, box scores, and where to watch — across NBA, NFL, MLB, NHL, MLS, EPL, NCAAF, and NCAAB.', accent: TEAL },
   { Demo: JerseyPickDemo, title: 'Pick Your Winners', body: 'Tap a jersey to pick who wins. Change your mind anytime before the game starts.', accent: CORAL },
-  { Demo: AIDemo, title: 'AI Predictions', body: '19 factors analyzed per game — momentum, matchups, form, and more. Upgrade to Pro to unlock every prediction.', accent: TEAL },
+  { Demo: AIDemo, title: 'AI Predictions', body: '20 factors analyzed per game — momentum, matchups, form, and more. Upgrade to Pro to unlock every prediction.', accent: TEAL },
   { Demo: ProfileDemo, title: 'Build Your Record', body: 'Track your wins, losses, and streaks. Your profile card levels up as your record improves.', accent: GREEN },
 ];
 

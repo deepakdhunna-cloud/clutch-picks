@@ -482,9 +482,9 @@ export const SportCard = memo(function SportCard({ sport, gameCount, index = 0, 
                 <Text
                   style={{
                     fontSize: 6,
-                    fontWeight: '700',
+                    fontWeight: '900',
                     letterSpacing: 2.5,
-                    color: textDimColor,
+                    color: '#FFFFFF',
                   }}
                 >
                   ADMIT ONE

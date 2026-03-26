@@ -76,9 +76,12 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
 function SettingSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={{ marginBottom: 24 }}>
-      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, marginBottom: 10, paddingHorizontal: 20 }}>
-        {title}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingHorizontal: 20 }}>
+        <View style={{ width: 3, height: 12, borderRadius: 1.5, backgroundColor: '#7A9DB8' }} />
+        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+          {title}
+        </Text>
+      </View>
       <View
         style={{
           marginHorizontal: 20,

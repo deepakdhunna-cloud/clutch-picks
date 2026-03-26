@@ -1,4 +1,6 @@
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
+
+let _jerseyIdCounter = 0;
 import Svg, {
   Path,
   Rect,
@@ -24,7 +26,10 @@ function jerseyToSport(j?: JerseySport): Sport {
 }
 
 function darken(hex: string, factor: number): string {
-  const n = parseInt(hex.replace('#', ''), 16);
+  // Guard against non-hex input (e.g. rgba strings, undefined)
+  if (!hex || !hex.startsWith('#') || hex.replace('#', '').length < 6) return hex || '#000000';
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  if (isNaN(n)) return hex;
   const r = Math.max(0, Math.round(((n >> 16) & 0xff) * factor));
   const g = Math.max(0, Math.round(((n >> 8)  & 0xff) * factor));
   const b = Math.max(0, Math.round(( n         & 0xff) * factor));
@@ -413,16 +418,18 @@ export const JerseyIcon = memo(function JerseyIcon({
   primaryColor,
   secondaryColor,
 }: JerseyIconProps) {
-  const colors = getTeamColors(teamCode, jerseyToSport(sport));
+  const instanceId = useRef(++_jerseyIdCounter).current;
+  const needsLookup = !primaryColor || !secondaryColor;
+  const colors = needsLookup ? getTeamColors(teamCode, jerseyToSport(sport)) : null;
 
-  const primary     = primaryColor   ?? colors.primary;
+  const primary     = primaryColor   ?? colors?.primary ?? '#5A7A8A';
   const primaryDark = darken(primary, 0.6);
-  const secondary   = secondaryColor ?? colors.secondary;
+  const secondary   = secondaryColor ?? colors?.secondary ?? '#FFFFFF';
   const text        = '#FFFFFF';
   const stroke      = darken(primary, 0.25);
   const label       = teamCode.slice(0, 4).toUpperCase();
 
-  const gradId    = `grad_${teamCode}_${sport ?? 'x'}`;
+  const gradId    = `grad_${teamCode}_${instanceId}`;
   const sportType = sportFor(sport);
   const height    = size * 1.25;
 

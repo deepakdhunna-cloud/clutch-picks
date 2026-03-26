@@ -29,23 +29,54 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
   const homeWinning = homeScore > awayScore;
 
   return (
+    <View style={{
+      width: CARD_WIDTH,
+      marginRight: 10,
+      borderRadius: 18,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.9,
+      shadowRadius: 24,
+      elevation: 20,
+    }}>
     <Pressable
       onPress={onPress}
       className="active:opacity-85"
-      style={{
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        marginRight: 10,
-        borderRadius: 18,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.18)',
-        shadowColor: '#000000',
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 },
-      }}
     >
+      {/* Glass border — dark reflective with team colors */}
+      <View style={{ borderRadius: 18, padding: 2, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[
+            `${awayColors.primary}90`,
+            `${awayColors.primary}50`,
+            '#0D1118',
+            '#080C12',
+            '#0D1118',
+            `${homeColors.primary}50`,
+            `${homeColors.primary}90`,
+          ]}
+          locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 18 }}
+        />
+        {/* Inner bevel — specular highlight top, deep shadow bottom */}
+        <View style={{ borderRadius: 16, padding: 1, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={[
+              `${awayColors.primary}60`,
+              'rgba(255,255,255,0.12)',
+              '#080C12',
+              'rgba(0,0,0,0.6)',
+              `${homeColors.primary}50`,
+            ]}
+            locations={[0, 0.2, 0.5, 0.8, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16 }}
+          />
+        {/* Card body */}
+        <View style={{ borderRadius: 15, overflow: 'hidden', height: CARD_HEIGHT }}>
       {/* Dark glass base */}
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(4,5,10,0.82)' }} />
 
@@ -109,23 +140,23 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             />
             <View style={{ marginLeft: 8, flex: 1 }}>
               <Text style={{
-                color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.55)',
+                color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                 fontSize: 13,
-                fontWeight: awayWinning ? '800' : '600',
+                fontWeight: awayWinning ? '800' : '500',
                 letterSpacing: 0.4,
               }}>
                 {game.awayTeam.city || game.awayTeam.abbreviation}
               </Text>
               {game.awayTeam.record ? (
-                <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: '500', marginTop: 1 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: '500', marginTop: 1 }}>
                   {game.awayTeam.record}
                 </Text>
               ) : null}
             </View>
             <Text style={{
-              color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
+              color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
               fontSize: 20,
-              fontWeight: awayWinning ? '900' : '600',
+              fontWeight: awayWinning ? '900' : '500',
               letterSpacing: -0.5,
             }}>
               {awayScore}
@@ -144,23 +175,23 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             />
             <View style={{ marginLeft: 8, flex: 1 }}>
               <Text style={{
-                color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.55)',
+                color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                 fontSize: 13,
-                fontWeight: homeWinning ? '800' : '600',
+                fontWeight: homeWinning ? '800' : '500',
                 letterSpacing: 0.4,
               }}>
                 {game.homeTeam.city || game.homeTeam.abbreviation}
               </Text>
               {game.homeTeam.record ? (
-                <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: '500', marginTop: 1 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: '500', marginTop: 1 }}>
                   {game.homeTeam.record}
                 </Text>
               ) : null}
             </View>
             <Text style={{
-              color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
+              color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
               fontSize: 20,
-              fontWeight: homeWinning ? '900' : '600',
+              fontWeight: homeWinning ? '900' : '500',
               letterSpacing: -0.5,
             }}>
               {homeScore}
@@ -212,7 +243,11 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
           </View>
         </View>
       </View>
+        </View>
+        </View>
+      </View>
     </Pressable>
+    </View>
   );
 });
 
