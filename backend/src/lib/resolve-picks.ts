@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "../prisma";
+import { createNotification } from "../routes/notifications";
 
 const ESPN_ENDPOINTS: Record<string, string> = {
   NFL: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
@@ -84,7 +85,7 @@ async function fetchGameResult(gameId: string): Promise<FinalGameResult | null> 
 }
 
 // Determine win/loss for a pick given final scores
-function determineResult(
+export function determineResult(
   pickedTeam: string,
   homeScore: number,
   awayScore: number
@@ -143,6 +144,17 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
           data: { result },
         });
         resolved++;
+
+        // Notify user of resolved pick
+        const emoji = result === "win" ? "W" : "L";
+        const teams = [pick.homeTeam, pick.awayTeam].filter(Boolean).join(" vs ");
+        createNotification(
+          pick.odId,
+          "pick_resolved",
+          `Pick Result: ${emoji}`,
+          `Your pick on ${teams || "a game"} was a ${result}!`,
+          { gameId: pick.gameId }
+        );
       } catch (err) {
         console.error(`[resolve-picks] Error updating pick ${pick.id}:`, err);
         skipped++;

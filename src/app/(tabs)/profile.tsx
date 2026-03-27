@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, StatusBar,
   ActivityIndicator, Image, Dimensions,
@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withRepeat,
+  useSharedValue, useAnimatedStyle, withTiming,
   Easing, interpolate, FadeInDown, FadeIn,
 } from 'react-native-reanimated';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -34,9 +34,8 @@ const TEAL_DARK = '#5A7A8A';
 const GREEN = '#4ADE80';
 const RED = '#EF4444';
 
-// ─── RARITY ────────────────────────────────────────────────────────
+// ─── CARD THEME ────────────────────────────────────────────────────
 interface Rarity {
-  tier: string;
   color: string;
   colorDim: string;
   gradColors: [string, string, string, string, string];
@@ -44,33 +43,12 @@ interface Rarity {
   glowColor: string;
 }
 
-function getRarity(winRate: number): Rarity {
-  if (winRate >= 75) return {
-    tier: 'GOAT', color: '#E8936A', colorDim: '#C4785A',
-    gradColors: ['#E8936A', '#7A9DB8', '#E8936A', '#7A9DB8', '#E8936A'],
-    innerBg: '#0C0808', glowColor: 'rgba(232,147,106,0.22)',
-  };
-  if (winRate >= 65) return {
-    tier: 'MVP', color: '#E8936A', colorDim: '#C4785A',
-    gradColors: ['#E8936A', '#7A9DB8', '#E8936A', '#C4785A', '#E8936A'],
-    innerBg: '#0C0A08', glowColor: 'rgba(232,147,106,0.18)',
-  };
-  if (winRate >= 55) return {
-    tier: 'ALL-STAR', color: CORAL, colorDim: '#B8725A',
-    gradColors: [CORAL, TEAL_DARK, CORAL, '#B8725A', CORAL],
-    innerBg: '#0C0A08', glowColor: 'rgba(232,147,106,0.15)',
-  };
-  if (winRate >= 45) return {
-    tier: 'STARTER', color: TEAL, colorDim: TEAL_DARK,
-    gradColors: [TEAL, TEAL_DARK, TEAL, '#4A6A7A', TEAL],
-    innerBg: '#0A0C0E', glowColor: 'rgba(122,157,184,0.12)',
-  };
-  return {
-    tier: 'ROOKIE', color: '#8A8A90', colorDim: '#5A5A60',
-    gradColors: ['#6A6A70', '#3A3A40', '#6A6A70', '#4A4A50', '#6A6A70'],
-    innerBg: '#0A0A0C', glowColor: 'rgba(138,138,144,0.1)',
-  };
-}
+// Single neutral card theme — no fake tiers
+const CARD_THEME: Rarity = {
+  color: TEAL, colorDim: TEAL_DARK,
+  gradColors: [TEAL, TEAL_DARK, TEAL, '#4A6A7A', TEAL],
+  innerBg: '#0A0C0E', glowColor: 'rgba(122,157,184,0.12)',
+};
 
 // ─── SVG ICONS ─────────────────────────────────────────────────────
 function SettingsGear({ size = 20, color = 'rgba(255,255,255,0.5)' }: { size?: number; color?: string }) {
@@ -123,163 +101,36 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function getGrade(winRate: number): string {
-  if (winRate >= 75) return '10';
-  if (winRate >= 65) return '9.5';
-  if (winRate >= 55) return '9';
-  if (winRate >= 45) return '8.5';
-  return '8';
-}
 
-// ─── CLEAN HEX MESH BACKGROUND COMPONENT ────────────────────────────
-function HexMeshBackground() {
-  // Hex path helper: pointy-top hexagons centered at (cx, cy) with radius r
-  const hexPath = (cx: number, cy: number, r: number): string => {
-    const pts = Array.from({ length: 6 }, (_, i) => {
-      const angle = (Math.PI / 180) * (60 * i - 30);
-      return `${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`;
-    });
-    return `M ${pts.join(' L ')} Z`;
-  };
 
-  const r = 16;
-  const cols = 14;
-  const rows = 20;
-  const hexW = r * Math.sqrt(3);
-  const hexH = r * 2;
-
-  const hexes: { cx: number; cy: number; idx: number }[] = [];
-  let idx = 0;
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const cx = col * hexW + (row % 2 === 1 ? hexW / 2 : 0);
-      const cy = row * hexH * 0.75;
-      hexes.push({ cx, cy, idx: idx++ });
-    }
-  }
-
-  return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      {/* SVG hex grid — light white pattern */}
-      <View style={[StyleSheet.absoluteFillObject, { overflow: 'hidden' }]} pointerEvents="none">
-        <Svg width={CARD_W} height={700}>
-          {hexes.map(({ cx, cy, idx: hIdx }) => (
-            <Path
-              key={hIdx}
-              d={hexPath(cx, cy, r - 1)}
-              fill="rgba(14,18,28,0.5)"
-              stroke="rgba(40,55,80,0.35)"
-              strokeWidth={0.7}
-            />
-          ))}
-        </Svg>
-      </View>
-    </View>
-  );
-}
-
-// ─── HOLOGRAPHIC SHIMMER COMPONENT ─────────────────────────────────
+// ─── CARD BORDER COMPONENT ─────────────────────────────────
 function HolographicBorder({ rarity, children }: { rarity: Rarity; children: React.ReactNode }) {
-  const shimmerPos = useSharedValue(0);
-  const faceShimmerPos = useSharedValue(0);
-
-  useEffect(() => {
-    // Border shimmer
-    shimmerPos.value = withRepeat(
-      withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-    // Face shimmer (slower, offset)
-    faceShimmerPos.value = withRepeat(
-      withTiming(1, { duration: 4500, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, []);
-
-  const borderShimmerStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(shimmerPos.value, [0, 0.5, 1], [0.15, 0.7, 0.15]),
-    transform: [
-      { translateX: interpolate(shimmerPos.value, [0, 1], [-CARD_W, CARD_W]) },
-      { rotate: '25deg' },
-    ],
-  }));
-
-  const faceShimmerStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(faceShimmerPos.value, [0, 0.3, 0.5, 0.7, 1], [0, 0, 0.12, 0, 0]),
-    transform: [
-      { translateX: interpolate(faceShimmerPos.value, [0, 1], [-CARD_W * 1.5, CARD_W * 1.5]) },
-      { rotate: '20deg' },
-      { skewX: '-15deg' },
-    ],
-  }));
-
   return (
     <View style={{ borderRadius: 24, padding: 3, overflow: 'hidden', backgroundColor: 'transparent' }}>
-      {/* Base gradient border */}
+      {/* Gradient border */}
       <LinearGradient
         colors={rarity.gradColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      {/* Animated border shimmer */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            top: -50,
-            width: 60,
-            height: 600,
-            backgroundColor: 'rgba(255,255,255,0.4)',
-          },
-          borderShimmerStyle,
-        ]}
-      />
       {/* Inner card */}
       <View style={[s.cardInner, { backgroundColor: rarity.innerBg || '#080610' }]}>
-        {/* Clean hex mesh background */}
-        <HexMeshBackground />
-        {/* Face shimmer overlay - skinny diagonal glare */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              top: -150,
-              left: 0,
-              width: 40,
-              height: 800,
-              zIndex: 10,
-            },
-            faceShimmerStyle,
-          ]}
-        >
-          <LinearGradient
-            colors={['transparent', `rgba(255,255,255,0.5)`, `rgba(255,255,255,0.8)`, `rgba(255,255,255,0.5)`, 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ flex: 1 }}
-          />
-        </Animated.View>
         {children}
       </View>
     </View>
   );
 }
 
-// ─── GRADING SLAB WRAPPER ──────────────────────────────────────────
+// ─── CARD SLAB WRAPPER ──────────────────────────────────────────
 function GradingSlab({
   children,
-  winRate,
   totalPicks
 }: {
   children: React.ReactNode;
   winRate: number;
   totalPicks: number;
 }) {
-  const grade = getGrade(winRate);
   const certNum = String(totalPicks).padStart(3, '0');
 
   return (
@@ -294,12 +145,6 @@ function GradingSlab({
       {/* Slab Header */}
       <View style={slabStyles.slabHeader}>
         <Text style={slabStyles.slabBrand}>CLUTCH PICKS</Text>
-        <View style={slabStyles.gradeContainer}>
-          <Text style={slabStyles.gradeLabel}>GRADE</Text>
-          <View style={slabStyles.gradeBadge}>
-            <Text style={slabStyles.gradeText}>{grade}</Text>
-          </View>
-        </View>
       </View>
 
       {/* Inner Card Container */}
@@ -660,7 +505,7 @@ export default function ProfileScreen() {
     return best;
   }, [picks]);
 
-  const rarity = getRarity(winRate);
+  const rarity = CARD_THEME;
 
   const gameMap = useMemo(() => {
     if (!allGames) return new Map<string, any>();
@@ -726,10 +571,6 @@ export default function ProfileScreen() {
     <>
       {/* Photo/Avatar Area */}
       <View style={cardStyles.photoArea}>
-        {/* Tier Badge - top left */}
-        <View style={[cardStyles.tierBadgePhoto, { backgroundColor: `${rarity.color}20` }]}>
-          <Text style={[cardStyles.tierBadgeText, { color: rarity.color }]}>{rarity.tier}</Text>
-        </View>
         {/* Avatar */}
         <View style={[cardStyles.avatarContainer, { borderColor: rarity.color }]}>
           {userImage ? (

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { createNotification } from "./notifications";
 
 const socialRouter = new Hono<{
   Variables: {
@@ -39,6 +40,15 @@ socialRouter.post("/follow/:userId", async (c) => {
         followingId: targetUserId,
       },
     });
+
+    // Notify the followed user
+    createNotification(
+      targetUserId,
+      "new_follower",
+      "New Follower",
+      `${currentUser.name ?? "Someone"} started following you`,
+      { userId: currentUser.id }
+    );
 
     return c.json({ data: { followed: true, followId: follow.id } });
   } catch (error: unknown) {

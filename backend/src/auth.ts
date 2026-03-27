@@ -63,7 +63,7 @@ export const auth = betterAuth({
     crossSubDomainCookies: {
       enabled: true,
     },
-    disableCSRFCheck: true,
+    // CSRF protection enabled — Better Auth + Expo plugin handle tokens automatically
     trustedProxyHeaders: true,
     defaultCookieAttributes: {
       sameSite: "none",

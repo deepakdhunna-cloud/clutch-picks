@@ -16,7 +16,7 @@ Clutch Picks - Sports Predictions
 
 ### Subtitle (30 characters max)
 ```
-Make Your Winning Picks
+AI Sports Predictions & Stats
 ```
 
 ### Keywords (100 characters max, comma-separated)
@@ -26,7 +26,9 @@ sports,picks,predictions,football,basketball,baseball,hockey,soccer,NFL,NBA,MLB,
 
 ### Description
 ```
-Make smarter sports picks with Clutch Picks – your ultimate companion for game predictions across all major sports.
+All predictions are AI-generated for entertainment and informational purposes only. Clutch Picks does not facilitate gambling.
+
+Make smarter sports picks with Clutch Picks – your companion for AI-powered game analysis across all major sports.
 
 TRACK ALL YOUR FAVORITE SPORTS
 • NFL, NBA, MLB, NHL, MLS, EPL
@@ -54,7 +56,7 @@ LIVE GAME TRACKING
 
 Whether you're a casual fan or a serious sports analyst, Clutch Picks gives you the tools to make informed predictions and track your success across every major sport.
 
-Download now and start making clutch picks!
+Predictions are for entertainment and informational purposes only. Past prediction accuracy does not guarantee future results.
 ```
 
 ### Promotional Text (170 characters max)
@@ -82,12 +84,15 @@ Welcome to Clutch Picks!
 **Secondary:** Entertainment
 
 ### Age Rating
-**12+**
+**17+**
 
 ### Content Descriptions
-- Simulated Gambling: **No** (no real money, no wagering, no gambling mechanics)
+- Simulated Gambling: **Yes** (predictions involve game outcome analysis similar to sports betting context)
 - Unrestricted Web Access: **No**
 - Infrequent/Mild Contests: **Yes** (users make predictions on game outcomes for entertainment)
+
+### Required Disclaimer
+All predictions are AI-generated for entertainment and informational purposes only. Clutch Picks does not facilitate, encourage, or enable gambling. Past prediction accuracy does not guarantee future results.
 
 ### Privacy Policy URL
 ```

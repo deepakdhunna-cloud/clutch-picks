@@ -350,8 +350,8 @@ function ProfileDemo() {
 const SLIDES = [
   { Demo: LiveCardDemo, title: 'Every Game. One Place.', body: 'Live scores, box scores, and where to watch — across NBA, NFL, MLB, NHL, MLS, EPL, NCAAF, and NCAAB.', accent: TEAL },
   { Demo: JerseyPickDemo, title: 'Pick Your Winners', body: 'Tap a jersey to pick who wins. Change your mind anytime before the game starts.', accent: CORAL },
-  { Demo: AIDemo, title: 'AI Predictions', body: '20 factors analyzed per game — momentum, matchups, form, and more. Upgrade to Pro to unlock every prediction.', accent: TEAL },
-  { Demo: ProfileDemo, title: 'Build Your Record', body: 'Track your wins, losses, and streaks. Your profile card levels up as your record improves.', accent: GREEN },
+  { Demo: AIDemo, title: 'AI Predictions', body: 'Multi-factor AI analysis per game — momentum, matchups, form, and more. Predictions are for entertainment only. Not gambling advice.', accent: TEAL },
+  { Demo: ProfileDemo, title: 'Build Your Record', body: 'Track your wins, losses, and streaks. See how your picks stack up over time.', accent: GREEN },
 ];
 
 // ─── DOTS ────────────────────────────────────────────────────

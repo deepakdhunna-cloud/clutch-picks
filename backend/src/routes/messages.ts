@@ -1,6 +1,15 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { createNotification } from "./notifications";
+
+function sanitizeContent(text: string): string {
+  return text
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .trim()
+    .slice(0, 2000);
+}
 
 const messagesRouter = new Hono<{
   Variables: {
@@ -137,9 +146,9 @@ messagesRouter.post("/conversations/:conversationId/messages", async (c) => {
 
   try {
     const body = await c.req.json<{ content?: string }>();
-    const { content } = body;
+    const sanitized = sanitizeContent(body.content ?? "");
 
-    if (!content?.trim()) {
+    if (!sanitized) {
       return c.json({ error: { message: "Content required", code: "CONTENT_REQUIRED" } }, 400);
     }
 
@@ -153,7 +162,7 @@ messagesRouter.post("/conversations/:conversationId/messages", async (c) => {
     if (!conv) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
 
     const msg = await prisma.message.create({
-      data: { conversationId, senderId: user.id, content: content.trim() },
+      data: { conversationId, senderId: user.id, content: sanitized },
       include: { sender: { select: { id: true, name: true, image: true } } },
     });
 
@@ -162,6 +171,16 @@ messagesRouter.post("/conversations/:conversationId/messages", async (c) => {
       where: { id: conversationId },
       data: { updatedAt: new Date() },
     });
+
+    // Notify the other participant
+    const recipientId = conv.participant1Id === user.id ? conv.participant2Id : conv.participant1Id;
+    createNotification(
+      recipientId,
+      "new_message",
+      "New Message",
+      `${user.name ?? "Someone"} sent you a message`,
+      { conversationId }
+    );
 
     return c.json({ data: msg });
   } catch (error) {

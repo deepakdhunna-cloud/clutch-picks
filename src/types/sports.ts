@@ -88,6 +88,8 @@ export interface Prediction {
   homeStreak?: number;
   awayStreak?: number;
   isTossUp?: boolean; // true if game is within 45-55% probability range
+  lowDataWarning?: boolean; // true when dataCoverage < 0.6
+  ensembleDivergence?: boolean; // true when sub-models disagree on winner
 }
 
 export interface GameWithPrediction extends Game {
@@ -170,10 +172,3 @@ export const SPORT_META: Record<Sport, SportMeta> = {
     isCollege: true,
   },
 };
-
-
-export interface MarketPickDataPoint {
-  timestamp: number;
-  homePercentage: number;
-  awayPercentage: number;
-}

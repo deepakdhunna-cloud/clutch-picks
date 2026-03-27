@@ -525,7 +525,7 @@ export default function ClutchPicksScreen() {
             ListFooterComponent={
               <View style={{ paddingTop: 16, paddingBottom: 20 }}>
                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
-                  AI predictions are for entertainment purposes only. Not financial advice.
+                  All predictions are AI-generated for entertainment purposes only. Not gambling advice.
                 </Text>
               </View>
             }

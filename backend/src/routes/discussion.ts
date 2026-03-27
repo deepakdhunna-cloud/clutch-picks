@@ -4,6 +4,13 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 
+function sanitizeContent(text: string): string {
+  return text
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .trim();
+}
+
 const discussionRouter = new Hono<{
   Variables: {
     user: typeof auth.$Infer.Session.user | null;
@@ -13,12 +20,15 @@ const discussionRouter = new Hono<{
 
 // Validation schemas
 const createPostSchema = z.object({
-  content: z.string().min(1).max(1000),
-  imageUrl: z.string().url().optional(),
+  content: z.string().min(1).max(1000).transform(sanitizeContent),
+  imageUrl: z.string().url().refine(
+    (url) => url.startsWith("https://storage.vibecodeapp.com/"),
+    "Image must be uploaded through the app"
+  ).optional(),
 });
 
 const createCommentSchema = z.object({
-  content: z.string().min(1).max(500),
+  content: z.string().min(1).max(500).transform(sanitizeContent),
 });
 
 // GET /api/discussion/posts - Get all posts (paginated)

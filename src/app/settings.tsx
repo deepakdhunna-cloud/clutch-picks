@@ -295,6 +295,18 @@ export default function SettingsScreen() {
             </Animated.View>
           )}
 
+          {/* Model Performance */}
+          <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+            <SettingSection title="AI MODEL">
+              <SettingItem
+                icon={RefreshCw}
+                title="Model Performance"
+                subtitle="Accuracy, calibration, and drift"
+                onPress={() => router.push('/model-accuracy')}
+              />
+            </SettingSection>
+          </Animated.View>
+
           {/* Privacy & Security */}
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>
             <SettingSection title="PRIVACY & SECURITY">
@@ -369,10 +381,13 @@ export default function SettingsScreen() {
             </SettingSection>
           </Animated.View>
 
-          {/* Version */}
-          <View style={{ alignItems: 'center', marginTop: 20 }}>
+          {/* Version + Disclaimer */}
+          <View style={{ alignItems: 'center', marginTop: 20, paddingHorizontal: 32 }}>
             <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
               Clutch Picks v1.0.10
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 15 }}>
+              Predictions are for entertainment and informational purposes only. Clutch Picks does not facilitate, encourage, or enable gambling. Past prediction accuracy does not guarantee future results.
             </Text>
           </View>
         </ScrollView>
