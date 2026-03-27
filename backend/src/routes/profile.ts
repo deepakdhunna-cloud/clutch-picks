@@ -125,7 +125,6 @@ profileRouter.get("/:userId", async (c) => {
         select: {
           id: true,
           name: true,
-          email: true,
           image: true,
           bio: true,
           isPrivate: true,
@@ -161,7 +160,6 @@ profileRouter.get("/:userId", async (c) => {
           name: profile.name,
           image: profile.image,
           bio: null,
-          email: null,
           isPrivate: true,
           followersCount,
           followingCount,

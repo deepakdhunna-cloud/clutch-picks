@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet, Dimensions, TextInput,
+  View, Text, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet, Dimensions, TextInput, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -220,7 +220,7 @@ export default function PaywallScreen() {
 
   const priceString = monthlyPackage?.product?.priceString || '$4.99';
   const features = [
-    { icon: '◆', label: 'AI Predictions', desc: '20 factors analyzed per game', accent: TEAL },
+    { icon: '◆', label: 'AI Predictions', desc: 'Multi-factor AI analysis per game', accent: TEAL },
     { icon: '▶', label: 'Live Scores', desc: 'Real-time across 8 leagues', accent: CORAL },
     { icon: '▤', label: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: TEAL },
     { icon: '◉', label: 'Where to Watch', desc: 'TV & streaming info', accent: CORAL },
@@ -255,10 +255,10 @@ export default function PaywallScreen() {
               <Text style={{ fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: 2 }}>CLUTCH PRO</Text>
             </View>
             <Text style={{ fontSize: 30, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, lineHeight: 36 }}>
-              See what others{'\n'}can't see.
+              Every game.{'\n'}Every stat.{'\n'}AI-analyzed.
             </Text>
             <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)', marginTop: 10, lineHeight: 22 }}>
-              AI-powered predictions across every game, every league. The edge you've been missing.
+              Multi-factor AI predictions across every game, every league. The analysis you've been looking for.
             </Text>
           </Animated.View>
 
@@ -429,7 +429,10 @@ export default function PaywallScreen() {
                 )}
 
                 <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 10 }}>
-                  Cancel anytime · No commitment
+                  Free for 3 days, then {priceString}/month. Cancel anytime.
+                </Text>
+                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 6, lineHeight: 15 }}>
+                  Subscription provides access to AI-generated predictions for entertainment purposes only.
                 </Text>
               </LinearGradient>
             </Animated.View>
@@ -445,6 +448,10 @@ export default function PaywallScreen() {
               )}
             </Pressable>
 
+            <Pressable onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')} style={{ marginTop: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: TEAL, textDecorationLine: 'underline' }}>Manage Subscription</Text>
+            </Pressable>
+
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
               <Pressable onPress={() => router.push('/terms' as any)}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecorationLine: 'underline' }}>Terms</Text>
@@ -456,7 +463,7 @@ export default function PaywallScreen() {
             </View>
 
             <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 14, paddingHorizontal: 28, lineHeight: 16 }}>
-              Payment charged to your App Store account. Subscription automatically renews unless canceled at least 24 hours before the end of the current period.
+              Payment charged to your App Store account. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Cancel in Settings {'>'} Subscriptions.
             </Text>
           </Animated.View>
         </ScrollView>

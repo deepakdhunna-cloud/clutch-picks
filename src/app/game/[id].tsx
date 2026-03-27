@@ -793,25 +793,6 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction
   );
 }
 
-function MarketOdds({ game }: { game: Game }) {
-  const { homeTeam, awayTeam, prediction } = game;
-  if (!prediction) return null;
-  const items = [{ label: `${homeTeam.abbreviation} ML`, value: prediction.marketFavorite === 'home' ? '145' : '+122', delta: '5', dc: '#FF5C5C' }, { label: `${awayTeam.abbreviation} ML`, value: prediction.marketFavorite === 'away' ? '145' : '+122', delta: '3', dc: '#4ADE80' }];
-  return (
-    <View>
-      <Text style={styles.sectionLabel}>Market Odds</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 }}>
-        {items.map(({ label, value, delta, dc }) => (
-          <View key={label} style={[styles.oddsRow, { width: '48%' }]}>
-            <View><Text style={styles.oddsRowLabel}>{label}</Text><Text style={styles.oddsRowValue}>{value}</Text></View>
-            <Text style={[styles.oddsDelta, { color: dc }]}>{delta}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 function RecentForm({ game }: { game: Game }) {
   const { homeTeam, awayTeam, prediction } = game;
   if (!prediction) return null;
@@ -1126,7 +1107,6 @@ export default function GameDetailScreen() {
           {prediction && isPremium ? (
             <>
               <View style={{ marginBottom: 22 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} /></View>
-              <View style={{ marginBottom: 22 }}><MarketOdds game={game} /></View>
               <View style={{ marginBottom: 22 }}><RecentForm game={game} /></View>
               <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
@@ -1152,8 +1132,10 @@ export default function GameDetailScreen() {
                 <RedactedPrediction homeTeam={homeTeam} awayTeam={awayTeam} prediction={prediction} onUnlock={() => router.push('/paywall')} />
               </View>
 
-              {/* ═══ MARKET ODDS ═══ */}
-              <RedactedSection title="Market Odds" height={120} onUnlock={() => router.push('/paywall')} />
+              {/* Disclaimer */}
+              <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, textAlign: 'center', marginTop: 8, marginBottom: 4 }}>
+                AI prediction for entertainment only. Not gambling advice.
+              </Text>
 
               {/* ═══ RECENT PERFORMANCE ═══ */}
               <RedactedSection title="Recent Performance" height={160} onUnlock={() => router.push('/paywall')} />

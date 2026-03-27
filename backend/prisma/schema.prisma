@@ -2,6 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// TODO: Migrate to PostgreSQL before exceeding ~100 concurrent users.
+// SQLite write-locks will cause request failures under load.
+// Steps: 1) Change provider to "postgresql" 2) Update DATABASE_URL
+// 3) Run prisma migrate dev 4) Seed from SQLite export
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
@@ -45,6 +49,9 @@ model UserPick {
   user       User      @relation(fields: [odId], references: [id], onDelete: Cascade)
 
   @@unique([odId, gameId]) // One pick per user per game
+  @@index([odId, createdAt])
+  @@index([gameId])
+  @@index([result])
 }
 
 model Session {
@@ -201,6 +208,20 @@ model TeamFollow {
   @@index([userId])
 }
 
+model AppNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "pick_resolved", "new_follower", "new_message"
+  title     String
+  body      String
+  data      String?  // JSON string for navigation params
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
 model EloRating {
   id          String   @id  // format: "{sport}-{teamId}"
   teamId      String
@@ -227,5 +248,7 @@ model PredictionResult {
 
   @@index([sport])
   @@index([wasCorrect])
+  @@index([createdAt])
+  @@index([sport, wasCorrect])
 }
 

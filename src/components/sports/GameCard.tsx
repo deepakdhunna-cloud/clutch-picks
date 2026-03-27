@@ -1151,9 +1151,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
             </View>
           </View>
 
-          {/* Pick Split - Real community data */}
+          {/* Community Picks */}
           <View style={styles.fanMomentumSection}>
-            {pickStats.totalPicks > 0 ? (
+            {pickStats.totalPicks >= 10 ? (
               <>
                 {/* Header row: away % | label | home % */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1169,7 +1169,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TrendingUp size={10} color="rgba(255,255,255,0.5)" />
                     <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 8, fontWeight: '700', letterSpacing: 1, marginLeft: 4 }}>
-                      PICK SPLIT
+                      {pickStats.totalPicks} PICKS
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1209,6 +1209,13 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   />
                 </View>
               </>
+            ) : pickStats.totalPicks > 0 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                <TrendingUp size={10} color="rgba(255,255,255,0.3)" />
+                <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600', marginLeft: 6 }}>
+                  {pickStats.totalPicks} pick{pickStats.totalPicks !== 1 ? 's' : null} — not enough data yet
+                </Text>
+              </View>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 <TrendingUp size={10} color="rgba(255,255,255,0.3)" />
@@ -1252,7 +1259,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                       }}
                     >
                       <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 }}>
-                        EVEN
+                        TOSS-UP
                       </Text>
                     </View>
                   ) : (
@@ -1297,6 +1304,17 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     ) : null}
                   </View>
                 </View>
+                {/* Data quality indicators */}
+                {game.prediction.lowDataWarning ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Text style={{ color: 'rgba(255,200,100,0.6)', fontSize: 9, fontWeight: '600' }}>⚠ Limited data</Text>
+                  </View>
+                ) : null}
+                {game.prediction.ensembleDivergence ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: game.prediction.lowDataWarning ? 2 : 4 }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '600' }}>Models disagree</Text>
+                  </View>
+                ) : null}
               </View>
             ) : (
               /* Locked prediction bar for free users */

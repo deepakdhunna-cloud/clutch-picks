@@ -3,7 +3,6 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
-import { resolvePicks } from "../lib/resolve-picks";
 
 const picksRouter = new Hono<{
   Variables: {
@@ -130,22 +129,27 @@ picksRouter.get("/stats", async (c) => {
   }
 });
 
-// GET /api/picks/resolve - Resolve all pending picks against ESPN final scores
-picksRouter.get("/resolve", async (c) => {
-  try {
-    const { resolved, skipped } = await resolvePicks();
-    return c.json({ data: { resolved, skipped } });
-  } catch (error) {
-    console.error("Error resolving picks:", error);
-    return c.json({ error: { message: "Failed to resolve picks", code: "RESOLVE_FAILED" } }, 500);
-  }
-});
-
-// GET /api/picks/user/:userId - Get picks for a specific user (public)
+// GET /api/picks/user/:userId - Get picks for a specific user (privacy-aware)
 picksRouter.get("/user/:userId", async (c) => {
   const userId = c.req.param("userId");
+  const currentUser = c.get("user");
 
   try {
+    // Check if profile is private
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isPrivate: true },
+    });
+
+    if (targetUser?.isPrivate && currentUser?.id !== userId) {
+      // Check if current user follows them
+      if (!currentUser) return c.json({ data: [] });
+      const isFollowing = await prisma.follow.findUnique({
+        where: { followerId_followingId: { followerId: currentUser.id, followingId: userId } },
+      });
+      if (!isFollowing) return c.json({ data: [] });
+    }
+
     const picks = await prisma.userPick.findMany({
       where: { odId: userId },
       orderBy: { createdAt: "desc" },

@@ -75,7 +75,11 @@ We use information to:
 We do not sell your personal information.
 
 We may share information in the following limited cases:
-• Service providers: vendors that help us operate the App (e.g., hosting, analytics, crash reporting, subscription management). They are permitted to process information only on our instructions and for the services they provide to us.
+• Service providers: vendors that help us operate the App. They are permitted to process information only on our instructions and for the services they provide to us. These include:
+  - ESPN (sports data and scores)
+  - OpenAI (AI-powered prediction analysis — game context is sent for analysis but no personal data is shared)
+  - RevenueCat (subscription and payment processing)
+  - Apple (authentication via Sign in with Apple)
 • Legal and safety reasons: if we believe disclosure is necessary to comply with law, court order, or valid legal process; to protect rights, safety, and security of Clutch Picks, our users, or others; or to investigate fraud, abuse, or security incidents.
 • Business transfers: if we are involved in a merger, acquisition, financing, reorganization, bankruptcy, or sale of assets, information may be transferred as part of that transaction.
 
