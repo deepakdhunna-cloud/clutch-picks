@@ -80,9 +80,9 @@ const searchBarOuter = {
 const searchBarInner = {
   flexDirection: 'row' as const,
   alignItems: 'center' as const,
-  backgroundColor: 'rgba(139,10,31,0.10)',
+  backgroundColor: '#000000',
   borderWidth: 1,
-  borderColor: 'rgba(139,10,31,0.20)',
+  borderColor: '#7A9DB8',
   borderRadius: 16,
   paddingVertical: 14,
   paddingHorizontal: 16,
@@ -98,8 +98,8 @@ const SearchBar = memo(function SearchBar() {
         }}
       >
         <View style={searchBarInner}>
-          <Search size={18} color="#FFFFFF" strokeWidth={2} />
-          <Text style={{ flex: 1, fontSize: 14, color: 'rgba(255,255,255,0.6)', fontWeight: '400', marginLeft: 12 }}>
+          <Search size={18} color="#7A9DB8" strokeWidth={2} />
+          <Text style={{ flex: 1, fontSize: 14, color: '#7A9DB8', fontWeight: '400', marginLeft: 12 }}>
             Search games, teams, sports...
           </Text>
         </View>
