@@ -39,15 +39,15 @@ onlineManager.setEventListener((setOnline) => {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Refetch on window focus for fresh data
-      refetchOnWindowFocus: true,
+      // SSE + polling handle freshness — don't refetch all queries on every tab switch
+      refetchOnWindowFocus: false,
       // Refetch when network reconnects
       refetchOnReconnect: true,
       // Keep retrying failed requests
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
       // Default stale time - can be overridden per query
-      staleTime: 10000, // 10 seconds
+      staleTime: 30000, // 30 seconds — prevents excessive refetches on tab switches
       // Cache time before garbage collection
       gcTime: 10 * 60 * 1000, // 10 minutes
       // Enable structural sharing to reduce unnecessary re-renders
@@ -161,6 +161,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
           <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
           <Stack.Screen name="model-accuracy" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="search-explore" options={{ freezeOnBlur: true, animation: 'fade' }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', freezeOnBlur: true, animation: 'slide_from_bottom', animationDuration: 250 }} />
         </Stack>
       </ThemeProvider>
