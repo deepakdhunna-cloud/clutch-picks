@@ -9,7 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, ChevronRight, Plus } from 'lucide-react-native';
+import { Search, ChevronRight, Plus, Zap } from 'lucide-react-native';
+import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -790,12 +791,74 @@ const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR }: {
   );
 });
 
+// ─── PRO UPSELL CARD ───
+function ProUpsellCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={{ marginHorizontal: 20, marginVertical: 8, borderRadius: 14, overflow: 'hidden' as const, borderWidth: 1, borderColor: 'rgba(139,10,31,0.12)', padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: 'rgba(139,10,31,0.03)' }}>
+      <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(139,10,31,0.10)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const }}>
+        <Zap size={14} color={MAROON} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>{title}</Text>
+        <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 1 }}>{subtitle}</Text>
+      </View>
+      <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: MAROON, letterSpacing: 0.5 }}>PRO</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── FREE GAME LIST ───
+function FreeGameList({ games, router }: { games: GameWithPrediction[]; router: ReturnType<typeof useRouter> }) {
+  const scheduled = games.filter(g => g.status === GameStatus.SCHEDULED || g.status === GameStatus.LIVE);
+  const sorted = [...scheduled].sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
+  const batch1 = sorted.slice(0, 6);
+  const batch2 = sorted.slice(6, 12);
+
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  const renderGame = (g: GameWithPrediction, i: number, total: number) => (
+    <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)}
+      style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, padding: 12, borderBottomWidth: i < total - 1 ? 1 : 0, borderBottomColor: 'rgba(255,255,255,0.03)' }}>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE, flex: 1 }}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text>
+      <Text style={{ fontSize: 10, color: TEXT_MUTED }}>{g.sport === 'NCAAF' ? 'CFB' : g.sport === 'NCAAB' ? 'CBB' : g.sport}</Text>
+      <Text style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: '600' }}>{g.status === GameStatus.LIVE ? 'LIVE' : fmtTime(g.gameTime)}</Text>
+    </Pressable>
+  );
+
+  return (
+    <View>
+      <View style={{ paddingHorizontal: 20, marginBottom: 8, marginTop: 4 }}>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: WHITE }}>Today's Games</Text>
+      </View>
+      {batch1.length > 0 ? (
+        <View style={{ marginHorizontal: 16, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' as const }}>
+          {batch1.map((g, i) => renderGame(g, i, batch1.length))}
+        </View>
+      ) : null}
+      <ProUpsellCard title="Want AI-ranked matchups?" subtitle="Insights, narratives & edge ratings" onPress={() => router.push('/paywall')} />
+      {batch2.length > 0 ? (
+        <View style={{ marginHorizontal: 16, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' as const, marginTop: 4 }}>
+          {batch2.map((g, i) => renderGame(g, i, batch2.length))}
+        </View>
+      ) : null}
+      {sorted.length === 0 ? (
+        <View style={{ alignItems: 'center' as const, paddingVertical: 40 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: TEXT_MUTED }}>No games today</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // ─── MAIN ───
 export default function MyArenaScreen() {
   const {data:allGames,isLoading,refetch} = useGames();
   const {data:userPicks} = useUserPicks();
   const {data:userStats} = useUserStats();
   const {data:teamFollows} = useTeamFollows();
+  const { isPremium } = useSubscription();
   useLiveScores();
   const sh = useHideOnScroll();
   const [sf,setSf] = useState('All');
@@ -825,6 +888,24 @@ export default function MyArenaScreen() {
   const cs = useAnimatedStyle(()=>({transform:[{translateX:-mtx.value*SW}]}));
 
   if (isLoading) return <View style={{flex:1,backgroundColor:BG,alignItems:'center',justifyContent:'center'}}><ActivityIndicator size="large" color={TEAL} /></View>;
+
+  const router = useRouter();
+
+  if (!isPremium) {
+    return (
+      <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>
+        <SearchBar />
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+          <FreeGameList games={allGames ?? []} router={router} />
+          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.08)', textAlign: 'center', lineHeight: 14 }}>
+              AI predictions are for entertainment purposes only. Not financial advice.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>

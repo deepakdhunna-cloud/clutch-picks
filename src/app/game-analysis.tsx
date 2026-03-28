@@ -189,6 +189,32 @@ export default function GameAnalysisScreen() {
     );
   }
 
+  if (!isPremium) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
+            </Pressable>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+            <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 8, marginBottom: 16 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: '#8B0A1F', letterSpacing: 2 }}>PRO</Text>
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 }}>Full AI Analysis</Text>
+            <Text style={{ fontSize: 13, color: '#A1B3C9', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>Detailed breakdown with edge ratings, factor analysis, and prediction confidence</Text>
+            <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+              <LinearGradient colors={['#8B0A1F', '#6A0818']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Unlock with Clutch Pro</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   const { homeTeam, awayTeam, prediction } = game;
   const sorted = [...prediction.factors]
     .filter(f => f.weight > 0)
@@ -255,17 +281,6 @@ export default function GameAnalysisScreen() {
               </View>
             </View>
           </View>
-          {!isPremium ? (
-            <Pressable onPress={() => router.push('/paywall')} style={{
-              ...StyleSheet.absoluteFillObject, zIndex: 10,
-              backgroundColor: 'rgba(4,6,8,0.7)',
-              alignItems: 'center', justifyContent: 'center', borderRadius: 18,
-            }}>
-              <View style={{ backgroundColor: MAROON_DIM, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(139,10,31,0.25)' }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#E8936A', letterSpacing: 1 }}>PRO</Text>
-              </View>
-            </Pressable>
-          ) : null}
         </View>
 
         {/* Edge Summary */}
@@ -304,29 +319,6 @@ export default function GameAnalysisScreen() {
                 homeTeam={homeTeam}
                 awayTeam={awayTeam}
               />
-              {!isPremium && index >= 2 ? (
-                <Pressable
-                  onPress={() => router.push('/paywall')}
-                  style={{
-                    ...StyleSheet.absoluteFillObject,
-                    zIndex: 10,
-                    backgroundColor: 'rgba(4,6,8,0.8)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 14,
-                  }}
-                >
-                  {index === 2 ? (
-                    <View style={{ alignItems: 'center' }}>
-                      <View style={{ backgroundColor: MAROON_DIM, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(139,10,31,0.25)', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#E8936A', letterSpacing: 1 }}>PRO</Text>
-                      </View>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Unlock all {sorted.length} factors</Text>
-                      <Text style={{ fontSize: 11, color: '#6B7C94', marginTop: 2 }}>Tap to subscribe</Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              ) : null}
             </View>
           ))}
         </View>

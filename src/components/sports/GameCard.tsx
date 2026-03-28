@@ -581,12 +581,12 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: 'rgba(90, 122, 138, 0.6)',
+                    backgroundColor: 'rgba(122,157,184,0.15)',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     borderRadius: 7,
                     borderWidth: 1,
-                    borderColor: 'rgba(90, 122, 138, 0.8)',
+                    borderColor: 'rgba(122,157,184,0.3)',
                   }}
                 >
                   <Tv size={10} color="#FFFFFF" />
@@ -1066,7 +1066,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     style={{
                       fontSize: 13,
                       fontWeight: '700',
-                      color: userPrediction?.pickedTeam === 'away' ? '#E8936A' : '#FFFFFF',
+                      color: userPrediction?.pickedTeam === 'away' ? '#8B0A1F' : '#FFFFFF',
                       ...(isAwayLoser ? { opacity: 0.35, color: '#555' } : {}),
                     }}
                     numberOfLines={1}
@@ -1121,7 +1121,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     style={{
                       fontSize: 13,
                       fontWeight: '700',
-                      color: userPrediction?.pickedTeam === 'home' ? '#E8936A' : '#FFFFFF',
+                      color: userPrediction?.pickedTeam === 'home' ? '#8B0A1F' : '#FFFFFF',
                       ...(isHomeLoser ? { opacity: 0.35, color: '#555' } : {}),
                     }}
                     numberOfLines={1}
@@ -1151,9 +1151,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
             </View>
           </View>
 
-          {/* Community Picks */}
+          {/* Community Picks — only show when enough data */}
+          {pickStats.totalPicks >= 10 ? (
           <View style={styles.fanMomentumSection}>
-            {pickStats.totalPicks >= 10 ? (
               <>
                 {/* Header row: away % | label | home % */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1209,22 +1209,8 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   />
                 </View>
               </>
-            ) : pickStats.totalPicks > 0 ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingUp size={10} color="rgba(255,255,255,0.3)" />
-                <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600', marginLeft: 6 }}>
-                  {pickStats.totalPicks} pick{pickStats.totalPicks !== 1 ? 's' : null} — not enough data yet
-                </Text>
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingUp size={10} color="rgba(255,255,255,0.3)" />
-                <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600', marginLeft: 6 }}>
-                  Be first to pick
-                </Text>
-              </View>
-            )}
           </View>
+          ) : null}
 
           {/* Prediction and Odds - Compact */}
           {game.prediction ? (
@@ -1239,7 +1225,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   borderWidth: 1,
                   borderColor: game.prediction.isTossUp
                     ? 'rgba(255,255,255,0.14)'
-                    : game.prediction.confidence >= 75 ? '#E8936A60' : 'rgba(255,255,255,0.16)',
+                    : game.prediction.confidence >= 75 ? 'rgba(139,10,31,0.35)' : 'rgba(255,255,255,0.16)',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.6,
@@ -1272,23 +1258,6 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   )}
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {game.spread !== undefined ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}>
-                        <TrendingUp size={10} color="#E0E0E0" />
-                        <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4 }}>
-                          {marketFavoriteTeam.abbreviation} {game.spread > 0 ? '-' : '+'}{Math.abs(game.spread)}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {game.overUnder !== undefined ? (
-                      <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
-                          O/U {game.overUnder}
-                        </Text>
-                      </View>
-                    ) : null}
-
                     {game.tvChannel ? (
                       <Pressable
                         onPress={(e) => {
@@ -1296,7 +1265,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                           handleTvChannelPress(game.tvChannel!);
                         }}
       
-                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(90,122,138,0.6)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(90,122,138,0.8)' }}
+                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}
                       >
                         <Tv size={10} color="#FFFFFF" />
                         <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600', marginLeft: 4 }}>{game.tvChannel}</Text>
@@ -1334,12 +1303,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(232,147,106,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(139,10,31,0.10)', alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ fontSize: 14 }}>🔒</Text>
                   </View>
                   <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' }}>AI Pick Available</Text>
                 </View>
-                <View style={{ backgroundColor: '#E8936A', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <View style={{ backgroundColor: '#8B0A1F', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
                   <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>PRO</Text>
                 </View>
               </Pressable>
@@ -1412,7 +1381,7 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#E8936A',
+    backgroundColor: '#8B0A1F',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1476,7 +1445,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#E8936A',
+    backgroundColor: '#8B0A1F',
     alignItems: 'center',
     justifyContent: 'center',
   },

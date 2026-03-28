@@ -1,4 +1,4 @@
-import { View, Text, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, RefreshControl, Pressable, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from 'react-native-reanimated';
 import React, { useState, useCallback, memo, useMemo } from 'react';
@@ -468,19 +468,67 @@ export default function ClutchPicksScreen() {
             <Text style={{ color: 'rgba(255,255,255,0.4)', marginTop: 14 }}>Loading picks...</Text>
           </View>
         ) : !isPremium ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60 }}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             {headerComponent}
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: 'rgba(139,10,31,0.25)' }}>
-              <Text style={{ fontSize: 32 }}>🔒</Text>
+
+            {/* Ghosted pick cards preview */}
+            <View style={{ borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(139,10,31,0.15)', marginBottom: 16 }}>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: 'rgba(139,10,31,0.4)' }}>#1</Text>
+                  </View>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.15)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
+                  <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(139,10,31,0.10)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 1 }}>PRO</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 36, height: 40, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                  <View>
+                    <View style={{ width: 120, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 4 }} />
+                    <View style={{ width: 60, height: 10, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.03)' }} />
+                  </View>
+                </View>
+              </View>
+              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)', opacity: 0.6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(122,157,184,0.10)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: 'rgba(122,157,184,0.4)' }}>#2</Text>
+                  </View>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.10)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 36, height: 40, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)' }} />
+                  <View>
+                    <View style={{ width: 100, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)', marginBottom: 4 }} />
+                    <View style={{ width: 50, height: 10, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.02)' }} />
+                  </View>
+                </View>
+              </View>
+              <View style={{ padding: 16, opacity: 0.3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                  <View style={{ width: 80, height: 10, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.03)' }} />
+                </View>
+              </View>
             </View>
-            <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 8 }}>Unlock Clutch Picks</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24 }}>
-              Get AI-powered picks, confidence ratings, and full analysis for every game.
-            </Text>
-            <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%', height: 54, borderRadius: 14, backgroundColor: '#8B0A1F', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>Subscribe to Unlock</Text>
-            </Pressable>
-          </View>
+
+            {/* CTA */}
+            <View style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(139,10,31,0.12)', padding: 24, alignItems: 'center' }}>
+              <LinearGradient colors={['rgba(139,10,31,0.06)', 'rgba(4,6,8,0.95)']} style={StyleSheet.absoluteFillObject} />
+              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(139,10,31,0.10)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <FieldGoalU size={26} color="#8B0A1F" />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 6 }}>Unlock Clutch Picks</Text>
+              <Text style={{ fontSize: 12, color: '#A1B3C9', textAlign: 'center', lineHeight: 18, marginBottom: 18 }}>AI-ranked picks for every sport, every day. Confidence ratings, edge analysis, and full breakdowns.</Text>
+              <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                <LinearGradient colors={['#8B0A1F', '#6A0818']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Start Free Trial</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </ScrollView>
         ) : validPicks.length > 0 ? (
           <Animated.FlatList
             key={responsive.numColumns}

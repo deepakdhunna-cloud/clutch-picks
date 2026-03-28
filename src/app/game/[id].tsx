@@ -645,8 +645,8 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
                   <View style={{ width: 60, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)' }} />
                 </View>
               </View>
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)' }}>
-                <Text style={{ fontSize: 8, fontWeight: '800', color: '#E8936A', letterSpacing: 0.8 }}>PRO</Text>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
+                <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.8 }}>PRO</Text>
               </View>
             </View>
 
@@ -658,7 +658,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
               </View>
               <View style={{ flexDirection: 'row', gap: 2.5 }}>
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < 7 ? 'rgba(232,147,106,0.15)' : 'rgba(255,255,255,0.04)' }} />
+                  <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < 7 ? 'rgba(139,10,31,0.15)' : 'rgba(255,255,255,0.04)' }} />
                 ))}
               </View>
             </View>
@@ -682,10 +682,10 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
               </View>
             </View>
             {/* Unlock CTA inside the card */}
-            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(232,147,106,0.1)' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(232,147,106,0.08)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.15)' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(232,147,106,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 8, fontWeight: '900', color: '#E8936A', letterSpacing: 0.5 }}>PRO</Text>
+            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(139,10,31,0.1)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(139,10,31,0.08)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.15)' }}>
+                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 8, fontWeight: '900', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
                 </View>
                 <View>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock Full Analysis</Text>
@@ -719,8 +719,8 @@ function RedactedWinProb({ homeTeam, awayTeam, onUnlock }: {
           <View style={{ flex: 1, backgroundColor: `${hColor}30`, borderRadius: 5 }} />
           <View style={{ flex: 1, backgroundColor: `${aColor}30`, borderRadius: 5 }} />
           {/* Centered lock */}
-          <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -10, width: 20, height: 20, borderRadius: 6, backgroundColor: 'rgba(4,6,8,0.9)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.3)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 6, fontWeight: '900', color: '#E8936A' }}>PRO</Text>
+          <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -10, width: 20, height: 20, borderRadius: 6, backgroundColor: 'rgba(4,6,8,0.9)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.3)', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 6, fontWeight: '900', color: '#8B0A1F' }}>PRO</Text>
           </View>
         </View>
       </View>
@@ -772,10 +772,10 @@ function RedactedSection({ title, height, onUnlock }: {
             justifyContent: 'center',
           }}>
             <View style={{ alignItems: 'center' }}>
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 9, fontWeight: '900', color: '#E8936A', letterSpacing: 0.5 }}>PRO</Text>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 9, fontWeight: '900', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
               </View>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Unlock with PRO</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Unlock with Clutch Pro</Text>
               <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>Tap to subscribe</Text>
             </View>
           </View>
@@ -1495,8 +1495,8 @@ export default function GameDetailScreen() {
                   <Text style={styles.analysisLinkTitle}>Why We Made This Pick</Text>
                   <Text style={styles.analysisLinkSub}>{prediction.factors.length} factors · {prediction.factors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
                 </View>
-                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)' }}>
-                  <Text style={{ fontSize: 8, fontWeight: '800', color: '#E8936A', letterSpacing: 0.5 }}>PRO</Text>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
+                  <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
                 </View>
               </Pressable>
             </>
