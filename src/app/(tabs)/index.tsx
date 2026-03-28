@@ -1166,7 +1166,7 @@ export default function HomeScreen() {
       <GridBackground />
       {/* Subtle coral and teal ambient washes */}
       <LinearGradient
-        colors={['rgba(232,147,106,0.04)', 'transparent', 'rgba(122,157,184,0.03)']}
+        colors={['rgba(139,10,31,0.04)', 'transparent', 'rgba(122,157,184,0.03)']}
         locations={[0, 0.45, 1]}
         start={{ x: 0.8, y: 0 }}
         end={{ x: 0.2, y: 1 }}

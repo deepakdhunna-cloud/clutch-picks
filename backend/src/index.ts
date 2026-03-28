@@ -13,6 +13,7 @@ import { gamesRouter } from "./routes/games";
 import { accuracyRouter } from "./routes/accuracy";
 import { teamFollowsRouter } from "./routes/team-follows";
 import { notificationsRouter } from "./routes/notifications";
+import { promoRouter } from "./routes/promo";
 import { logger } from "hono/logger";
 
 // Type the Hono app with user/session variables
@@ -162,6 +163,7 @@ app.route("/api/messages", messagesRouter);
 app.route("/api/predictions", accuracyRouter);
 app.route("/api/team-follows", teamFollowsRouter);
 app.route("/api/notifications", notificationsRouter);
+app.route("/api/promo", promoRouter);
 
 const port = Number(process.env.PORT) || 3000;
 

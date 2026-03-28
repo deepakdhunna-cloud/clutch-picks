@@ -11,7 +11,7 @@ import { AuthBackground } from '@/components/AuthBackground';
 
 const BG = '#040608';
 const TEAL = '#7A9DB8';
-const CORAL = '#E8936A';
+const CORAL = '#8B0A1F';
 
 function BackArrow({ size = 20 }: { size?: number }) {
   return (

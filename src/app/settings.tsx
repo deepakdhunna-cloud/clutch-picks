@@ -2,7 +2,8 @@ import { View, Text, Pressable, ScrollView, Alert, Linking, Platform } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift } from 'lucide-react-native';
+import { Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import * as Haptics from 'expo-haptics';
@@ -10,7 +11,7 @@ import * as SecureStore from 'expo-secure-store';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { useSubscription } from '@/lib/subscription-context';
-import { isRevenueCatEnabled, logoutUser, restorePurchases } from '@/lib/revenuecatClient';
+import { isRevenueCatEnabled, logoutUser, restorePurchases, getCustomerInfo } from '@/lib/revenuecatClient';
 import { api } from '@/lib/api/api';
 
 interface SettingItemProps {
@@ -101,8 +102,43 @@ function SettingSection({ title, children }: { title: string; children: React.Re
 export default function SettingsScreen() {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const { isPremium, isLoading: isSubscriptionLoading } = useSubscription();
+  const [promoModalVisible, setPromoModalVisible] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const { isPremium, isLoading: isSubscriptionLoading, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
+
+  const handleRedeemPromo = async (code: string) => {
+    if (!code.trim()) return;
+    setPromoLoading(true);
+    try {
+      const rcInfo = await getCustomerInfo();
+      const rcUserId = rcInfo.ok ? rcInfo.data.originalAppUserId : undefined;
+      const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: code.trim(), rcUserId });
+      await checkSubscription();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Code Applied!', result.message ?? 'Lifetime access granted!');
+    } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Invalid Code', error?.message || 'This code could not be applied.');
+    } finally {
+      setPromoLoading(false);
+      setPromoInput('');
+      setPromoModalVisible(false);
+    }
+  };
+
+  const handlePromoPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'ios') {
+      Alert.prompt('Promo Code', 'Enter your code', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Redeem', onPress: (code) => { if (code) handleRedeemPromo(code); } },
+      ], 'plain-text', '', 'default');
+    } else {
+      setPromoModalVisible(true);
+    }
+  };
 
   const handleTermsPress = () => {
     router.push('/terms');
@@ -277,6 +313,12 @@ export default function SettingsScreen() {
                     }
                   }}
                 />
+                <SettingItem
+                  icon={Gift}
+                  title="Redeem Promo Code"
+                  subtitle="Enter a code to unlock access"
+                  onPress={handlePromoPress}
+                />
                 {isPremium ? (
                   <SettingItem
                     icon={CreditCard}
@@ -391,6 +433,36 @@ export default function SettingsScreen() {
             </Text>
           </View>
         </ScrollView>
+
+        {/* Android promo modal — iOS uses Alert.prompt */}
+        {Platform.OS !== 'ios' ? (
+          <Modal visible={promoModalVisible} transparent animationType="fade" onRequestClose={() => setPromoModalVisible(false)}>
+            <Pressable onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+              <Pressable onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>Promo Code</Text>
+                <Text style={{ fontSize: 13, color: '#6B7C94', marginBottom: 16 }}>Enter your code</Text>
+                <TextInput
+                  value={promoInput}
+                  onChangeText={(t) => setPromoInput(t.toUpperCase())}
+                  placeholder="CODE"
+                  placeholderTextColor="rgba(255,255,255,0.15)"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 16, paddingVertical: 14, letterSpacing: 2, marginBottom: 16 }}
+                  keyboardAppearance="dark"
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#6B7C94' }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{promoLoading ? 'Redeeming...' : 'Redeem'}</Text>
+                  </Pressable>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        ) : null}
       </SafeAreaView>
     </View>
   );
