@@ -26,17 +26,17 @@ export const PredictionBadge = memo(function PredictionBadge({
     glow: 'rgba(255,255,255,0.1)',
   });
 
-  // Color coding: warm colors = good (high confidence), cool colors = caution (lower confidence)
+  // Color coding: maroon for high confidence, teal for medium, muted for low
   const getConfidenceColor = () => {
     if (isTossUp) return getTossUpColors();
-    // High confidence (80%+): Bright coral/orange - strong positive
-    if (confidence >= 80) return { bg: 'bg-[#E8936A]/25', text: '#E8936A', bar: '#E8936A', glow: '#E8936A' };
-    // Good confidence (70-79%): Warm peach - positive
-    if (confidence >= 70) return { bg: 'bg-[#D4806A]/25', text: '#D4806A', bar: '#D4806A', glow: '#D4806A' };
-    // Medium confidence (60-69%): Muted blue-gray - neutral/caution
-    if (confidence >= 60) return { bg: 'bg-[#5A7A8A]/25', text: '#7A9AAA', bar: '#5A7A8A', glow: '#5A7A8A' };
-    // Lower confidence (<60%): Cool gray - proceed with caution
-    return { bg: 'bg-[#6B7280]/25', text: '#9CA3AF', bar: '#6B7280', glow: '#6B7280' };
+    // High confidence (75%+): Dark maroon
+    if (confidence >= 75) return { bg: 'bg-[#8B0A1F]/25', text: '#FFFFFF', bar: '#8B0A1F', glow: '#8B0A1F' };
+    // Good confidence (65-74%): Maroon
+    if (confidence >= 65) return { bg: 'bg-[#8B0A1F]/20', text: '#FFFFFF', bar: '#8B0A1F', glow: '#8B0A1F' };
+    // Medium confidence (55-64%): Teal
+    if (confidence >= 55) return { bg: 'bg-[#7A9DB8]/20', text: '#FFFFFF', bar: '#7A9DB8', glow: '#7A9DB8' };
+    // Lower confidence (<55%): Muted
+    return { bg: 'bg-[#6B7280]/20', text: '#9CA3AF', bar: '#6B7280', glow: '#6B7280' };
   };
 
   const colors = getConfidenceColor();

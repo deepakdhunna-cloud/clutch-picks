@@ -555,17 +555,17 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View
                   style={{
-                    backgroundColor: sportMeta.color,
+                    backgroundColor: 'rgba(122,157,184,0.15)',
                     paddingHorizontal: 7,
                     paddingVertical: 3,
                     borderRadius: 5,
                     marginRight: 6,
                     borderWidth: 1,
-                    borderColor: '#FFFFFF40',
+                    borderColor: 'rgba(122,157,184,0.3)',
                   }}
                 >
-                  <Text style={{ color: sportMeta.accentColor, fontSize: 9, fontWeight: '700' }}>
-                    {game.sport}
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }}>
+                    {game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}
                   </Text>
                 </View>
                 <PulsingLiveBadge />
@@ -978,24 +978,24 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
             <View className="flex-row items-center">
               <View
                 style={{
-                  backgroundColor: sportMeta.color,
+                  backgroundColor: 'rgba(122,157,184,0.15)',
                   paddingHorizontal: 8,
                   paddingVertical: 4,
                   borderRadius: 6,
                   marginRight: 6,
                   borderWidth: 1,
-                  borderColor: '#FFFFFF40',
+                  borderColor: 'rgba(122,157,184,0.3)',
                 }}
               >
-                <Text style={{ color: sportMeta.accentColor, fontSize: 10, fontWeight: '700' }}>
-                  {game.sport}
+                <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+                  {game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}
                 </Text>
               </View>
-              {/* FAV Badge - moved to header */}
+              {/* FAV Badge - maroon with white text */}
               {(isFavoriteAway || isFavoriteHome) ? (
                 <View
                   style={{
-                    backgroundColor: 'rgba(232, 147, 106, 0.3)',
+                    backgroundColor: 'rgba(139,10,31,0.25)',
                     paddingHorizontal: 6,
                     paddingVertical: 3,
                     borderRadius: 5,
@@ -1003,11 +1003,11 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     flexDirection: 'row',
                     alignItems: 'center',
                     borderWidth: 1,
-                    borderColor: '#E8936A',
+                    borderColor: 'rgba(139,10,31,0.4)',
                   }}
                 >
-                  <Star size={8} color="#E8936A" fill="#E8936A" />
-                  <Text style={{ color: '#E8936A', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
+                  <Star size={8} color="#FFFFFF" fill="#8B0A1F" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
                     {isFavoriteAway ? game.awayTeam.abbreviation : game.homeTeam.abbreviation}
                   </Text>
                 </View>

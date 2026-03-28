@@ -107,7 +107,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
               teamCode={team.abbreviation}
               primaryColor={teamColors.primary}
               secondaryColor={teamColors.secondary}
-              size={92}
+              size={72}
               sport={jerseyType}
             />
           </Animated.View>
@@ -542,20 +542,65 @@ function QuarterTable({ game }: { game: Game }) {
   const { homeTeam, awayTeam } = game;
   const isLive = game.status === 'LIVE', isFinal = game.status === 'FINAL';
   const getQScore = (score: number | undefined) => score === undefined ? '' : (isLive || isFinal) ? String(Math.round(score / 4)) : '';
+
+  const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
+  const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
+
+  // Determine which team is winning for highlight
+  const homeWinning = (game.homeScore ?? 0) > (game.awayScore ?? 0);
+  const awayWinning = (game.awayScore ?? 0) > (game.homeScore ?? 0);
+  const tied = (game.homeScore ?? 0) === (game.awayScore ?? 0);
+
   return (
     <View style={styles.tableContainer}>
-      <View style={styles.tableRow}>
+      {/* Header row with subtle background */}
+      <View style={[styles.tableRow, { backgroundColor: 'rgba(255,255,255,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }]}>
         <View style={styles.tableTeamCell} />
-        {['Q1', 'Q2', 'Q3', 'Q4', 'T'].map(q => <View key={q} style={styles.tableScoreCell}><Text style={[styles.tableHeaderText, q === 'T' && { color: 'rgba(255,255,255,0.45)' }]}>{q}</Text></View>)}
+        {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
+          <View key={q} style={styles.tableScoreCell}>
+            <Text style={styles.tableHeaderText}>{q}</Text>
+          </View>
+        ))}
+        {/* Total column with left divider */}
+        <View style={[styles.tableScoreCell, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' }]}>
+          <Text style={[styles.tableHeaderText, { color: 'rgba(255,255,255,0.5)' }]}>T</Text>
+        </View>
       </View>
-      {[{ team: homeTeam, total: game.homeScore }, { team: awayTeam, total: game.awayScore }].map(({ team, total }, ri) => (
+      {[
+        { team: homeTeam, total: game.homeScore, colors: homeColors, winning: homeWinning },
+        { team: awayTeam, total: game.awayScore, colors: awayColors, winning: awayWinning },
+      ].map(({ team, total, colors, winning }, ri) => (
         <View key={team.id} style={[styles.tableRow, ri === 0 && { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }]}>
           <View style={styles.tableTeamCell}>
-            {team.logo ? <Image source={{ uri: team.logo }} style={styles.tableTeamLogo} /> : null}
-            <Text style={[styles.tableTeamAbbr, { color: team.color }]}>{team.abbreviation}</Text>
+            {/* Team color badge with white text */}
+            <View style={{
+              backgroundColor: colors.primary,
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              minWidth: 42,
+              alignItems: 'center' as const,
+              justifyContent: 'center' as const,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                fontWeight: '800',
+                color: '#FFFFFF',
+                letterSpacing: 0.5,
+              }}>
+                {team.abbreviation}
+              </Text>
+            </View>
           </View>
-          {[0, 1, 2, 3].map(qi => <View key={qi} style={styles.tableScoreCell}><Text style={styles.tableScoreText}>{getQScore(total)}</Text></View>)}
-          <View style={styles.tableScoreCell}><Text style={styles.tableTotalText}>{total ?? ''}</Text></View>
+          {[0, 1, 2, 3].map(qi => (
+            <View key={qi} style={styles.tableScoreCell}>
+              <Text style={styles.tableScoreText}>{getQScore(total)}</Text>
+            </View>
+          ))}
+          {/* Total with left divider + highlight if winning */}
+          <View style={[styles.tableScoreCell, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' }]}>
+            <Text style={[styles.tableTotalText, winning && !tied && { color: colors.primary }]}>{total ?? ''}</Text>
+          </View>
         </View>
       ))}
     </View>
@@ -568,67 +613,84 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
 }) {
   return (
     <Pressable onPress={onUnlock}>
-      <View style={styles.predictionContainer}>
-        <View style={{ padding: 16 }}>
-          {/* Header — visible, but winner replaced with redacted bar */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <View>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Clutch Pick</Text>
-              {/* Redacted team name — blurry bar, not the actual name */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 140, height: 18, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}>
-                  <View style={{ position: 'absolute', inset: 0, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
-                    <View style={{ width: '70%', height: '100%', backgroundColor: 'rgba(255,255,255,0.03)' }} />
-                  </View>
-                </View>
-                <View style={{ width: 60, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)' }} />
-              </View>
-            </View>
-            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)' }}>
-              <Text style={{ fontSize: 8, fontWeight: '800', color: '#E8936A', letterSpacing: 0.8 }}>PRO</Text>
-            </View>
-          </View>
-
-          {/* Confidence bar — shows shape but hides the actual number */}
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Confidence</Text>
-              <View style={{ width: 32, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 2.5 }}>
-              {Array.from({ length: 12 }).map((_, i) => (
-                <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < 7 ? 'rgba(232,147,106,0.15)' : 'rgba(255,255,255,0.04)' }} />
-              ))}
-            </View>
-          </View>
-
-          {/* Analysis text — redacted shimmer lines, not real text */}
-          <View style={{ marginBottom: 16, gap: 6 }}>
-            <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.05)', width: '95%' }} />
-            <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.04)', width: '88%' }} />
-            <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.035)', width: '72%' }} />
-          </View>
-
-          {/* Stat tiles — visible labels, redacted values */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-            <View style={[styles.statTile, { flex: 1 }]}>
-              <Text style={styles.statTileLabel}>Edge Rating</Text>
-              <View style={{ width: 36, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
-            </View>
-            <View style={[styles.statTile, { flex: 1 }]}>
-              <Text style={styles.statTileLabel}>Value Signal</Text>
-              <View style={{ width: 52, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
-            </View>
-          </View>
-          {/* Unlock CTA inside the card */}
-          <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(232,147,106,0.1)' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(232,147,106,0.08)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.15)' }}>
-              <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(232,147,106,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 8, fontWeight: '900', color: '#E8936A', letterSpacing: 0.5 }}>PRO</Text>
-              </View>
+      <View style={{
+        borderRadius: 22,
+        padding: 2,
+        backgroundColor: 'rgba(139,10,31,0.10)',
+        overflow: 'hidden',
+      }}>
+        <LinearGradient
+          colors={['rgba(139,10,31,0.15)', 'rgba(122,157,184,0.08)', 'rgba(139,10,31,0.12)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
+        />
+        <View style={{
+          backgroundColor: '#040608',
+          borderRadius: 20,
+          overflow: 'hidden',
+        }}>
+          <View style={{ padding: 16 }}>
+            {/* Header — visible, but winner replaced with redacted bar */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <View>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock Full Analysis</Text>
-                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Confidence, stats, and detailed breakdown</Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Clutch Pick</Text>
+                {/* Redacted team name — blurry bar, not the actual name */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 140, height: 18, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+                    <View style={{ position: 'absolute', inset: 0, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
+                      <View style={{ width: '70%', height: '100%', backgroundColor: 'rgba(255,255,255,0.03)' }} />
+                    </View>
+                  </View>
+                  <View style={{ width: 60, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                </View>
+              </View>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)' }}>
+                <Text style={{ fontSize: 8, fontWeight: '800', color: '#E8936A', letterSpacing: 0.8 }}>PRO</Text>
+              </View>
+            </View>
+
+            {/* Confidence bar — shows shape but hides the actual number */}
+            <View style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Confidence</Text>
+                <View style={{ width: 32, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 2.5 }}>
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < 7 ? 'rgba(232,147,106,0.15)' : 'rgba(255,255,255,0.04)' }} />
+                ))}
+              </View>
+            </View>
+
+            {/* Analysis text — redacted shimmer lines, not real text */}
+            <View style={{ marginBottom: 16, gap: 6 }}>
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.05)', width: '95%' }} />
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.04)', width: '88%' }} />
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.035)', width: '72%' }} />
+            </View>
+
+            {/* Stat tiles — visible labels, redacted values */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+              <View style={[styles.statTile, { flex: 1 }]}>
+                <Text style={styles.statTileLabel}>Edge Rating</Text>
+                <View style={{ width: 36, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
+              </View>
+              <View style={[styles.statTile, { flex: 1 }]}>
+                <Text style={styles.statTileLabel}>Value Signal</Text>
+                <View style={{ width: 52, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
+              </View>
+            </View>
+            {/* Unlock CTA inside the card */}
+            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(232,147,106,0.1)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(232,147,106,0.08)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.15)' }}>
+                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(232,147,106,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 8, fontWeight: '900', color: '#E8936A', letterSpacing: 0.5 }}>PRO</Text>
+                </View>
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock Full Analysis</Text>
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Confidence, stats, and detailed breakdown</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -642,18 +704,20 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
 function RedactedWinProb({ homeTeam, awayTeam, onUnlock }: {
   homeTeam: GameTeam; awayTeam: GameTeam; onUnlock: () => void;
 }) {
+  const hColor = safeTeamColor(homeTeam.color);
+  const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
   return (
     <Pressable onPress={onUnlock}>
       <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: homeTeam.color, letterSpacing: 0.4 }}>{homeTeam.abbreviation}</Text>
+          <Text style={{ fontSize: 9, fontWeight: '800', color: hColor, letterSpacing: 0.4 }}>{homeTeam.abbreviation}</Text>
           <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: awayTeam.color, letterSpacing: 0.4 }}>{awayTeam.abbreviation}</Text>
+          <Text style={{ fontSize: 9, fontWeight: '800', color: aColor, letterSpacing: 0.4 }}>{awayTeam.abbreviation}</Text>
         </View>
         {/* Bar with equal split — doesn't reveal the actual probability */}
         <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', overflow: 'hidden', position: 'relative' }}>
-          <View style={{ flex: 1, backgroundColor: `${homeTeam.color}30`, borderRadius: 5 }} />
-          <View style={{ flex: 1, backgroundColor: `${awayTeam.color}30`, borderRadius: 5 }} />
+          <View style={{ flex: 1, backgroundColor: `${hColor}30`, borderRadius: 5 }} />
+          <View style={{ flex: 1, backgroundColor: `${aColor}30`, borderRadius: 5 }} />
           {/* Centered lock */}
           <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -10, width: 20, height: 20, borderRadius: 6, backgroundColor: 'rgba(4,6,8,0.9)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.3)', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 6, fontWeight: '900', color: '#E8936A' }}>PRO</Text>
@@ -722,107 +786,313 @@ function RedactedSection({ title, height, onUnlock }: {
 }
 
 
+// Ensure a team color is visible on dark backgrounds — swap black/very dark for a fallback
+function safeTeamColor(color: string, fallback: string = '#5A7A8A'): string {
+  if (!color) return fallback;
+  const hex = color.replace('#', '');
+  if (hex.length < 6) return fallback;
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  // If luminance is too low, use fallback
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum < 0.15 ? fallback : color;
+}
+
 function WinProbBar({ prediction, homeTeam, awayTeam }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam }) {
   const hp = prediction.homeWinProbability, ap = prediction.awayWinProbability;
+  const hColor = safeTeamColor(homeTeam.color);
+  const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
   return (
     <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <Text style={{ fontSize: 9, fontWeight: '800', color: homeTeam.color, letterSpacing: 0.4 }}>{homeTeam.abbreviation} {hp}%</Text>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: hColor, letterSpacing: 0.4 }}>{homeTeam.abbreviation} {hp}%</Text>
         <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
-        <Text style={{ fontSize: 9, fontWeight: '800', color: awayTeam.color, letterSpacing: 0.4 }}>{ap}% {awayTeam.abbreviation}</Text>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: aColor, letterSpacing: 0.4 }}>{ap}% {awayTeam.abbreviation}</Text>
       </View>
       <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', overflow: 'hidden' }}>
-        <View style={{ flex: hp, backgroundColor: homeTeam.color, borderRadius: 5 }} />
-        <View style={{ flex: ap, backgroundColor: awayTeam.color, borderRadius: 5 }} />
+        <View style={{ flex: hp, backgroundColor: hColor, borderRadius: 5 }} />
+        <View style={{ flex: ap, backgroundColor: aColor, borderRadius: 5 }} />
       </View>
+    </View>
+  );
+}
+
+function ConfidenceBarSegment({ index, filled }: { index: number; filled: boolean; totalFilled: number }) {
+  // Use rotation on a square gradient to create seamless infinite color cycling
+  // Rotation never jumps because 0° and 360° look identical
+  const rot = useSharedValue(0);
+  useEffect(() => {
+    if (!filled) return;
+    rot.value = withRepeat(
+      withTiming(360, { duration: 4000, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, [filled]);
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rot.value}deg` }],
+  }));
+
+  if (!filled) {
+    return <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 3, height: 6 }} />;
+  }
+
+  // A large square gradient rotates behind the tiny segment window
+  // The gradient has maroon on one side, teal on the other
+  // As it spins, the colors smoothly cycle through the visible area
+  return (
+    <View style={{ flex: 1, borderRadius: 3, overflow: 'hidden' as const, height: 6, alignItems: 'center' as const, justifyContent: 'center' as const }}>
+      <Animated.View style={[spinStyle, { width: 60, height: 60, position: 'absolute' as const }]}>
+        <LinearGradient
+          colors={['#5A0614', '#8B0A1F', '#7A9DB8', '#5A7A8A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1 }}
+        />
+      </Animated.View>
     </View>
   );
 }
 
 function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport'] }) {
   const winner = prediction.predictedWinner === 'home' ? homeTeam : awayTeam;
-  const SEGS = 12, filledSegs = Math.round((prediction.confidence / 100) * SEGS);
+  const SEGS = 10;
+  const filledSegs = Math.round((prediction.confidence / 100) * SEGS);
 
-  // Value signal based on valueRating (1-10) not edgeRating
   const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
-  const valueColor = prediction.valueRating >= 7 ? '#4ADE80' : prediction.valueRating >= 4 ? '#E8936A' : 'rgba(255,255,255,0.4)';
+  const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
+
+  // Continuous rotation — animates from 0 to a huge number so it never resets/jumps
+  const rotation = useSharedValue(0);
+  const glowPulse = useSharedValue(0);
+  useEffect(() => {
+    // Animate to a very large value so it spins continuously without resetting
+    rotation.value = withTiming(360000, { duration: 360000 / 360 * 4500, easing: Easing.linear });
+    glowPulse.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, []);
+
+  const rotatingStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value % 360}deg` }],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.15, 0.4]),
+    shadowRadius: interpolate(glowPulse.value, [0, 1], [8, 20]),
+  }));
+
+  const BORDER = 3.5;
 
   return (
-    <View style={styles.predictionContainer}>
-      <View style={{ padding: 16 }}>
-        {/* Clean header — no emoji, no icon clutter */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <View>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 }}>Clutch Pick</Text>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 }}>{winner.city} {winner.name}</Text>
-          </View>
-          <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(232,147,106,0.12)', borderWidth: 1, borderColor: 'rgba(232,147,106,0.2)' }}>
-            <Text style={{ fontSize: 8, fontWeight: '800', color: '#E8936A', letterSpacing: 0.8 }}>PRO</Text>
-          </View>
+    <Animated.View style={[glowStyle, {
+      borderRadius: 22,
+      shadowColor: '#7A9DB8',
+      shadowOffset: { width: 0, height: 0 },
+    }]}>
+    <View style={{
+      borderRadius: 22,
+      overflow: 'hidden',
+      position: 'relative' as const,
+    }}>
+      {/* ── BORDER LAYER ── */}
+      {/* Static dim gradient base — visible where the beam isn't */}
+      <LinearGradient
+        colors={['rgba(139,10,31,0.25)', 'rgba(90,122,138,0.15)', 'rgba(139,10,31,0.25)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Rotating beam — oversized square that spins, clipped by card border radius */}
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center' as const, justifyContent: 'center' as const }]} pointerEvents="none">
+        <Animated.View
+          style={[
+            rotatingStyle,
+            {
+              width: 800,
+              height: 800,
+              position: 'absolute' as const,
+            },
+          ]}
+        >
+          {/* Top half: teal beam */}
+          <LinearGradient
+            colors={['transparent', 'transparent', '#7A9DB8', 'rgba(255,255,255,0.5)', '#7A9DB8', 'transparent', 'transparent']}
+            start={{ x: 0.3, y: 0 }}
+            end={{ x: 0.7, y: 0 }}
+            style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 400 }}
+          />
+          {/* Bottom half: pure dark maroon beam — no white or teal */}
+          <LinearGradient
+            colors={['transparent', 'transparent', '#5A0614', '#8B0A1F', '#5A0614', 'transparent', 'transparent']}
+            start={{ x: 0.3, y: 0 }}
+            end={{ x: 0.7, y: 0 }}
+            style={{ position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 400 }}
+          />
+        </Animated.View>
+      </View>
+
+      {/* ── INNER CARD — inset to reveal the thick border ── */}
+      <View style={{
+        margin: BORDER,
+        backgroundColor: '#040608',
+        borderRadius: 22 - BORDER,
+        overflow: 'hidden',
+        position: 'relative' as const,
+        zIndex: 2,
+      }}>
+        {/* Inner glow — maroon top-left, teal top-right */}
+        <View style={[StyleSheet.absoluteFill, { zIndex: 0 }]} pointerEvents="none">
+          <LinearGradient
+            colors={['rgba(139,10,31,0.08)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.5, y: 0.4 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={['rgba(122,157,184,0.05)', 'transparent']}
+            start={{ x: 1, y: 0 }}
+            end={{ x: 0.5, y: 0.4 }}
+            style={StyleSheet.absoluteFill}
+          />
         </View>
 
-        {/* Confidence bar */}
-        <View style={{ marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Confidence</Text>
-            <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF' }}>{prediction.confidence}%</Text>
+        {/* Content */}
+        <View style={{ padding: 22, paddingBottom: 20, position: 'relative' as const, zIndex: 1 }}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 16 }}>
+            <View>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: '#8B0A1F', letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                CLUTCH PICK
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 }}>
+                {winner.name}
+              </Text>
+            </View>
+            <View style={{
+              paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6,
+              backgroundColor: 'rgba(139,10,31,0.15)',
+              borderWidth: 1, borderColor: 'rgba(139,10,31,0.3)',
+            }}>
+              <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 2.5 }}>
+
+          {/* Confidence */}
+          <View style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.5, textTransform: 'uppercase' as const }}>
+              CONFIDENCE
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF' }}>
+              {prediction.confidence}%
+            </Text>
+          </View>
+
+          {/* Confidence bar — animated segments with staggered shimmer */}
+          <View style={{ flexDirection: 'row' as const, gap: 3, marginBottom: 18 }}>
             {Array.from({ length: SEGS }).map((_, i) => (
-              <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < filledSegs ? '#E8936A' : 'rgba(255,255,255,0.07)' }} />
+              <ConfidenceBarSegment key={i} index={i} filled={i < filledSegs} totalFilled={filledSegs} />
             ))}
           </View>
-        </View>
 
-        {/* Analysis text */}
-        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 20, marginBottom: 16 }}>{prediction.analysis}</Text>
+          {/* Analysis */}
+          <Text style={{ fontSize: 12, color: '#A1B3C9', lineHeight: 20, marginBottom: 18 }}>
+            {prediction.analysis}
+          </Text>
 
-        {/* Stat tiles — clean 2-column */}
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-          <View style={[styles.statTile, { flex: 1 }]}>
-            <Text style={styles.statTileLabel}>Edge Rating</Text>
-            <Text style={[styles.statTileValue, { color: '#FFFFFF' }]}>{prediction.edgeRating}/10</Text>
-          </View>
-          <View style={[styles.statTile, { flex: 1 }]}>
-            <Text style={styles.statTileLabel}>Value Signal</Text>
-            <Text style={[styles.statTileValue, { color: valueColor }]}>{valueLabel}</Text>
+          {/* Stat tiles */}
+          <View style={{ flexDirection: 'row' as const, gap: 10 }}>
+            <View style={{
+              flex: 1, backgroundColor: 'rgba(255,255,255,0.02)',
+              borderRadius: 12, padding: 14,
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                EDGE RATING
+              </Text>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF' }}>
+                {prediction.edgeRating}/10
+              </Text>
+            </View>
+            <View style={{
+              flex: 1, backgroundColor: 'rgba(255,255,255,0.02)',
+              borderRadius: 12, padding: 14,
+              borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                VALUE SIGNAL
+              </Text>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: valueColor }}>
+                {valueLabel}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
     </View>
+    </Animated.View>
   );
 }
 
 function RecentForm({ game }: { game: Game }) {
   const { homeTeam, awayTeam, prediction } = game;
   if (!prediction) return null;
+
+  const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
+  const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
+
   return (
     <View>
-      <Text style={styles.sectionLabel}>Recent Performance</Text>
-      <View style={{ gap: 7 }}>
-        {[{ team: homeTeam, form: prediction.recentFormHome }, { team: awayTeam, form: prediction.recentFormAway }].map(({ team, form }) => (
+      <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Recent Performance</Text>
+      <View style={{ gap: 10 }}>
+        {[
+          { team: homeTeam, form: prediction.recentFormHome, colors: homeColors },
+          { team: awayTeam, form: prediction.recentFormAway, colors: awayColors },
+        ].map(({ team, form, colors }) => (
           <View key={team.id} style={styles.formCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-              {team.logo ? <Image source={{ uri: team.logo }} style={{ width: 16, height: 16 }} resizeMode="contain" /> : null}
-              <Text style={[styles.formAbbr, { color: team.color }]}>{team.abbreviation}</Text>
+            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 10 }}>
+              {/* Team color badge — same as box score */}
+              <View style={{
+                backgroundColor: colors.primary,
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                minWidth: 42,
+                alignItems: 'center' as const,
+                justifyContent: 'center' as const,
+              }}>
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: '800',
+                  color: '#FFFFFF',
+                  letterSpacing: 0.5,
+                }}>
+                  {team.abbreviation}
+                </Text>
+              </View>
               <Text style={styles.formRecord}>{team.record}</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={true} decelerationRate="fast">
-              {form.split('').filter(c => c === 'W' || c === 'L').slice(0, 10).map((r, i) => (
+              {form.split('').filter((c: string) => c === 'W' || c === 'L').slice(0, 10).map((r: string, i: number) => (
                 <View key={i} style={{
                   width: 28,
                   height: 28,
-                  borderRadius: 14,
-                  backgroundColor: r === 'W' ? 'rgba(122,157,184,0.2)' : 'rgba(232,147,106,0.2)',
+                  borderRadius: 8,
+                  backgroundColor: r === 'W' ? 'rgba(122,157,184,0.15)' : 'rgba(239,68,68,0.10)',
                   borderWidth: 1,
-                  borderColor: r === 'W' ? 'rgba(122,157,184,0.4)' : 'rgba(232,147,106,0.4)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  borderColor: r === 'W' ? 'rgba(122,157,184,0.3)' : 'rgba(239,68,68,0.2)',
+                  alignItems: 'center' as const,
+                  justifyContent: 'center' as const,
                 }}>
                   <Text style={{
-                    color: '#FFFFFF',
-                    fontSize: 11,
-                    fontWeight: '900',
+                    color: r === 'W' ? '#7A9DB8' : '#EF4444',
+                    fontSize: 10,
+                    fontWeight: '800',
                   }}>{r}</Text>
                 </View>
               ))}
@@ -950,6 +1220,91 @@ function PickConfirmModal({
   );
 }
 
+const SilkThreads = React.memo(function SilkThreads() {
+  // 5 threads, each with independent animation
+  const threads = useMemo(() => [
+    { top: '8%', rotate: '1.5deg', color: 'rgba(139,10,31,0.06)', duration: 18000, delay: 0 },
+    { top: '22%', rotate: '-0.8deg', color: 'rgba(122,157,184,0.04)', duration: 22000, delay: 4000 },
+    { top: '42%', rotate: '0.5deg', color: 'rgba(255,255,255,0.02)', duration: 25000, delay: 8000 },
+    { top: '62%', rotate: '-1.2deg', color: 'rgba(139,10,31,0.04)', duration: 20000, delay: 12000 },
+    { top: '78%', rotate: '0.8deg', color: 'rgba(122,157,184,0.03)', duration: 24000, delay: 6000 },
+  ], []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {threads.map((t, i) => (
+        <SilkThread key={i} {...t} />
+      ))}
+    </View>
+  );
+});
+
+const SilkThread = React.memo(function SilkThread({
+  top, rotate, color, duration, delay,
+}: {
+  top: string; rotate: string; color: string; duration: number; delay: number;
+}) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      translateX.value = withRepeat(
+        withTiming(20, { duration, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true
+      );
+      translateY.value = withRepeat(
+        withTiming(25, { duration: duration * 1.2, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true
+      );
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: duration * 0.15, easing: Easing.out(Easing.ease) }),
+          withTiming(1, { duration: duration * 0.7 }),
+          withTiming(0, { duration: duration * 0.15, easing: Easing.in(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          position: 'absolute',
+          top: top as any,
+          left: '-50%',
+          width: '200%',
+          height: 1,
+          transform: [{ rotate }],
+        },
+      ]}
+    >
+      <LinearGradient
+        colors={['transparent', color, color, 'transparent']}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 0 }}
+        style={{ flex: 1 }}
+      />
+    </Animated.View>
+  );
+});
+
 export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -1002,9 +1357,9 @@ export default function GameDetailScreen() {
     enabled: !!id,
     refetchInterval: (query) => (query.state.data as Game | undefined)?.status === 'LIVE' ? 30000 : false,
   });
-  if (isLoading) return <View style={{ flex: 1, backgroundColor: '#080810', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#7A9DB8" /></View>;
+  if (isLoading) return <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#7A9DB8" /></View>;
   if (error || !game) return (
-    <View style={{ flex: 1, backgroundColor: '#080810', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
       <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
     </View>
@@ -1014,13 +1369,14 @@ export default function GameDetailScreen() {
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
   const jerseyType = sportEnumToJersey(game.sport);
   return (
-    <View style={{ flex: 1, backgroundColor: '#080810' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
+    <View style={{ flex: 1, backgroundColor: '#040608' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
+      <SilkThreads />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} removeClippedSubviews={true} bounces={true} overScrollMode="never" decelerationRate="normal">
         <View style={{ overflow: 'hidden' }}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0D0D18' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
           <LinearGradient colors={[hexToRgba(homeTeam.color, 0.5), hexToRgba(homeTeam.color, 0.28), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['transparent', hexToRgba(awayTeam.color, 0.22), hexToRgba(awayTeam.color, 0.45)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <LinearGradient colors={['transparent', '#080810']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
+          <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
           <View style={{ height: insets.top + 10 }} />
           <View style={styles.topBar}>
             <Pressable onPress={() => router.back()} style={styles.backBtn}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
@@ -1044,16 +1400,7 @@ export default function GameDetailScreen() {
             </View>
           </View>
           <View style={{ position: 'relative' }}>
-            {/* Scoring Flow Chart Watermark - behind jerseys */}
-            <View style={styles.scoringWatermark} pointerEvents="none">
-              <ScoringFlowChartWatermark
-                homeColor={homeTeam.color}
-                awayColor={awayTeam.color}
-                homeAbbr={homeTeam.abbreviation}
-                awayAbbr={awayTeam.abbreviation}
-                isLive={isLive}
-              />
-            </View>
+
             <View style={[styles.jerseyRow, { zIndex: 1 }]}>
               <TappableJerseyHero
                 team={homeTeam}
@@ -1067,20 +1414,16 @@ export default function GameDetailScreen() {
                 <View style={styles.scorePanel}>
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                     <Text style={[styles.scoreNumber, {
-                      color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.3)',
-                      fontWeight: (game.homeScore ?? 0) >= (game.awayScore ?? 0) ? '900' : '600',
-                      textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+                      color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.homeScore ?? ''}</Text>
                     <Text style={styles.scoreSep}>–</Text>
                     <Text style={[styles.scoreNumber, {
-                      color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.3)',
-                      fontWeight: (game.awayScore ?? 0) >= (game.homeScore ?? 0) ? '900' : '600',
-                      textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+                      color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.awayScore ?? ''}</Text>
                   </View>
                   {isLive && game.quarter && game.clock
-                    ? <Text style={[styles.scoreClock, { textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>{game.quarter} · {game.clock}</Text>
-                    : <Text style={[styles.scoreClock, { textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>{game.status}</Text>}
+                    ? <Text style={styles.scoreClock}>{game.quarter} · {game.clock}</Text>
+                    : <Text style={styles.scoreClock}>{game.status}</Text>}
                 </View>
               </View>
               <TappableJerseyHero
@@ -1100,14 +1443,14 @@ export default function GameDetailScreen() {
             <Text style={styles.venueText}>{game.venue}</Text>
             {game.tvChannel ? <View style={styles.tvBadge}><Text style={styles.tvText}>{game.tvChannel}</Text></View> : null}
           </View>
-          <View style={{ marginBottom: 22 }}>
+          <View style={{ marginBottom: 40 }}>
             <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
             <QuarterTable game={game} />
           </View>
           {prediction && isPremium ? (
             <>
-              <View style={{ marginBottom: 22 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} /></View>
-              <View style={{ marginBottom: 22 }}><RecentForm game={game} /></View>
+              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} /></View>
+              <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
               <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
                   <AnalysisIcon size={20} color="#FFFFFF" />
@@ -1127,7 +1470,7 @@ export default function GameDetailScreen() {
               </View>
 
               {/* ═══ OUR PREDICTION ═══ */}
-              <View style={{ marginBottom: 22 }}>
+              <View style={{ marginBottom: 40 }}>
                 <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text>
                 <RedactedPrediction homeTeam={homeTeam} awayTeam={awayTeam} prediction={prediction} onUnlock={() => router.push('/paywall')} />
               </View>
@@ -1207,28 +1550,28 @@ const styles = StyleSheet.create({
   scoringWatermark: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -190 }, { translateY: -110 }], zIndex: 0, opacity: 0.5 },
   scorePanelOuter: { flex: 1, alignItems: 'center', paddingBottom: 8 },
   scorePanel: { paddingHorizontal: 22, paddingVertical: 14, alignItems: 'center' },
-  scoreNumber: { fontSize: 34, fontWeight: '900', lineHeight: 48, letterSpacing: -1.5 },
-  scoreSep: { fontSize: 14, color: 'rgba(255,255,255,0.2)', fontWeight: '300', lineHeight: 48 },
-  scoreClock: { fontSize: 15, color: '#ffffff', fontWeight: '700', marginTop: 4, letterSpacing: 0.6, textTransform: 'uppercase' },
+  scoreNumber: { fontSize: 72, fontFamily: 'VT323_400Regular', lineHeight: 78, letterSpacing: 2 },
+  scoreSep: { fontSize: 14, color: 'rgba(255,255,255,0.08)', fontWeight: '300', lineHeight: 48 },
+  scoreClock: { fontSize: 13, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 4 },
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   tvBadge: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
   tvText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase' },
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   sectionMicroLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' },
   chartLegendText: { fontSize: 9, color: 'rgba(255,255,255,0.35)', fontWeight: '700' },
   chartContainer: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  tableContainer: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  tableContainer: { backgroundColor: 'rgba(255,255,255,0.025)', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   tableRow: { flexDirection: 'row', alignItems: 'center' },
-  tableTeamCell: { width: 80, paddingVertical: 11, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  tableTeamCell: { width: 85, paddingVertical: 14, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 6 },
   tableTeamLogo: { width: 20, height: 20 },
   tableTeamAbbr: { fontSize: 13, fontWeight: '800' },
-  tableScoreCell: { flex: 1, alignItems: 'center', paddingVertical: 11 },
-  tableHeaderText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color: 'rgba(255,255,255,0.4)' },
-  tableScoreText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
-  tableTotalText: { fontSize: 17, fontWeight: '900', color: '#fff' },
+  tableScoreCell: { flex: 1, alignItems: 'center', paddingVertical: 14 },
+  tableHeaderText: { fontSize: 10, fontWeight: '800', letterSpacing: 1, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' },
+  tableScoreText: { fontSize: 22, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.5)', letterSpacing: 1 },
+  tableTotalText: { fontSize: 28, fontFamily: 'VT323_400Regular', color: '#FFFFFF', letterSpacing: 1 },
   predictionContainer: { borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.06)' },
   predIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'rgba(255,255,255,0.1)' },
   predLabel: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.2, textTransform: 'uppercase' },
@@ -1242,7 +1585,7 @@ const styles = StyleSheet.create({
   oddsRowLabel: { fontSize: 8, color: 'rgba(255,255,255,0.25)', fontWeight: '700', marginBottom: 2 },
   oddsRowValue: { fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: -0.3 },
   oddsDelta: { fontSize: 9, fontWeight: '700' },
-  formCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 9, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  formCard: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   formAbbr: { fontSize: 11, fontWeight: '800' },
   formRecord: { fontSize: 8, color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' },
   formPip: { flex: 1, height: 20, borderRadius: 4, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

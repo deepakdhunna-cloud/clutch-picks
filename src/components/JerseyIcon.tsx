@@ -76,7 +76,9 @@ function OutlinedLabel({
         letterSpacing={0.5}
         fill="none"
         stroke={stroke}
-        strokeWidth={4}
+        strokeWidth={2.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
       >
         {label}
       </SvgText>

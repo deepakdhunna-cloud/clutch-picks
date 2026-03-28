@@ -5,10 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useSubscription } from '@/lib/subscription-context';
 
-const CORAL = '#E8936A';
+const MAROON = '#8B0A1F';
+const MAROON_DIM = 'rgba(139,10,31,0.12)';
 const TEAL = '#7A9DB8';
-const GREEN = '#4ADE80';
-const BG = '#080810';
+const BG = '#040608';
 
 interface PredictionFactor {
   name: string;
@@ -54,67 +54,52 @@ function FactorSvgIcon({ name, size = 18 }: { name: string; size?: number }) {
   const color = 'rgba(255,255,255,0.5)';
   const n = name.toLowerCase();
 
-  // Home/Away Split
   if (n.includes('home') && n.includes('away'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M3 12L12 3l9 9" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><Path d="M5 10v9a1 1 0 001 1h12a1 1 0 001-1v-9" stroke={color} strokeWidth="1.8" /></Svg>;
 
-  // Injuries
   if (n.includes('injur'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" stroke={color} strokeWidth="1.8" strokeLinecap="round" /><Path d="M12 11v5m-2.5-2.5h5" stroke={color} strokeWidth="1.8" strokeLinecap="round" /></Svg>;
 
-  // Recent Form
   if (n.includes('form') || n.includes('recent'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M3 17l4-4 4 4 4-8 6 6" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 
-  // Head to Head
   if (n.includes('head'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 
-  // Streak
   if (n.includes('streak'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 
-  // Elo Rating
   if (n.includes('elo'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" /><Path d="M12 7v5l3 3" stroke={color} strokeWidth="1.8" strokeLinecap="round" /></Svg>;
 
-  // Win %
   if (n.includes('win'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M6 9H3a1 1 0 01-1-1V5a1 1 0 011-1h3m12 5h3a1 1 0 001-1V5a1 1 0 00-1-1h-3M6 4h12v7a6 6 0 01-12 0V4zm3 17h6m-3-3v3" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 
-  // Point Diff
   if (n.includes('point') || n.includes('diff'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M18 20V10M12 20V4M6 20v-6" stroke={color} strokeWidth="2" strokeLinecap="round" /></Svg>;
 
-  // Strength of Schedule
   if (n.includes('strength') || n.includes('schedule'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" /></Svg>;
 
-  // Defense / Scoring Trend
   if (n.includes('trend') || n.includes('defense') || n.includes('scoring'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M3 3v18h18" stroke={color} strokeWidth="1.8" strokeLinecap="round" /><Path d="M7 14l4-4 4 4 5-5" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 
-  // Advanced Metrics
   if (n.includes('advanced') || n.includes('metric'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" /><Circle cx="12" cy="12" r="4" stroke={color} strokeWidth="1.8" /><Line x1="12" y1="2" x2="12" y2="6" stroke={color} strokeWidth="1.8" /><Line x1="12" y1="18" x2="12" y2="22" stroke={color} strokeWidth="1.8" /></Svg>;
 
-  // Weather
   if (n.includes('weather'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M17 18a5 5 0 10-1.92-9.61A7 7 0 104 18h13z" stroke={color} strokeWidth="1.8" strokeLinecap="round" /></Svg>;
 
-  // Rest Days
   if (n.includes('rest'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke={color} strokeWidth="1.8" strokeLinecap="round" /></Svg>;
 
-  // Situational / Clutch
   if (n.includes('situational') || n.includes('clutch'))
     return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" /><Path d="M12 6v6l4 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" /></Svg>;
 
-  // Default
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" /><Circle cx="12" cy="12" r="3" fill={color} fillOpacity="0.3" /></Svg>;
 }
 
-// ─── FACTOR TILE — neutral colors, no team dependency ────────────
+// ─── FACTOR TILE ────────────────────────────────────────────────
 function FactorTile({
   factor,
   homeTeam,
@@ -129,35 +114,35 @@ function FactorTile({
   const hasEdge = isHomeEdge || isAwayEdge;
   const edgeTeam = isHomeEdge ? homeTeam : awayTeam;
 
-  const edgeBg = hasEdge ? 'rgba(232,147,106,0.06)' : 'rgba(255,255,255,0.02)';
-  const edgeBorder = hasEdge ? 'rgba(232,147,106,0.12)' : 'rgba(255,255,255,0.06)';
+  const edgeBg = hasEdge ? MAROON_DIM : 'rgba(255,255,255,0.02)';
+  const edgeBorder = hasEdge ? 'rgba(139,10,31,0.18)' : 'rgba(255,255,255,0.06)';
 
   const homeBarW = Math.max(2, Math.abs(factor.homeScore) * 50);
   const awayBarW = Math.max(2, Math.abs(factor.awayScore) * 50);
 
   return (
     <View style={[s.factorTile, { backgroundColor: edgeBg, borderColor: edgeBorder }]}>
-      {hasEdge ? <View style={[s.factorAccent, { backgroundColor: CORAL }]} /> : null}
+      {hasEdge ? <View style={[s.factorAccent, { backgroundColor: MAROON }]} /> : null}
       <View style={s.factorInner}>
-        <View style={[s.factorIconWrap, { backgroundColor: hasEdge ? 'rgba(232,147,106,0.1)' : 'rgba(255,255,255,0.04)' }]}>
+        <View style={[s.factorIconWrap, { backgroundColor: hasEdge ? MAROON_DIM : 'rgba(255,255,255,0.04)' }]}>
           <FactorSvgIcon name={factor.name} size={18} />
         </View>
         <View style={{ flex: 1 }}>
           <View style={s.factorTitleRow}>
-            <Text style={[s.factorName, { color: hasEdge ? '#FFFFFF' : 'rgba(255,255,255,0.5)' }]}>
+            <Text style={[s.factorName, { color: '#FFFFFF' }]}>
               {factor.name}
             </Text>
             <View style={[s.edgeBadge, {
-              backgroundColor: hasEdge ? 'rgba(232,147,106,0.15)' : 'rgba(255,255,255,0.04)',
-              borderColor: hasEdge ? 'rgba(232,147,106,0.25)' : 'rgba(255,255,255,0.06)',
+              backgroundColor: hasEdge ? MAROON_DIM : 'rgba(255,255,255,0.04)',
+              borderColor: hasEdge ? 'rgba(139,10,31,0.25)' : 'rgba(255,255,255,0.06)',
             }]}>
-              <Text style={[s.edgeBadgeText, { color: hasEdge ? CORAL : 'rgba(255,255,255,0.3)' }]}>
+              <Text style={[s.edgeBadgeText, { color: hasEdge ? MAROON : '#6B7C94' }]}>
                 {hasEdge ? `${edgeTeam.abbreviation} EDGE` : 'NEUTRAL'}
               </Text>
             </View>
           </View>
 
-          <Text style={[s.factorDesc, { color: hasEdge ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.4)' }]}>
+          <Text style={[s.factorDesc, { color: '#A1B3C9' }]}>
             {factor.description}
           </Text>
 
@@ -167,9 +152,9 @@ function FactorTile({
               <View style={[s.barFill, { width: `${homeBarW}%`, backgroundColor: TEAL }]} />
             </View>
             <View style={s.barTrack}>
-              <View style={[s.barFill, { width: `${awayBarW}%`, backgroundColor: CORAL }]} />
+              <View style={[s.barFill, { width: `${awayBarW}%`, backgroundColor: MAROON }]} />
             </View>
-            <Text style={[s.barLabel, { color: CORAL }]}>{awayTeam.abbreviation}</Text>
+            <Text style={[s.barLabel, { color: MAROON }]}>{awayTeam.abbreviation}</Text>
           </View>
         </View>
       </View>
@@ -199,7 +184,7 @@ export default function GameAnalysisScreen() {
   if (isLoading || !game || !game.prediction) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>Loading analysis...</Text>
+        <Text style={{ color: '#6B7C94', fontSize: 14 }}>Loading analysis...</Text>
       </View>
     );
   }
@@ -224,7 +209,7 @@ export default function GameAnalysisScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      {/* Header — neutral, no team color gradient */}
+      {/* Header */}
       <View style={[s.headerWrap, { paddingTop: insets.top }]}>
         <View style={s.header}>
           <Pressable onPress={() => router.back()} style={s.backBtn}>
@@ -250,7 +235,7 @@ export default function GameAnalysisScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <View>
                   <Text style={s.pickLabel}>CLUTCH PICK</Text>
-                  <Text style={s.pickTeam}>{winner.city} {winner.name}</Text>
+                  <Text style={s.pickTeam}>{winner.name}</Text>
                 </View>
                 <View style={s.confBadge}>
                   <Text style={s.confValue}>{prediction.confidence}%</Text>
@@ -258,15 +243,15 @@ export default function GameAnalysisScreen() {
                 </View>
               </View>
 
-              {/* Win probability bar — teal vs coral */}
+              {/* Win probability bar — teal vs maroon */}
               <View style={s.probRow}>
-              <Text style={[s.probTeam, { color: TEAL }]}>{homeTeam.abbreviation} {prediction.homeWinProbability}%</Text>
-              <View style={s.probBar}>
-                <View style={[s.probFill, { flex: prediction.homeWinProbability, backgroundColor: TEAL }]} />
-                <View style={{ width: 2 }} />
-                <View style={[s.probFill, { flex: prediction.awayWinProbability, backgroundColor: CORAL }]} />
-              </View>
-              <Text style={[s.probTeam, { color: CORAL, textAlign: 'right' }]}>{prediction.awayWinProbability}% {awayTeam.abbreviation}</Text>
+                <Text style={[s.probTeam, { color: TEAL }]}>{homeTeam.abbreviation} {prediction.homeWinProbability}%</Text>
+                <View style={s.probBar}>
+                  <View style={[s.probFill, { flex: prediction.homeWinProbability, backgroundColor: TEAL }]} />
+                  <View style={{ width: 2 }} />
+                  <View style={[s.probFill, { flex: prediction.awayWinProbability, backgroundColor: MAROON }]} />
+                </View>
+                <Text style={[s.probTeam, { color: MAROON, textAlign: 'right' }]}>{prediction.awayWinProbability}% {awayTeam.abbreviation}</Text>
               </View>
             </View>
           </View>
@@ -276,7 +261,7 @@ export default function GameAnalysisScreen() {
               backgroundColor: 'rgba(4,6,8,0.7)',
               alignItems: 'center', justifyContent: 'center', borderRadius: 18,
             }}>
-              <View style={{ backgroundColor: 'rgba(232,147,106,0.15)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(232,147,106,0.25)' }}>
+              <View style={{ backgroundColor: MAROON_DIM, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(139,10,31,0.25)' }}>
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#E8936A', letterSpacing: 1 }}>PRO</Text>
               </View>
             </Pressable>
@@ -290,11 +275,11 @@ export default function GameAnalysisScreen() {
             <Text style={s.edgeTileLabel}>{homeTeam.abbreviation} Edges</Text>
           </View>
           <View style={[s.edgeTile, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-            <Text style={[s.edgeCount, { color: 'rgba(255,255,255,0.4)' }]}>{neutralCount}</Text>
+            <Text style={[s.edgeCount, { color: '#6B7C94' }]}>{neutralCount}</Text>
             <Text style={s.edgeTileLabel}>Neutral</Text>
           </View>
-          <View style={[s.edgeTile, { backgroundColor: 'rgba(232,147,106,0.08)' }]}>
-            <Text style={[s.edgeCount, { color: CORAL }]}>{awayEdgeCount}</Text>
+          <View style={[s.edgeTile, { backgroundColor: MAROON_DIM }]}>
+            <Text style={[s.edgeCount, { color: MAROON }]}>{awayEdgeCount}</Text>
             <Text style={s.edgeTileLabel}>{awayTeam.abbreviation} Edges</Text>
           </View>
         </View>
@@ -308,7 +293,7 @@ export default function GameAnalysisScreen() {
         {/* Factors */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <Text style={s.sectionLabel}>Analysis Factors</Text>
-          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>Sorted by impact</Text>
+          <Text style={{ fontSize: 10, color: '#6B7C94' }}>Sorted by impact</Text>
         </View>
 
         <View style={{ gap: 10 }}>
@@ -333,11 +318,11 @@ export default function GameAnalysisScreen() {
                 >
                   {index === 2 ? (
                     <View style={{ alignItems: 'center' }}>
-                      <View style={{ backgroundColor: 'rgba(232,147,106,0.15)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(232,147,106,0.25)', marginBottom: 6 }}>
+                      <View style={{ backgroundColor: MAROON_DIM, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(139,10,31,0.25)', marginBottom: 6 }}>
                         <Text style={{ fontSize: 10, fontWeight: '800', color: '#E8936A', letterSpacing: 1 }}>PRO</Text>
                       </View>
                       <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Unlock all {sorted.length} factors</Text>
-                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>Tap to subscribe</Text>
+                      <Text style={{ fontSize: 11, color: '#6B7C94', marginTop: 2 }}>Tap to subscribe</Text>
                     </View>
                   ) : null}
                 </Pressable>
@@ -375,41 +360,41 @@ const s = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
-  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 3 },
+  headerSub: { fontSize: 11, color: '#6B7C94', marginTop: 3 },
 
   pickCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
     marginBottom: 14,
   },
   pickCardInner: { padding: 16 },
-  pickLabel: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 4 },
+  pickLabel: { fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 2, marginBottom: 4 },
   pickTeam: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
   confBadge: {
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: 'rgba(232,147,106,0.1)',
+    backgroundColor: MAROON_DIM,
     borderWidth: 1,
-    borderColor: 'rgba(232,147,106,0.2)',
+    borderColor: 'rgba(139,10,31,0.2)',
     alignItems: 'center',
   },
-  confValue: { fontSize: 22, fontWeight: '900', color: CORAL, lineHeight: 26 },
-  confLabel: { fontSize: 7, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, marginTop: 2 },
+  confValue: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', lineHeight: 26 },
+  confLabel: { fontSize: 7, fontWeight: '700', color: '#6B7C94', letterSpacing: 0.8, marginTop: 2 },
   probRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   probTeam: { fontSize: 10, fontWeight: '800', width: 50 },
-  probBar: { flex: 1, height: 6, borderRadius: 3, flexDirection: 'row', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+  probBar: { flex: 1, height: 6, borderRadius: 3, flexDirection: 'row', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' },
   probFill: { height: '100%', borderRadius: 3 },
 
   edgeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
@@ -422,17 +407,17 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   edgeCount: { fontSize: 26, fontWeight: '900', lineHeight: 30 },
-  edgeTileLabel: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.3)', marginTop: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
+  edgeTileLabel: { fontSize: 9, fontWeight: '700', color: '#6B7C94', marginTop: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   summaryCard: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
     marginBottom: 20,
   },
-  summaryText: { fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 21, marginTop: 8 },
+  summaryText: { fontSize: 13, color: '#A1B3C9', lineHeight: 21, marginTop: 8 },
   sectionLabel: { fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5, textTransform: 'uppercase' },
 
   factorTile: { borderRadius: 14, overflow: 'hidden', borderWidth: 1, position: 'relative' },
@@ -446,6 +431,6 @@ const s = StyleSheet.create({
   factorDesc: { fontSize: 12, lineHeight: 18, marginBottom: 10 },
   barsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   barLabel: { fontSize: 10, fontWeight: '800', width: 30 },
-  barTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
+  barTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 2 },
 });

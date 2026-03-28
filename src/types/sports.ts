@@ -157,7 +157,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
   },
   [Sport.NCAAF]: {
     sport: Sport.NCAAF,
-    name: 'College Football',
+    name: 'CFB',
     icon: 'football',
     color: '#5A7A8A',
     accentColor: '#FFFFFF',
@@ -165,7 +165,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
   },
   [Sport.NCAAB]: {
     sport: Sport.NCAAB,
-    name: 'College Basketball',
+    name: 'CBB',
     icon: 'basketball',
     color: '#D98E76',
     accentColor: '#FFFFFF',

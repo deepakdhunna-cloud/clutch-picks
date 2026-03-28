@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from 'react-native-reanimated';
 import { X } from 'lucide-react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import {
   getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled,
@@ -19,8 +19,49 @@ import type { PurchasesPackage } from 'react-native-purchases';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const BG = '#040608';
-const CORAL = '#E8936A';
+const MAROON = '#8B0A1F';
+const MAROON_DIM = 'rgba(139,10,31,0.12)';
+const MAROON_GLOW = 'rgba(139,10,31,0.25)';
 const TEAL = '#7A9DB8';
+const TEAL_DIM = 'rgba(122,157,184,0.10)';
+
+// ─── Feature Icon Components ────────────────────────────────────
+function IconPredictions({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Path d="M3 3v18h18" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M7 14l4-4 4 4 5-5" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function IconLiveScores({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.8} />
+      <Path d="M12 7v5l3 3" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function IconBoxScores({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Rect x={3} y={3} width={18} height={18} rx={3} stroke={color} strokeWidth={1.8} />
+      <Line x1={3} y1={9} x2={21} y2={9} stroke={color} strokeWidth={1.5} />
+      <Line x1={9} y1={9} x2={9} y2={21} stroke={color} strokeWidth={1.5} />
+    </Svg>
+  );
+}
+
+function IconWatch({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Rect x={2} y={7} width={20} height={14} rx={2} stroke={color} strokeWidth={1.8} />
+      <Path d="M17 2l-5 5-5-5" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
 
 // ─── Shimmer CTA button ─────────────────────────────────────────
 function ShimmerButton({ onPress, loading, label }: {
@@ -46,12 +87,21 @@ function ShimmerButton({ onPress, loading, label }: {
       })}
     >
       <LinearGradient
-        colors={[CORAL, '#D07850', '#C46840']}
+        colors={[MAROON, '#6A0818', '#5A0614']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+        style={{
+          height: 56, borderRadius: 14,
+          alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
+          shadowColor: MAROON,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 16,
+          elevation: 8,
+        }}
       >
-        <Animated.View style={[{ position: 'absolute', width: 50, height: 120, backgroundColor: 'rgba(255,255,255,0.12)' }, shimmerStyle]} />
+        <Animated.View style={[{ position: 'absolute', width: 50, height: 120, backgroundColor: 'rgba(255,255,255,0.10)' }, shimmerStyle]} />
         {loading ? (
           <ActivityIndicator color="#FFFFFF" />
         ) : (
@@ -219,60 +269,93 @@ export default function PaywallScreen() {
   };
 
   const priceString = monthlyPackage?.product?.priceString || '$4.99';
+
   const features = [
-    { icon: '◆', label: 'AI Predictions', desc: 'Multi-factor AI analysis per game', accent: TEAL },
-    { icon: '▶', label: 'Live Scores', desc: 'Real-time across 8 leagues', accent: CORAL },
-    { icon: '▤', label: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: TEAL },
-    { icon: '◉', label: 'Where to Watch', desc: 'TV & streaming info', accent: CORAL },
-  ];
+    { IconComponent: IconPredictions, label: 'AI Predictions', desc: 'Multi-factor analysis per game', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
+    { IconComponent: IconLiveScores, label: 'Live Scores', desc: 'Real-time across 8 leagues', accent: TEAL, bgColor: TEAL_DIM, borderColor: 'rgba(122,157,184,0.12)' },
+    { IconComponent: IconBoxScores, label: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
+    { IconComponent: IconWatch, label: 'Where to Watch', desc: 'TV & streaming info', accent: TEAL, bgColor: TEAL_DIM, borderColor: 'rgba(122,157,184,0.12)' },
+  ] as const;
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      {/* Background ambience */}
+      {/* Background ambience — maroon top, teal mid, maroon bottom */}
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {/* Maroon orb top */}
         <LinearGradient
-          colors={[`${CORAL}08`, 'transparent', `${TEAL}05`]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
+          colors={['rgba(139,10,31,0.06)', 'transparent']}
+          start={{ x: 0.3, y: 0 }}
+          end={{ x: 0.7, y: 0.4 }}
+          style={[StyleSheet.absoluteFillObject, { opacity: 1 }]}
         />
+        {/* Teal orb mid-right */}
+        <View style={{
+          position: 'absolute', top: '40%', right: -20, width: 200, height: 200,
+          borderRadius: 100, backgroundColor: 'rgba(122,157,184,0.03)',
+        }} />
+        {/* Grain texture */}
+        <View style={[StyleSheet.absoluteFillObject, { opacity: 0.015, backgroundColor: 'transparent' }]} />
       </View>
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <Pressable onPress={() => router.back()} style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }} hitSlop={12}>
-            <X size={18} color="rgba(255,255,255,0.5)" />
+          <Pressable onPress={() => router.back()} style={{
+            width: 34, height: 34, borderRadius: 12,
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+            alignItems: 'center', justifyContent: 'center',
+          }} hitSlop={12}>
+            <X size={18} color="rgba(255,255,255,0.4)" />
           </Pressable>
         </Animated.View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
           {/* ═══ HERO ═══ */}
-          <Animated.View entering={FadeInDown.duration(500)} style={{ paddingHorizontal: 24, paddingTop: 60, paddingBottom: 28 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <View style={{ width: 3, height: 16, borderRadius: 1.5, backgroundColor: CORAL }} />
-              <Text style={{ fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: 2 }}>CLUTCH PRO</Text>
+          <Animated.View entering={FadeInDown.duration(500)} style={{ paddingHorizontal: 28, paddingTop: 52, paddingBottom: 28 }}>
+            {/* CLUTCH PRO badge with gradient bar */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+              <LinearGradient
+                colors={[MAROON, TEAL]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={{ width: 3, height: 18, borderRadius: 2 }}
+              />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 2.5 }}>CLUTCH PRO</Text>
             </View>
-            <Text style={{ fontSize: 30, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, lineHeight: 36 }}>
-              Every game.{'\n'}Every stat.{'\n'}AI-analyzed.
+
+            {/* Title — "AI-analyzed" in teal */}
+            <Text style={{ fontSize: 32, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, lineHeight: 38 }}>
+              Every game.{'\n'}Every stat.{'\n'}
+              <Text style={{ color: TEAL }}>AI-analyzed.</Text>
             </Text>
-            <Text style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)', marginTop: 10, lineHeight: 22 }}>
-              Multi-factor AI predictions across every game, every league. The analysis you've been looking for.
+            <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginTop: 12, lineHeight: 22 }}>
+              Multi-factor predictions across every game, every league. The analysis behind the edge.
             </Text>
           </Animated.View>
 
           {/* ═══ LOCKED PICKS PREVIEW ═══ */}
           <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ paddingHorizontal: 20, marginBottom: 28 }}>
-            <View style={{ borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+            <View style={{
+              borderRadius: 18, borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.06)',
+              overflow: 'hidden',
+              backgroundColor: 'rgba(8,8,12,0.6)',
+            }}>
               {/* Header */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.02)' }}>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                paddingHorizontal: 16, paddingVertical: 12,
+                backgroundColor: 'rgba(255,255,255,0.015)',
+                borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)',
+              }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: CORAL }} />
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5 }}>TONIGHT'S PICKS</Text>
+                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: MAROON }} />
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>TONIGHT'S PICKS</Text>
                 </View>
-                <View style={{ backgroundColor: `${CORAL}15`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: CORAL }}>LOCKED</Text>
+                <View style={{ backgroundColor: MAROON_DIM, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 8, fontWeight: '800', color: MAROON, letterSpacing: 1 }}>LOCKED</Text>
                 </View>
               </View>
 
@@ -284,26 +367,26 @@ export default function PaywallScreen() {
               ]).map((p, i) => (
                 <View key={i} style={{
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                  paddingHorizontal: 16, paddingVertical: 13,
-                  borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)',
-                  opacity: i === 2 ? 0.4 : 1,
+                  paddingHorizontal: 16, paddingVertical: 14,
+                  borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.025)',
+                  opacity: i === 2 ? 0.35 : 1,
                 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{p.teams}</Text>
-                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>{p.league} · {p.time}</Text>
+                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>{p.league} · {p.time}</Text>
                   </View>
-                  {/* Blurred prediction placeholder */}
-                  <View style={{ flexDirection: 'row', gap: 6, opacity: 0.12 }}>
-                    <View style={{ width: 44, height: 14, borderRadius: 4, backgroundColor: CORAL }} />
-                    <View style={{ width: 32, height: 14, borderRadius: 4, backgroundColor: TEAL }} />
+                  {/* Blurred prediction bars — maroon + teal */}
+                  <View style={{ flexDirection: 'row', gap: 6, opacity: 0.10 }}>
+                    <View style={{ width: 44, height: 12, borderRadius: 4, backgroundColor: MAROON }} />
+                    <View style={{ width: 32, height: 12, borderRadius: 4, backgroundColor: TEAL }} />
                   </View>
                 </View>
               ))}
 
               {/* Bottom hint */}
               {remainingCount > 0 ? (
-                <View style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+                <View style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.025)' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.12)', textAlign: 'center' }}>
                     +{remainingCount} more picks available
                   </Text>
                 </View>
@@ -311,63 +394,71 @@ export default function PaywallScreen() {
             </View>
           </Animated.View>
 
-          {/* ═══ FEATURES LIST ═══ */}
-          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ paddingHorizontal: 20, marginBottom: 28 }}>
-            <View style={{ gap: 0 }}>
-              {features.map((f, i) => (
-                <View key={i} style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 14,
-                  paddingVertical: 14,
-                  borderBottomWidth: i < features.length - 1 ? 1 : 0,
-                  borderBottomColor: 'rgba(255,255,255,0.04)',
+          {/* ═══ FEATURES LIST — SVG icons, alternating maroon/teal ═══ */}
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ paddingHorizontal: 24, marginBottom: 28 }}>
+            {features.map((f, i) => (
+              <View key={i} style={{
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                paddingVertical: 16,
+                borderBottomWidth: i < features.length - 1 ? 1 : 0,
+                borderBottomColor: 'rgba(255,255,255,0.025)',
+              }}>
+                <View style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  backgroundColor: f.bgColor,
+                  borderWidth: 1, borderColor: f.borderColor,
+                  alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${f.accent}10`, borderWidth: 1, borderColor: `${f.accent}18`, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 14, color: f.accent }}>{f.icon}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{f.label}</Text>
-                    <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{f.desc}</Text>
-                  </View>
-                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                    <Path d="M9 18l6-6-6-6" stroke="rgba(255,255,255,0.12)" strokeWidth={2} strokeLinecap="round" />
-                  </Svg>
+                  <f.IconComponent color={f.accent} />
                 </View>
-              ))}
-            </View>
-          </Animated.View>
-
-          {/* ═══ STATS BAR ═══ */}
-          <Animated.View entering={FadeInDown.delay(280).duration(400)} style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 28, gap: 8 }}>
-            {[
-              { value: '8', label: 'Leagues', color: '#FFF' },
-              { value: '20', label: 'Factors', color: CORAL },
-              { value: '24/7', label: 'Updates', color: TEAL },
-            ].map((s, i) => (
-              <View key={i} style={{ flex: 1, alignItems: 'center', paddingVertical: 16, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: s.color }}>{s.value}</Text>
-                <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1, marginTop: 4 }}>{s.label.toUpperCase()}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{f.label}</Text>
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>{f.desc}</Text>
+                </View>
               </View>
             ))}
           </Animated.View>
 
-          {/* ═══ PRICE + CTA ═══ */}
-          <Animated.View entering={FadeInDown.delay(360).duration(400)} style={[{ paddingHorizontal: 20 }]}>
-            <Animated.View style={[{ borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: `${CORAL}25`, shadowColor: CORAL, shadowOffset: { width: 0, height: 0 } }, ctaGlowStyle]}>
+          {/* ═══ STATS BAR — maroon for factors, teal for updates ═══ */}
+          <Animated.View entering={FadeInDown.delay(280).duration(400)} style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 28, gap: 8 }}>
+            {[
+              { value: '8', label: 'Leagues', color: '#FFF' },
+              { value: '20', label: 'Factors', color: MAROON },
+              { value: '24/7', label: 'Updates', color: TEAL },
+            ].map((s, i) => (
+              <View key={i} style={{
+                flex: 1, alignItems: 'center', paddingVertical: 16,
+                borderRadius: 14,
+                backgroundColor: 'rgba(255,255,255,0.015)',
+                borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
+              }}>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: s.color }}>{s.value}</Text>
+                <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 1.5, marginTop: 4 }}>{s.label.toUpperCase()}</Text>
+              </View>
+            ))}
+          </Animated.View>
+
+          {/* ═══ PRICE + CTA — maroon border + breathing glow ═══ */}
+          <Animated.View entering={FadeInDown.delay(360).duration(400)} style={{ paddingHorizontal: 20 }}>
+            <Animated.View style={[{
+              borderRadius: 22, overflow: 'hidden',
+              borderWidth: 1.5, borderColor: 'rgba(139,10,31,0.15)',
+              shadowColor: MAROON,
+              shadowOffset: { width: 0, height: 0 },
+            }, ctaGlowStyle]}>
               <LinearGradient
-                colors={[`${CORAL}0A`, `${CORAL}04`, BG]}
+                colors={['rgba(139,10,31,0.06)', 'rgba(139,10,31,0.02)', BG]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}
                 style={{ padding: 24 }}
               >
                 {/* Price row */}
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                    <Text style={{ fontSize: 38, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{priceString}</Text>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>/month</Text>
-                  </View>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{priceString}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.3)', marginLeft: 4 }}>/month</Text>
                 </View>
 
-                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginBottom: 16, lineHeight: 18 }}>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', marginBottom: 16, lineHeight: 18 }}>
                   Every game. Every league. Every AI prediction.
                 </Text>
 
@@ -376,14 +467,14 @@ export default function PaywallScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                     <View style={{
                       flex: 1, flexDirection: 'row', alignItems: 'center',
-                      backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10,
-                      borderWidth: 1, borderColor: promoCode.length > 0 ? `${TEAL}30` : 'rgba(255,255,255,0.08)',
+                      backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10,
+                      borderWidth: 1, borderColor: promoCode.length > 0 ? 'rgba(122,157,184,0.25)' : 'rgba(255,255,255,0.06)',
                       paddingHorizontal: 12, paddingVertical: 10,
                     }}>
                       <TextInput
                         style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#FFF', padding: 0, letterSpacing: 1 }}
                         placeholder="Enter promo code"
-                        placeholderTextColor="rgba(255,255,255,0.2)"
+                        placeholderTextColor="rgba(255,255,255,0.15)"
                         value={promoCode}
                         onChangeText={(t) => setPromoCode(t.toUpperCase())}
                         autoCapitalize="characters"
@@ -391,7 +482,7 @@ export default function PaywallScreen() {
                       />
                       {promoCode.length > 0 ? (
                         <Pressable onPress={() => setPromoCode('')} hitSlop={8}>
-                          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>×</Text>
+                          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>×</Text>
                         </Pressable>
                       ) : null}
                     </View>
@@ -402,9 +493,12 @@ export default function PaywallScreen() {
                           Alert.alert('Promo Code', `Code "${promoCode}" will be applied at checkout through your App Store account. Redeem it in Settings > Subscriptions > Redeem Code.`);
                         }
                       }}
-                      style={{ backgroundColor: promoCode.trim() ? TEAL : `${TEAL}30`, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 10 }}
+                      style={{
+                        backgroundColor: promoCode.trim() ? TEAL : 'rgba(122,157,184,0.2)',
+                        paddingHorizontal: 16, paddingVertical: 11, borderRadius: 10,
+                      }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: promoCode.trim() ? BG : `${TEAL}60` }}>Apply</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: promoCode.trim() ? BG : 'rgba(122,157,184,0.5)' }}>Apply</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -413,7 +507,7 @@ export default function PaywallScreen() {
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
                   >
                     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                      <Path d="M20 12H4M12 4v16" stroke={TEAL} strokeWidth={2} strokeLinecap="round" />
+                      <Path d="M12 4v16M4 12h16" stroke={TEAL} strokeWidth={2} strokeLinecap="round" />
                     </Svg>
                     <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>Have a promo code?</Text>
                   </Pressable>
@@ -428,10 +522,10 @@ export default function PaywallScreen() {
                   <ShimmerButton onPress={handlePurchase} loading={isPurchasing} label="Unlock All Picks" />
                 )}
 
-                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 10 }}>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>
                   Free for 3 days, then {priceString}/month. Cancel anytime.
                 </Text>
-                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 6, lineHeight: 15 }}>
+                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 6, lineHeight: 15 }}>
                   Subscription provides access to AI-generated predictions for entertainment purposes only.
                 </Text>
               </LinearGradient>
@@ -442,7 +536,7 @@ export default function PaywallScreen() {
           <Animated.View entering={FadeIn.delay(440)} style={{ alignItems: 'center', paddingTop: 20 }}>
             <Pressable onPress={handleRestore} disabled={isRestoring} style={{ paddingVertical: 12 }}>
               {isRestoring ? (
-                <ActivityIndicator color={CORAL} size="small" />
+                <ActivityIndicator color={TEAL} size="small" />
               ) : (
                 <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Restore Purchases</Text>
               )}
@@ -454,15 +548,15 @@ export default function PaywallScreen() {
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
               <Pressable onPress={() => router.push('/terms' as any)}>
-                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecorationLine: 'underline' }}>Terms</Text>
+                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Terms</Text>
               </Pressable>
-              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)' }}>·</Text>
+              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>·</Text>
               <Pressable onPress={() => router.push('/privacy-policy' as any)}>
-                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecorationLine: 'underline' }}>Privacy</Text>
+                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Privacy</Text>
               </Pressable>
             </View>
 
-            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 14, paddingHorizontal: 28, lineHeight: 16 }}>
+            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 14, paddingHorizontal: 28, lineHeight: 16 }}>
               Payment charged to your App Store account. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Cancel in Settings {'>'} Subscriptions.
             </Text>
           </Animated.View>

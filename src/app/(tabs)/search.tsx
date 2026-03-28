@@ -41,6 +41,7 @@ const TEXT_MUTED = '#6B7C94';
 
 const { width: SW } = Dimensions.get('window');
 const SPORTS = ['All','NBA','NFL','MLB','NHL','NCAAF','NCAAB','MLS','EPL'] as const;
+const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB' };
 const SPRING = { stiffness: 300, damping: 22, mass: 1 };
 const MODES = ['Game Day','Prep Mode','Review'] as const;
 const TC = [TEAL, LIVE_RED, MAROON] as const;
@@ -74,8 +75,8 @@ const PulsingLiveBadge = memo(function PulsingLiveBadge() {
 // ─── SEARCH BAR ───
 const searchBarOuter = {
   marginHorizontal: 20,
-  marginTop: 8,
-  marginBottom: 14,
+  marginTop: 12,
+  marginBottom: 20,
 } as const;
 const searchBarInner = {
   flexDirection: 'row' as const,
@@ -111,13 +112,13 @@ const SearchBar = memo(function SearchBar() {
 // ─── SPORT PILLS ───
 const SportPills = memo(function SportPills({ selected, onSelect }: { selected: string; onSelect: (s: string) => void }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 5 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 18 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
       {SPORTS.map((s) => {
         const on = selected === s;
         return (
           <Pressable key={s} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(s); }}
-            style={{ backgroundColor: on ? MAROON : 'rgba(122,157,184,0.08)', borderWidth: on ? 0 : 1, borderColor: on ? 'transparent' : 'rgba(122,157,184,0.12)', borderRadius: 20, paddingHorizontal: 13, paddingVertical: 5 }}>
-            <Text style={{ fontSize: 10, fontWeight: on ? '700' : '600', color: on ? WHITE : TEAL, letterSpacing: on ? 0 : 0.4 }}>{s}</Text>
+            style={{ backgroundColor: on ? MAROON : 'rgba(122,157,184,0.08)', borderWidth: on ? 0 : 1, borderColor: on ? 'transparent' : 'rgba(122,157,184,0.12)', borderRadius: 22, paddingHorizontal: 18, paddingVertical: 9 }}>
+            <Text style={{ fontSize: 13, fontWeight: on ? '700' : '600', color: on ? WHITE : TEAL, letterSpacing: on ? 0 : 0.4 }}>{SPORT_DISPLAY[s] ?? s}</Text>
           </Pressable>
         );
       })}
@@ -130,7 +131,7 @@ const SegPill = memo(function SegPill({ active, onChange, hasLive, tx }: { activ
   const cw = SW - 40; const sw = (cw - 6) / 3;
   const ss = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value * sw }] }));
   return (
-    <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+    <View style={{ paddingHorizontal: 20, marginBottom: 22 }}>
       <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 3, borderWidth: 1, borderColor: BORDER, flexDirection: 'row', position: 'relative' }}>
         <Animated.View style={[{ position: 'absolute', top: 3, left: 3, width: sw, height: '100%', backgroundColor: MAROON, borderRadius: 10 }, ss]} />
         {MODES.map((l, i) => (
@@ -156,26 +157,57 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   const ds = useAnimatedStyle(() => ({ opacity: dotOp.value }));
   return (
     <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/game/${game.id}`); }}
-      style={{ minWidth: 150, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 14, backgroundColor: GLASS, borderWidth: 1, borderColor: live ? 'rgba(220,38,38,0.15)' : BORDER }}>
-      {live ? <LinearGradient colors={['rgba(220,38,38,0.06)', GLASS]} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16 }} /> : null}
-      <Text style={{ fontSize: 9, color: TEXT_MUTED, opacity: 0.5, marginBottom: 6 }}>{game.sport}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: WHITE }}>{game.awayTeam.abbreviation}</Text>
-        <Text style={{ fontSize: 10, color: TEXT_MUTED }}>vs</Text>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: WHITE }}>{game.homeTeam.abbreviation}</Text>
+      style={{ minWidth: 150, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: live ? 'rgba(220,38,38,0.25)' : 'rgba(255,255,255,0.12)' }}>
+      {/* Background layers */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#060810' }} />
+      {/* Maroon→teal diagonal wash */}
+      <LinearGradient
+        colors={live ? ['rgba(220,38,38,0.08)', 'transparent', 'rgba(122,157,184,0.04)'] : ['rgba(139,10,31,0.06)', 'transparent', 'rgba(122,157,184,0.04)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      {/* Top accent line */}
+      <LinearGradient
+        colors={live ? [LIVE_RED, 'rgba(220,38,38,0.3)', 'transparent'] : [MAROON, TEAL]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ height: 2 }}
+      />
+      {/* Content */}
+      <View style={{ paddingVertical: 12, paddingHorizontal: 14 }}>
+        {/* Sport badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <View style={{ backgroundColor: 'rgba(122,157,184,0.1)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: TEAL, letterSpacing: 1 }}>{game.sport}</Text>
+          </View>
+          {live ? (
+            <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: LIVE_RED }, ds]} />
+          ) : null}
+        </View>
+        {/* Teams */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: WHITE }}>{game.awayTeam.abbreviation}</Text>
+          <View style={{ width: 1, height: 14, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 0.5 }} />
+          <Text style={{ fontSize: 18, fontWeight: '900', color: WHITE }}>{game.homeTeam.abbreviation}</Text>
+        </View>
+        {/* Status */}
+        {live ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE }}>{game.awayScore ?? 0} - {game.homeScore ?? 0}</Text>
+            <Text style={{ fontSize: 9, color: LIVE_RED, fontWeight: '700' }}>{game.quarter ?? null}</Text>
+          </View>
+        ) : final ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: TEXT_SECONDARY }}>{game.awayScore ?? 0} - {game.homeScore ?? 0}</Text>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 0.5 }}>FINAL</Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 12, fontWeight: '600', color: TEXT_MUTED }}>{t}</Text>
+        )}
       </View>
-      {live ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: LIVE_RED }, ds]} />
-          <Text style={{ fontSize: 11, fontWeight: '700', color: LIVE_RED }}>{game.awayScore ?? 0}-{game.homeScore ?? 0}</Text>
-          <Text style={{ fontSize: 9, color: TEXT_MUTED }}>{game.quarter ?? null}</Text>
-        </View>
-      ) : final ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUTED }}>FINAL</Text>
-          <Text style={{ fontSize: 11, fontWeight: '600', color: TEXT_SECONDARY }}>{game.awayScore ?? 0}-{game.homeScore ?? 0}</Text>
-        </View>
-      ) : <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{t}</Text>}
     </Pressable>
   );
 });
@@ -184,8 +216,8 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
 const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction[] }) {
   const router = useRouter();
   if (games.length === 0) return (
-    <View style={{ marginHorizontal: 20, marginBottom: 20 }}>
-      <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, marginBottom: 4 }}>Your Games</Text>
+    <View style={{ marginHorizontal: 20, marginBottom: 28 }}>
+      <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, marginBottom: 8 }}>Your Games</Text>
       <View style={{ backgroundColor: GLASS, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 20, alignItems: 'center' }}>
         <Text style={{ fontSize: 12, color: TEXT_MUTED, textAlign: 'center', marginBottom: 12 }}>Follow games or teams to track them here</Text>
         <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)'); }}
@@ -196,8 +228,8 @@ const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction
     </View>
   );
   return (
-    <View style={{ marginBottom: 20 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 4 }}>
+    <View style={{ marginBottom: 28 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8 }}>
         <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE }}>Your Games</Text>
         <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)'); }}>
           <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Browse +</Text>
@@ -391,7 +423,7 @@ const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
   const t = l10.filter(p => p.result === 'win' || p.result === 'loss').length;
   const a = t > 0 ? Math.round((c/t)*100) : 0;
   return (
-    <View style={{ backgroundColor: GLASS, borderWidth: 1, borderColor: 'rgba(139,10,31,0.14)', borderRadius: 18, padding: 18, marginHorizontal: 20, marginBottom: 16 }}>
+    <View style={{ backgroundColor: GLASS, borderWidth: 1, borderColor: 'rgba(139,10,31,0.14)', borderRadius: 18, padding: 18, marginHorizontal: 20, marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>Your predictions</Text>
         <Text style={{ fontSize: 12, fontWeight: '700', color: MAROON }}>{a}%</Text>
@@ -431,76 +463,108 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   const tags: string[] = [];
   const conf = p.confidence ?? 55; const edge = p.edgeRating ?? 5;
   const hStreak = p.homeStreak ?? 0; const aStreak = p.awayStreak ?? 0;
-  const hfW = p.recentFormHome?.split('-').filter(r => r === 'W').length ?? 0;
-  const afW = p.recentFormAway?.split('-').filter(r => r === 'W').length ?? 0;
-  const hfT = p.recentFormHome?.split('-').length ?? 0;
-  const afT = p.recentFormAway?.split('-').length ?? 0;
+
+  // Parse form — handle both "WWLWL" and "W-L-W" formats
+  const parseForm = (form: string | undefined) => {
+    if (!form) return { wins: 0, total: 0 };
+    const chars = form.split('').filter((c: string) => c === 'W' || c === 'L');
+    return { wins: chars.filter((c: string) => c === 'W').length, total: Math.max(chars.length, 1) };
+  };
+  const hf = parseForm(p.recentFormHome);
+  const af = parseForm(p.recentFormAway);
+
   const pr = (r: string) => { const [w,l] = r.split('-').map(Number); return { w: w??0, l: l??0, t: (w??0)+(l??0) }; };
   const hr = pr(home.record); const ar = pr(away.record);
 
   let hl = ''; let dt = ''; let drawType: DrawType = 'default';
+  const trySet = (type: DrawType): boolean => { if (usedTypes.has(type)) return false; drawType = type; return true; };
 
-  if (hStreak >= 3 && aStreak >= 3 && !usedTypes.has('streak_clash')) {
-    drawType = 'streak_clash'; hl = 'Streak vs streak';
+  // 1. STREAK CLASH
+  if (!hl && hStreak >= 3 && aStreak >= 3 && trySet('streak_clash')) {
+    hl = 'Streak vs streak';
     tags.push('CLASH',`${home.abbreviation} W${hStreak}`,`${away.abbreviation} W${aStreak}`);
     dt = `${home.abbreviation} riding a ${hStreak}-game win streak meets ${away.abbreviation} on a ${aStreak}-game tear. Something has to give. ${winner.abbreviation} gets the edge at ${conf}%.`;
   }
-  if (!hl && conf >= 55 && conf <= 65 && !usedTypes.has('upset_brewing')) {
-    const favHome = p.predictedWinner === 'home';
-    const uW = favHome ? afW : hfW;
-    const fW = favHome ? hfW : afW;
-    if (uW >= fW && uW >= 6) {
-      drawType = 'upset_brewing'; hl = 'Upset watch';
-      tags.push('UPSET ALERT');
-      dt = `${loser.abbreviation} (${loser.record}) has been hotter recently — ${uW} wins in their last 10. The model still leans ${winner.abbreviation} at ${conf}%, but the gap is closing.`;
-    }
-  }
-  if (!hl && conf >= 72 && edge >= 7 && !usedTypes.has('dominant_favorite')) {
-    drawType = 'dominant_favorite'; hl = 'Strong lean';
+
+  // 2. DOMINANT FAVORITE — lowered threshold
+  if (!hl && conf >= 68 && edge >= 6 && trySet('dominant_favorite')) {
+    hl = 'Strong lean';
     tags.push('HIGH CONFIDENCE',`${conf}%`);
-    dt = `${winner.abbreviation} (${winner.record}) is a clear favorite with ${conf}% confidence and ${edge}/10 edge rating. ${loser.abbreviation} (${loser.record}) is outmatched across the model's factors.`;
+    dt = `${winner.abbreviation} (${winner.record}) is a clear favorite at ${conf}% with a ${edge}/10 edge rating. ${loser.abbreviation} (${loser.record}) is outmatched across the model's key factors.`;
   }
-  if (!hl && p.isTossUp && !usedTypes.has('toss_up')) {
-    drawType = 'toss_up'; hl = 'Coin flip';
-    tags.push('TOSS-UP');
-    dt = `Dead even. ${home.abbreviation} (${home.record}) at home vs ${away.abbreviation} (${away.record}) — the model can't separate them. Home court gives a slight nudge but this could go either way.`;
+
+  // 3. UPSET BREWING — lowered threshold
+  if (!hl && conf >= 55 && conf <= 65 && trySet('upset_brewing')) {
+    const favHome = p.predictedWinner === 'home';
+    const uW = favHome ? af.wins : hf.wins;
+    const uT = favHome ? af.total : hf.total;
+    if (uW >= 5) {
+      hl = 'Upset watch';
+      tags.push('UPSET ALERT', `${loser.abbreviation} ${uW}-${uT - uW} L10`);
+      dt = `${loser.abbreviation} has been hotter recently with ${uW} wins in their last 10. The model still leans ${winner.abbreviation} at ${conf}%, but the gap is closing. High-variance spot.`;
+    } else { hl = ''; drawType = 'default'; }
   }
-  if (!hl && p.ensembleDivergence && !usedTypes.has('model_conflict')) {
-    drawType = 'model_conflict'; hl = 'Models disagree';
+
+  // 4. TOSS-UP — expanded range
+  if (!hl && (p.isTossUp || (conf >= 48 && conf <= 53)) && trySet('toss_up')) {
+    hl = 'Coin flip';
+    tags.push('TOSS-UP', `${p.homeWinProbability ?? 50}/${p.awayWinProbability ?? 50}`);
+    dt = `Dead even. ${home.abbreviation} (${home.record}) at home vs ${away.abbreviation} (${away.record}) — the model can't separate them. This could go either way.`;
+  }
+
+  // 5. MODEL CONFLICT
+  if (!hl && p.ensembleDivergence && trySet('model_conflict')) {
+    hl = 'Models disagree';
     tags.push('SPLIT DECISION');
-    dt = `The prediction models can't agree. Some factors favor ${home.abbreviation}, others point to ${away.abbreviation}. The composite leans ${winner.abbreviation} at ${conf}%, but treat this as lower-certainty.`;
+    dt = `The prediction models can't agree. Some factors favor ${home.abbreviation}, others point to ${away.abbreviation}. The composite leans ${winner.abbreviation} at ${conf}%, but certainty is lower than the number suggests.`;
   }
-  if (!hl && (hStreak >= 5 || aStreak >= 5) && !usedTypes.has('hot_team')) {
-    const hot = hStreak >= 5 ? home : away; const streak = hStreak >= 5 ? hStreak : aStreak;
-    drawType = 'hot_team'; hl = `${hot.abbreviation} is rolling`;
+
+  // 6. HOT TEAM — lowered threshold
+  if (!hl && (hStreak >= 4 || aStreak >= 4) && trySet('hot_team')) {
+    const hot = hStreak >= aStreak ? home : away; const streak = Math.max(hStreak, aStreak);
+    hl = `${hot.abbreviation} is rolling`;
     tags.push(`W${streak} STREAK`);
     dt = `${hot.abbreviation} has won ${streak} straight and shows no signs of slowing. Model gives ${winner.abbreviation} ${conf}%.`;
   }
-  if (!hl && edge >= 7 && !usedTypes.has('high_value')) {
-    drawType = 'high_value'; hl = 'Best value tonight';
+
+  // 7. HIGH VALUE
+  if (!hl && edge >= 7 && trySet('high_value')) {
+    hl = 'Best value tonight';
     tags.push('HIGH EDGE',`${edge}/10`);
-    dt = `Edge rating ${edge}/10 — one of the sharpest picks on the board. ${winner.abbreviation} (${winner.record}) has a clear statistical advantage over ${loser.abbreviation} (${loser.record}).`;
+    dt = `Edge rating ${edge}/10 — one of the sharpest on the board. ${winner.abbreviation} (${winner.record}) has a clear statistical advantage over ${loser.abbreviation} (${loser.record}).`;
   }
-  if (!hl && (hfW <= 3 || afW <= 3) && hfT >= 8 && !usedTypes.has('cold_team')) {
-    const cold = hfW <= 3 ? home : away; const cW = hfW <= 3 ? hfW : afW; const cT = hfW <= 3 ? hfT : afT;
-    drawType = 'cold_team'; hl = `${cold.abbreviation} struggling`;
-    tags.push(`${cold.abbreviation} ${cW}-${cT-cW} L10`);
-    dt = `${cold.abbreviation} has won just ${cW} of their last ${cT}. The model gives ${winner.abbreviation} ${conf}% — fade the cold team here.`;
+
+  // 8. COLD TEAM — lowered threshold
+  if (!hl && (hf.wins <= 3 || af.wins <= 3) && hf.total >= 5 && trySet('cold_team')) {
+    const cold = hf.wins <= af.wins ? home : away;
+    const cW = Math.min(hf.wins, af.wins);
+    const cT = Math.max(hf.total, af.total);
+    hl = `${cold.abbreviation} struggling`;
+    tags.push(`${cold.abbreviation} ${cW}-${cT - cW} L10`);
+    dt = `${cold.abbreviation} has won just ${cW} of their last 10. ${winner.abbreviation} should capitalize — model gives them ${conf}% with a ${edge}/10 edge.`;
   }
-  if (!hl && Math.abs((hr.w/Math.max(hr.t,1))-(ar.w/Math.max(ar.t,1))) > 0.25 && !usedTypes.has('record_mismatch')) {
-    const better = (hr.w/Math.max(hr.t,1)) > (ar.w/Math.max(ar.t,1)) ? home : away;
-    const worse = better === home ? away : home;
-    drawType = 'record_mismatch'; hl = 'Mismatch on paper';
-    tags.push(`${better.abbreviation} ${better.record}`,`${worse.abbreviation} ${worse.record}`);
-    dt = `${better.abbreviation} (${better.record}) has a significantly better record than ${worse.abbreviation} (${worse.record}). The model agrees — ${winner.abbreviation} at ${conf}%.`;
+
+  // 9. RECORD MISMATCH — lowered threshold
+  if (!hl && trySet('record_mismatch')) {
+    const hPct = hr.w / Math.max(hr.t, 1);
+    const aPct = ar.w / Math.max(ar.t, 1);
+    if (Math.abs(hPct - aPct) > 0.15) {
+      const better = hPct > aPct ? home : away;
+      const worse = better === home ? away : home;
+      hl = 'Mismatch on paper';
+      tags.push(`${better.abbreviation} ${better.record}`,`${worse.abbreviation} ${worse.record}`);
+      dt = `${better.abbreviation} (${better.record}) has a significantly better record than ${worse.abbreviation} (${worse.record}). The model agrees — ${winner.abbreviation} at ${conf}%.`;
+    } else { hl = ''; drawType = 'default'; }
   }
+
+  // 10. DEFAULT — always unique per game
   if (!hl) {
     drawType = 'default'; hl = `${away.abbreviation} at ${home.abbreviation}`;
     dt = `${winner.abbreviation} (${winner.record}) favored at ${conf}% over ${loser.abbreviation} (${loser.record}).`;
-    if (p.recentFormHome && p.recentFormAway) dt += ` Recent form: ${home.abbreviation} ${hfW}-${hfT-hfW}, ${away.abbreviation} ${afW}-${afT-afW} L10.`;
-    if (edge >= 6) dt += ` Edge rating ${edge}/10.`;
-    if (p.lowDataWarning) { tags.push('LIMITED DATA'); dt += ' Limited data — lower certainty.'; }
+    if (hf.total > 1 && af.total > 1) dt += ` Recent form: ${home.abbreviation} ${hf.wins}-${hf.total - hf.wins}, ${away.abbreviation} ${af.wins}-${af.total - af.wins} in last 10.`;
+    if (edge >= 6) dt += ` Edge rating ${edge}/10 adds confidence.`;
   }
+
   const ic = tags.filter(t => !['CLASH','TOSS-UP','SPLIT DECISION','LIMITED DATA'].includes(t)).length;
   if (ic > 0) tags.unshift(`${Math.max(ic,1)} INSIGHT${ic>1?'S':''}`);
   return { tags, headline: hl, detail: dt, drawType };
@@ -584,11 +648,11 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
   // No live games
   if (!live.length) return (
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
-      <View style={{paddingHorizontal:20,marginTop:4,marginBottom:14}}><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Game Day</Text></View>
+      <View style={{paddingHorizontal:20,marginTop:4,marginBottom:24}}><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Game Day</Text></View>
       <YourGames games={followed} />
-      <View style={{alignItems:'center',paddingTop:20,paddingBottom:16}}><Text style={{fontSize:14,color:TEXT_MUTED}}>No live games right now</Text></View>
-      {sched.length>0?<View style={{paddingHorizontal:20,marginBottom:20}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginTop:4,marginBottom:10}}>Coming Up</Text>{sched.slice(0,5).map((g,i)=><HorizonCard key={g.id} game={g} index={i} />)}</View>:null}
-      {picks.length>0?<View style={{marginTop:4}}><PredStrip picks={picks} /></View>:null}
+      <View style={{alignItems:'center',paddingTop:28,paddingBottom:24}}><Text style={{fontSize:14,color:TEXT_MUTED}}>No live games right now</Text></View>
+      {sched.length>0?<View style={{paddingHorizontal:20,marginBottom:28}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginTop:4,marginBottom:14}}>Coming Up</Text>{sched.slice(0,5).map((g,i)=><HorizonCard key={g.id} game={g} index={i} />)}</View>:null}
+      {picks.length>0?<View style={{marginTop:8}}><PredStrip picks={picks} /></View>:null}
       <Disclaimer />
     </Animated.ScrollView>
   );
@@ -597,7 +661,7 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
   return (
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
       {/* 1. Header */}
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:14}}>
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:24}}>
         <View><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Game Day</Text></View>
         <View style={{marginTop:2}}><PulsingLiveBadge /></View>
       </View>
@@ -606,7 +670,7 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
       <YourGames games={followed} />
 
       {/* 3. Live Intelligence header — ABOVE cards */}
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginTop:20,marginBottom:14}}>
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginTop:28,marginBottom:18}}>
         <Text style={{fontSize:16,fontWeight:'800',color:WHITE}}>Live intelligence</Text>
         <Text style={{fontSize:10,color:TEXT_MUTED}}>Updated just now</Text>
       </View>
@@ -637,16 +701,16 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
 
       {/* 6. Intel feed — tied to focused game */}
       {focusedIntel.length > 0 ? (
-        <View style={{paddingHorizontal:20,marginTop:14,marginBottom:20}}>
+        <View style={{paddingHorizontal:20,marginTop:20,marginBottom:28}}>
           {focusedIntel.map((c,i) => <IntelCard key={`${focusedGame?.id}-${i}`} type={c.type} title={c.title} body={c.body} />)}
         </View>
       ) : null}
 
       {/* 7. On the Horizon */}
-      {sched.length>0?<View style={{paddingHorizontal:20,marginBottom:20}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginTop:4,marginBottom:10}}>On the Horizon</Text>{sched.slice(0,6).map((g,i)=><HorizonCard key={g.id} game={g} index={i} />)}</View>:null}
+      {sched.length>0?<View style={{paddingHorizontal:20,marginBottom:28}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginTop:4,marginBottom:14}}>On the Horizon</Text>{sched.slice(0,6).map((g,i)=><HorizonCard key={g.id} game={g} index={i} />)}</View>:null}
 
       {/* 8. Predictions */}
-      {picks.length>0?<View style={{marginTop:4,marginBottom:20}}><PredStrip picks={picks} /></View>:null}
+      {picks.length>0?<View style={{marginTop:8,marginBottom:28}}><PredStrip picks={picks} /></View>:null}
 
       {/* 9. Disclaimer */}
       <Disclaimer />
@@ -673,16 +737,16 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
 
   return (
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:14}}>
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:24}}>
         <View><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Your Insights</Text></View>
         <View style={{flexDirection:'row',alignItems:'center',gap:6}}><View style={{width:6,height:6,borderRadius:3,backgroundColor:MAROON}} /><Text style={{fontSize:11,fontWeight:'700',color:MAROON}}>{sched.length} GAMES</Text></View>
       </View>
-      <View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:16}}>
+      <View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:24}}>
         <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>ARENA INSIGHT</Text>
         <Text style={{fontSize:15,fontWeight:'700',color:WHITE,lineHeight:23}}>{insight.headline}</Text>
         {insight.teams.length>0?<View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:12}}>{insight.teams.map(t=><View key={t} style={{backgroundColor:MAROON_DIM,borderRadius:10,paddingHorizontal:12,paddingVertical:5}}><Text style={{fontSize:10,fontWeight:'700',color:MAROON}}>{t}</Text></View>)}</View>:null}
       </View>
-      {ranked.length>0?<View style={{paddingHorizontal:20,marginBottom:16}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:12}}>Matchups Ranked For You</Text>{ranked.map((r,i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} />)}</View>:<View style={{paddingHorizontal:20,marginBottom:16}}><Text style={{fontSize:12,color:TEXT_MUTED}}>No scheduled games with predictions</Text></View>}
+      {ranked.length>0?<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>Matchups Ranked For You</Text>{ranked.map((r,i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} />)}</View>:<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,color:TEXT_MUTED}}>No scheduled games with predictions</Text></View>}
       <AccBySport picks={picks} />
       <StreakCard stats={stats} />
       <Disclaimer />
@@ -700,24 +764,24 @@ const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR }: {
   const ds = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
   return (
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:14}}>
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:24}}>
         <View><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Last Night</Text></View>
         <Text style={{fontSize:11,color:TEXT_MUTED}}>{ds}</Text>
       </View>
       {t>0?(
-        <View style={{backgroundColor:GLASS,borderRadius:22,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',padding:26,marginHorizontal:20,marginBottom:16,alignItems:'center'}}>
+        <View style={{backgroundColor:GLASS,borderRadius:22,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',padding:26,marginHorizontal:20,marginBottom:24,alignItems:'center'}}>
           <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>YOUR NIGHT</Text>
           <Text style={{fontSize:56,fontWeight:'800',color:WHITE}}>{w}-{l}</Text>
           <Text style={{fontSize:14,fontWeight:'700',color:MAROON,marginTop:4}}>{a}% accuracy</Text>
           <View style={{flexDirection:'row',gap:3,marginTop:14}}>{pfg.map(g=><View key={g.id} style={{width:48,height:5,borderRadius:2.5,backgroundColor:pm.get(g.id)?.result==='win'?TEAL:ERROR,opacity:pm.get(g.id)?.result==='win'?0.9:0.4}} />)}</View>
         </View>
-      ):<View style={{alignItems:'center',paddingVertical:30}}><Text style={{fontSize:13,color:TEXT_MUTED}}>Make some picks to see your results here</Text></View>}
-      {pfg.length>0?<View style={{paddingHorizontal:20,marginBottom:16}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:10}}>Results</Text>{pfg.map(g=><ResultCard key={g.id} game={g} pick={pm.get(g.id)} />)}</View>:null}
-      {fg.length>0?<View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:16}}>
-        <Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:12}}>What The Data Caught</Text>
+      ):<View style={{alignItems:'center',paddingVertical:36}}><Text style={{fontSize:13,color:TEXT_MUTED}}>Make some picks to see your results here</Text></View>}
+      {pfg.length>0?<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>Results</Text>{pfg.map(g=><ResultCard key={g.id} game={g} pick={pm.get(g.id)} />)}</View>:null}
+      {fg.length>0?<View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:24}}>
+        <Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>What The Data Caught</Text>
         {fg.slice(0,3).map(g=>{const p=g.prediction;if(!p) return null;const ok=(p.predictedWinner==='home'&&(g.homeScore??0)>(g.awayScore??0))||(p.predictedWinner==='away'&&(g.awayScore??0)>(g.homeScore??0));return <View key={g.id} style={{marginBottom:10,paddingLeft:12,borderLeftWidth:3,borderLeftColor:ok?TEAL:ERROR}}><Text style={{fontSize:11,fontWeight:'600',color:WHITE,marginBottom:2}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11,color:TEXT_SECONDARY,lineHeight:16.5}}>{ok?`Model correctly predicted ${p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation} at ${p.confidence}% confidence.`:`Model missed — predicted ${p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation} at ${p.confidence}% but the upset came through.`}</Text></View>;})}
       </View>:null}
-      <View style={{backgroundColor:GLASS,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:16,flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}>
+      <View style={{backgroundColor:GLASS,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:24,flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}>
         <View><Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:4}}>SEASON RECORD</Text><Text style={{fontSize:28,fontWeight:'800',color:WHITE}}>{stats?.wins??0}-{stats?.losses??0}</Text></View>
         <Text style={{fontSize:32,fontWeight:'800',color:MAROON}}>{stats?.winRate?`${Math.round(stats.winRate)}%`:'—'}</Text>
       </View>

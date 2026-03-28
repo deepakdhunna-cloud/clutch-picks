@@ -32,6 +32,17 @@ export interface GamePickStats {
   awayPercentage: number;
 }
 
+type AllPickStatsMap = Record<string, GamePickStats>;
+
+const DEFAULT_STATS: GamePickStats = {
+  gameId: '',
+  homePicks: 0,
+  awayPicks: 0,
+  totalPicks: 0,
+  homePercentage: 50,
+  awayPercentage: 50,
+};
+
 // Hook to fetch all user picks with real-time updates
 export function useUserPicks() {
   return useQuery({
@@ -40,8 +51,8 @@ export function useUserPicks() {
       const result = await api.get<Pick[]>('/api/picks');
       return result ?? [];
     },
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // 60 seconds for pick updates
+    staleTime: 30000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: false,
   });
 }
@@ -60,8 +71,8 @@ export function useUserStats() {
         currentStreak: 0,
       };
     },
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // 60 seconds for stats updates
+    staleTime: 30000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: false,
   });
 }
@@ -73,12 +84,13 @@ export function useMakePick() {
   return useMutation({
     mutationFn: (data: { gameId: string; pickedTeam: 'home' | 'away'; homeTeam?: string; awayTeam?: string; sport?: string }) =>
       api.post<Pick>('/api/picks', data),
-    onSuccess: () => {
-      // Immediately invalidate picks and stats queries to refetch
+    onSuccess: (_data, variables) => {
+      // Invalidate picks and stats
       queryClient.invalidateQueries({ queryKey: ['picks'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      // Also refresh games to show updated pick status
-      queryClient.invalidateQueries({ queryKey: ['games'] });
+      // Invalidate batch pick stats (single query, not per-game)
+      queryClient.invalidateQueries({ queryKey: ['allPickStats'] });
+      // DON'T invalidate ['games'] — it's expensive and unnecessary for a pick action
     },
   });
 }
@@ -107,29 +119,44 @@ export function useRefreshPicks() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['picks'] }),
       queryClient.invalidateQueries({ queryKey: ['stats'] }),
+      queryClient.invalidateQueries({ queryKey: ['allPickStats'] }),
     ]);
   };
 
   return { refresh };
 }
 
-// Hook to fetch pick stats for a specific game
-export function useGamePickStats(gameId: string) {
+// ─── BATCH PICK STATS (single query for ALL games, replaces per-card queries) ───
+
+// Single query that fetches stats for ALL games at once
+function useAllPickStats() {
   return useQuery({
-    queryKey: ['gamePickStats', gameId],
+    queryKey: ['allPickStats'],
     queryFn: async () => {
-      const result = await api.get<GamePickStats>(`/api/picks/game/${gameId}/stats`);
-      return result ?? {
-        gameId,
-        homePicks: 0,
-        awayPicks: 0,
-        totalPicks: 0,
-        homePercentage: 50,
-        awayPercentage: 50,
-      };
+      const result = await api.get<AllPickStatsMap>('/api/picks/all-stats');
+      return result ?? {};
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: 60000, // 1 minute — pick stats don't change fast
+    refetchInterval: 120000, // 2 minutes
     refetchIntervalInBackground: false,
-    enabled: !!gameId,
+  });
+}
+
+// Per-card hook: reads from the single batch query via selector (no extra network calls)
+export function useGamePickStats(gameId: string) {
+  const selector = useMemo(
+    () => (data: AllPickStatsMap | undefined) => data?.[gameId] ?? { ...DEFAULT_STATS, gameId },
+    [gameId]
+  );
+  return useQuery({
+    queryKey: ['allPickStats'],
+    queryFn: async () => {
+      const result = await api.get<AllPickStatsMap>('/api/picks/all-stats');
+      return result ?? {};
+    },
+    select: selector,
+    staleTime: 60000,
+    refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }

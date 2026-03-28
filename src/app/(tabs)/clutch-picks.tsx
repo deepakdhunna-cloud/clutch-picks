@@ -118,7 +118,7 @@ function formatGameTime(dateString: string): { date: string; time: string } {
 }
 
 // Premium accent color
-const ACCENT_ORANGE = '#E8936A';
+const ACCENT_ORANGE = '#8B0A1F';
 const PREMIUM_BLUE = '#7A9DB8';
 
 // Top Pick Card Component — Premium luxury redesign
@@ -142,20 +142,23 @@ const TopPickCard = memo(function TopPickCard({
 
   const isAwayPick = game.prediction?.predictedWinner === 'away';
 
-  // Border shimmer — smooth glide on UI thread
-  const shimmer = useSharedValue(0);
+  // Rotating shimmer border — traces around the card
+  const rotation = useSharedValue(0);
+  const glowPulse = useSharedValue(0);
   React.useEffect(() => {
-    shimmer.value = withRepeat(
-      withTiming(1, { duration: 4500, easing: Easing.bezier(0.25, 0.1, 0.25, 1) }),
-      -1, false
+    rotation.value = withTiming(360000, { duration: 360000 / 360 * 4500, easing: Easing.linear });
+    glowPulse.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
     );
   }, []);
-  const shimmerStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(shimmer.value, [0, 0.1, 0.5, 0.9, 1], [0, 0.6, 1, 0.6, 0]),
-    transform: [
-      { translateX: interpolate(shimmer.value, [0, 1], [-160, 520]) },
-      { rotate: '20deg' },
-    ],
+  const rotatingStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value % 360}deg` }],
+  }));
+  const glowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.25, 0.5]),
+    shadowRadius: interpolate(glowPulse.value, [0, 1], [10, 22]),
   }));
 
   return (
@@ -164,15 +167,12 @@ const TopPickCard = memo(function TopPickCard({
         onPress={onPress}
         style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}
       >
-        {/* Outer glow — teal ambient light around the card */}
-        <View style={{
+        {/* Outer glow — breathing silver pulse */}
+        <Animated.View style={[glowStyle, {
           borderRadius: 24,
-          shadowColor: PREMIUM_BLUE,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 30,
-          elevation: 16,
-        }}>
+          shadowColor: '#C0C8D0',
+          shadowOffset: { width: 0, height: 0 },
+        }]}>
         {/* Depth shadow */}
         <View style={{
           borderRadius: 24,
@@ -182,57 +182,43 @@ const TopPickCard = memo(function TopPickCard({
           shadowRadius: 20,
           elevation: 20,
         }}>
-          {/* Border wrapper — teal & chrome, 3px */}
-          <View style={{ borderRadius: 24, padding: 3 }}>
-            {/* Border gradient — sits behind, visible around card edges */}
+          {/* Border wrapper — rotating shimmer */}
+          <View style={{ borderRadius: 24, overflow: 'hidden', position: 'relative' }}>
+            {/* Static silver gradient base */}
             <LinearGradient
-              colors={[
-                PREMIUM_BLUE,
-                '#C0C8D0',
-                PREMIUM_BLUE,
-                '#D4D8DC',
-                PREMIUM_BLUE,
-              ]}
-              locations={[0, 0.25, 0.5, 0.75, 1]}
+              colors={['#C0C8D0', '#8A929A', '#D4D8DC', '#8A929A', '#C0C8D0']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24 }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             />
-            {/* Border shimmer — wide soft gradient beam */}
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, overflow: 'hidden' }} pointerEvents="none">
-              <Animated.View
-                style={[{
-                  position: 'absolute', top: -100, width: 80, height: 900,
-                }, shimmerStyle]}
-              >
+            {/* Rotating beam — teal + maroon same as before */}
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+              <Animated.View style={[rotatingStyle, { width: 800, height: 800, position: 'absolute' }]}>
                 <LinearGradient
-                  colors={[
-                    'transparent',
-                    'rgba(255,255,255,0.05)',
-                    'rgba(200,220,240,0.25)',
-                    'rgba(255,255,255,0.5)',
-                    'rgba(200,220,240,0.25)',
-                    'rgba(255,255,255,0.05)',
-                    'transparent',
-                  ]}
-                  locations={[0, 0.15, 0.3, 0.5, 0.7, 0.85, 1]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{ flex: 1 }}
+                  colors={['transparent', 'transparent', '#7A9DB8', 'rgba(255,255,255,0.5)', '#7A9DB8', 'transparent', 'transparent']}
+                  start={{ x: 0.3, y: 0 }}
+                  end={{ x: 0.7, y: 0 }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400 }}
+                />
+                <LinearGradient
+                  colors={['transparent', 'transparent', '#5A0614', '#8B0A1F', '#5A0614', 'transparent', 'transparent']}
+                  start={{ x: 0.3, y: 0 }}
+                  end={{ x: 0.7, y: 0 }}
+                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 400 }}
                 />
               </Animated.View>
             </View>
 
-            {/* Card body — sits on top, clips the shimmer from bleeding in */}
-            <View style={{ borderRadius: 21, overflow: 'hidden', backgroundColor: '#0c1218' }}>
+            {/* Card body — inset to reveal rotating border */}
+            <View style={{ margin: 3.5, borderRadius: 20.5, overflow: 'hidden', backgroundColor: '#182028' }}>
               {/* Coral radial glow — top right */}
               <View style={{ position: 'absolute', top: 0, right: 0, width: '100%', height: '100%' }} pointerEvents="none">
                 <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
                   <Defs>
                     <RadialGradient id={`coral_${index}`} cx="85%" cy="15%" rx="50%" ry="50%">
-                      <Stop offset="0%" stopColor="#E8936A" stopOpacity={0.5} />
-                      <Stop offset="60%" stopColor="#E8936A" stopOpacity={0.1} />
-                      <Stop offset="100%" stopColor="#E8936A" stopOpacity={0} />
+                      <Stop offset="0%" stopColor="#8B0A1F" stopOpacity={0.5} />
+                      <Stop offset="60%" stopColor="#8B0A1F" stopOpacity={0.1} />
+                      <Stop offset="100%" stopColor="#8B0A1F" stopOpacity={0} />
                     </RadialGradient>
                   </Defs>
                   <Rect x="0" y="0" width="100%" height="100%" fill={`url(#coral_${index})`} />
@@ -257,7 +243,7 @@ const TopPickCard = memo(function TopPickCard({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   {/* Rank badge */}
                   <View style={{ backgroundColor: ACCENT_ORANGE, width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: '#000', fontSize: 12, fontWeight: '900' }}>#{index + 1}</Text>
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900' }}>#{index + 1}</Text>
                   </View>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
                 </View>
@@ -289,23 +275,23 @@ const TopPickCard = memo(function TopPickCard({
                     sport={game.sport}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: isAwayPick ? ACCENT_ORANGE : '#FFF' }} numberOfLines={1}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFF' }} numberOfLines={1}>
                       {game.awayTeam.name}
                     </Text>
                     <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{game.awayTeam.record}</Text>
                   </View>
                   {isAwayPick ? (
-                    <View style={{ backgroundColor: `${ACCENT_ORANGE}18`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: `${ACCENT_ORANGE}25` }}>
-                      <Text style={{ fontSize: 9, fontWeight: '800', color: ACCENT_ORANGE, letterSpacing: 0.5 }}>AI PICK</Text>
+                    <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
+                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>AI PICK</Text>
                     </View>
                   ) : null}
                 </View>
 
                 {/* Divider with VS */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingLeft: 56 }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' }} />
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.15)', marginHorizontal: 10 }}>VS</Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                  <LinearGradient colors={['transparent', 'rgba(255,255,255,0.35)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.45)', marginHorizontal: 8 }}>VS</Text>
+                  <LinearGradient colors={['rgba(255,255,255,0.35)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
                 </View>
 
                 {/* Home team */}
@@ -319,14 +305,14 @@ const TopPickCard = memo(function TopPickCard({
                     sport={game.sport}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: !isAwayPick ? ACCENT_ORANGE : '#FFF' }} numberOfLines={1}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFF' }} numberOfLines={1}>
                       {game.homeTeam.name}
                     </Text>
                     <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{game.homeTeam.record}</Text>
                   </View>
                   {!isAwayPick ? (
-                    <View style={{ backgroundColor: `${ACCENT_ORANGE}18`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: `${ACCENT_ORANGE}25` }}>
-                      <Text style={{ fontSize: 9, fontWeight: '800', color: ACCENT_ORANGE, letterSpacing: 0.5 }}>AI PICK</Text>
+                    <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
+                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>AI PICK</Text>
                     </View>
                   ) : null}
                 </View>
@@ -337,12 +323,12 @@ const TopPickCard = memo(function TopPickCard({
                 {/* Confidence row */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>CONFIDENCE</Text>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: conf >= 80 ? ACCENT_ORANGE : PREMIUM_BLUE }}>{conf}%</Text>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFFFFF' }}>{conf}%</Text>
                 </View>
                 {/* Confidence bar */}
                 <View style={{ height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 14 }}>
                   <LinearGradient
-                    colors={conf >= 80 ? [ACCENT_ORANGE, '#D4806A'] : [PREMIUM_BLUE, '#5A7A8A']}
+                    colors={conf >= 80 ? ['#8B0A1F', '#5A0614'] : [PREMIUM_BLUE, '#5A7A8A']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={{ height: '100%', width: `${conf}%`, borderRadius: 2.5 }}
@@ -393,7 +379,7 @@ const TopPickCard = memo(function TopPickCard({
 
                 {/* View details CTA */}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(122,157,184,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(122,157,184,0.25)' }}>
                     <Text style={{ fontSize: 11, fontWeight: '600', color: PREMIUM_BLUE }}>Full breakdown</Text>
                     <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
                       <Path d="M9 18l6-6-6-6" stroke={PREMIUM_BLUE} strokeWidth={2.5} strokeLinecap="round" />
@@ -404,7 +390,7 @@ const TopPickCard = memo(function TopPickCard({
             </View>
           </View>
           </View>
-        </View>
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
@@ -447,29 +433,30 @@ export default function ClutchPicksScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {/* Logo icon */}
         <View style={{ marginRight: 14, position: 'relative' }}>
-          <View style={{ position: 'absolute', top: -6, left: -6, right: -6, bottom: -6, borderRadius: 20, backgroundColor: ACCENT_ORANGE, opacity: 0.25 }} />
-          <View style={{ position: 'absolute', top: -3, left: -3, right: -3, bottom: -3, borderRadius: 17, backgroundColor: ACCENT_ORANGE, opacity: 0.35 }} />
+          <View style={{ position: 'absolute', top: -10, left: -10, right: -10, bottom: -10, borderRadius: 24, shadowColor: '#7A9DB8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 14 }} />
+          <View style={{ position: 'absolute', top: -5, left: -5, right: -5, bottom: -5, borderRadius: 19, backgroundColor: '#8B0A1F', opacity: 0.2 }} />
+          <View style={{ position: 'absolute', top: -2, left: -2, right: -2, bottom: -2, borderRadius: 16, backgroundColor: '#7A9DB8', opacity: 0.12 }} />
           <LinearGradient
-            colors={[ACCENT_ORANGE, `${ACCENT_ORANGE}80`, PREMIUM_BLUE]}
+            colors={['#7A9DB8', '#8B0A1F', '#5A0614', '#7A9DB8']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ width: 52, height: 52, borderRadius: 14, padding: 2, shadowColor: ACCENT_ORANGE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 10 }}
+            style={{ width: 52, height: 52, borderRadius: 14, padding: 2, shadowColor: '#7A9DB8', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 10 }}
           >
-            <View style={{ flex: 1, borderRadius: 12, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' }}>
-              <FieldGoalU size={30} color={ACCENT_ORANGE} />
+            <View style={{ flex: 1, borderRadius: 12, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center' }}>
+              <FieldGoalU size={30} color="#C0C8D0" />
             </View>
           </LinearGradient>
         </View>
         <View>
           <Text style={{ color: '#FFFFFF', fontSize: 26, fontWeight: '800', letterSpacing: -0.5 }}>Clutch Picks</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>Best pick per sport today</Text>
+          <Text style={{ color: '#7A9DB8', fontSize: 13 }}>Best pick per sport today</Text>
         </View>
       </View>
     </View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#040608' }}>
+    <View style={{ flex: 1, backgroundColor: '#010101' }}>
       <GridBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ErrorBoundary onGoBack={() => router.back()}>
@@ -483,14 +470,14 @@ export default function ClutchPicksScreen() {
         ) : !isPremium ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60 }}>
             {headerComponent}
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(232,147,106,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: 'rgba(232,147,106,0.2)' }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: 'rgba(139,10,31,0.25)' }}>
               <Text style={{ fontSize: 32 }}>🔒</Text>
             </View>
             <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 8 }}>Unlock Clutch Picks</Text>
             <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24 }}>
               Get AI-powered picks, confidence ratings, and full analysis for every game.
             </Text>
-            <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%', height: 54, borderRadius: 14, backgroundColor: '#E8936A', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%', height: 54, borderRadius: 14, backgroundColor: '#8B0A1F', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>Subscribe to Unlock</Text>
             </Pressable>
           </View>
@@ -519,9 +506,9 @@ export default function ClutchPicksScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5A7A8A" />
             }
             removeClippedSubviews={true}
-            maxToRenderPerBatch={3}
-            windowSize={5}
-            initialNumToRender={3}
+            maxToRenderPerBatch={8}
+            windowSize={9}
+            initialNumToRender={5}
             ListFooterComponent={
               <View style={{ paddingTop: 16, paddingBottom: 20 }}>
                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
@@ -535,7 +522,7 @@ export default function ClutchPicksScreen() {
             {headerComponent}
             <View style={{ position: 'relative', marginBottom: 20 }}>
               <View style={{ position: 'absolute', top: -8, left: -8, right: -8, bottom: -8, borderRadius: 48, backgroundColor: ACCENT_ORANGE, opacity: 0.15 }} />
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(232,147,106,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: `${ACCENT_ORANGE}30` }}>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: `${ACCENT_ORANGE}30` }}>
                 <FieldGoalU size={44} color={`${ACCENT_ORANGE}60`} />
               </View>
             </View>

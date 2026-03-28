@@ -17,6 +17,8 @@
     "@bottom-tabs/react-navigation": "^0.12.2",
     "@codeherence/react-native-header": "^1.0.0",
     "@expo-google-fonts/bebas-neue": "^0.4.1",
+    "@expo-google-fonts/orbitron": "^0.4.2",
+    "@expo-google-fonts/vt323": "^0.4.1",
     "@expo/html-elements": "^0.13.7",
     "@expo/metro-runtime": "~5.0.5",
     "@expo/react-native-action-sheet": "^4.1.1",
