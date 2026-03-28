@@ -10,6 +10,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, ChevronRight, Plus, Zap } from 'lucide-react-native';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -894,6 +895,7 @@ export default function MyArenaScreen() {
   if (!isPremium) {
     return (
       <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>
+        <ErrorBoundary>
         <SearchBar />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
           <FreeGameList games={allGames ?? []} router={router} />
@@ -903,12 +905,14 @@ export default function MyArenaScreen() {
             </Text>
           </View>
         </ScrollView>
+        </ErrorBoundary>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>
+      <ErrorBoundary>
       <SearchBar />
       <SportPills selected={sf} onSelect={setSf} />
       <SegPill active={am} onChange={hmc} hasLive={live.length>0} tx={mtx} />
@@ -919,6 +923,7 @@ export default function MyArenaScreen() {
           <View style={{width:SW}}>{am===2?<Review final={final} picks={userPicks??[]} stats={userStats} sh={sh} onR={onR} isR={isR} />:<View />}</View>
         </Animated.View>
       </GestureDetector>
+      </ErrorBoundary>
     </SafeAreaView>
   );
 }

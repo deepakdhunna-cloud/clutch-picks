@@ -1,5 +1,6 @@
 import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import Animated, {
   FadeInDown,
@@ -1163,6 +1164,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
+      <ErrorBoundary>
       <GridBackground />
       {/* Subtle coral and teal ambient washes */}
       <LinearGradient
@@ -1182,9 +1184,9 @@ export default function HomeScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={11}
-        initialNumToRender={6}
+        maxToRenderPerBatch={4}
+        windowSize={5}
+        initialNumToRender={3}
         updateCellsBatchingPeriod={50}
         decelerationRate="normal"
         numColumns={numColumns > 1 ? numColumns : undefined}
@@ -1324,7 +1326,7 @@ export default function HomeScreen() {
             data={searchQuery.trim() === '' ? [] : searchResults}
             keyExtractor={(item) => item.id}
             removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
+            maxToRenderPerBatch={4}
             windowSize={5}
             renderItem={({ item, index }) => (
               <SearchGameCard
@@ -1388,6 +1390,7 @@ export default function HomeScreen() {
           />
         </View>
       </Modal>
+      </ErrorBoundary>
     </SafeAreaView>
   );
 }

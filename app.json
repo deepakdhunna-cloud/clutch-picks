@@ -3,14 +3,14 @@
     "name": "CLUTCH PICKS",
     "slug": "clutch-picks",
     "scheme": "vibecode",
-    "version": "1.0.11",
+    "version": "1.1.0",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "Com.vibecode.clutchpicks-xzrxme",
-      "buildNumber": "20",
+      "buildNumber": "21",
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "CLUTCH PICKS uses the camera to capture photos inside the app before you publish them.",
