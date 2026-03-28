@@ -147,7 +147,7 @@ const SportMasteryRing = memo(function SportMasteryRing({ sport, pct, wins, tota
   const ringColor = pct > 65 ? C.TEAL : pct >= 55 ? C.MAROON : C.TEAL_DARK;
 
   return (
-    <View style={{ minWidth: 88, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, paddingHorizontal: 10, borderWidth: 1, borderColor: C.BORDER, alignItems: 'center' }}>
+    <View style={{ minWidth: 88, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center' }}>
       <View style={{ width: 48, height: 48, marginBottom: 6 }}>
         <Svg width={48} height={48} viewBox="0 0 48 48">
           <SvgCircle cx={24} cy={24} r={r} stroke="#2A3444" strokeWidth={3} fill="none" />
@@ -171,7 +171,7 @@ const AchievementBadge = memo(function AchievementBadge({ name, desc, earned, ic
   const IconComp = icon === 'heart_check' ? HeartCheckIcon : icon === 'target' ? TargetIcon : icon === 'trophy' ? TrophyIcon : StarOutlineIcon;
 
   return (
-    <View style={{ minWidth: 90, backgroundColor: C.GLASS, borderRadius: 14, padding: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: C.BORDER, alignItems: 'center' }}>
+    <View style={{ minWidth: 90, backgroundColor: C.GLASS, borderRadius: 14, padding: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center' }}>
       <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: earned ? C.MAROON_DIM : 'rgba(255,255,255,0.03)', alignItems: 'center', justifyContent: 'center', marginBottom: 8, opacity: earned ? 1 : 0.4 }}>
         <IconComp size={18} color={iconColor} />
       </View>
@@ -190,7 +190,7 @@ const SignatureCallCard = memo(function SignatureCallCard({ type, data }: {
   const accentColor = isBest ? C.TEAL : C.MAROON;
 
   return (
-    <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.BORDER, marginBottom: 8, position: 'relative', overflow: 'hidden' }}>
+    <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', marginBottom: 8, position: 'relative', overflow: 'hidden' }}>
       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: accentColor }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
         {isBest ? <StarIcon size={12} color={C.TEAL} /> : <BoltIcon size={12} color={C.MAROON} />}
@@ -476,18 +476,19 @@ export default function ProfileScreen() {
                 <Stop offset="1" stopColor={C.TEAL_DARK} />
               </SvgGradient>
             </Defs>
-            <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="rgba(255,255,255,0.12)" strokeWidth={0.5}>Analyst Card</SvgText>
+            <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
+            <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
           <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/settings'); }}
-            style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: C.BORDER, alignItems: 'center', justifyContent: 'center' }}>
+            style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
           </Pressable>
         </View>
 
         {/* ── 1. ANALYST CARD HERO ── */}
         <Animated.View entering={FadeInDown.duration(500)} style={{ marginHorizontal: 16 }}>
-          <View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 2.5, borderColor: C.BORDER_HI, position: 'relative' }}>
-            {/* Bg layers */}
+<View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 4, borderColor: 'rgba(255,255,255,0.14)', position: 'relative' }}>
+
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.GLASS }} />
             <LinearGradient colors={[C.MAROON_GLOW, 'transparent', 'transparent', C.TEAL_DIM]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
 
@@ -519,7 +520,11 @@ export default function ProfileScreen() {
               </View>
 
               {/* Accuracy Rating */}
-              <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.BORDER, paddingVertical: 20 }}>
+              <View style={{ paddingVertical: 20 }}>
+                {/* Top divider — visible in middle, fades outward */}
+                <LinearGradient colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1 }} />
+                {/* Bottom divider — visible in middle, fades outward */}
+                <LinearGradient colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1 }} />
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 52, fontWeight: '800', color: '#FFFFFF', lineHeight: 52, letterSpacing: -2 }}>{accuracy}%</Text>
                   <View style={{ alignItems: 'flex-end', paddingBottom: 4 }}>
@@ -574,7 +579,7 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ── 2. EDIT PROFILE + SHARE BUTTONS ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 12 }}>
+        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 20 }}>
           <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/edit-profile'); }}
             style={{ flex: 1, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
@@ -587,17 +592,17 @@ export default function ProfileScreen() {
                 });
               } catch {}
             }}
-            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: C.BORDER, borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <ShareIcon size={14} color={C.TEXT_SECONDARY} />
             <Text style={{ fontSize: 13, fontWeight: '600', color: C.TEXT_SECONDARY }}>Share Card</Text>
           </Pressable>
         </Animated.View>
 
         {/* ── 3. SPORT MASTERY + PREDICTIONS ROW ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 20, gap: 8 }}>
-          <View style={{ width: 115, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.BORDER, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.MAROON_DIM, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
-              <GridIcon size={18} color={C.MAROON} />
+        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 28, gap: 8 }}>
+          <View style={{ width: 115, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.MAROON_DIM, borderWidth: 1, borderColor: C.MAROON, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <GridIcon size={18} color={C.TEXT_PRIMARY} />
             </View>
             <Text style={{ fontSize: 22, fontWeight: '800', color: C.TEXT_PRIMARY }}>{totalPicks}</Text>
             <Text style={{ fontSize: 8, fontWeight: '600', color: C.TEXT_MUTED, letterSpacing: 1.2, marginTop: 2 }}>PREDICTIONS</Text>
@@ -615,8 +620,8 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ── 4. SIGNATURE CALLS ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ marginHorizontal: 16, marginTop: 24 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ marginHorizontal: 16, marginTop: 32 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 2 }}>SIGNATURE CALLS</Text>
           </View>
           {signatureCalls.bestCall ? <SignatureCallCard type="best" data={signatureCalls.bestCall} /> : null}
@@ -627,9 +632,9 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ── 5. WEEKLY RHYTHM ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ marginHorizontal: 16, marginTop: 24 }}>
-          <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 2, marginBottom: 12 }}>THIS WEEK</Text>
-          <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.BORDER }}>
+        <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ marginHorizontal: 16, marginTop: 32 }}>
+          <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 2, marginBottom: 14 }}>THIS WEEK</Text>
+          <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}>
             {/* Day labels */}
             <View style={{ flexDirection: 'row', gap: 4, marginBottom: 6 }}>
               {weeklyRhythm.map((d) => (
@@ -657,7 +662,7 @@ export default function ProfileScreen() {
               })}
             </View>
             {/* Insight */}
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 10, borderWidth: 1, borderColor: C.BORDER, padding: 10, paddingHorizontal: 12, marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', padding: 10, paddingHorizontal: 12, marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TrendIcon size={12} color={C.TEAL} />
               <Text style={{ fontSize: 10, color: C.TEXT_SECONDARY, lineHeight: 15, flex: 1 }}>{weekInsight}</Text>
             </View>
@@ -665,8 +670,8 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ── 6. ACHIEVEMENTS ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(500)} style={{ marginTop: 24 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 16, marginBottom: 12 }}>
+        <Animated.View entering={FadeInDown.duration(500).delay(500)} style={{ marginTop: 32 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 16, marginBottom: 14 }}>
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 2 }}>ACHIEVEMENTS</Text>
             <Text style={{ fontSize: 10, color: C.TEAL }}>{earnedCount} of {achievements.length}</Text>
           </View>
@@ -676,7 +681,7 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ── 7. SIGN OUT + VERSION ── */}
-        <View style={{ alignItems: 'center', marginTop: 28, marginBottom: 20 }}>
+        <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 28 }}>
           <Pressable onPress={handleSignOut}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
           </Pressable>

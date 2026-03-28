@@ -1,4 +1,5 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import Animated, {
   FadeInDown,
@@ -20,7 +21,7 @@ import CompactLiveCard from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
 import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
-import { useGames, useLiveGames } from '@/hooks/useGames';
+import { useGames } from '@/hooks/useGames';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -138,7 +139,7 @@ const HomeHeader = React.memo(function HomeHeader({
       {/* Today Games Bar — Ticket Style */}
       <Animated.View
         entering={FadeInDown.delay(150).duration(500)}
-        style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginTop: 12, marginBottom: 16 }}
+        style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginTop: 16, marginBottom: 20 }}
       >
         <Pressable
           onPress={() => {
@@ -161,7 +162,7 @@ const HomeHeader = React.memo(function HomeHeader({
               : Object.values(gameCounts ?? {}).reduce((s: number, c) => s + ((c as number) ?? 0), 0);
 
             if (!hasFilter) {
-              // ── DEFAULT STATE: grayish-white tint background ──
+              // ── DEFAULT STATE: dark glass with blur ──
               return (
                 <View
                   style={{
@@ -171,32 +172,34 @@ const HomeHeader = React.memo(function HomeHeader({
                     padding: 12,
                     paddingHorizontal: 16,
                     borderRadius: 14,
-                    backgroundColor: '#C2C4C812',
                     borderWidth: 1,
-                    borderColor: '#C2C4C818',
+                    borderColor: 'rgba(255,255,255,0.2)',
                     overflow: 'hidden',
                   }}
                 >
+                  <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.03)' }]} />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }}>
-                    {/* Navy mini ticket */}
-                    <View
-                      style={{
-                        width: 26,
-                        height: 32,
-                        borderTopLeftRadius: 6,
-                        borderTopRightRadius: 6,
-                        borderBottomLeftRadius: 2,
-                        borderBottomRightRadius: 2,
-                        backgroundColor: '#1C2A3A',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        shadowColor: '#1C2A3A',
-                        shadowOpacity: 0.3,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 2 },
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{barCount}</Text>
+                    {/* Mini ticket — glass style */}
+                    <View style={{
+                      width: 26, height: 32, borderRadius: 6, overflow: 'hidden',
+                      borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                    }}>
+                      {/* Top accent */}
+                      <View style={{ height: 2, backgroundColor: '#5A7A8A' }} />
+                      {/* Number */}
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{barCount}</Text>
+                      </View>
+                      {/* Perforation */}
+                      <View style={{ marginHorizontal: 2, height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: 'rgba(255,255,255,0.1)' }} />
+                      {/* Zigzag */}
+                      <View style={{ height: 4, backgroundColor: '#040608', flexDirection: 'row' }}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 2.5, borderRightWidth: 2.5, borderTopWidth: 3, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#040608', marginTop: -3 }} />
+                        ))}
+                      </View>
                     </View>
                     <View>
                       <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Today's Games</Text>
@@ -210,18 +213,18 @@ const HomeHeader = React.memo(function HomeHeader({
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       borderRadius: 8,
-                      backgroundColor: 'rgba(194,196,200,0.15)',
+                      backgroundColor: 'rgba(90,122,138,0.15)',
                       borderWidth: 1,
-                      borderColor: 'rgba(194,196,200,0.2)',
+                      borderColor: 'rgba(90,122,138,0.25)',
                     }}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#C2C4C8', letterSpacing: 0.5 }}>VIEW ALL</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#7A9DB8', letterSpacing: 0.5 }}>VIEW ALL</Text>
                   </View>
                 </View>
               );
             }
 
-            // ── FILTERED STATE: sport-colored bar on dark background ──
+            // ── FILTERED STATE: dark glass with maroon accent ──
             return (
               <View
                 style={{
@@ -231,31 +234,34 @@ const HomeHeader = React.memo(function HomeHeader({
                   padding: 12,
                   paddingHorizontal: 16,
                   borderRadius: 14,
-                  backgroundColor: barColor + '12',
                   borderWidth: 1,
-                  borderColor: barColor + '18',
+                  borderColor: 'rgba(255,255,255,0.2)',
                   overflow: 'hidden',
                 }}
               >
+                <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(139,10,31,0.06)' }]} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }}>
-                  <View
-                    style={{
-                      width: 26,
-                      height: 32,
-                      borderTopLeftRadius: 6,
-                      borderTopRightRadius: 6,
-                      borderBottomLeftRadius: 2,
-                      borderBottomRightRadius: 2,
-                      backgroundColor: barColor,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      shadowColor: barColor,
-                      shadowOpacity: 0.3,
-                      shadowRadius: 6,
-                      shadowOffset: { width: 0, height: 2 },
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{barCount}</Text>
+                  {/* Mini ticket — glass style with maroon accent */}
+                  <View style={{
+                    width: 26, height: 32, borderRadius: 6, overflow: 'hidden',
+                    borderWidth: 1, borderColor: 'rgba(139,10,31,0.35)',
+                    backgroundColor: 'rgba(255,255,255,0.03)',
+                  }}>
+                    {/* Top accent */}
+                    <View style={{ height: 2, backgroundColor: '#8B0A1F' }} />
+                    {/* Number */}
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{barCount}</Text>
+                    </View>
+                    {/* Perforation */}
+                    <View style={{ marginHorizontal: 2, height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: 'rgba(255,255,255,0.1)' }} />
+                    {/* Zigzag */}
+                    <View style={{ height: 4, backgroundColor: '#040608', flexDirection: 'row' }}>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 2.5, borderRightWidth: 2.5, borderTopWidth: 3, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#040608', marginTop: -3 }} />
+                      ))}
+                    </View>
                   </View>
                   <View>
                     <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Today's Games</Text>
@@ -269,9 +275,9 @@ const HomeHeader = React.memo(function HomeHeader({
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 8,
-                    backgroundColor: barColor + '15',
+                    backgroundColor: 'rgba(139,10,31,0.15)',
                     borderWidth: 1,
-                    borderColor: barColor + '20',
+                    borderColor: 'rgba(139,10,31,0.3)',
                   }}
                 >
                   <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>VIEW ALL</Text>
@@ -285,12 +291,12 @@ const HomeHeader = React.memo(function HomeHeader({
       {/* Sports Categories */}
       <Animated.View
         entering={FadeInDown.delay(100).duration(500)}
-        style={{ paddingTop: 0, paddingBottom: 0 }}
+        style={{ paddingTop: 4, paddingBottom: 8 }}
       >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, paddingVertical: 8, gap: 10 }}
+          contentContainerStyle={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, paddingVertical: 10, gap: 10 }}
           style={{ flexGrow: 0 }}
           scrollEventThrottle={16}
           removeClippedSubviews={true}
@@ -317,9 +323,9 @@ const HomeHeader = React.memo(function HomeHeader({
       {liveGamesPreview && liveGamesPreview.length > 0 ? (
         <Animated.View
           entering={FadeInDown.delay(100).duration(500)}
-          style={{ marginBottom: 20, marginTop: 8 }}
+          style={{ marginBottom: 24, marginTop: 16 }}
         >
-          <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+          <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
@@ -339,7 +345,7 @@ const HomeHeader = React.memo(function HomeHeader({
                 {liveGamesPreview.length}
               </Text>
             </View>
-            <View style={{ width: 32, height: 2, borderRadius: 1, backgroundColor: 'rgba(220,38,38,0.5)', marginTop: 6 }} />
+            <View style={{ width: 40, height: 2.5, borderRadius: 1.5, backgroundColor: 'rgba(220,38,38,0.8)', marginTop: 6 }} />
           </View>
 
           {/* Sport filter pills */}
@@ -347,7 +353,7 @@ const HomeHeader = React.memo(function HomeHeader({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 12, paddingTop: 2 }}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 14, paddingTop: 6 }}
               style={{ flexGrow: 0 }}
               decelerationRate="fast"
             >
@@ -438,35 +444,34 @@ const HomeHeader = React.memo(function HomeHeader({
       ) : nonLiveGames.length > 0 ? (
         <>
           {/* "Today's Games" / Sport Name header */}
-          <Animated.View entering={FadeInRight.delay(280).duration(500)} style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginBottom: 8 }}>
+          <Animated.View entering={FadeInRight.delay(280).duration(500)} style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginBottom: 14, marginTop: 8 }}>
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   {selectedSportFilter ? (
-                    <View
-                      style={{
-                        width: 8,
-                        height: 12,
-                        borderTopLeftRadius: 5,
-                        borderTopRightRadius: 5,
-                        borderBottomLeftRadius: 2,
-                        borderBottomRightRadius: 2,
-                        backgroundColor: getTicketColor(selectedSportFilter),
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ fontSize: 5, fontWeight: '900', color: '#FFF' }}>
-                        {gameCounts?.[selectedSportFilter] ?? 0}
-                      </Text>
+                    <View style={{
+                      width: 26, height: 32, borderRadius: 6, overflow: 'hidden',
+                      borderWidth: 1, borderColor: 'rgba(139,10,31,0.35)',
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                    }}>
+                      <View style={{ height: 2, backgroundColor: getTicketColor(selectedSportFilter) }} />
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{gameCounts?.[selectedSportFilter] ?? 0}</Text>
+                      </View>
+                      <View style={{ marginHorizontal: 2, height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: 'rgba(255,255,255,0.1)' }} />
+                      <View style={{ height: 4, backgroundColor: '#040608', flexDirection: 'row' }}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 2.5, borderRightWidth: 2.5, borderTopWidth: 3, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#040608', marginTop: -3 }} />
+                        ))}
+                      </View>
                     </View>
                   ) : null}
                   <Text style={{ color: '#FFFFFF', fontSize: responsive.isTablet ? responsive.headerSize : headerFontSize, fontWeight: '800', letterSpacing: 0.5 }}>
-                    {selectedSportFilter ? `${SPORT_META[selectedSportFilter].name}` : "Today"}
+                    {selectedSportFilter ? (selectedSportFilter === 'NCAAF' ? 'CFB' : selectedSportFilter === 'NCAAB' ? 'CBB' : selectedSportFilter) : "Today"}
                   </Text>
                 </View>
               </View>
-              <View style={{ width: 32, height: 2, borderRadius: 1, backgroundColor: selectedSportFilter ? getTicketColor(selectedSportFilter) + '80' : 'rgba(255,255,255,0.15)', marginTop: 6 }} />
+              <View style={{ width: 40, height: 2.5, borderRadius: 1.5, backgroundColor: selectedSportFilter ? getTicketColor(selectedSportFilter) : 'rgba(255,255,255,0.3)', marginTop: 6 }} />
             </View>
           </Animated.View>
         </>
@@ -673,10 +678,12 @@ export default function HomeScreen() {
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
   const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames } = useGames();
-  const { data: liveGames } = useLiveGames();
 
-  // Use real live games from the API
-  const liveGamesPreview = liveGames ?? [];
+  // Derive live games from the same query (no double subscription)
+  const liveGamesPreview = useMemo(
+    () => (todaysGames ?? []).filter((g: any) => g.status === 'in_progress' || g.status === 'halftime'),
+    [todaysGames]
+  );
 
   // Gate pulse animations — only run when there are live games
   useEffect(() => {
@@ -724,7 +731,8 @@ export default function HomeScreen() {
       pulseScale2.value = 1;
       pulseOpacity2.value = 0.6;
     }
-  }, [liveGamesPreview.length, pulseScale1, pulseOpacity1, pulseScale2, pulseOpacity2]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveGamesPreview.length]);
 
   const ring1Style = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale1.value }],
@@ -958,7 +966,7 @@ export default function HomeScreen() {
       const textDimColor = isLight ? 'rgba(28,42,58,0.5)' : 'rgba(255,255,255,0.5)';
       const perfColor = isLight ? 'rgba(28,42,58,0.2)' : 'rgba(255,255,255,0.2)';
       return (
-        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 20, marginBottom: 4 } : { paddingHorizontal: 20, marginTop: 20, marginBottom: 4 }}>
+        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 10 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14 }}>
             {/* Full ticket stub — matches filter button exactly */}
             <View
@@ -1103,7 +1111,7 @@ export default function HomeScreen() {
         item.label === 'FINAL RESULTS' ? '#4ADE80' :
         '#FFFFFF';
       return (
-        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 16, marginBottom: 10 } : { paddingHorizontal: 20, marginTop: 16, marginBottom: 10 }}>
+        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 }}>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1118,7 +1126,7 @@ export default function HomeScreen() {
               </View>
               <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{item.count}</Text>
             </View>
-            <View style={{ width: 32, height: 2, borderRadius: 1, backgroundColor: accentColor + '80', marginTop: 6 }} />
+            <View style={{ width: 56, height: 3, borderRadius: 1.5, backgroundColor: accentColor, marginTop: 8, shadowColor: accentColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 6 }} />
           </View>
         </View>
       );
@@ -1126,7 +1134,7 @@ export default function HomeScreen() {
 
     if (item.type === 'game') {
       return (
-        <View style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20 }}>
+        <View style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 6 }}>
           <GameCard game={item.game} index={item.index} />
         </View>
       );
@@ -1173,10 +1181,10 @@ export default function HomeScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         removeClippedSubviews={true}
-        maxToRenderPerBatch={5}
-        windowSize={5}
-        initialNumToRender={2}
-        updateCellsBatchingPeriod={100}
+        maxToRenderPerBatch={10}
+        windowSize={11}
+        initialNumToRender={6}
+        updateCellsBatchingPeriod={50}
         decelerationRate="normal"
         numColumns={numColumns > 1 ? numColumns : undefined}
         columnWrapperStyle={numColumns > 1 ? { gap: 16, paddingHorizontal: responsive.contentPadding } : undefined}
@@ -1232,7 +1240,7 @@ export default function HomeScreen() {
           ) : null
         }
         ListFooterComponent={
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 }}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 }}>
             <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
               AI predictions are for entertainment purposes only. Not financial advice.
             </Text>

@@ -33,8 +33,8 @@ const LEAGUES = [
   { id: 'NHL', name: 'NHL' },
   { id: 'MLS', name: 'MLS' },
   { id: 'EPL', name: 'EPL' },
-  { id: 'NCAAF', name: 'NCAAF' },
-  { id: 'NCAAB', name: 'NCAAB' },
+  { id: 'NCAAF', name: 'CFB' },
+  { id: 'NCAAB', name: 'CBB' },
 ];
 
 interface UserProfile {

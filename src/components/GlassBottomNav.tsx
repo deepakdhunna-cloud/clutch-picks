@@ -1,17 +1,16 @@
 /**
- * GlassBottomNav — Premium bottom navigation with glowing underline indicator
+ * Fade Rail — Premium bottom navigation
+ * Content dissolves into the nav via gradient. Active tab has a maroon glow pip.
  */
 
 import React from 'react';
-import { View, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Pressable, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
   useAnimatedProps,
   useSharedValue,
   withSpring,
-  withTiming,
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
@@ -20,8 +19,7 @@ import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 
-const TEAL = '#7A9DB8';
-const CORAL = '#E8936A';
+const MAROON = '#8B0A1F';
 
 export function GlassBottomNav({
   state,
@@ -29,10 +27,8 @@ export function GlassBottomNav({
   navigation,
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const bottomPadding = Math.max(insets.bottom, 12);
+  const bottomPadding = Math.max(insets.bottom, 16);
   const tabBarVisible = useTabBarVisible();
-  const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
 
   const animatedContainerStyle = useAnimatedStyle(() => {
     const translateY = interpolate(tabBarVisible.value, [0, 1], [120, 0], Extrapolation.CLAMP);
@@ -45,25 +41,32 @@ export function GlassBottomNav({
 
   return (
     <Animated.View
-      style={[
-        styles.container,
-        { paddingBottom: bottomPadding },
-        isTablet && { paddingHorizontal: 40 },
-        animatedContainerStyle,
-      ]}
+      style={[styles.container, animatedContainerStyle]}
       animatedProps={animatedContainerProps}
     >
-      <View style={[styles.glassWrapper, isTablet && { maxWidth: 500, alignSelf: 'center' }]}>
-        {Platform.OS === 'ios' && (
-          <BlurView
-            intensity={80}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
-          />
-        )}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(8, 10, 16, 0.65)' }]} pointerEvents="none" />
-        {/* Top edge highlight */}
-        <View style={styles.topEdge} pointerEvents="none" />
+      {/* Gradient fade — content dissolves into nav */}
+      <LinearGradient
+        colors={['transparent', 'rgba(4,6,8,0.4)', 'rgba(4,6,8,0.8)', '#040608']}
+        style={styles.fade}
+        pointerEvents="none"
+      />
+
+      {/* Nav area */}
+      <View style={[styles.bar, { paddingBottom: bottomPadding }]}>
+        {/* Accent line */}
+        <LinearGradient
+          colors={[
+            'transparent',
+            'rgba(255,255,255,0.02)',
+            'rgba(139,10,31,0.18)',
+            'rgba(122,157,184,0.12)',
+            'rgba(255,255,255,0.02)',
+            'transparent',
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.accentLine}
+        />
 
         <View style={styles.tabRow}>
           {state.routes.map((route, index) => {
@@ -91,7 +94,7 @@ export function GlassBottomNav({
             const label = options.tabBarLabel ?? options.title ?? route.name;
             const icon = options.tabBarIcon?.({
               focused: isFocused,
-              color: isFocused ? '#FFFFFF' : 'rgba(255, 255, 255, 0.35)',
+              color: '#FFFFFF',
               size: 22,
             });
             const labelValue = typeof label === 'string' ? label : route.name;
@@ -146,23 +149,23 @@ function TabButton({
     transform: [{ scale: scale.value }],
   }));
 
-  // Label opacity (avoids interpolateColor which can crash in worklets)
-  const labelStyle = useAnimatedStyle(() => ({
+  const iconStyle = useAnimatedStyle(() => ({
     opacity: interpolate(focus.value, [0, 1], [0.35, 1]),
   }));
 
-  // Glowing underline bar
-  const barStyle = useAnimatedStyle(() => ({
-    opacity: focus.value,
-    transform: [
-      { scaleX: interpolate(focus.value, [0, 1], [0, 1]) },
-    ],
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(focus.value, [0, 1], [0.4, 1]),
   }));
 
-  // Icon glow
-  const iconGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(focus.value, [0, 1], [0, 0.5]),
-    transform: [{ scale: interpolate(focus.value, [0, 1], [0.5, 1]) }],
+  // Maroon glow pip
+  const pipStyle = useAnimatedStyle(() => ({
+    opacity: focus.value,
+    transform: [{ scale: interpolate(focus.value, [0, 1], [0, 1]) }],
+  }));
+
+  // Radial glow behind active icon
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(focus.value, [0, 1], [0, 0.05]),
   }));
 
   return (
@@ -181,26 +184,22 @@ function TabButton({
       accessibilityState={accessibilityState}
     >
       <Animated.View style={[styles.tabContent, pressStyle]}>
-        {/* Icon with glow behind it when active */}
-        <View style={styles.iconArea}>
-          <Animated.View style={[styles.iconGlow, iconGlowStyle]} />
-          <View style={styles.iconWrapper}>{icon}</View>
-        </View>
+        {/* Radial glow behind icon */}
+        <Animated.View style={[styles.iconGlow, glowStyle]} />
 
+        {/* Icon */}
+        <Animated.View style={[styles.iconWrap, iconStyle]}>
+          {icon}
+        </Animated.View>
+
+        {/* Label */}
         <Animated.Text style={[styles.label, labelStyle]} numberOfLines={1}>
           {label}
         </Animated.Text>
 
-        {/* Glowing underline bar */}
-        <Animated.View style={[styles.barContainer, barStyle]}>
-          <LinearGradient
-            colors={['transparent', TEAL, TEAL, 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.bar}
-          />
-          {/* Glow beneath the bar */}
-          <View style={styles.barGlow} />
+        {/* Maroon glow pip */}
+        <Animated.View style={[styles.pip, pipStyle]}>
+          <View style={styles.pipDot} />
         </Animated.View>
       </Animated.View>
     </Pressable>
@@ -213,45 +212,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    alignItems: 'center',
-    paddingHorizontal: 20,
   },
-  glassWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    width: '100%',
-    maxWidth: 400,
-    minHeight: 64,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 9999,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.65,
-        shadowRadius: 40,
-      },
-      android: { elevation: 20 },
-    }),
+  fade: {
+    height: 10,
   },
-  topEdge: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  bar: {
+    backgroundColor: '#040608',
+  },
+  accentLine: {
+    height: 0.5,
+    marginHorizontal: 32,
+    marginBottom: 0,
   },
   tabRow: {
-    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-evenly',
+    alignItems: 'center',
+    paddingHorizontal: 8,
   },
   tabButton: {
     flex: 1,
@@ -259,70 +236,50 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
   },
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  iconArea: {
+    width: 64,
     position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 3,
+    paddingVertical: 2,
   },
   iconGlow: {
     position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: TEAL,
-    ...Platform.select({
-      ios: {
-        shadowColor: TEAL,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 10,
-      },
-      android: {},
-    }),
+    top: -4,
+    width: 36,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: MAROON,
   },
-  iconWrapper: {
+  iconWrap: {
+    marginBottom: 5,
     zIndex: 1,
+    transform: [{ scale: 1 }],
   },
   label: {
-    fontSize: 10,
+    fontSize: 8.5,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 6,
+    zIndex: 1,
   },
-  barContainer: {
-    width: 24,
-    height: 3,
+  pip: {
     alignItems: 'center',
+    zIndex: 1,
   },
-  bar: {
-    width: 24,
-    height: 2,
-    borderRadius: 1,
-  },
-  barGlow: {
-    position: 'absolute',
-    top: -2,
-    width: 20,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: TEAL,
-    opacity: 0.4,
+  pipDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: MAROON,
     ...Platform.select({
       ios: {
-        shadowColor: TEAL,
+        shadowColor: MAROON,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 8,
+        shadowOpacity: 0.6,
+        shadowRadius: 4,
       },
       android: {},
     }),

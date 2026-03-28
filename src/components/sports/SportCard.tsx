@@ -1,4 +1,5 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { memo, useCallback, useEffect } from 'react';
 import Animated, {
@@ -325,171 +326,148 @@ export const SportCard = memo(function SportCard({ sport, gameCount, index = 0, 
   });
 
   if (compact) {
-    // ── Ticket Stub Colors — 3-color palette ──
-    const TICKET_COLORS_LOCAL = ['#E8936A', '#1C2A3A', '#C2C4C8'];
-    const TICKET_MAP_LOCAL: Record<string, number> = {
-      NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, NCAAF: 0, NCAAB: 1,
-    };
-    const ticketColor = TICKET_COLORS_LOCAL[TICKET_MAP_LOCAL[sport] ?? 0];
-    const isLight = ticketColor === '#C2C4C8';
-    const textColor = isLight ? '#1C2A3A' : '#FFFFFF';
-    const textDimColor = isLight ? 'rgba(28,42,58,0.5)' : 'rgba(255,255,255,0.5)';
-    const perfColor = isLight ? 'rgba(28,42,58,0.2)' : 'rgba(255,255,255,0.2)';
+    // Alternating teal/maroon tint — teal for even index, maroon for odd
+    const isTealDefault = index % 2 === 0;
+    // When selected, swap: teal defaults become maroon, maroon defaults become teal
+    const accentColor = isSelected
+      ? (isTealDefault ? '#8B0A1F' : '#7A9DB8')
+      : (isTealDefault ? '#7A9DB8' : '#8B0A1F');
+    const tintBg = isSelected
+      ? (isTealDefault ? 'rgba(139,10,31,0.08)' : 'rgba(122,157,184,0.08)')
+      : (isTealDefault ? 'rgba(122,157,184,0.10)' : 'rgba(139,10,31,0.10)');
+    const borderC = isSelected
+      ? (isTealDefault ? 'rgba(139,10,31,0.30)' : 'rgba(122,157,184,0.30)')
+      : (isTealDefault ? 'rgba(122,157,184,0.20)' : 'rgba(139,10,31,0.20)');
+    const accentBarColor = isSelected
+      ? (isTealDefault ? '#8B0A1F' : '#7A9DB8')
+      : (isTealDefault ? 'rgba(122,157,184,0.3)' : 'rgba(139,10,31,0.3)');
+    const sportNameColor = isSelected
+      ? (isTealDefault ? '#8B0A1F' : '#7A9DB8')
+      : accentColor;
 
     return (
       <AnimatedPressable
         onPress={handlePress}
         onPressIn={() => { scale.value = withSpring(0.92, { damping: 15, stiffness: 300 }); }}
         onPressOut={() => { scale.value = withSpring(1, { damping: 15, stiffness: 300 }); }}
-        style={[animatedStyle, { alignItems: 'center' }]}
+        style={[animatedStyle, { alignItems: 'center' as const }]}
       >
         <Animated.View style={[orbAnimatedStyle]}>
-          {/* Outer ring — selection indicator */}
           <View
             style={{
-              width: 70,
-              height: 86,
-              borderRadius: 12,
-              borderWidth: isSelected ? 2 : 0,
-              borderColor: isSelected ? ticketColor : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: isSelected ? ticketColor : 'transparent',
-              shadowOpacity: isSelected ? 0.5 : 0,
-              shadowRadius: isSelected ? 10 : 0,
-              shadowOffset: { width: 0, height: 0 },
+              width: 62,
+              height: 80,
+              borderRadius: 14,
+              overflow: 'hidden' as const,
+              position: 'relative' as const,
+              borderWidth: 1,
+              borderColor: borderC,
             }}
           >
+            <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />
+            {/* Tint background */}
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: tintBg }]} />
+
+            {/* Accent line at top */}
             <View
               style={{
-                width: 66,
-                height: 82,
-                borderTopLeftRadius: 10,
-                borderTopRightRadius: 10,
-                borderBottomLeftRadius: 4,
-                borderBottomRightRadius: 4,
-                overflow: 'hidden',
-                position: 'relative',
-                backgroundColor: ticketColor,
-              }}
-            >
-              {/* Selected — bottom indicator bar (above perforation) */}
-              {isSelected ? (
-                <View
-                  style={{
-                    position: 'absolute',
-                    bottom: 14,
-                    left: 0,
-                    right: 0,
-                    height: 3,
-                    backgroundColor: isLight ? '#1C2A3A' : '#FFFFFF',
-                    opacity: 0.7,
-                  }}
-                />
-              ) : null}
-
-              {/* Zigzag torn edge */}
-              <View
-                style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 6,
-                  backgroundColor: '#040608',
-                }}
-              >
-                <View style={{ flexDirection: 'row', position: 'absolute', top: -3, left: 0, right: 0 }}>
-                  {Array.from({ length: 11 }).map((_, i) => (
-                    <View
-                      key={i}
-                      style={{
-                        width: 0,
-                        height: 0,
-                        borderLeftWidth: 3,
-                        borderRightWidth: 3,
-                        borderTopWidth: 5,
-                        borderLeftColor: 'transparent',
-                        borderRightColor: 'transparent',
-                        borderTopColor: '#040608',
-                      }}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              {/* Perforation line */}
-              <View
-                style={{
-                  position: 'absolute',
-                  bottom: 8,
-                  left: 4,
-                  right: 4,
-                  height: 0,
-                  borderBottomWidth: 1,
-                  borderStyle: 'dashed',
-                  borderBottomColor: perfColor,
+                position: 'absolute' as const,
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 2.5,
+                backgroundColor: accentBarColor,
+                shadowColor: isSelected ? accentBarColor : 'transparent',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: isSelected ? 0.4 : 0,
+                shadowRadius: isSelected ? 6 : 0,
                 }}
               />
 
-              {/* Stripe texture */}
-              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.06 }}>
+            {/* Perforation line near bottom */}
+            <View
+              style={{
+                position: 'absolute' as const,
+                bottom: 8,
+                left: 4,
+                right: 4,
+                height: 0,
+                borderBottomWidth: 1,
+                borderStyle: 'dashed' as const,
+                borderBottomColor: 'rgba(255,255,255,0.06)',
+              }}
+            />
+
+            {/* Zigzag torn edge */}
+            <View
+              style={{
+                position: 'absolute' as const,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 6,
+                backgroundColor: '#040608',
+              }}
+            >
+              <View style={{ flexDirection: 'row' as const, position: 'absolute' as const, top: -3, left: 0, right: 0 }}>
                 {Array.from({ length: 11 }).map((_, i) => (
                   <View
                     key={i}
                     style={{
-                      position: 'absolute',
-                      left: i * 6,
-                      top: 0,
-                      bottom: 0,
-                      width: 0.5,
-                      backgroundColor: isLight ? '#000' : '#FFF',
+                      width: 0,
+                      height: 0,
+                      borderLeftWidth: 3,
+                      borderRightWidth: 3,
+                      borderTopWidth: 5,
+                      borderLeftColor: 'transparent',
+                      borderRightColor: 'transparent',
+                      borderTopColor: '#040608',
                     }}
                   />
                 ))}
               </View>
+            </View>
 
-              {/* Sport name */}
-              <View style={{ alignItems: 'center', paddingTop: 10 }}>
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: '900',
-                    letterSpacing: 1,
-                    color: textColor,
-                  }}
-                >
-                  {sport}
-                </Text>
-              </View>
+            {/* Sport name */}
+            <View style={{ alignItems: 'center' as const, paddingTop: 12 }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: '800',
+                  letterSpacing: 1,
+                  color: sportNameColor,
+                }}
+              >
+                {sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport}
+              </Text>
+            </View>
 
-              {/* Game count */}
-              <View style={{ alignItems: 'center', marginTop: 2 }}>
-                <Text
-                  style={{
-                    fontSize: 22,
-                    fontWeight: '900',
-                    color: textColor,
-                    fontVariant: ['tabular-nums'],
-                  }}
-                >
-                  {gameCount}
-                </Text>
-              </View>
+            {/* Game count */}
+            <View style={{ alignItems: 'center' as const, marginTop: 2 }}>
+              <Text
+                style={{
+                  fontSize: 22,
+                  fontWeight: '900',
+                  color: isSelected ? '#FFFFFF' : '#C8D4E0',
+                  fontVariant: ['tabular-nums'] as any,
+                }}
+              >
+                {gameCount}
+              </Text>
+            </View>
 
-              {/* ADMIT ONE */}
-              <View style={{ alignItems: 'center', marginTop: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 6,
-                    fontWeight: '900',
-                    letterSpacing: 2.5,
-                    color: '#FFFFFF',
-                  }}
-                >
-                  ADMIT ONE
-                </Text>
-              </View>
+            {/* ADMIT ONE */}
+            <View style={{ position: 'absolute' as const, bottom: 10, left: 0, right: 0, alignItems: 'center' as const }}>
+              <Text
+                style={{
+                  fontSize: 5,
+                  fontWeight: '900',
+                  letterSpacing: 2,
+                  color: isSelected ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.2)',
+                }}
+              >
+                ADMIT ONE
+              </Text>
             </View>
           </View>
         </Animated.View>
@@ -572,7 +550,7 @@ export const SportCard = memo(function SportCard({ sport, gameCount, index = 0, 
 });
 
 // Ticket color helper — used by index.tsx for Today's Games bar
-export const TICKET_COLORS = ['#E8936A', '#1C2A3A', '#C2C4C8'];
+export const TICKET_COLORS = ['#8B0A1F', '#8B0A1F', '#8B0A1F'];
 export const TICKET_COLOR_MAP: Record<string, number> = {
   NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, NCAAF: 0, NCAAB: 1,
 };

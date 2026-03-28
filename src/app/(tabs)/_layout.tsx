@@ -72,15 +72,65 @@ export default function TabLayout() {
           options={{
             title: 'My Arena',
             tabBarIcon: ({ focused }) => (
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                {/* Radar rings */}
-                <Circle cx={12} cy={12} r={10} stroke="#FFFFFF" strokeWidth={focused ? 1.8 : 1.2} fill="none" opacity={0.2} />
-                <Circle cx={12} cy={12} r={6} stroke="#FFFFFF" strokeWidth={focused ? 1.8 : 1.2} fill="none" opacity={0.35} />
-                <Circle cx={12} cy={12} r={2} fill="#FFFFFF" opacity={focused ? 0.9 : 0.6} />
-                {/* Sweep line */}
-                <Line x1={12} y1={2} x2={12} y2={12} stroke="#FFFFFF" strokeWidth={focused ? 2 : 1.2} strokeLinecap="round" opacity={0.7} />
-                {/* Signal dot */}
-                <Circle cx={15} cy={7} r={1.5} fill="#FFFFFF" opacity={focused ? 0.8 : 0.5} />
+              <Svg width={26} height={26} viewBox="0 0 32 32" fill="none">
+                {/* Crown rim */}
+                <Path
+                  d="M5 23h22"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                />
+                <Path
+                  d="M5 23L4 14l4 3"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <Path
+                  d="M27 23l1-9-4 3"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* Left fleur */}
+                <Path
+                  d="M8 17c0-3 2-5 2-5s2 2 2 5"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.2}
+                  strokeLinecap="round"
+                />
+                <Circle cx={10} cy={11.5} r={0.8} fill="#FFFFFF" opacity={0.5} />
+                {/* Center fleur — tallest */}
+                <Path
+                  d="M13.5 17c0-4 2.5-8 2.5-8s2.5 4 2.5 8"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.3}
+                  strokeLinecap="round"
+                />
+                <Circle cx={16} cy={8.5} r={1} fill="#FFFFFF" opacity={0.6} />
+                {/* Right fleur */}
+                <Path
+                  d="M20 17c0-3 2-5 2-5s2 2 2 5"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.2}
+                  strokeLinecap="round"
+                />
+                <Circle cx={22} cy={11.5} r={0.8} fill="#FFFFFF" opacity={0.5} />
+                {/* Crown band */}
+                <Path
+                  d="M5 23h22v3H5z"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+                {/* Band cross details */}
+                <Line x1={11} y1={23} x2={11} y2={26} stroke="#FFFFFF" strokeWidth={0.5} opacity={0.25} />
+                <Line x1={16} y1={23} x2={16} y2={26} stroke="#FFFFFF" strokeWidth={0.5} opacity={0.25} />
+                <Line x1={21} y1={23} x2={21} y2={26} stroke="#FFFFFF" strokeWidth={0.5} opacity={0.25} />
               </Svg>
             ),
           }}

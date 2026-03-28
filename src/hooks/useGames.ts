@@ -5,10 +5,10 @@ import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 
 // Polling intervals for different contexts
-const LIVE_POLLING_INTERVAL = 6000; // 6 seconds — matches SSE interval, fallback when SSE drops
-const DEFAULT_POLLING_INTERVAL = 60000; // 60 seconds — SSE handles live, this is just a safety net
-const STALE_TIME = 20000; // 20 seconds — data feels fresher
-const GAME_DETAIL_STALE_TIME = 8000; // 8 seconds — game detail stays very fresh
+const LIVE_POLLING_INTERVAL = 30000; // 30 seconds — SSE handles real-time, this is a fallback
+const DEFAULT_POLLING_INTERVAL = 120000; // 2 minutes — no live games, minimal polling
+const STALE_TIME = 30000; // 30 seconds — prevents excessive refetches on tab focus
+const GAME_DETAIL_STALE_TIME = 15000; // 15 seconds — game detail
 
 // Prefetch news for a game's teams
 async function prefetchNewsForGame(queryClient: ReturnType<typeof useQueryClient>, game: GameWithPrediction) {

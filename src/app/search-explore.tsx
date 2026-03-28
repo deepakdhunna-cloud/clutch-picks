@@ -38,10 +38,12 @@ const SportCard = memo(function SportCard({ sport, count, onPress }: { sport: st
   const meta = SPORT_META[sport as Sport];
   const color = meta?.color ?? TEXT_MUTED;
   return (
-    <Pressable onPress={onPress} style={{ minWidth: 105, backgroundColor: GLASS, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: BORDER }}>
-      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: color, marginBottom: 8 }} />
-      <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE, marginBottom: 2 }}>{sport}</Text>
-      <Text style={{ fontSize: 10, color: TEXT_MUTED }}>{count} game{count !== 1 ? 's' : ''} today</Text>
+    <Pressable onPress={onPress} style={{ minWidth: 110, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+      <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: color, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport}</Text>
+      </View>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 }}>{sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport}</Text>
+      <Text style={{ fontSize: 10, color: '#6B7C94' }}>{count} game{count !== 1 ? 's' : ''} today</Text>
     </Pressable>
   );
 });
@@ -52,22 +54,40 @@ const GameBar = memo(function GameBar({ game, onPress }: { game: GameWithPredict
   const final = game.status === GameStatus.FINAL;
   const awayC = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport);
   const homeC = getTeamColors(game.homeTeam.abbreviation, game.sport as Sport);
+  const sportMeta = SPORT_META[game.sport as Sport];
+  const sportColor = sportMeta?.color ?? TEXT_MUTED;
   const timeStr = live ? null : final ? null : fmtTime(game.gameTime);
 
   return (
-    <Pressable onPress={onPress} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: awayC.primary, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 10, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>{game.awayTeam.abbreviation}</Text>
+    <Pressable onPress={onPress} style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, padding: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      {/* Sport color accent bar */}
+      <View style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: sportColor }} />
+      {/* Sport badge */}
+      <View style={{ backgroundColor: `${sportColor}20`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', minWidth: 42, marginLeft: 4 }}>
+        <Text style={{ fontSize: 10, fontWeight: '800', color: sportColor, letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
       </View>
-      <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUTED }}>vs</Text>
-      <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: homeC.primary, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 10, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>{game.homeTeam.abbreviation}</Text>
-      </View>
+      {/* Teams */}
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          {live ? <><LiveDot /><Text style={{ fontSize: 12, fontWeight: '600', color: LIVE_RED }}>LIVE</Text><Text style={{ fontSize: 12, color: TEXT_SECONDARY }}> · {game.sport}</Text></> : final ? <Text style={{ fontSize: 12, fontWeight: '600', color: TEXT_SECONDARY }}><Text style={{ color: TEXT_MUTED }}>FINAL</Text> · {game.sport}</Text> : <Text style={{ fontSize: 12, fontWeight: '600', color: TEXT_SECONDARY }}>{timeStr} · {game.sport}</Text>}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: awayC.primary, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: WHITE }}>{game.awayTeam.abbreviation}</Text>
+          </View>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>{game.awayTeam.abbreviation}</Text>
+          <Text style={{ fontSize: 9, color: TEXT_MUTED }}>@</Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>{game.homeTeam.abbreviation}</Text>
+          <View style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: homeC.primary, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: WHITE }}>{game.homeTeam.abbreviation}</Text>
+          </View>
         </View>
-        {game.venue ? <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 1 }} numberOfLines={1}>{game.venue}</Text> : <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 1 }}>{game.awayTeam.city} at {game.homeTeam.city}</Text>}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          {live ? (
+            <><LiveDot /><Text style={{ fontSize: 11, fontWeight: '700', color: LIVE_RED }}>LIVE</Text><Text style={{ fontSize: 10, color: TEXT_MUTED }}>{game.quarter ?? null}</Text></>
+          ) : final ? (
+            <><View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUTED }}>FINAL</Text></View><Text style={{ fontSize: 11, color: TEXT_SECONDARY }}>{game.awayScore ?? 0} - {game.homeScore ?? 0}</Text></>
+          ) : (
+            <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{timeStr}</Text>
+          )}
+        </View>
       </View>
       <ChevronRight size={16} color={TEXT_MUTED} />
     </Pressable>
@@ -86,11 +106,15 @@ export default function SearchExploreScreen() {
   const [sportFilter, setSportFilter] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const onChangeText = useCallback((text: string) => {
+  const onChangeText = useCallback((text: string, instant?: boolean) => {
     setQuery(text);
     setSportFilter(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedQuery(text), 200);
+    if (instant) {
+      setDebouncedQuery(text);
+    } else {
+      debounceRef.current = setTimeout(() => setDebouncedQuery(text), 200);
+    }
   }, []);
 
   useEffect(() => {
@@ -144,13 +168,13 @@ export default function SearchExploreScreen() {
     if (!allGames) return [];
     if (sportFilter) return allGames.filter(g => g.sport === sportFilter);
     if (!debouncedQuery.trim()) return [];
-    const q = debouncedQuery.toLowerCase().trim();
-    return allGames.filter(g =>
-      g.homeTeam.name.toLowerCase().includes(q) || g.homeTeam.abbreviation.toLowerCase().includes(q) ||
-      g.homeTeam.city.toLowerCase().includes(q) || g.awayTeam.name.toLowerCase().includes(q) ||
-      g.awayTeam.abbreviation.toLowerCase().includes(q) || g.awayTeam.city.toLowerCase().includes(q) ||
-      g.sport.toLowerCase().includes(q) || (g.venue ?? '').toLowerCase().includes(q)
-    );
+    // Split query into words, filter out "vs"/"at"/"@", match ANY word against game fields
+    const words = debouncedQuery.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0 && !['vs', 'at', '@', '-'].includes(w));
+    if (words.length === 0) return [];
+    return allGames.filter(g => {
+      const haystack = `${g.homeTeam.name} ${g.homeTeam.abbreviation} ${g.homeTeam.city} ${g.awayTeam.name} ${g.awayTeam.abbreviation} ${g.awayTeam.city} ${g.sport} ${g.venue ?? ''}`.toLowerCase();
+      return words.some(w => haystack.includes(w));
+    });
   }, [debouncedQuery, sportFilter, allGames]);
 
   const showResults = sportFilter !== null || debouncedQuery.trim().length > 0;
@@ -172,7 +196,7 @@ export default function SearchExploreScreen() {
         <Pressable onPress={goBack} hitSlop={12}><ArrowLeft size={22} color={WHITE} strokeWidth={2} /></Pressable>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: GLASS, borderRadius: 14, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, paddingVertical: 10 }}>
           <Search size={16} color={TEXT_MUTED} strokeWidth={2} style={{ marginRight: 10 }} />
-          <TextInput ref={inputRef} style={{ flex: 1, fontSize: 15, fontWeight: '500', color: WHITE }} placeholder="Search games, teams, sports..." placeholderTextColor={TEXT_MUTED} autoFocus keyboardAppearance="dark" selectionColor={MAROON_DIM} returnKeyType="search" value={query} onChangeText={onChangeText} />
+          <TextInput ref={inputRef} style={{ flex: 1, fontSize: 15, fontWeight: '500', color: WHITE }} placeholder="Search games, teams, sports..." placeholderTextColor={TEXT_MUTED} autoFocus keyboardAppearance="dark" selectionColor={MAROON_DIM} returnKeyType="done" value={query} onChangeText={onChangeText} onSubmitEditing={() => Keyboard.dismiss()} />
           {query.length > 0 ? <Pressable onPress={() => { setQuery(''); setDebouncedQuery(''); setSportFilter(null); }} hitSlop={8}><X size={16} color={TEXT_MUTED} /></Pressable> : null}
         </View>
         <Pressable onPress={goBack}><Text style={{ fontSize: 14, fontWeight: '600', color: TEAL }}>Cancel</Text></Pressable>
@@ -189,9 +213,9 @@ export default function SearchExploreScreen() {
                   <Pressable onPress={clearRecents}><Text style={{ fontSize: 10, fontWeight: '700', color: MAROON }}>Clear</Text></Pressable>
                 </View>
                 {recentSearches.map(term => (
-                  <Pressable key={term} onPress={() => onChangeText(term)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 8 }}>
+                  <Pressable key={term} onPress={() => onChangeText(term, true)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 8 }}>
                     <Clock size={14} color={TEXT_MUTED} />
-                    <Text style={{ flex: 1, fontSize: 14, color: TEXT_SECONDARY, marginLeft: 10 }}>{term}</Text>
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: TEXT_SECONDARY, marginLeft: 10 }}>{term}</Text>
                     <Pressable onPress={() => removeRecent(term)} hitSlop={8}><X size={14} color={TEXT_MUTED} /></Pressable>
                   </Pressable>
                 ))}

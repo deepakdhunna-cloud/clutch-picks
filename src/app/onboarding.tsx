@@ -1,132 +1,130 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, Pressable, Dimensions, StyleSheet, FlatList,
+  View, Text, Pressable, Dimensions, TextInput, Image, Alert,
+  ActionSheetIOS, Platform, ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSpring, Easing, interpolate, withSequence } from 'react-native-reanimated';
+import Animated, {
+  FadeIn, FadeInDown, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft,
+  useSharedValue, useAnimatedStyle,
+  withSpring, withTiming, withSequence, withRepeat, withDelay,
+  interpolate, Easing,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Rect, Text as SvgText, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
 import * as Haptics from 'expo-haptics';
+import { pickImage, takePhoto } from '@/lib/file-picker';
+import { uploadFile } from '@/lib/upload';
+import { api } from '@/lib/api/api';
 
 const { width: W } = Dimensions.get('window');
-const TEAL = '#7A9DB8';
-const TEAL_DARK = '#5A7A8A';
-const CORAL = '#E8936A';
-const GREEN = '#4ADE80';
+
 const BG = '#040608';
+const MAROON = '#8B0A1F';
+const TEAL = '#7A9DB8';
+const GREEN = '#4ADE80';
+const RED = '#DC2626';
+const ERROR = '#EF4444';
+const WHITE = '#FFFFFF';
+const TEXT_SEC = '#A1B3C9';
+const TEXT_MUT = '#6B7C94';
+const GLASS = 'rgba(255,255,255,0.02)';
+const BORDER = 'rgba(255,255,255,0.06)';
 
-// ─── SLIDE 1: Live Score Card ────────────────────────────────
-function LiveCardDemo() {
-  const [homeScore, setHomeScore] = useState(104);
-  const [awayScore, setAwayScore] = useState(98);
-  const [flashTeam, setFlashTeam] = useState<'home' | 'away' | null>(null);
-  const pulseAnim = useSharedValue(0.4);
-
-  useEffect(() => {
-    pulseAnim.value = withRepeat(withTiming(1, { duration: 1000 }), -1, true);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const who = Math.random() > 0.45 ? 'home' : 'away';
-      const pts = Math.random() > 0.6 ? 3 : 2;
-      if (who === 'home') setHomeScore(s => s + pts);
-      else setAwayScore(s => s + pts);
-      setFlashTeam(who);
-      setTimeout(() => setFlashTeam(null), 600);
-    }, 2800);
-    return () => clearInterval(t);
-  }, []);
-
-  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseAnim.value }));
-  const homeWinning = homeScore > awayScore;
-  const awayWinning = awayScore > homeScore;
-  const gswColors = getTeamColors('GSW', Sport.NBA);
-  const lalColors = getTeamColors('LAL', Sport.NBA);
-  const jerseyType = sportEnumToJersey('NBA');
-
+// ─── PROGRESS BAR ─────────────────────────────────────────────
+function ProgressBar({ step }: { step: number }) {
   return (
-    <View style={{ alignItems: 'center' }}>
-      {/* Ambient glow */}
-      <View style={{ position: 'absolute', top: -20, width: 200, height: 120, borderRadius: 100, backgroundColor: `${CORAL}12`, transform: [{ scaleX: 1.5 }] }} />
-
-      <View style={{
-        width: 260, borderRadius: 16, overflow: 'hidden',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-      }}>
-        <LinearGradient colors={['rgba(4,5,10,0.88)', 'rgba(4,5,10,0.92)']} style={StyleSheet.absoluteFillObject} />
-        {/* Team color bleeds */}
-        <LinearGradient colors={[`${gswColors.primary}99`, `${gswColors.primary}44`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.8 }} style={StyleSheet.absoluteFillObject} />
-        <LinearGradient colors={[`${lalColors.primary}99`, `${lalColors.primary}44`, 'transparent']} start={{ x: 1, y: 1 }} end={{ x: 0.3, y: 0.2 }} style={StyleSheet.absoluteFillObject} />
-        <LinearGradient colors={['transparent', 'rgba(2,3,8,0.72)', 'transparent']} style={StyleSheet.absoluteFillObject} />
-
-        <View style={{ zIndex: 1 }}>
-          {/* LIVE header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Animated.View style={[{ width: 5, height: 5, borderRadius: 3, backgroundColor: CORAL }, pulseStyle]} />
-              <Text style={{ color: CORAL, fontSize: 9, fontWeight: '800', letterSpacing: 1.5 }}>LIVE</Text>
-            </View>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 8, fontWeight: '700' }}>NBA</Text>
-            </View>
-          </View>
-
-          {/* Teams */}
-          <View style={{ paddingHorizontal: 12, paddingVertical: 4, gap: 6 }}>
-            {/* Warriors */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <JerseyIcon teamCode="GSW" primaryColor={gswColors.primary} secondaryColor={gswColors.secondary} size={26} sport={jerseyType} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: awayWinning ? '#FFF' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: awayWinning ? '800' : '600' }}>Warriors</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 8 }}>36-28</Text>
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: flashTeam === 'away' ? GREEN : awayWinning ? '#FFF' : 'rgba(255,255,255,0.35)' }}>{awayScore}</Text>
-            </View>
-            {/* Lakers */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <JerseyIcon teamCode="LAL" primaryColor={lalColors.primary} secondaryColor={lalColors.secondary} size={26} sport={jerseyType} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: homeWinning ? '#FFF' : 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: homeWinning ? '800' : '600' }}>Lakers</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 8 }}>38-26</Text>
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: flashTeam === 'home' ? GREEN : homeWinning ? '#FFF' : 'rgba(255,255,255,0.35)' }}>{homeScore}</Text>
-            </View>
-          </View>
-
-          {/* Bottom */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '700' }}>Q3</Text>
-              </View>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '700' }}>5:42</Text>
-            </View>
-            <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 8 }}>ESPN</Text>
-          </View>
+    <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 40, paddingTop: 16 }}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <View key={i} style={{
+          flex: 1, height: 3, borderRadius: 2, overflow: 'hidden',
+          backgroundColor: i > step ? 'rgba(255,255,255,0.06)' : undefined,
+        }}>
+          {i <= step ? (
+            <LinearGradient colors={i < step ? [MAROON, TEAL] : [MAROON, MAROON]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, borderRadius: 2 }} />
+          ) : null}
         </View>
-      </View>
-
-      {/* Stacked card depth illusion */}
-      <View style={{ position: 'absolute', top: 8, left: 20, right: 20, bottom: -6, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', zIndex: -1, transform: [{ scale: 0.95 }] }} />
+      ))}
     </View>
   );
 }
 
-// ─── SLIDE 2: Jersey Pick ────────────────────────────────────
-function JerseyPickDemo() {
-  const [picked, setPicked] = useState<'home' | 'away' | null>(null);
+// ─── PULSING DOT ──────────────────────────────────────────────
+function PulsingDot({ color = RED, size = 6 }: { color?: string; size?: number }) {
+  const op = useSharedValue(1);
+  useEffect(() => {
+    op.value = withRepeat(withTiming(0.3, { duration: 1000, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const s = useAnimatedStyle(() => ({ opacity: op.value }));
+  return <Animated.View style={[s, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]} />;
+}
+
+// ─── STEP 0: WELCOME ─────────────────────────────────────────
+function WelcomeStep({ onContinue }: { onContinue: () => void }) {
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Grid background */}
+      <View style={[StyleSheet.absoluteFillObject, { opacity: 0.4 }]} pointerEvents="none">
+        <Svg width={W} height={800} style={StyleSheet.absoluteFillObject}>
+          {Array.from({ length: 20 }).map((_, i) => (
+            <Path key={`h${i}`} d={`M0 ${i * 20} L${W} ${i * 20}`} stroke="rgba(255,255,255,0.03)" strokeWidth={0.5} />
+          ))}
+          {Array.from({ length: 20 }).map((_, i) => (
+            <Path key={`v${i}`} d={`M${i * 20} 0 L${i * 20} 800`} stroke="rgba(255,255,255,0.03)" strokeWidth={0.5} />
+          ))}
+        </Svg>
+      </View>
+
+      {/* Ambient glows */}
+      <View style={{ position: 'absolute', top: '25%', alignSelf: 'center', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(139,10,31,0.08)' }} pointerEvents="none" />
+      <View style={{ position: 'absolute', top: '35%', right: '10%', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(122,157,184,0.04)' }} pointerEvents="none" />
+
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
+        {/* Ghost jerseys */}
+        <Animated.View entering={FadeIn.delay(200).duration(800)} style={{ flexDirection: 'row', gap: 40, marginBottom: 30, opacity: 0.15 }}>
+          <View style={{ width: 60, height: 68, borderRadius: 16, backgroundColor: '#552583', transform: [{ rotate: '-8deg' }], alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: WHITE }}>LAL</Text>
+          </View>
+          <View style={{ width: 60, height: 68, borderRadius: 16, backgroundColor: '#007A33', transform: [{ rotate: '8deg' }], alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: WHITE }}>BOS</Text>
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeIn.delay(400).duration(600)}>
+          <Image source={require('@/assets/clutch-logo-horizontal.png')} style={{ width: 280, height: 280 * (523 / 3352) }} resizeMode="contain" />
+        </Animated.View>
+
+        <Animated.Text entering={FadeInDown.delay(700).duration(500)} style={{ fontSize: 14, color: TEXT_MUT, marginTop: 16 }}>
+          Your sports prediction command center
+        </Animated.Text>
+      </View>
+
+      <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
+        <Animated.View entering={FadeInDown.delay(1000).duration(500)}>
+          <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+            <LinearGradient colors={[MAROON, '#6A0818']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Let's Go</Text>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+// ─── STEP 1: PICK YOUR WINNER ─────────────────────────────────
+function PickStep({ picked, setPicked, onContinue, onSkip }: {
+  picked: 'home' | 'away' | null; setPicked: (v: 'home' | 'away') => void; onContinue: () => void; onSkip: () => void;
+}) {
   const homeScale = useSharedValue(1);
   const awayScale = useSharedValue(1);
-  const [cycle, setCycle] = useState(0);
-
-  const detColors = getTeamColors('DET', Sport.NBA);
-  const phiColors = getTeamColors('PHI', Sport.NBA);
+  const lalColors = getTeamColors('LAL', Sport.NBA);
+  const bosColors = getTeamColors('BOS', Sport.NBA);
   const jerseyType = sportEnumToJersey('NBA');
 
   const doPick = useCallback((team: 'home' | 'away') => {
@@ -135,316 +133,621 @@ function JerseyPickDemo() {
     const target = team === 'home' ? homeScale : awayScale;
     const other = team === 'home' ? awayScale : homeScale;
     target.value = withSequence(withSpring(0.88, { damping: 15 }), withSpring(1.05, { damping: 12 }), withSpring(1, { damping: 10 }));
-    other.value = withSpring(0.9, { damping: 12 });
+    other.value = withSpring(0.85, { damping: 12 });
   }, []);
-
-  useEffect(() => {
-    const t: ReturnType<typeof setTimeout>[] = [];
-    t.push(setTimeout(() => doPick('home'), 1500));
-    t.push(setTimeout(() => doPick('away'), 4000));
-    t.push(setTimeout(() => doPick('home'), 6500));
-    t.push(setTimeout(() => { homeScale.value = withSpring(1); awayScale.value = withSpring(1); setPicked(null); setCycle(c => c + 1); }, 9000));
-    return () => t.forEach(clearTimeout);
-  }, [cycle]);
 
   const homeStyle = useAnimatedStyle(() => ({ transform: [{ scale: homeScale.value }] }));
   const awayStyle = useAnimatedStyle(() => ({ transform: [{ scale: awayScale.value }] }));
 
   return (
-    <View style={{ width: 290, overflow: 'visible' }}>
-      {/* Spotlight glows */}
-      <View style={{ position: 'absolute', top: -30, left: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: picked === 'home' ? `${CORAL}18` : `${detColors.primary}08`, zIndex: -1 }} pointerEvents="none" />
-      <View style={{ position: 'absolute', top: -30, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: picked === 'away' ? `${CORAL}18` : `${phiColors.primary}08`, zIndex: -1 }} pointerEvents="none" />
+    <View style={{ flex: 1 }}>
+      <ProgressBar step={1} />
+      <Pressable onPress={onSkip} style={{ position: 'absolute', top: 16, right: 24, zIndex: 10, padding: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
+      </Pressable>
 
-      {/* Team names */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 4 }}>
-        <View style={{ opacity: picked === 'away' ? 0.4 : 1 }}>
-          <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFF' }}>Detroit</Text>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>46-18</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end', opacity: picked === 'home' ? 0.4 : 1 }}>
-          <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFF' }}>Philadelphia</Text>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>35-30</Text>
-        </View>
-      </View>
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 36 }}>
+        <Animated.Text entering={FadeInDown.duration(400)} style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'center', marginBottom: 6 }}>
+          Pick Your Winner
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(100).duration(400)} style={{ fontSize: 13, color: TEXT_MUT, textAlign: 'center', marginBottom: 28 }}>
+          Tap the jersey you think wins tonight
+        </Animated.Text>
 
-      {/* Jerseys + score */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <Pressable onPress={() => doPick('home')}>
-          <Animated.View style={[homeStyle, { alignItems: 'center', opacity: picked === 'away' ? 0.5 : 1 }]}>
-            <View style={picked === 'home' ? { shadowColor: CORAL, shadowOpacity: 0.6, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : { shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}>
-              <JerseyIcon teamCode="DET" primaryColor={detColors.primary} secondaryColor={detColors.secondary} size={76} sport={jerseyType} />
+        {/* Matchup card */}
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={{ width: '100%', borderRadius: 20, overflow: 'hidden', backgroundColor: GLASS, borderWidth: 1, borderColor: BORDER }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14 }}>
+            <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: WHITE }}>NBA</Text>
             </View>
-            {picked === 'home' ? (
-              <View style={{ position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11, backgroundColor: CORAL, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: BG }}>
-                <Text style={{ fontSize: 12, fontWeight: '900', color: '#000' }}>✓</Text>
-              </View>
-            ) : null}
-          </Animated.View>
-        </Pressable>
-
-        <View style={{ alignItems: 'center', paddingBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
-            <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFF' }}>0</Text>
-            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)' }}>–</Text>
-            <Text style={{ fontSize: 28, fontWeight: '900', color: 'rgba(255,255,255,0.6)' }}>0</Text>
+            <Text style={{ fontSize: 10, color: TEXT_MUT }}>Tonight 7:00 PM</Text>
           </View>
-          <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.25)', fontWeight: '700', letterSpacing: 1.5 }}>TONIGHT 7:00</Text>
-        </View>
 
-        <Pressable onPress={() => doPick('away')}>
-          <Animated.View style={[awayStyle, { alignItems: 'center', opacity: picked === 'home' ? 0.5 : 1 }]}>
-            <View style={picked === 'away' ? { shadowColor: CORAL, shadowOpacity: 0.6, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : { shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}>
-              <JerseyIcon teamCode="PHI" primaryColor={phiColors.primary} secondaryColor={phiColors.secondary} size={76} sport={jerseyType} />
-            </View>
-            {picked === 'away' ? (
-              <View style={{ position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11, backgroundColor: CORAL, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: BG }}>
-                <Text style={{ fontSize: 12, fontWeight: '900', color: '#000' }}>✓</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 }}>
+            <Pressable onPress={() => doPick('home')}>
+              <Animated.View style={[homeStyle, { alignItems: 'center', opacity: picked === 'away' ? 0.35 : 1 }]}>
+                <View style={picked === 'home' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
+                  <JerseyIcon teamCode="LAL" primaryColor={lalColors.primary} secondaryColor={lalColors.secondary} size={86} sport={jerseyType} />
+                </View>
+                {picked === 'home' ? (
+                  <View style={{ position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11, backgroundColor: MAROON, borderWidth: 2.5, borderColor: BG, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: WHITE }}>✓</Text>
+                  </View>
+                ) : null}
+                <Text style={{ fontSize: 13, fontWeight: '700', color: picked === 'away' ? 'rgba(255,255,255,0.3)' : WHITE, marginTop: 6 }}>Lakers</Text>
+                <Text style={{ fontSize: 10, color: TEXT_MUT }}>38-26</Text>
+              </Animated.View>
+            </Pressable>
+
+            <View style={{ alignItems: 'center', paddingBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: WHITE }}>0</Text>
+                <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.08)' }}>–</Text>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: WHITE }}>0</Text>
               </View>
-            ) : null}
+              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.25)', letterSpacing: 2, marginTop: 2 }}>SCHEDULED</Text>
+            </View>
+
+            <Pressable onPress={() => doPick('away')}>
+              <Animated.View style={[awayStyle, { alignItems: 'center', opacity: picked === 'home' ? 0.35 : 1 }]}>
+                <View style={picked === 'away' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
+                  <JerseyIcon teamCode="BOS" primaryColor={bosColors.primary} secondaryColor={bosColors.secondary} size={86} sport={jerseyType} />
+                </View>
+                {picked === 'away' ? (
+                  <View style={{ position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11, backgroundColor: MAROON, borderWidth: 2.5, borderColor: BG, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: WHITE }}>✓</Text>
+                  </View>
+                ) : null}
+                <Text style={{ fontSize: 13, fontWeight: '700', color: picked === 'home' ? 'rgba(255,255,255,0.3)' : WHITE, marginTop: 6 }}>Celtics</Text>
+                <Text style={{ fontSize: 10, color: TEXT_MUT }}>42-22</Text>
+              </Animated.View>
+            </Pressable>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
+              <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUT }}>57% confidence</Text>
+            </View>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
+              <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUT }}>BOS -4.5</Text>
+            </View>
+          </View>
+        </Animated.View>
+
+        {picked ? (
+          <Animated.View entering={FadeInDown.duration(400)} style={{ alignItems: 'center', marginTop: 20 }}>
+            <Text style={{ fontSize: 13, color: TEXT_SEC }}>Nice pick! That's all it takes.</Text>
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)', marginTop: 8 }}>Tap the other jersey to switch</Text>
           </Animated.View>
-        </Pressable>
+        ) : null}
       </View>
 
-      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 8 }}>
-        {picked ? 'Tap the other jersey to switch' : 'Tap a jersey to pick the winner'}
-      </Text>
+      <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
+        <Pressable onPress={onContinue} disabled={!picked} style={({ pressed }) => ({ opacity: !picked ? 0.3 : pressed ? 0.9 : 1, transform: [{ scale: pressed && picked ? 0.98 : 1 }] })}>
+          <LinearGradient
+            colors={picked ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']}
+            style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: '800', color: picked ? WHITE : 'rgba(255,255,255,0.15)', letterSpacing: 0.5 }}>Continue</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-// ─── SLIDE 3: AI Analysis ────────────────────────────────────
-function AIDemo() {
-  const [visible, setVisible] = useState(0);
-  const [cycle, setCycle] = useState(0);
-  const factors = [
-    { name: 'Home Court', home: 0.7, away: 0.3, edge: 'home' as const },
-    { name: 'Recent Form', home: 0.4, away: 0.8, edge: 'away' as const },
-    { name: 'Head to Head', home: 0.6, away: 0.5, edge: 'home' as const },
-    { name: 'Rest Days', home: 0.5, away: 0.7, edge: 'away' as const },
-    { name: 'Momentum', home: 0.8, away: 0.4, edge: 'home' as const },
-  ];
-
-  useEffect(() => {
-    setVisible(0);
-    const t: ReturnType<typeof setTimeout>[] = [];
-    factors.forEach((_, i) => t.push(setTimeout(() => setVisible(i + 1), 600 + i * 450)));
-    t.push(setTimeout(() => setCycle(c => c + 1), 600 + factors.length * 450 + 2000));
-    return () => t.forEach(clearTimeout);
-  }, [cycle]);
-
-  const confPct = Math.round((visible / factors.length) * 73 + 27);
+// ─── STEP 2: AI PREDICTIONS ───────────────────────────────────
+function AIPredictionsStep({ onContinue, onSkip }: { onContinue: () => void; onSkip: () => void }) {
+  const bosColors = getTeamColors('BOS', Sport.NBA);
+  const jerseyType = sportEnumToJersey('NBA');
 
   return (
-    <View style={{ width: 260 }}>
-      {/* Confidence meter */}
-      <View style={{ marginBottom: 14, padding: 12, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: 2 }}>CONFIDENCE</Text>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: CORAL }}>{confPct}%</Text>
+    <View style={{ flex: 1 }}>
+      <ProgressBar step={2} />
+      <Pressable onPress={onSkip} style={{ position: 'absolute', top: 16, right: 24, zIndex: 10, padding: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
+      </Pressable>
+
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 36 }}>
+        <Animated.Text entering={FadeInDown.duration(400)} style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'center', marginBottom: 6 }}>
+          AI-Powered Picks
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(100).duration(400)} style={{ fontSize: 13, color: TEXT_MUT, textAlign: 'center', marginBottom: 28 }}>
+          Every game analyzed by 20+ prediction factors
+        </Animated.Text>
+
+        {/* Clutch Pick card */}
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={{ width: '100%' }}>
+          <View style={{ borderRadius: 22, overflow: 'hidden', borderWidth: 3, borderColor: 'rgba(255,255,255,0.12)' }}>
+            <LinearGradient colors={[MAROON, '#5A7A8A', MAROON, TEAL, MAROON]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { opacity: 0.3 }]} />
+            <View style={{ margin: 3, borderRadius: 18, overflow: 'hidden', backgroundColor: '#0A0E14' }}>
+              <View style={{ padding: 18 }}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <View style={{ backgroundColor: MAROON, width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', color: WHITE }}>#1</Text>
+                  </View>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
+                </View>
+
+                {/* Team row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                  <JerseyIcon teamCode="BOS" primaryColor={bosColors.primary} secondaryColor={bosColors.secondary} size={52} sport={jerseyType} />
+                  <View>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: WHITE }}>Boston Celtics</Text>
+                    <Text style={{ fontSize: 11, color: TEXT_MUT, marginTop: 2 }}>vs LAL Lakers</Text>
+                  </View>
+                </View>
+
+                {/* Confidence */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>CONFIDENCE</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: WHITE }}>57%</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 3, height: 5, marginBottom: 16 }}>
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <View key={i} style={{ flex: 1, borderRadius: 2, overflow: 'hidden' }}>
+                      {i < 6 ? (
+                        <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, borderRadius: 2 }} />
+                      ) : (
+                        <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 2 }} />
+                      )}
+                    </View>
+                  ))}
+                </View>
+
+                {/* Stats */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: BORDER }}>
+                    <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1 }}>EDGE</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, marginTop: 2 }}>6/10</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: BORDER }}>
+                    <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1 }}>VALUE</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: TEAL, marginTop: 2 }}>Fair</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        <Animated.Text entering={FadeInDown.delay(500).duration(400)} style={{ fontSize: 12, color: TEXT_SEC, textAlign: 'center', marginTop: 20, lineHeight: 18 }}>
+          Tap any pick for edge rating, win probability, and full analysis.
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(600).duration(400)} style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', marginTop: 12 }}>
+          For entertainment only. Not gambling advice.
+        </Animated.Text>
+      </View>
+
+      <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
+        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+          <LinearGradient colors={[MAROON, '#6A0818']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── STEP 3: MY ARENA ────────────────────────────────────────
+function ArenaStep({ subPage, onContinue, onSkip }: { subPage: number; onContinue: () => void; onSkip: () => void }) {
+  const labels = ['Game Day', 'Prep Mode', 'Review'];
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ProgressBar step={3} />
+      <Pressable onPress={onSkip} style={{ position: 'absolute', top: 16, right: 24, zIndex: 10, padding: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
+      </Pressable>
+
+      <View style={{ flex: 1, paddingTop: 28 }}>
+        <Animated.Text entering={FadeInDown.duration(400)} style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'center', marginBottom: 6 }}>
+          My Arena
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(100).duration(400)} style={{ fontSize: 13, color: TEXT_MUT, textAlign: 'center', marginBottom: 20 }}>
+          Your personalized sports command center
+        </Animated.Text>
+
+        {/* Segmented control */}
+        <View style={{ flexDirection: 'row', marginHorizontal: 24, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 3, marginBottom: 20, borderWidth: 1, borderColor: BORDER }}>
+          {labels.map((l, i) => (
+            <View key={l} style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: i === subPage ? MAROON : 'transparent', borderRadius: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: i === subPage ? WHITE : TEXT_MUT }}>{l}</Text>
+            </View>
+          ))}
         </View>
-        <View style={{ flexDirection: 'row', gap: 2 }}>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < Math.round((confPct / 100) * 12) ? CORAL : 'rgba(255,255,255,0.06)' }} />
+
+        {/* Sub-page content */}
+        <View style={{ flex: 1, paddingHorizontal: 24 }}>
+          {subPage === 0 ? <ArenaGameDay /> : null}
+          {subPage === 1 ? <ArenaPrepMode /> : null}
+          {subPage === 2 ? <ArenaReview /> : null}
+        </View>
+
+        {/* Page dots */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingBottom: 12 }}>
+          {[0, 1, 2].map(i => (
+            <View key={i} style={{ width: i === subPage ? 16 : 6, height: 6, borderRadius: 3, backgroundColor: i === subPage ? MAROON : 'rgba(255,255,255,0.12)' }} />
           ))}
         </View>
       </View>
 
-      {factors.map((f, i) => (
-        <View key={f.name} style={{
-          opacity: i < visible ? 1 : 0.1,
-          padding: 8, paddingHorizontal: 10, borderRadius: 10,
-          backgroundColor: i < visible ? 'rgba(255,255,255,0.03)' : 'transparent',
-          borderWidth: 1, borderColor: i < visible ? 'rgba(255,255,255,0.06)' : 'transparent',
-          marginBottom: 4,
-        }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFF' }}>{f.name}</Text>
-            {i < visible ? (
-              <View style={{ backgroundColor: f.edge === 'home' ? `${TEAL}15` : `${CORAL}15`, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 3 }}>
-                <Text style={{ fontSize: 8, fontWeight: '800', color: f.edge === 'home' ? TEAL : CORAL }}>{f.edge === 'home' ? 'HOME' : 'AWAY'}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={{ flexDirection: 'row', gap: 2, height: 3 }}>
-            <View style={{ flex: f.home, height: 3, borderRadius: 2, backgroundColor: i < visible ? TEAL : 'rgba(255,255,255,0.04)' }} />
-            <View style={{ flex: f.away, height: 3, borderRadius: 2, backgroundColor: i < visible ? CORAL : 'rgba(255,255,255,0.03)' }} />
-          </View>
-        </View>
-      ))}
-      <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.12)', textAlign: 'center', marginTop: 6 }}>20 factors analyzed per game with Pro</Text>
+      <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
+        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+          <LinearGradient
+            colors={subPage === 2 ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.06)']}
+            style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: subPage < 2 ? 1 : 0, borderColor: BORDER }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>
+              {subPage < 2 ? 'Swipe to see more →' : 'Continue'}
+            </Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-// ─── SLIDE 4: Profile Card ───────────────────────────────────
-function ProfileDemo() {
-  const [wins, setWins] = useState(0);
-  const [losses, setLosses] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [cycle, setCycle] = useState(0);
-
-  useEffect(() => {
-    setWins(0); setLosses(0); setStreak(0);
-    const picks = [true, true, false, true, true, true, false, true];
-    const t: ReturnType<typeof setTimeout>[] = [];
-    let w = 0, l = 0, s = 0;
-    picks.forEach((win, i) => {
-      t.push(setTimeout(() => {
-        if (win) { w++; s++; } else { l++; s = 0; }
-        setWins(w); setLosses(l); setStreak(s);
-      }, 800 + i * 600));
-    });
-    t.push(setTimeout(() => setCycle(c => c + 1), 800 + picks.length * 600 + 2000));
-    return () => t.forEach(clearTimeout);
-  }, [cycle]);
-
-  const total = wins + losses;
-  const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
-  const tier = pct >= 75 ? 'GOAT' : pct >= 65 ? 'MVP' : pct >= 55 ? 'ALL-STAR' : pct >= 45 ? 'STARTER' : 'ROOKIE';
-  const tierColor = pct >= 75 ? CORAL : pct >= 65 ? CORAL : pct >= 55 ? CORAL : pct >= 45 ? TEAL : '#8A8A90';
-
+function ArenaGameDay() {
   return (
-    <View style={{ width: 240 }}>
-      <View style={{ position: 'absolute', top: '30%', alignSelf: 'center', width: 160, height: 100, borderRadius: 80, backgroundColor: `${tierColor}15`, transform: [{ scaleX: 1.3 }] }} />
-      <View style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: `${tierColor}50`, backgroundColor: 'rgba(8,6,16,0.95)', padding: 16 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <View style={{ paddingHorizontal: 10, paddingVertical: 3, borderRadius: 5, backgroundColor: `${tierColor}20`, borderWidth: 1, borderColor: `${tierColor}30` }}>
-            <Text style={{ fontSize: 7, fontWeight: '900', color: tierColor, letterSpacing: 2 }}>{tier}</Text>
+    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <PulsingDot />
+        <Text style={{ fontSize: 9, fontWeight: '700', color: RED, letterSpacing: 1.5 }}>YOUR LIVE GAMES</Text>
+      </View>
+      <Text style={{ fontSize: 12, color: TEXT_SEC, marginBottom: 8 }}>Track every game you care about in real time</Text>
+
+      {/* Mock live card */}
+      <View style={{ backgroundColor: GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(220,38,38,0.15)' }}>
+        <LinearGradient colors={['rgba(220,38,38,0.06)', 'transparent']} style={[StyleSheet.absoluteFill, { borderRadius: 16 }]} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+          <PulsingDot size={5} />
+          <Text style={{ fontSize: 10, fontWeight: '700', color: RED }}>LIVE · Q3 5:42</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: WHITE }}>BOS</Text>
+            <Text style={{ fontSize: 24, fontWeight: '900', color: WHITE }}>67</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: tierColor }}>{pct}</Text>
-            <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.25)', marginLeft: 2 }}>OVR</Text>
+          <Text style={{ fontSize: 12, color: TEXT_MUT }}>vs</Text>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: 'rgba(255,255,255,0.4)' }}>LAL</Text>
+            <Text style={{ fontSize: 24, fontWeight: '900', color: 'rgba(255,255,255,0.4)' }}>58</Text>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${tierColor}20`, borderWidth: 2, borderColor: `${tierColor}40`, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: tierColor }}>Y</Text>
+      </View>
+
+      {/* Upcoming */}
+      <View style={{ backgroundColor: GLASS, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: BORDER, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: TEAL, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: WHITE }}>8:30</Text>
+          <Text style={{ fontSize: 8, fontWeight: '600', color: WHITE }}>PM</Text>
+        </View>
+        <View>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE }}>DEN vs MIA</Text>
+          <Text style={{ fontSize: 10, color: TEXT_MUT }}>Scheduled</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+function ArenaPrepMode() {
+  return (
+    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
+      {/* Insight card */}
+      <View style={{ backgroundColor: GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: BORDER }}>
+        <Text style={{ fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 1.5, marginBottom: 8 }}>ARENA INSIGHT</Text>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE, lineHeight: 20 }}>3 home underdogs are in play tonight — a pattern hitting at a high rate this week.</Text>
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
+          {['Knicks', 'Heat', 'Suns'].map(t => (
+            <View key={t} style={{ backgroundColor: 'rgba(139,10,31,0.12)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: MAROON }}>{t}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>Matchups Ranked</Text>
+
+      {/* Ranked cards */}
+      {[
+        { rank: 1, teams: 'BOS at LAL', story: 'Strong lean', detail: 'BOS clear favorite at 57% confidence' },
+        { rank: 2, teams: 'DEN at MIA', story: 'Upset watch', detail: 'MIA 7-3 in last 10 despite underdog status' },
+      ].map(c => (
+        <View key={c.rank} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: c.rank === 1 ? MAROON : TEAL }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <View style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: c.rank === 1 ? MAROON : TEAL, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: WHITE }}>{c.rank}</Text>
+            </View>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>{c.story}</Text>
           </View>
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF', textTransform: 'uppercase' }}>YOU</Text>
-            <Text style={{ fontSize: 9, fontStyle: 'italic', color: 'rgba(255,255,255,0.2)' }}>"Sports enthusiast"</Text>
+          <Text style={{ fontSize: 11, color: TEXT_SEC, lineHeight: 16 }}>{c.detail}</Text>
+        </View>
+      ))}
+    </Animated.View>
+  );
+}
+
+function ArenaReview() {
+  return (
+    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
+      {/* Hero */}
+      <View style={{ backgroundColor: GLASS, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(139,10,31,0.12)', alignItems: 'center' }}>
+        <Text style={{ fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 1.5, marginBottom: 8 }}>YOUR NIGHT</Text>
+        <Text style={{ fontSize: 48, fontWeight: '800', color: WHITE }}>4-1</Text>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: MAROON, marginTop: 4 }}>80% accuracy</Text>
+        <View style={{ flexDirection: 'row', gap: 3, marginTop: 12 }}>
+          {['W', 'W', 'W', 'L', 'W'].map((r, i) => (
+            <View key={i} style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: r === 'W' ? TEAL : ERROR, opacity: r === 'W' ? 0.9 : 0.4 }} />
+          ))}
+        </View>
+      </View>
+
+      {/* Results */}
+      {[
+        { teams: 'BOS vs LAL', result: 'win' },
+        { teams: 'DEN vs MIA', result: 'win' },
+        { teams: 'GSW vs PHI', result: 'loss' },
+      ].map((r, i) => (
+        <View key={i} style={{ backgroundColor: GLASS, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: BORDER, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: WHITE }}>{r.teams}</Text>
+          <View style={{ backgroundColor: r.result === 'win' ? 'rgba(122,157,184,0.12)' : 'rgba(239,68,68,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: r.result === 'win' ? TEAL : ERROR }}>{r.result === 'win' ? 'CORRECT' : 'MISSED'}</Text>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 10 }}>
+      ))}
+    </Animated.View>
+  );
+}
+
+// ─── STEP 4: BUILD YOUR CARD ──────────────────────────────────
+function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, onPhotoPress, onContinue }: {
+  displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; onPhotoPress: () => void; onContinue: () => void;
+}) {
+  return (
+    <View style={{ flex: 1 }}>
+      <ProgressBar step={4} />
+
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 36 }}>
+        <Animated.Text entering={FadeInDown.duration(400)} style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'center', marginBottom: 6 }}>
+          Build Your Card
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(100).duration(400)} style={{ fontSize: 13, color: TEXT_MUT, textAlign: 'center', marginBottom: 28 }}>
+          Your analyst identity across the app
+        </Animated.Text>
+
+        {/* Profile card */}
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={{ width: '100%' }}>
+          <View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 3 }}>
+            <LinearGradient colors={[TEAL, '#5A7A8A', TEAL, '#4A6A7A', TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 24 }]} />
+            <View style={{ margin: 3, borderRadius: 21, backgroundColor: '#0A0C0E', padding: 20 }}>
+              {/* Header */}
+              <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUT, letterSpacing: 2, marginBottom: 16 }}>CLUTCH PICKS</Text>
+
+              {/* Photo + name */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <Pressable onPress={onPhotoPress}>
+                  <View style={{
+                    width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: TEAL,
+                    backgroundColor: 'rgba(122,157,184,0.1)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                  }}>
+                    {isUploading ? (
+                      <ActivityIndicator color={TEAL} />
+                    ) : profileImage ? (
+                      <Image source={{ uri: profileImage }} style={{ width: 84, height: 84, borderRadius: 42 }} />
+                    ) : (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 28, fontWeight: '800', color: TEAL }}>?</Text>
+                        <Text style={{ fontSize: 7, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1, marginTop: 2 }}>TAP TO ADD</Text>
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
+
+                <TextInput
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  placeholder="Your name..."
+                  placeholderTextColor={TEXT_MUT}
+                  style={{
+                    fontSize: 18, fontWeight: '800', color: WHITE, textAlign: 'center',
+                    marginTop: 14, paddingVertical: 6, paddingHorizontal: 20, width: '100%',
+                    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+                  }}
+                  keyboardAppearance="dark"
+                  returnKeyType="done"
+                />
+              </View>
+
+              {/* OVR */}
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontSize: 28, fontWeight: '900', color: TEAL }}>0</Text>
+                <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>OVR</Text>
+              </View>
+
+              {/* Stats row */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                {[
+                  { label: 'PK', value: '0' },
+                  { label: 'W', value: '0', color: TEAL },
+                  { label: 'L', value: '0', color: ERROR },
+                  { label: 'PCT', value: '—' },
+                  { label: 'STK', value: '—' },
+                ].map(s => (
+                  <View key={s.label} style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: s.color ?? WHITE }}>{s.value}</Text>
+                    <Text style={{ fontSize: 8, fontWeight: '600', color: TEXT_MUT, letterSpacing: 0.5, marginTop: 2 }}>{s.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        <Text style={{ fontSize: 12, color: TEXT_MUT, marginTop: 16 }}>Tap photo to add yours. Name is optional.</Text>
+      </View>
+
+      <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
+        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+          <LinearGradient colors={[MAROON, '#6A0818']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── STEP 5: PAYWALL BRIDGE ──────────────────────────────────
+function PaywallStep({ onSubscribe, onSkip }: { onSubscribe: () => void; onSkip: () => void }) {
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Maroon ambient glow */}
+      <View style={{ position: 'absolute', top: '20%', alignSelf: 'center', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(139,10,31,0.08)' }} pointerEvents="none" />
+
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+        {/* Icon */}
+        <Animated.View entering={FadeIn.delay(200).duration(500)} style={{ width: 64, height: 64, borderRadius: 18, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 24, borderWidth: 1, borderColor: 'rgba(139,10,31,0.3)' }}>
+          <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+            <Path d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6z" stroke={MAROON} strokeWidth={1.8} strokeLinejoin="round" />
+          </Svg>
+        </Animated.View>
+
+        <Animated.Text entering={FadeInDown.delay(300).duration(400)} style={{ fontSize: 28, fontWeight: '900', color: WHITE, marginBottom: 8 }}>
+          Clutch Pro
+        </Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(400).duration(400)} style={{ fontSize: 14, color: TEXT_SEC, textAlign: 'center', marginBottom: 32 }}>
+          Unlock the full prediction engine
+        </Animated.Text>
+
+        {/* Perks */}
+        <Animated.View entering={FadeInDown.delay(500).duration(400)} style={{ width: '100%', gap: 16 }}>
           {[
-            { l: 'PK', v: String(total), c: '#FFF' },
-            { l: 'W', v: String(wins), c: TEAL },
-            { l: 'L', v: String(losses), c: CORAL },
-            { l: 'PCT', v: `${pct}%`, c: '#FFF' },
-            { l: 'STK', v: streak > 0 ? `W${streak}` : '—', c: GREEN },
-          ].map(s => (
-            <View key={s.l} style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 6, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 1, marginBottom: 3 }}>{s.l}</Text>
-              <Text style={{ fontSize: 13, fontWeight: '900', color: s.c }}>{s.v}</Text>
+            { title: 'Full AI Analysis', desc: 'Detailed breakdowns on every game' },
+            { title: 'Clutch Picks', desc: 'Top-ranked AI picks per sport daily' },
+            { title: 'Arena Insights', desc: 'Pattern detection and review analytics' },
+          ].map((p, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(139,10,31,0.12)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: MAROON }} />
+              </View>
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>{p.title}</Text>
+                <Text style={{ fontSize: 11, color: TEXT_MUT, marginTop: 1 }}>{p.desc}</Text>
+              </View>
             </View>
           ))}
-        </View>
+        </Animated.View>
       </View>
-      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 10 }}>Your card levels up as you win</Text>
+
+      <View style={{ paddingHorizontal: 28, paddingBottom: 20 }}>
+        <Pressable onPress={onSubscribe} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+          <LinearGradient colors={[MAROON, '#6A0818']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Free Trial</Text>
+          </LinearGradient>
+        </Pressable>
+        <Pressable onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 16 }}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: TEXT_MUT }}>Maybe later</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-// ─── SLIDE CONFIG ────────────────────────────────────────────
-const SLIDES = [
-  { Demo: LiveCardDemo, title: 'Every Game. One Place.', body: 'Live scores, box scores, and where to watch — across NBA, NFL, MLB, NHL, MLS, EPL, NCAAF, and NCAAB.', accent: TEAL },
-  { Demo: JerseyPickDemo, title: 'Pick Your Winners', body: 'Tap a jersey to pick who wins. Change your mind anytime before the game starts.', accent: CORAL },
-  { Demo: AIDemo, title: 'AI Predictions', body: 'Multi-factor AI analysis per game — momentum, matchups, form, and more. Predictions are for entertainment only. Not gambling advice.', accent: TEAL },
-  { Demo: ProfileDemo, title: 'Build Your Record', body: 'Track your wins, losses, and streaks. See how your picks stack up over time.', accent: GREEN },
-];
-
-// ─── DOTS ────────────────────────────────────────────────────
-function Dots({ current }: { current: number }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
-      {SLIDES.map((_, i) => (
-        <View key={i} style={{
-          width: i === current ? 28 : 8, height: 8, borderRadius: 4,
-          backgroundColor: i === current ? CORAL : 'rgba(255,255,255,0.12)',
-        }} />
-      ))}
-    </View>
-  );
-}
-
-// ─── MAIN ────────────────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const router = useRouter();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const [step, setStep] = useState(0);
+  const [arenaSubPage, setArenaSubPage] = useState(0);
+  const [picked, setPicked] = useState<'home' | 'away' | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleNext = useCallback(() => {
-    if (currentIndex < SLIDES.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
-    } else {
-      completeOnboarding();
+  const goNext = useCallback(() => {
+    if (step === 3 && arenaSubPage < 2) {
+      setArenaSubPage(arenaSubPage + 1);
+      return;
     }
-  }, [currentIndex]);
+    if (step === 4) { saveProfile(); return; }
+    if (step === 5) return;
+    setStep(step + 1);
+    if (step === 3) setArenaSubPage(0);
+  }, [step, arenaSubPage]);
 
-  const completeOnboarding = async () => {
-    // Navigate to profile setup - it will mark onboarding complete
-    router.replace('/profile-setup');
+  const skip = useCallback(async () => {
+    await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
+    router.replace('/(tabs)');
+  }, []);
+
+  const saveProfile = async () => {
+    try {
+      if (displayName.trim().length > 0) {
+        await api.put('/api/profile', { name: displayName.trim() });
+      }
+      await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
+      setStep(5);
+    } catch {
+      await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
+      setStep(5);
+    }
   };
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setCurrentIndex(viewableItems[0].index ?? 0);
-    }
-  }).current;
+  const goToPaywall = useCallback(async () => {
+    await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
+    router.replace('/paywall');
+  }, []);
 
-  const isLast = currentIndex === SLIDES.length - 1;
+  const skipPaywall = useCallback(async () => {
+    await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
+    router.replace('/(tabs)');
+  }, []);
+
+  const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
+    if (!pickedFile) return;
+    setIsUploading(true);
+    try {
+      const uploadResult = await uploadFile(pickedFile.uri, pickedFile.filename, pickedFile.mimeType);
+      await api.put('/api/profile/image', { imageUrl: uploadResult.url });
+      setProfileImage(uploadResult.url);
+    } catch {
+      Alert.alert('Upload Failed', 'Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handlePhotoPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
+        async (buttonIndex) => {
+          if (buttonIndex === 1) handleImageUpload(await takePhoto());
+          else if (buttonIndex === 2) handleImageUpload(await pickImage());
+        }
+      );
+    } else {
+      Alert.alert('Add Photo', '', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: async () => handleImageUpload(await takePhoto()) },
+        { text: 'Choose from Library', onPress: async () => handleImageUpload(await pickImage()) },
+      ]);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* Skip */}
-        {!isLast ? (
-          <Pressable onPress={completeOnboarding} style={{ position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 8 }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.3)' }}>Skip</Text>
-          </Pressable>
-        ) : null}
-
-        {/* Slides */}
-        <FlatList
-          ref={flatListRef}
-          data={SLIDES}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          bounces={false}
-          decelerationRate="fast"
-          snapToInterval={W}
-          snapToAlignment="start"
-          getItemLayout={(_, index) => ({ length: W, offset: W * index, index })}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
-          keyExtractor={(_, i) => String(i)}
-          renderItem={({ item }) => (
-            <View style={{ width: W, flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
-              <View style={{ marginBottom: 24 }}>
-                <item.Demo />
-              </View>
-              <Text style={{ fontSize: 24, fontWeight: '900', color: '#FFF', textAlign: 'center', letterSpacing: -0.5, marginBottom: 10, lineHeight: 30 }}>{item.title}</Text>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.38)', textAlign: 'center', lineHeight: 20, maxWidth: 280 }}>{item.body}</Text>
-            </View>
-          )}
-        />
-
-        {/* Bottom */}
-        <View style={{ paddingHorizontal: 28, paddingBottom: 20, gap: 18 }}>
-          <Dots current={currentIndex} />
-          <Pressable onPress={handleNext} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-            <LinearGradient
-              colors={isLast ? [CORAL, '#D07850'] : [TEAL, TEAL_DARK]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ height: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 }}>{isLast ? "Let's Go" : 'Next'}</Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
+        {step === 0 ? <WelcomeStep onContinue={() => setStep(1)} /> : null}
+        {step === 1 ? <PickStep picked={picked} setPicked={setPicked} onContinue={() => setStep(2)} onSkip={skip} /> : null}
+        {step === 2 ? <AIPredictionsStep onContinue={() => setStep(3)} onSkip={skip} /> : null}
+        {step === 3 ? <ArenaStep subPage={arenaSubPage} onContinue={goNext} onSkip={skip} /> : null}
+        {step === 4 ? <ProfileStep displayName={displayName} setDisplayName={setDisplayName} profileImage={profileImage} isUploading={isUploading} onPhotoPress={handlePhotoPress} onContinue={saveProfile} /> : null}
+        {step === 5 ? <PaywallStep onSubscribe={goToPaywall} onSkip={skipPaywall} /> : null}
       </SafeAreaView>
     </View>
   );

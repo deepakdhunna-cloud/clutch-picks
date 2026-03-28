@@ -37,6 +37,9 @@ export function useLiveScores() {
   const mountedRef = useRef(true);
   // Stable ref to latest applyScoresToCache — updated below so connect() needs no deps on it
   const applyScoresRef = useRef<((scores: LiveScore[]) => void) | null>(null);
+  // Throttle SSE state updates to max once per 500ms
+  const throttleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingScores = useRef<LiveScore[] | null>(null);
 
   const applyScoresToCache = useCallback((scores: LiveScore[]) => {
     if (scores.length === 0) return;
@@ -116,8 +119,19 @@ export function useLiveScores() {
       if (!mountedRef.current) return;
       try {
         const scores: LiveScore[] = JSON.parse(event.data ?? '[]');
-        setLiveScores(scores);
+        // Always update cache immediately (cheap — only writes if data changed)
         applyScoresRef.current?.(scores);
+        // Throttle setState to max once per 500ms to avoid render storms
+        pendingScores.current = scores;
+        if (!throttleTimer.current) {
+          throttleTimer.current = setTimeout(() => {
+            throttleTimer.current = null;
+            if (pendingScores.current && mountedRef.current) {
+              setLiveScores(pendingScores.current);
+              pendingScores.current = null;
+            }
+          }, 500);
+        }
       } catch {
         // malformed payload — ignore
       }
