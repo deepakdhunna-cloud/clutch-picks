@@ -21,7 +21,7 @@ const { width: W, height: H } = Dimensions.get('window');
 const BG = '#040608';
 const TEAL = '#7A9DB8';
 const TEAL_DARK = '#5A7A8A'; // used in other screens too
-const CORAL = '#E8936A';
+const CORAL = '#8B0A1F';
 const BADGE_BLUE = '#5A7A8A'; // Same blue as PicksBadge background
 
 // ─── Apple Logo ─────────────────────────────────────────────────

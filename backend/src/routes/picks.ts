@@ -162,6 +162,41 @@ picksRouter.get("/user/:userId", async (c) => {
   }
 });
 
+// GET /api/picks/all-stats - Get pick statistics for ALL games in one batch (avoids N+1 per-card queries)
+picksRouter.get("/all-stats", async (c) => {
+  try {
+    const picks = await prisma.userPick.groupBy({
+      by: ["gameId", "pickedTeam"],
+      _count: { id: true },
+    });
+
+    const statsMap: Record<string, { homePicks: number; awayPicks: number }> = {};
+    for (const row of picks) {
+      if (!statsMap[row.gameId]) statsMap[row.gameId] = { homePicks: 0, awayPicks: 0 };
+      if (row.pickedTeam === "home") statsMap[row.gameId]!.homePicks = row._count.id;
+      else statsMap[row.gameId]!.awayPicks = row._count.id;
+    }
+
+    const result: Record<string, { gameId: string; homePicks: number; awayPicks: number; totalPicks: number; homePercentage: number; awayPercentage: number }> = {};
+    for (const [gameId, s] of Object.entries(statsMap)) {
+      const total = s.homePicks + s.awayPicks;
+      result[gameId] = {
+        gameId,
+        homePicks: s.homePicks,
+        awayPicks: s.awayPicks,
+        totalPicks: total,
+        homePercentage: total === 0 ? 50 : Math.round((s.homePicks / total) * 1000) / 10,
+        awayPercentage: total === 0 ? 50 : Math.round((s.awayPicks / total) * 1000) / 10,
+      };
+    }
+
+    return c.json({ data: result });
+  } catch (error) {
+    console.error("Error fetching all pick stats:", error);
+    return c.json({ error: { message: "Failed to fetch stats", code: "FETCH_FAILED" } }, 500);
+  }
+});
+
 // GET /api/picks/game/:gameId/stats - Get pick statistics for a specific game (public)
 picksRouter.get("/game/:gameId/stats", async (c) => {
   const gameId = c.req.param("gameId");

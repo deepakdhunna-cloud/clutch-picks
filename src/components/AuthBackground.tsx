@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: W, height: H } = Dimensions.get('window');
 const TEAL = '#7A9DB8';
-const CORAL = '#E8936A';
+const CORAL = '#8B0A1F';
 
 // ─── Neon Streak ────────────────────────────────────────────────
 // Static props go in a regular style, only opacity/translate are animated

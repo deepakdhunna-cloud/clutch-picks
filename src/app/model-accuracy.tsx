@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { api } from '@/lib/api/api';
 
-const CORAL = '#E8936A';
+const CORAL = '#8B0A1F';
 const TEAL = '#7A9DB8';
 const GREEN = '#4ADE80';
 const RED = '#EF4444';

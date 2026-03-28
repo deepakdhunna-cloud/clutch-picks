@@ -101,7 +101,7 @@ export const TeamJersey = memo(function TeamJersey({
 
   const primary = primaryColor || FALLBACK_PRIMARY;
   const secondary = secondaryColor || FALLBACK_SECONDARY;
-  const accent = isHighlighted ? '#E8936A' : '#FFFFFF';
+  const accent = isHighlighted ? '#8B0A1F' : '#FFFFFF';
 
   return getSportJersey(sportType, {
     primary,

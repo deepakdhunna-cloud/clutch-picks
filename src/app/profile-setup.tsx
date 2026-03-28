@@ -23,7 +23,7 @@ import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
 
 const BG = '#040608';
-const CORAL = '#E8936A';
+const CORAL = '#8B0A1F';
 const TEAL = '#7A9DB8';
 
 const LEAGUES = [
@@ -343,11 +343,11 @@ export default function ProfileSetupScreen() {
                       style={{
                         flex: 1,
                         backgroundColor: isSelected
-                          ? 'rgba(232,147,106,0.12)'
+                          ? 'rgba(139,10,31,0.12)'
                           : 'rgba(255,255,255,0.04)',
                         borderWidth: 1,
                         borderColor: isSelected
-                          ? 'rgba(232,147,106,0.3)'
+                          ? 'rgba(139,10,31,0.3)'
                           : 'rgba(255,255,255,0.08)',
                         borderRadius: 12,
                         padding: 14,
@@ -380,11 +380,11 @@ export default function ProfileSetupScreen() {
                       style={{
                         flex: 1,
                         backgroundColor: isSelected
-                          ? 'rgba(232,147,106,0.12)'
+                          ? 'rgba(139,10,31,0.12)'
                           : 'rgba(255,255,255,0.04)',
                         borderWidth: 1,
                         borderColor: isSelected
-                          ? 'rgba(232,147,106,0.3)'
+                          ? 'rgba(139,10,31,0.3)'
                           : 'rgba(255,255,255,0.08)',
                         borderRadius: 12,
                         padding: 14,
@@ -434,7 +434,7 @@ export default function ProfileSetupScreen() {
             >
               {hasDisplayName ? (
                 <LinearGradient
-                  colors={[CORAL, '#D07850']}
+                  colors={[CORAL, '#6A0818']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={{

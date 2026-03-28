@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 
 const GLASS_BG = 'rgba(4,5,10,0.97)';
 const GLASS_BORDER = 'rgba(255,255,255,0.13)';
-const AMBER = '#E8936A';
+const AMBER = '#8B0A1F';
 const TEAL = '#4ECDC4';
 const WIN_COLOR = '#22C55E';
 const LOSS_COLOR = '#EF4444';
@@ -262,7 +262,7 @@ export default function UserProfileScreen() {
                       borderRadius: 11,
                       backgroundColor: isFollowing ? 'rgba(255,255,255,0.06)' : AMBER,
                       borderWidth: 1,
-                      borderColor: isFollowing ? 'rgba(255,255,255,0.14)' : 'rgba(232,147,106,0.5)',
+                      borderColor: isFollowing ? 'rgba(255,255,255,0.14)' : 'rgba(139,10,31,0.5)',
                       gap: 6,
                     }}
                   >
@@ -329,7 +329,7 @@ export default function UserProfileScreen() {
                   </View>
                   {/* Streak */}
                   <View style={{ flex: 1, alignItems: 'center' }}>
-                    <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(232,147,106,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                    <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(139,10,31,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                       <Flame size={20} color={AMBER} />
                     </View>
                     <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{pickStats?.currentStreak ?? 0}</Text>

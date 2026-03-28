@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet, Dimensions, Linking,
+  View, Text, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
 } from 'react-native';
+import { api } from '@/lib/api/api';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +12,7 @@ import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import Purchases from 'react-native-purchases';
 import {
-  getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled,
+  getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, getCustomerInfo,
 } from '@/lib/revenuecatClient';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGames } from '@/hooks/useGames';
@@ -123,6 +124,9 @@ export default function PaywallScreen() {
   const [monthlyPackage, setMonthlyPackage] = useState<PurchasesPackage | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string>('');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [promoLoading, setPromoLoading] = useState(false);
   const { checkSubscription } = useSubscription();
   const { data: allGames } = useGames();
 
@@ -461,32 +465,74 @@ export default function PaywallScreen() {
                   Every game. Every league. Every AI prediction.
                 </Text>
 
-                {/* Promo code — opens native iOS redemption sheet */}
-                <Pressable
-                  onPress={async () => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    try {
-                      if (isRevenueCatEnabled()) {
-                        await Purchases.presentCodeRedemptionSheet();
-                        // After redemption, check subscription status
-                        setTimeout(async () => {
+                {/* Promo code */}
+                {promoOpen ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <View style={{
+                      flex: 1, flexDirection: 'row', alignItems: 'center',
+                      backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10,
+                      borderWidth: 1, borderColor: promoCode.length > 0 ? 'rgba(122,157,184,0.25)' : 'rgba(255,255,255,0.06)',
+                      paddingHorizontal: 12, paddingVertical: 10,
+                    }}>
+                      <TextInput
+                        style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#FFF', padding: 0, letterSpacing: 1 }}
+                        placeholder="Enter promo code"
+                        placeholderTextColor="rgba(255,255,255,0.15)"
+                        value={promoCode}
+                        onChangeText={(t) => setPromoCode(t.toUpperCase())}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                      />
+                      {promoCode.length > 0 ? (
+                        <Pressable onPress={() => setPromoCode('')} hitSlop={8}>
+                          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>×</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      onPress={async () => {
+                        if (!promoCode.trim() || promoLoading) return;
+                        setPromoLoading(true);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        try {
+                          const rcInfo = await getCustomerInfo();
+                          const rcUserId = rcInfo.ok ? rcInfo.data.originalAppUserId : undefined;
+                          const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: promoCode.trim(), rcUserId });
                           await checkSubscription();
-                        }, 2000);
-                      } else {
-                        Linking.openURL('https://apps.apple.com/redeem');
-                      }
-                    } catch (e) {
-                      // Fallback to App Store redeem page
-                      Linking.openURL('https://apps.apple.com/redeem');
-                    }
-                  }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
-                >
-                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                    <Path d="M12 4v16M4 12h16" stroke={TEAL} strokeWidth={2} strokeLinecap="round" />
-                  </Svg>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>Redeem promo code</Text>
-                </Pressable>
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          Alert.alert('Code Applied!', result.message, [{ text: 'OK', onPress: () => router.back() }]);
+                        } catch (error: any) {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                          Alert.alert('Invalid Code', error?.message || 'This code could not be applied.');
+                        } finally {
+                          setPromoLoading(false);
+                        }
+                      }}
+                      disabled={!promoCode.trim() || promoLoading}
+                      style={{
+                        backgroundColor: promoCode.trim() ? TEAL : 'rgba(122,157,184,0.2)',
+                        paddingHorizontal: 16, paddingVertical: 11, borderRadius: 10,
+                        opacity: promoLoading ? 0.6 : 1,
+                      }}
+                    >
+                      {promoLoading ? (
+                        <ActivityIndicator color={BG} size="small" />
+                      ) : (
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: promoCode.trim() ? BG : 'rgba(122,157,184,0.5)' }}>Apply</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={() => setPromoOpen(true)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
+                  >
+                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                      <Path d="M12 4v16M4 12h16" stroke={TEAL} strokeWidth={2} strokeLinecap="round" />
+                    </Svg>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>Have a promo code?</Text>
+                  </Pressable>
+                )}
 
                 {/* CTA button */}
                 {isLoading ? (

@@ -251,4 +251,28 @@ model PredictionResult {
   @@index([createdAt])
   @@index([sport, wasCorrect])
 }
+model PromoCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  type        String    @default("lifetime")
+  maxUses     Int       @default(1)
+  currentUses Int       @default(0)
+  expiresAt   DateTime?
+  createdBy   String?
+  note        String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  redemptions PromoRedemption[]
+  @@index([code])
+}
+
+model PromoRedemption {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  userId      String
+  redeemedAt  DateTime @default(now())
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  @@unique([promoCodeId, userId])
+  @@index([userId])
+}
 
