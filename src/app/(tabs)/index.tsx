@@ -357,34 +357,35 @@ const HomeHeader = React.memo(function HomeHeader({
               style={{ flexGrow: 0 }}
               decelerationRate="fast"
             >
-              {/* All pill — navy blue */}
+              {/* All pill */}
               <Pressable onPress={() => setSelectedLiveSportFilter(null)}>
                 <View style={{
-                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
-                  backgroundColor: '#1C2A3A',
-                  borderWidth: 1, borderColor: !selectedLiveSportFilter ? '#3A4E62' : '#2A3A4E',
+                  paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22,
+                  backgroundColor: !selectedLiveSportFilter ? MAROON : 'rgba(122,157,184,0.08)',
+                  borderWidth: !selectedLiveSportFilter ? 0 : 1,
+                  borderColor: !selectedLiveSportFilter ? 'transparent' : 'rgba(122,157,184,0.12)',
                 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                  <Text style={{ fontSize: 13, fontWeight: !selectedLiveSportFilter ? '700' : '600', color: !selectedLiveSportFilter ? '#FFFFFF' : TEAL }}>
                     All ({liveGamesPreview.length})
                   </Text>
                 </View>
               </Pressable>
 
-              {/* Per-sport pills — ticket colors */}
+              {/* Per-sport pills */}
               {availableLiveSports.map((sport) => {
                 const isChipSelected = selectedLiveSportFilter === sport;
-                const ticketColor = getTicketColor(sport);
-                const isLight = ticketColor === '#C2C4C8';
                 const count = liveSportCounts.get(sport) ?? 0;
+                const displayName = sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport;
                 return (
                   <Pressable key={sport} onPress={() => setSelectedLiveSportFilter(isChipSelected ? null : sport)}>
                     <View style={{
-                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
-                      backgroundColor: ticketColor,
-                      borderWidth: 1, borderColor: isChipSelected ? '#FFF' : ticketColor,
+                      paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22,
+                      backgroundColor: isChipSelected ? MAROON : 'rgba(122,157,184,0.08)',
+                      borderWidth: isChipSelected ? 0 : 1,
+                      borderColor: isChipSelected ? 'transparent' : 'rgba(122,157,184,0.12)',
                     }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#040608' : '#FFFFFF' }}>
-                        {sport} ({count})
+                      <Text style={{ fontSize: 13, fontWeight: isChipSelected ? '700' : '600', color: isChipSelected ? '#FFFFFF' : TEAL }}>
+                        {displayName} ({count})
                       </Text>
                     </View>
                   </Pressable>
