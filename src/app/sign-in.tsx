@@ -97,6 +97,8 @@ export default function SignInScreen() {
           const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
           router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
         }
+      } else {
+        setError('Could not authenticate with Apple. Please try again.');
       }
     } catch (e: any) {
       if (e.code !== 'ERR_REQUEST_CANCELED') {

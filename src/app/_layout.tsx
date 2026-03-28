@@ -72,7 +72,7 @@ queryClient.prefetchQuery({
     const json = await response.json();
     return json.data ?? [];
   },
-  staleTime: 10000,
+  staleTime: 30000,
 });
 
 function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {

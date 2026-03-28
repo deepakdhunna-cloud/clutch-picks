@@ -32,7 +32,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setIsPremium(false);
       }
     } catch (error) {
-      console.log('[Subscription] Error checking subscription:', error);
+      if (__DEV__) console.log('[Subscription] Error checking subscription:', error);
       setIsPremium(false);
     } finally {
       setIsLoading(false);

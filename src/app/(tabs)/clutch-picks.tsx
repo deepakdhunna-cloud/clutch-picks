@@ -554,9 +554,9 @@ export default function ClutchPicksScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5A7A8A" />
             }
             removeClippedSubviews={true}
-            maxToRenderPerBatch={8}
-            windowSize={9}
-            initialNumToRender={5}
+            maxToRenderPerBatch={3}
+            windowSize={5}
+            initialNumToRender={2}
             ListFooterComponent={
               <View style={{ paddingTop: 16, paddingBottom: 20 }}>
                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
