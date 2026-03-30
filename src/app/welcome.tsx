@@ -99,7 +99,7 @@ export default function WelcomeScreen() {
       withSpring(0.95, { damping: 15, stiffness: 300 }),
       withSpring(1, { damping: 12, stiffness: 200 })
     );
-    router.push('/sign-up' as any);
+    router.push('/sign-in' as any);
   };
 
   return (

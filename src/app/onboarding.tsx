@@ -18,6 +18,8 @@ import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
+import { useInvalidateSession } from '@/lib/auth/use-session';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
@@ -666,6 +668,8 @@ export default function OnboardingScreen() {
   const [displayName, setDisplayName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const queryClient = useQueryClient();
+  const invalidateSession = useInvalidateSession();
 
   const goNext = useCallback(() => {
     if (step === 3 && arenaSubPage < 2) {
@@ -688,6 +692,9 @@ export default function OnboardingScreen() {
       if (displayName.trim().length > 0) {
         await api.put('/api/profile', { name: displayName.trim() });
       }
+      // Invalidate caches so profile page picks up changes immediately
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      invalidateSession();
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
       setStep(5);
     } catch {
@@ -713,6 +720,7 @@ export default function OnboardingScreen() {
       const uploadResult = await uploadFile(pickedFile.uri, pickedFile.filename, pickedFile.mimeType);
       await api.put('/api/profile/image', { imageUrl: uploadResult.url });
       setProfileImage(uploadResult.url);
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     } catch {
       Alert.alert('Upload Failed', 'Please try again.');
     } finally {

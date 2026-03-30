@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { useSubscription } from '@/lib/subscription-context';
@@ -397,6 +398,16 @@ export default function SettingsScreen() {
                 title="Help & Support"
                 subtitle="Get help or send feedback"
                 onPress={() => Linking.openURL('mailto:support@clutchpicksapp.com')}
+              />
+              <SettingItem
+                icon={RefreshCw}
+                title="Replay Tutorial"
+                subtitle="Walk through the app intro again"
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  await AsyncStorage.setItem('clutch_onboarding_complete', 'false');
+                  router.replace('/onboarding');
+                }}
               />
             </SettingSection>
           </Animated.View>

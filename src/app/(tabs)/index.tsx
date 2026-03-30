@@ -122,21 +122,6 @@ const HomeHeader = React.memo(function HomeHeader({
 }: HomeHeaderProps) {
   return (
     <>
-      {/* App Header - Clutch Branding */}
-      <Animated.View
-        entering={FadeInDown.duration(400)}
-        className="px-5 pt-5 pb-3"
-        style={{ alignItems: 'center' }}
-      >
-        <View style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12 }}>
-          <Image
-            source={require('@/assets/clutch-logo-horizontal.png')}
-            style={{ width: 300, height: 300 * (523 / 3352) }}
-            resizeMode="contain"
-          />
-        </View>
-      </Animated.View>
-
       {/* Today Games Bar — Ticket Style */}
       <Animated.View
         entering={FadeInDown.delay(150).duration(500)}
@@ -1165,6 +1150,16 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
       <ErrorBoundary>
+      {/* Logo — rendered outside FlatList for instant display */}
+      <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 12 }}>
+        <View style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12 }}>
+          <Image
+            source={require('@/assets/clutch-logo-horizontal.png')}
+            style={{ width: 300, height: 300 * (523 / 3352) }}
+            resizeMode="contain"
+          />
+        </View>
+      </View>
       <GridBackground />
       {/* Subtle coral and teal ambient washes */}
       <LinearGradient
