@@ -118,11 +118,12 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
     const inPublicGroup = segments[0] === 'privacy-policy' || segments[0] === 'terms';
 
     if (session?.user && inAuthGroup && segments[0] !== 'onboarding') {
-      // Always go to home — mark onboarding done for returning users
+      // Check if onboarding is complete — if not, send to onboarding first
       if (!onboardingDone) {
-        AsyncStorage.setItem('clutch_onboarding_complete', 'true').catch(() => {});
+        router.replace('/onboarding');
+      } else {
+        router.replace('/(tabs)');
       }
-      router.replace('/(tabs)');
     } else if (!session?.user && !inAuthGroup && !inPublicGroup) {
       router.replace('/welcome');
     }
