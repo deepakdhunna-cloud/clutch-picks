@@ -15,6 +15,8 @@ import { useUserStats, useUserPicks } from '@/hooks/usePicks';
 import { useGames } from '@/hooks/useGames';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { api } from '@/lib/api/api';
+import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
+import { getTeamColors } from '@/lib/team-colors';
 import { authClient } from '@/lib/auth/auth-client';
 import { GameWithPrediction, GameStatus } from '@/types/sports';
 import { isRevenueCatEnabled, logoutUser } from '@/lib/revenuecatClient';
@@ -271,6 +273,37 @@ export default function ProfileScreen() {
   const streak = stats?.currentStreak ?? 0;
 
   // Form line
+  // Recent picks with game data for jersey tiles — works even for old games not in today's list
+  const recentPickTiles = useMemo(() => {
+    if (!picks || picks.length === 0) return [];
+    if (__DEV__) console.log('[Profile] picks count:', picks.length, 'games count:', allGames?.length ?? 0);
+    const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
+    const tiles = [...picks].reverse().slice(0, 15).map((p) => {
+      const game = gameMap.get(p.gameId);
+      // Use game data if available, fall back to pick's own fields
+      const pickedAbbr = p.pickedTeam === 'home'
+        ? (game?.homeTeam?.abbreviation ?? p.homeTeam ?? '??')
+        : (game?.awayTeam?.abbreviation ?? p.awayTeam ?? '??');
+      const opponentAbbr = p.pickedTeam === 'home'
+        ? (game?.awayTeam?.abbreviation ?? p.awayTeam ?? '??')
+        : (game?.homeTeam?.abbreviation ?? p.homeTeam ?? '??');
+      const sport = game?.sport ?? p.sport ?? 'NBA';
+      const pickedTeamObj = game
+        ? (p.pickedTeam === 'home' ? game.homeTeam : game.awayTeam)
+        : null;
+      return {
+        id: p.id,
+        abbreviation: pickedAbbr,
+        opponentAbbr,
+        color: pickedTeamObj?.color ?? '#5A7A8A',
+        result: p.result ?? 'pending',
+        sport,
+      };
+    });
+    if (__DEV__) console.log('[Profile] tiles generated:', tiles.length, tiles.slice(0, 3).map(t => `${t.abbreviation} vs ${t.opponentAbbr} (${t.result})`));
+    return tiles;
+  }, [picks, allGames]);
+
   const formLine = useMemo(() => {
     if (!picks) return [];
     return [...picks].reverse().slice(0, 10).map((p) => p.result ?? 'pending');
@@ -598,22 +631,95 @@ export default function ProfileScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* ── 3. SPORT MASTERY + PREDICTIONS ROW ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 28, gap: 8 }}>
-          <View style={{ width: 115, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+        {/* ── 3. PREDICTIONS + RECENT PICKS ROW ── */}
+        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flexDirection: 'row', marginTop: 28 }}>
+          {/* Predictions tile — fixed, doesn't scroll */}
+          <View style={{ width: 110, height: 130, marginLeft: 16, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
             <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.MAROON_DIM, borderWidth: 1, borderColor: C.MAROON, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
               <GridIcon size={18} color={C.TEXT_PRIMARY} />
             </View>
             <Text style={{ fontSize: 22, fontWeight: '800', color: C.TEXT_PRIMARY }}>{totalPicks}</Text>
             <Text style={{ fontSize: 8, fontWeight: '600', color: C.TEXT_MUTED, letterSpacing: 1.2, marginTop: 2 }}>PREDICTIONS</Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
-            {sportBreakdown.map((s) => (
-              <SportMasteryRing key={s.sport} sport={s.sport} pct={s.pct} wins={s.wins} total={s.total} />
-            ))}
-            {sportBreakdown.length === 0 ? (
-              <View style={{ justifyContent: 'center', paddingHorizontal: 16 }}>
-                <Text style={{ fontSize: 11, color: C.TEXT_MUTED }}>Make picks to see sport mastery</Text>
+
+          {/* Recent pick tiles — scrollable, goes behind predictions tile */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 130, marginLeft: 8 }} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
+            {recentPickTiles.map((p) => {
+              const teamColors = getTeamColors(p.abbreviation, p.sport as any, p.color);
+              const jerseyType = sportEnumToJersey(p.sport);
+              const isWin = p.result === 'win';
+              const isLoss = p.result === 'loss';
+              const ribbonColor = isWin ? C.TEAL : isLoss ? C.MAROON : undefined;
+              const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'TBD';
+              return (
+                <View key={p.id} style={{
+                  width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 10, borderWidth: 1,
+                  borderColor: isWin ? 'rgba(122,157,184,0.2)' : isLoss ? 'rgba(139,10,31,0.2)' : 'rgba(255,255,255,0.08)',
+                  alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                }}>
+                  {/* Corner ribbon — premium layered */}
+                  <View style={{ position: 'absolute', top: 0, right: 0, width: 44, height: 44, zIndex: 10, overflow: 'hidden' }}>
+                    {/* Shadow layer */}
+                    <View style={{
+                      position: 'absolute', top: -2, right: -2,
+                      width: 62, height: 22,
+                      backgroundColor: 'rgba(0,0,0,0.4)',
+                      transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -4 }],
+                    }} />
+                    {/* Main ribbon */}
+                    {ribbonColor ? (
+                      <LinearGradient
+                        colors={isWin ? [C.TEAL, '#5A8A9A', C.TEAL] : [C.MAROON, '#6A0818', C.MAROON]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={{
+                          position: 'absolute', top: 0, right: 0,
+                          width: 62, height: 20,
+                          transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
+                          alignItems: 'center', justifyContent: 'center',
+                          shadowColor: ribbonColor,
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.4,
+                          shadowRadius: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 7, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{ribbonLabel}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <LinearGradient
+                        colors={[C.MAROON, '#5A4A5A', C.TEAL]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={{
+                          position: 'absolute', top: 0, right: 0,
+                          width: 62, height: 20,
+                          transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 6, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{ribbonLabel}</Text>
+                      </LinearGradient>
+                    )}
+                    {/* Highlight edge — thin white line on top edge */}
+                    <View style={{
+                      position: 'absolute', top: 0, right: 0,
+                      width: 62, height: 1,
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                      transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
+                    }} />
+                  </View>
+                  <View style={{ marginBottom: 4 }}>
+                    <JerseyIcon teamCode={p.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={48} sport={jerseyType} />
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 2 }}>{p.abbreviation}</Text>
+                  <Text style={{ fontSize: 8, color: C.TEXT_MUTED }}>vs {p.opponentAbbr}</Text>
+                </View>
+              );
+            })}
+
+            {recentPickTiles.length === 0 ? (
+              <View style={{ width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 10, color: C.TEXT_MUTED, textAlign: 'center' }}>Make picks to see them here</Text>
               </View>
             ) : null}
           </ScrollView>

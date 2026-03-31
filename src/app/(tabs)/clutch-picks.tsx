@@ -1,13 +1,38 @@
 import { View, Text, RefreshControl, Pressable, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from 'react-native-reanimated';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
 import React, { useState, useCallback, memo, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
 import Svg, { Path, Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { Clock } from 'lucide-react-native';
+import { TeamJerseyCompact } from '@/components/sports';
+import { GameWithPrediction } from '@/types/sports';
+import { getTeamColors } from '@/lib/team-colors';
+import { useTopPicks } from '@/hooks/useGames';
+import GridBackground from '@/components/GridBackground';
+import { useSubscription } from '@/lib/subscription-context';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+// Expandable analysis text — tap to show full, tap again to collapse
+const ExpandableText = memo(function ExpandableText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Pressable onPress={() => setExpanded(!expanded)}>
+      <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 20 }} numberOfLines={expanded ? undefined : 3}>
+        {text}
+      </Text>
+      {!expanded && text.length > 120 ? (
+        <Text style={{ fontSize: 11, fontWeight: '600', color: '#7A9DB8', marginTop: 4 }}>Read more</Text>
+      ) : expanded ? (
+        <Text style={{ fontSize: 11, fontWeight: '600', color: '#7A9DB8', marginTop: 4 }}>Show less</Text>
+      ) : null}
+    </Pressable>
+  );
+});
 
 // Field goal post U symbol - memoized
 const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: string; size?: number }) {
@@ -52,13 +77,6 @@ const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: strin
     </Svg>
   );
 });
-import { TeamJerseyCompact } from '@/components/sports';
-import { GameWithPrediction } from '@/types/sports';
-import { getTeamColors } from '@/lib/team-colors';
-import { useTopPicks } from '@/hooks/useGames';
-import GridBackground from '@/components/GridBackground';
-import { useSubscription } from '@/lib/subscription-context';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Helper to ensure two colors are visually distinct
 const hexToRgb = (hex: string) => {
@@ -146,12 +164,13 @@ const TopPickCard = memo(function TopPickCard({
   const rotation = useSharedValue(0);
   const glowPulse = useSharedValue(0);
   React.useEffect(() => {
-    rotation.value = withTiming(360000, { duration: 360000 / 360 * 4500, easing: Easing.linear });
+    rotation.value = withRepeat(withTiming(360, { duration: 4500, easing: Easing.linear }), -1, false);
     glowPulse.value = withRepeat(
       withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       -1,
       true
     );
+    return () => { cancelAnimation(rotation); cancelAnimation(glowPulse); };
   }, []);
   const rotatingStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value % 360}deg` }],
@@ -373,9 +392,7 @@ const TopPickCard = memo(function TopPickCard({
                   <View style={{ width: 3, height: 12, borderRadius: 1.5, backgroundColor: ACCENT_ORANGE }} />
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>WHY THIS PICK</Text>
                 </View>
-                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 20 }} numberOfLines={3}>
-                  {game.prediction?.analysis}
-                </Text>
+                <ExpandableText text={game.prediction?.analysis ?? ''} />
 
                 {/* View details CTA */}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
@@ -471,62 +488,100 @@ export default function ClutchPicksScreen() {
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
             {headerComponent}
 
-            {/* Ghosted pick cards preview */}
-            <View style={{ borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(139,10,31,0.15)', marginBottom: 16 }}>
-              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 10, fontWeight: '900', color: 'rgba(139,10,31,0.4)' }}>#1</Text>
+            {/* Ghost pick cards — look like real picks but blurred out */}
+            {[1, 2, 3].map((rank) => (
+              <View key={rank} style={{ marginBottom: 14, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: rank === 1 ? 'rgba(139,10,31,0.25)' : 'rgba(255,255,255,0.06)', opacity: rank === 1 ? 1 : rank === 2 ? 0.85 : 0.65 }}>
+                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
+                <LinearGradient colors={rank === 1 ? ['rgba(139,10,31,0.12)', 'rgba(4,6,8,0.85)'] : ['rgba(255,255,255,0.04)', 'rgba(4,6,8,0.85)']} style={StyleSheet.absoluteFillObject} />
+                <View style={{ padding: 16 }}>
+                  {/* Header row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                    <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: rank === 1 ? 'rgba(139,10,31,0.20)' : 'rgba(122,157,184,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: rank === 1 ? '#8B0A1F' : 'rgba(122,157,184,0.5)' }}>#{rank}</Text>
+                    </View>
+                    <View style={{ marginLeft: 8, flex: 1 }}>
+                      <View style={{ width: 80, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(139,10,31,0.18)' }}>
+                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#8B0A1F', letterSpacing: 1.2 }}>PRO</Text>
+                    </View>
                   </View>
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.15)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
-                  <View style={{ marginLeft: 'auto', backgroundColor: 'rgba(139,10,31,0.10)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 1 }}>PRO</Text>
+                  {/* Fake matchup row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View style={{ width: 40, height: 44, borderRadius: 10, backgroundColor: 'rgba(122,157,184,0.08)' }} />
+                      <View>
+                        <View style={{ width: 70, height: 13, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 5 }} />
+                        <View style={{ width: 45, height: 9, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'center', paddingHorizontal: 12 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(122,157,184,0.3)', letterSpacing: 1 }}>VS</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View style={{ width: 40, height: 44, borderRadius: 10, backgroundColor: 'rgba(139,10,31,0.08)' }} />
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <View style={{ width: 70, height: 13, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 5 }} />
+                        <View style={{ width: 45, height: 9, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                      </View>
+                    </View>
                   </View>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{ width: 36, height: 40, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)' }} />
-                  <View>
-                    <View style={{ width: 120, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 4 }} />
-                    <View style={{ width: 60, height: 10, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.03)' }} />
-                  </View>
+                  {/* Fake confidence bar */}
+                  {rank <= 2 ? (
+                    <View style={{ marginTop: 14 }}>
+                      <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
+                        <View style={{ width: rank === 1 ? '72%' : '58%', height: '100%', borderRadius: 3, backgroundColor: rank === 1 ? 'rgba(139,10,31,0.25)' : 'rgba(122,157,184,0.15)' }} />
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               </View>
-              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)', opacity: 0.6 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(122,157,184,0.10)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 10, fontWeight: '900', color: 'rgba(122,157,184,0.4)' }}>#2</Text>
-                  </View>
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.10)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{ width: 36, height: 40, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)' }} />
-                  <View>
-                    <View style={{ width: 100, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)', marginBottom: 4 }} />
-                    <View style={{ width: 50, height: 10, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.02)' }} />
-                  </View>
-                </View>
-              </View>
-              <View style={{ padding: 16, opacity: 0.3 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)' }} />
-                  <View style={{ width: 80, height: 10, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.03)' }} />
-                </View>
-              </View>
-            </View>
+            ))}
 
-            {/* CTA */}
-            <View style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(139,10,31,0.12)', padding: 24, alignItems: 'center' }}>
-              <LinearGradient colors={['rgba(139,10,31,0.06)', 'rgba(4,6,8,0.95)']} style={StyleSheet.absoluteFillObject} />
-              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(139,10,31,0.10)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-                <FieldGoalU size={26} color="#8B0A1F" />
+            {/* Lock overlay + CTA card */}
+            <View style={{ borderRadius: 22, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(122,157,184,0.15)', marginTop: 8 }}>
+              <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFillObject} />
+              <LinearGradient colors={['rgba(122,157,184,0.08)', 'rgba(139,10,31,0.08)', 'rgba(4,6,8,0.9)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFillObject} />
+              <View style={{ padding: 28, alignItems: 'center' }}>
+                {/* Lock icon */}
+                <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: 'rgba(122,157,184,0.10)', borderWidth: 1.5, borderColor: 'rgba(122,157,184,0.20)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, shadowColor: '#7A9DB8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 16 }}>
+                  <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                    <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z" fill="rgba(122,157,184,0.3)" stroke="#7A9DB8" strokeWidth="1.5" />
+                    <Path d="M7 11V7a5 5 0 0110 0v4" stroke="#7A9DB8" strokeWidth="1.5" strokeLinecap="round" />
+                    <Path d="M12 16v2" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                  </Svg>
+                </View>
+
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>Unlock Clutch Picks</Text>
+                <Text style={{ fontSize: 13, color: '#7A9DB8', textAlign: 'center', lineHeight: 20, marginBottom: 24, opacity: 0.8 }}>AI-powered picks ranked by confidence, updated daily across every sport.</Text>
+
+                {/* Feature bullets */}
+                <View style={{ width: '100%', gap: 12, marginBottom: 28 }}>
+                  {[
+                    { text: 'Confidence-ranked picks for every sport' },
+                    { text: 'Edge analysis & full breakdowns' },
+                    { text: 'Updated daily before games start' },
+                  ].map((item, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(122,157,184,0.06)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)' }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(122,157,184,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                          <Path d="M20 6L9 17l-5-5" stroke="#7A9DB8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                      </View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)', flex: 1 }}>{item.text}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* CTA button */}
+                <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                  <LinearGradient colors={['#8B0A1F', '#5A0614']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#8B0A1F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }}>Start Free Trial</Text>
+                  </LinearGradient>
+                </Pressable>
+
+                <Text style={{ fontSize: 11, color: 'rgba(122,157,184,0.5)', marginTop: 12, textAlign: 'center' }}>Cancel anytime · No commitment</Text>
               </View>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 6 }}>Unlock Clutch Picks</Text>
-              <Text style={{ fontSize: 12, color: '#A1B3C9', textAlign: 'center', lineHeight: 18, marginBottom: 18 }}>AI-ranked picks for every sport, every day. Confidence ratings, edge analysis, and full breakdowns.</Text>
-              <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
-                <LinearGradient colors={['#8B0A1F', '#6A0818']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Start Free Trial</Text>
-                </LinearGradient>
-              </Pressable>
             </View>
           </ScrollView>
         ) : validPicks.length > 0 ? (

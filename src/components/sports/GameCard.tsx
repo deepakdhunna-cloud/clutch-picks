@@ -1064,17 +1064,19 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 <View className="flex-1">
                   <Text
                     style={{
-                      fontSize: 13,
-                      fontWeight: '700',
+                      fontSize: 14,
+                      fontWeight: '900',
                       color: userPrediction?.pickedTeam === 'away' ? '#8B0A1F' : '#FFFFFF',
+                      letterSpacing: -0.2,
+                      lineHeight: 17,
                       ...(isAwayLoser ? { opacity: 0.35, color: '#555' } : {}),
                     }}
-                    numberOfLines={1}
+                    numberOfLines={2}
                   >
                     {game.awayTeam.name}
                   </Text>
                   <Text
-                    style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, marginTop: 1, ...(isAwayLoser ? { opacity: 0.35 } : {}) }}
+                    style={{ color: '#FFFFFF', fontSize: 9, marginTop: 3, ...(isAwayLoser ? { opacity: 0.35 } : {}) }}
                   >
                     {game.awayTeam.record}
                   </Text>
@@ -1119,17 +1121,20 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 <View className="flex-1 items-end" style={{ marginRight: 10 }}>
                   <Text
                     style={{
-                      fontSize: 13,
-                      fontWeight: '700',
+                      fontSize: 14,
+                      fontWeight: '900',
                       color: userPrediction?.pickedTeam === 'home' ? '#8B0A1F' : '#FFFFFF',
+                      letterSpacing: -0.2,
+                      lineHeight: 17,
+                      textAlign: 'right',
                       ...(isHomeLoser ? { opacity: 0.35, color: '#555' } : {}),
                     }}
-                    numberOfLines={1}
+                    numberOfLines={2}
                   >
                     {game.homeTeam.name}
                   </Text>
                   <Text
-                    style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, marginTop: 1, ...(isHomeLoser ? { opacity: 0.35 } : {}) }}
+                    style={{ color: '#FFFFFF', fontSize: 9, marginTop: 3, textAlign: 'right', ...(isHomeLoser ? { opacity: 0.35 } : {}) }}
                   >
                     {game.homeTeam.record}
                   </Text>

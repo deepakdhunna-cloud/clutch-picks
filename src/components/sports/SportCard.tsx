@@ -463,7 +463,7 @@ export const SportCard = memo(function SportCard({ sport, gameCount, index = 0, 
                   fontSize: 5,
                   fontWeight: '900',
                   letterSpacing: 2,
-                  color: isSelected ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.2)',
+                  color: isSelected ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.4)',
                 }}
               >
                 ADMIT ONE

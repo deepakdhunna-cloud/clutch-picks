@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import {
-  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView,
+  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -9,7 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, ChevronRight, Plus, Zap } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
+import { Search, ChevronRight, Plus, Zap, Lock } from 'lucide-react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
@@ -21,6 +22,7 @@ import { useUserPicks, useUserStats, type Pick as UserPick, type UserStats } fro
 import { useTeamFollows } from '@/hooks/useTeamFollows';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
+import { getTeamColors } from '@/lib/team-colors';
 
 // ─── COLORS ───
 const MAROON = '#8B0A1F';
@@ -258,63 +260,72 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
   const pt = ph ? game.homeTeam : game.awayTeam;
   const ps = ph ? hs : as2; const os = ph ? as2 : hs;
   const lead = ps > os; const d = ps - os;
+  const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color);
+  const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color);
   return (
     <Pressable
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/game/[id]', params: { id: game.id } }); }}
       style={{ opacity: 1, width: cardWidth }}
     >
       <View style={{ borderRadius: 22, borderWidth: 1.5, borderColor: BORDER_HI, overflow: 'hidden' }}>
-        {/* Dark base + subtle gradient wash */}
+        {/* Dark base */}
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#06080A' }} />
-        <LinearGradient colors={['rgba(139,10,31,0.04)', 'transparent', 'rgba(122,157,184,0.03)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+        {/* Team color washes */}
+        <LinearGradient colors={[`${awayColors.primary}22`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+        <LinearGradient colors={['transparent', `${homeColors.primary}18`]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
         {/* Shimmer ribbon */}
         <LinearGradient colors={[MAROON, TEAL, MAROON]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 2.5, width: '100%' }} />
         {/* Ribbon bleed glow */}
         <LinearGradient colors={['rgba(122,157,184,0.06)', 'rgba(139,10,31,0.03)', 'transparent']} style={{ height: 40, width: '100%' }} />
-        {/* Card content */}
-        <View style={{ padding: 20, paddingTop: 0 }}>
-          {/* Live meta + sport pill */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LIVE_RED }} />
-              <Text style={{ fontSize: 12, fontWeight: '600', color: WHITE }}>LIVE · {game.quarter ?? 'Q1'} {game.clock ?? null}</Text>
-            </View>
-            <View style={{ backgroundColor: MAROON_DIM, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: MAROON, letterSpacing: 0.5 }}>{game.sport}</Text>
-            </View>
+        {/* Live + sport — overlapping the ribbon bleed */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: -20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LIVE_RED }} />
+            <Text style={{ fontSize: 11, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>LIVE</Text>
           </View>
+          <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: WHITE, letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
+          </View>
+        </View>
+
+        {/* Card content */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}>
           {/* Scores */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: '600' }}>{game.awayTeam.abbreviation}</Text>
-              {pick?.pickedTeam === 'away' ? <View style={{ width: 20, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} /> : null}
-              <Text style={{ fontSize: 42, fontWeight: '800', color: WHITE }}>{as2}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SECONDARY, marginBottom: 2, letterSpacing: 0.5 }}>{game.awayTeam.abbreviation}</Text>
+              {pick?.pickedTeam === 'away' ? <View style={{ width: 16, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} /> : null}
+              <Text style={{ fontSize: 48, fontFamily: 'VT323_400Regular', color: WHITE, letterSpacing: 2 }}>{as2}</Text>
             </View>
-            <View style={{ alignItems: 'center', marginHorizontal: 12 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 0.5 }}>{game.quarter ?? null}</Text>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: TEXT_SECONDARY, marginTop: 2 }}>{game.clock ?? '0:00'}</Text>
+            <View style={{ alignItems: 'center', marginHorizontal: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: '300', color: 'rgba(255,255,255,0.15)' }}>–</Text>
+              {game.quarter || game.clock ? (
+                <Text style={{ fontSize: 14, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, marginTop: 2 }}>
+                  {game.quarter ?? null}{game.quarter && game.clock ? ' · ' : null}{game.clock ?? null}
+                </Text>
+              ) : null}
             </View>
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: '600' }}>{game.homeTeam.abbreviation}</Text>
-              {pick?.pickedTeam === 'home' ? <View style={{ width: 20, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} /> : null}
-              <Text style={{ fontSize: 42, fontWeight: '800', color: WHITE }}>{hs}</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SECONDARY, marginBottom: 2, letterSpacing: 0.5 }}>{game.homeTeam.abbreviation}</Text>
+              {pick?.pickedTeam === 'home' ? <View style={{ width: 16, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} /> : null}
+              <Text style={{ fontSize: 48, fontFamily: 'VT323_400Regular', color: WHITE, letterSpacing: 2 }}>{hs}</Text>
             </View>
           </View>
           {/* Stat boxes */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: pick ? MAROON_DIM : BORDER }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1, marginBottom: 4 }}>YOUR PICK</Text>
+            <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>YOUR PICK</Text>
               {pick ? (<><Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>{pt?.abbreviation}</Text><Text style={{ fontSize: 9, fontWeight: '600', color: lead ? TEAL : d === 0 ? TEXT_MUTED : ERROR, marginTop: 2 }}>{lead ? 'Leading' : d === 0 ? 'Tied' : 'Trailing'}</Text></>) : <Text style={{ fontSize: 10, color: TEXT_MUTED }}>No pick</Text>}
             </View>
             <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1, marginBottom: 4 }}>MOMENTUM</Text>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>MOMENTUM</Text>
               <View style={{ flexDirection: 'row', gap: 3, alignItems: 'flex-end', height: 20, marginBottom: 2 }}>
                 {[0.4,0.7,0.5,0.9,0.6].map((h,i) => <View key={i} style={{ width: 4, height: 8+h*12, borderRadius: 2, backgroundColor: h > 0.5 ? TEAL : TEXT_MUTED, opacity: 0.5+h*0.5 }} />)}
               </View>
               <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>{lead ? 'Positive' : 'Neutral'}</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1, marginBottom: 4 }}>KEY STAT</Text>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>KEY STAT</Text>
               <Text style={{ fontSize: 16, fontWeight: '800', color: SILVER }}>{game.prediction?.confidence ?? 50}%</Text>
               <Text style={{ fontSize: 9, color: TEXT_MUTED, marginTop: 2 }}>Confidence</Text>
             </View>
@@ -488,8 +499,8 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     dt = `${home.abbreviation} riding a ${hStreak}-game win streak meets ${away.abbreviation} on a ${aStreak}-game tear. Something has to give. ${winner.abbreviation} gets the edge at ${conf}%.`;
   }
 
-  // 2. DOMINANT FAVORITE — lowered threshold
-  if (!hl && conf >= 68 && edge >= 6 && trySet('dominant_favorite')) {
+  // 2. DOMINANT FAVORITE
+  if (!hl && conf >= 64 && edge >= 5 && trySet('dominant_favorite')) {
     hl = 'Strong lean';
     tags.push('HIGH CONFIDENCE',`${conf}%`);
     dt = `${winner.abbreviation} (${winner.record}) is a clear favorite at ${conf}% with a ${edge}/10 edge rating. ${loser.abbreviation} (${loser.record}) is outmatched across the model's key factors.`;
@@ -521,8 +532,8 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     dt = `The prediction models can't agree. Some factors favor ${home.abbreviation}, others point to ${away.abbreviation}. The composite leans ${winner.abbreviation} at ${conf}%, but certainty is lower than the number suggests.`;
   }
 
-  // 6. HOT TEAM — lowered threshold
-  if (!hl && (hStreak >= 4 || aStreak >= 4) && trySet('hot_team')) {
+  // 6. HOT TEAM
+  if (!hl && (hStreak >= 3 || aStreak >= 3) && trySet('hot_team')) {
     const hot = hStreak >= aStreak ? home : away; const streak = Math.max(hStreak, aStreak);
     hl = `${hot.abbreviation} is rolling`;
     tags.push(`W${streak} STREAK`);
@@ -559,12 +570,38 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     } else { hl = ''; drawType = 'default'; }
   }
 
-  // 10. DEFAULT — always unique per game
+  // 10. DEFAULT — rotate through varied templates based on game data
   if (!hl) {
-    drawType = 'default'; hl = `${away.abbreviation} at ${home.abbreviation}`;
-    dt = `${winner.abbreviation} (${winner.record}) favored at ${conf}% over ${loser.abbreviation} (${loser.record}).`;
-    if (hf.total > 1 && af.total > 1) dt += ` Recent form: ${home.abbreviation} ${hf.wins}-${hf.total - hf.wins}, ${away.abbreviation} ${af.wins}-${af.total - af.wins} in last 10.`;
-    if (edge >= 6) dt += ` Edge rating ${edge}/10 adds confidence.`;
+    drawType = 'default';
+    // Use game-specific data to pick a unique angle
+    const homeWinPct = hr.w / Math.max(hr.t, 1);
+    const awayWinPct = ar.w / Math.max(ar.t, 1);
+    const isHomeGame = p.predictedWinner === 'home';
+    const formDiff = hf.wins - af.wins;
+
+    if (conf >= 62 && edge >= 5) {
+      hl = `${winner.abbreviation} has the numbers`;
+      dt = `${winner.abbreviation} enters at ${conf}% confidence with a ${edge}/10 edge. The data favors them over ${loser.abbreviation} (${loser.record}) across multiple factors.`;
+    } else if (isHomeGame && homeWinPct > 0.55) {
+      hl = `Home court matters`;
+      dt = `${home.abbreviation} (${home.record}) has home-field advantage and the model's backing at ${conf}%. ${away.abbreviation} (${away.record}) faces an uphill battle on the road.`;
+    } else if (!isHomeGame && awayWinPct > 0.55) {
+      hl = `Road warriors`;
+      dt = `${away.abbreviation} (${away.record}) is favored despite playing away. ${conf}% confidence suggests their talent overcomes the venue disadvantage against ${home.abbreviation} (${home.record}).`;
+    } else if (Math.abs(formDiff) >= 2 && hf.total >= 5) {
+      const hotterTeam = formDiff > 0 ? home : away;
+      const colderTeam = formDiff > 0 ? away : home;
+      const hotWins = formDiff > 0 ? hf.wins : af.wins;
+      const hotTotal = formDiff > 0 ? hf.total : af.total;
+      hl = `Form favors ${hotterTeam.abbreviation}`;
+      dt = `${hotterTeam.abbreviation} is ${hotWins}-${hotTotal - hotWins} in their last ${hotTotal} while ${colderTeam.abbreviation} has been inconsistent. Model picks ${winner.abbreviation} at ${conf}%.`;
+    } else if (conf < 58) {
+      hl = `Close call`;
+      dt = `Only ${conf}% separates these teams. ${winner.abbreviation} gets a slight edge over ${loser.abbreviation} but this one could go either way. Edge rating: ${edge}/10.`;
+    } else {
+      hl = `${away.abbreviation} at ${home.abbreviation}`;
+      dt = `${winner.abbreviation} (${winner.record}) favored at ${conf}% over ${loser.abbreviation} (${loser.record}). ${edge >= 6 ? `Edge rating ${edge}/10 adds weight.` : 'A standard matchup by the numbers.'}`;
+    }
   }
 
   const ic = tags.filter(t => !['CLASH','TOSS-UP','SPLIT DECISION','LIMITED DATA'].includes(t)).length;
@@ -639,7 +676,17 @@ const CARD_W = SW - 40;
 const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, isR }: { live: GameWithPrediction[]; sched: GameWithPrediction[]; picks: UserPick[]; followed: GameWithPrediction[]; sh: any; onR: ()=>void; isR: boolean }) {
   const pm = useMemo(() => { const m = new Map<string,UserPick>(); picks.forEach(p => m.set(p.gameId,p)); return m; }, [picks]);
   const [focusedIdx, setFocusedIdx] = useState(0);
-  const focusedGame = live[focusedIdx] ?? null;
+  const [liveSearch, setLiveSearch] = useState('');
+  const filteredLive = useMemo(() => {
+    if (!liveSearch.trim()) return live;
+    const q = liveSearch.toLowerCase().trim();
+    return live.filter(g =>
+      g.homeTeam.name.toLowerCase().includes(q) || g.homeTeam.abbreviation.toLowerCase().includes(q) ||
+      g.awayTeam.name.toLowerCase().includes(q) || g.awayTeam.abbreviation.toLowerCase().includes(q) ||
+      g.sport.toLowerCase().includes(q)
+    );
+  }, [live, liveSearch]);
+  const focusedGame = filteredLive[focusedIdx] ?? filteredLive[0] ?? null;
   const focusedIntel = useMemo(() => generateLiveIntel(focusedGame), [focusedGame]);
 
   const onLiveScroll = useCallback((e: any) => {
@@ -671,16 +718,41 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
       {/* 2. Your Games */}
       <YourGames games={followed} />
 
-      {/* 3. Live Intelligence header — ABOVE cards */}
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginTop:28,marginBottom:18}}>
-        <Text style={{fontSize:16,fontWeight:'800',color:WHITE}}>Live intelligence</Text>
-        <Text style={{fontSize:10,color:TEXT_MUTED}}>Updated just now</Text>
+      {/* 3. Live Intelligence header + search */}
+      <View style={{paddingHorizontal:20,marginTop:28,marginBottom:12}}>
+        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <Text style={{fontSize:16,fontWeight:'800',color:WHITE}}>Live intelligence</Text>
+          <Text style={{fontSize:10,color:TEXT_MUTED}}>Updated just now</Text>
+        </View>
+        {live.length > 0 ? (
+          <View style={{flexDirection:'row',alignItems:'center',backgroundColor:'rgba(255,255,255,0.04)',borderRadius:12,borderWidth:1,borderColor:'rgba(255,255,255,0.08)',paddingHorizontal:12,paddingVertical:8,gap:8}}>
+            <Search size={14} color={TEXT_MUTED} />
+            <TextInput
+              value={liveSearch}
+              onChangeText={setLiveSearch}
+              placeholder="Search intelligence..."
+              placeholderTextColor='rgba(255,255,255,0.2)'
+              style={{flex:1,fontSize:13,fontWeight:'500',color:WHITE,padding:0}}
+              keyboardAppearance="dark"
+              returnKeyType="done"
+            />
+            {liveSearch.length > 0 ? (
+              <Pressable onPress={() => setLiveSearch('')} hitSlop={8}>
+                <Text style={{fontSize:14,color:TEXT_MUTED}}>×</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       {/* 4. Scrollable live cards */}
-      {live.length === 1 ? (
+      {filteredLive.length === 0 && liveSearch.trim() ? (
+        <View style={{alignItems:'center',paddingVertical:20}}>
+          <Text style={{fontSize:13,color:TEXT_MUTED}}>No live games match "{liveSearch}"</Text>
+        </View>
+      ) : filteredLive.length === 1 ? (
         <View style={{paddingHorizontal:20,marginBottom:8}}>
-          <LiveCard game={live[0]} pick={pm.get(live[0].id)} cardWidth={CARD_W} />
+          <LiveCard game={filteredLive[0]} pick={pm.get(filteredLive[0].id)} cardWidth={CARD_W} />
         </View>
       ) : (
         <ScrollView
@@ -690,14 +762,14 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
           onScroll={onLiveScroll} scrollEventThrottle={16}
           style={{flexGrow:0}}
         >
-          {live.map((g) => <LiveCard key={g.id} game={g} pick={pm.get(g.id)} cardWidth={CARD_W} />)}
+          {filteredLive.map((g) => <LiveCard key={g.id} game={g} pick={pm.get(g.id)} cardWidth={CARD_W} />)}
         </ScrollView>
       )}
 
       {/* 5. Page dots */}
-      {live.length > 1 ? (
+      {filteredLive.length > 1 ? (
         <View style={{flexDirection:'row',justifyContent:'center',gap:4,marginTop:10,marginBottom:4}}>
-          {live.map((_,i) => <View key={i} style={{width:i===focusedIdx?8:4,height:4,borderRadius:2,backgroundColor:i===focusedIdx?MAROON:'rgba(255,255,255,0.15)'}} />)}
+          {filteredLive.map((_,i) => <View key={i} style={{width:i===focusedIdx?8:4,height:4,borderRadius:2,backgroundColor:i===focusedIdx?MAROON:'rgba(255,255,255,0.15)'}} />)}
         </View>
       ) : null}
 
@@ -792,6 +864,144 @@ const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR }: {
   );
 });
 
+// ─── FREE ARENA — Game Day lite + locked Prep/Review previews ───
+function FreeArena({ games, sportFilter, router, sh, onR, isR, followed }: { games: GameWithPrediction[]; sportFilter: string; router: ReturnType<typeof useRouter>; sh: any; onR: () => void; isR: boolean; followed: GameWithPrediction[] }) {
+  const filtered = useMemo(() => {
+    if (sportFilter === 'All') return games;
+    return games.filter(g => g.sport === sportFilter);
+  }, [games, sportFilter]);
+
+  const live = useMemo(() => filtered.filter(g => g.status === GameStatus.LIVE || (g.status as string) === 'in_progress' || (g.status as string) === 'halftime'), [filtered]);
+  const sched = useMemo(() => filtered.filter(g => g.status === GameStatus.SCHEDULED).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()), [filtered]);
+  const final = useMemo(() => filtered.filter(g => g.status === GameStatus.FINAL).slice(0, 5), [filtered]);
+
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
+      {/* Header */}
+      <View style={{ paddingHorizontal: 20, marginTop: 4, marginBottom: 20 }}>
+        <Text style={{ fontSize: 10, fontWeight: '600', color: TEXT_MUTED, letterSpacing: 2.5, marginBottom: 4 }}>MY ARENA</Text>
+        <Text style={{ fontSize: 24, fontWeight: '800', color: WHITE }}>Game Day</Text>
+      </View>
+
+      {/* Your Games — followed teams/games */}
+      <YourGames games={followed} />
+
+      {/* Live games section */}
+      {live.length > 0 ? (
+        <View style={{ marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12, gap: 8 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE }}>Live Now</Text>
+            <PulsingLiveBadge />
+          </View>
+          {live.map(g => {
+            const ac = getTeamColors(g.awayTeam.abbreviation, g.sport);
+            const hc = getTeamColors(g.homeTeam.abbreviation, g.sport);
+            return (
+              <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, marginBottom: 10, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(220,38,38,0.15)' }}>
+                <LinearGradient colors={[`${ac.primary}15`, 'rgba(4,6,8,0.95)', `${hc.primary}10`]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: WHITE }}>{g.awayTeam.abbreviation}</Text>
+                    <Text style={{ fontSize: 10, color: TEXT_MUTED }}>{g.awayTeam.name}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center', paddingHorizontal: 14 }}>
+                    <Text style={{ fontSize: 22, fontWeight: '800', color: WHITE, fontFamily: 'VT323_400Regular' }}>{g.awayScore ?? 0} - {g.homeScore ?? 0}</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: LIVE_RED, marginTop: 2 }}>{(g as any).statusDetail ?? 'LIVE'}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: WHITE }}>{g.homeTeam.abbreviation}</Text>
+                    <Text style={{ fontSize: 10, color: TEXT_MUTED }}>{g.homeTeam.name}</Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {/* Upcoming games */}
+      {sched.length > 0 ? (
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, paddingHorizontal: 20, marginBottom: 12 }}>Upcoming</Text>
+          {sched.slice(0, 8).map((g, i) => (
+            <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: TC[i % 3], alignItems: 'center', justifyContent: 'center', marginRight: 14, opacity: 0.9 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: WHITE }}>{fmtTime(g.gameTime).replace(/\s*(AM|PM)/, '')}</Text>
+                <Text style={{ fontSize: 8, fontWeight: '600', color: WHITE }}>{fmtTime(g.gameTime).includes('PM') ? 'PM' : 'AM'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text>
+                <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 2 }}>{g.sport === 'NCAAF' ? 'CFB' : g.sport === 'NCAAB' ? 'CBB' : g.sport}</Text>
+              </View>
+              <ChevronRight size={16} color={TEXT_MUTED} />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Final scores */}
+      {final.length > 0 ? (
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, paddingHorizontal: 20, marginBottom: 12 }}>Final</Text>
+          {final.map(g => (
+            <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE }}>{g.awayTeam.abbreviation} <Text style={{ color: TEXT_MUTED }}>{g.awayScore ?? '-'}</Text></Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE, marginTop: 2 }}>{g.homeTeam.abbreviation} <Text style={{ color: TEXT_MUTED }}>{g.homeScore ?? '-'}</Text></Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUTED }}>FINAL</Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {/* No games */}
+      {live.length === 0 && sched.length === 0 && final.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: TEXT_MUTED }}>No games today</Text>
+        </View>
+      ) : null}
+
+      {/* Locked Prep Mode preview */}
+      <View style={{ marginHorizontal: 20, marginBottom: 16, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(139,10,31,0.18)' }}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <LinearGradient colors={['rgba(139,10,31,0.08)', 'rgba(4,6,8,0.90)']} style={StyleSheet.absoluteFillObject} />
+        <Pressable onPress={() => router.push('/paywall')} style={{ padding: 20, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Lock size={16} color={TEAL} />
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>Prep Mode</Text>
+            <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(139,10,31,0.18)' }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: MAROON, letterSpacing: 1 }}>PRO</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 12, color: TEAL, textAlign: 'center', lineHeight: 18, opacity: 0.8 }}>AI-ranked matchups, edge ratings, and detailed narratives for every game.</Text>
+        </Pressable>
+      </View>
+
+      {/* Locked Review preview */}
+      <View style={{ marginHorizontal: 20, marginBottom: 24, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(122,157,184,0.15)' }}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <LinearGradient colors={['rgba(122,157,184,0.06)', 'rgba(4,6,8,0.90)']} style={StyleSheet.absoluteFillObject} />
+        <Pressable onPress={() => router.push('/paywall')} style={{ padding: 20, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Lock size={16} color={TEAL} />
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>Review</Text>
+            <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(139,10,31,0.18)' }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: MAROON, letterSpacing: 1 }}>PRO</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 12, color: TEAL, textAlign: 'center', lineHeight: 18, opacity: 0.8 }}>See how your picks performed with accuracy breakdowns and AI analysis.</Text>
+        </Pressable>
+      </View>
+
+      <Disclaimer />
+    </Animated.ScrollView>
+  );
+}
+
 // ─── PRO UPSELL CARD ───
 function ProUpsellCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
   return (
@@ -883,6 +1093,8 @@ export default function MyArenaScreen() {
 
   const sx = useSharedValue(0);
   const pg = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-15, 15])
     .onStart(()=>{sx.value=mtx.value;})
     .onUpdate(e=>{mtx.value=Math.max(0,Math.min(2,sx.value-(e.translationX/SW)*1.5));})
     .onEnd(e=>{let t=Math.round(mtx.value);if(Math.abs(e.velocityX)>500) t=e.velocityX<0?Math.ceil(mtx.value):Math.floor(mtx.value);t=Math.max(0,Math.min(2,t));mtx.value=withSpring(t,SPRING);runOnJS(setAm)(t);});
@@ -897,14 +1109,8 @@ export default function MyArenaScreen() {
       <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>
         <ErrorBoundary>
         <SearchBar />
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-          <FreeGameList games={allGames ?? []} router={router} />
-          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
-            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.08)', textAlign: 'center', lineHeight: 14 }}>
-              AI predictions are for entertainment purposes only. Not financial advice.
-            </Text>
-          </View>
-        </ScrollView>
+        <SportPills selected={sf} onSelect={setSf} />
+        <FreeArena games={allGames ?? []} sportFilter={sf} router={router} sh={sh} onR={onR} isR={isR} followed={followed} />
         </ErrorBoundary>
       </SafeAreaView>
     );

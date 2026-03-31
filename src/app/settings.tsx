@@ -406,6 +406,7 @@ export default function SettingsScreen() {
                 onPress={async () => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   await AsyncStorage.setItem('clutch_onboarding_complete', 'false');
+                  await AsyncStorage.setItem('clutch_onboarding_skip_profile', 'true');
                   router.replace('/onboarding');
                 }}
               />
