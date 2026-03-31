@@ -1378,16 +1378,38 @@ export default function GameDetailScreen() {
           <LinearGradient colors={['transparent', hexToRgba(awayTeam.color, 0.22), hexToRgba(awayTeam.color, 0.45)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
           <View style={{ height: insets.top + 10 }} />
-          <View style={styles.topBar}>
+          {/* Top bar — back + follow */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 }}>
             <Pressable onPress={() => router.back()} style={styles.backBtn}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
-            <View style={styles.livePill}>
-              {isLive ? (<><LivePulseDot /><Text style={styles.liveText}>LIVE</Text><View style={styles.pillDivider} /></>) : null}
-              <Text style={styles.pillMeta}>{game.sport}{isLive && game.quarter ? ` · ${game.quarter}` : ''}{isLive && game.clock ? ` · ${game.clock}` : ''}</Text>
-            </View>
-            <Pressable onPress={toggleFollow} style={[styles.followBtn, followed && { backgroundColor: hexToRgba(homeTeam.color, 0.22), borderColor: hexToRgba(homeTeam.color, 0.5) }]}>
-              <Text style={[styles.followIcon, { color: followed ? homeTeam.color : '#fff' }]}>{followed ? '✓' : '+'}</Text>
-              <Text style={[styles.followText, { color: '#fff' }]}>{followed ? 'Added' : 'Follow'}</Text>
+            {/* Follow button — bold and visible */}
+            <Pressable
+              onPress={() => { Haptics.impactAsync(followed ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium); toggleFollow(); }}
+              style={({ pressed }) => ({
+                height: 38, borderRadius: 19, paddingHorizontal: 18, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6,
+                backgroundColor: followed ? 'rgba(122,157,184,0.2)' : 'rgba(255,255,255,0.15)',
+                borderWidth: 1.5,
+                borderColor: followed ? '#7A9DB8' : 'rgba(255,255,255,0.3)',
+                transform: [{ scale: pressed ? 0.92 : 1 }],
+              })}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? '✓' : '+'}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? 'Following' : 'Follow'}</Text>
             </Pressable>
+          </View>
+
+          {/* Centered sport + status pill */}
+          <View style={{ alignItems: 'center', marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 8 }}>
+              {isLive ? (<><LivePulseDot /><Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>LIVE</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
+              <View style={{ backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
+              </View>
+              {!isLive ? (
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                  {game.status === 'FINAL' ? 'Final' : new Date(game.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </Text>
+              ) : null}
+            </View>
           </View>
           <View style={styles.teamNamesRow}>
             <View style={{ flex: 1 }}>
@@ -1551,7 +1573,7 @@ const styles = StyleSheet.create({
   scorePanelOuter: { flex: 1, alignItems: 'center', paddingBottom: 8 },
   scorePanel: { paddingHorizontal: 22, paddingVertical: 14, alignItems: 'center' },
   scoreNumber: { fontSize: 72, fontFamily: 'VT323_400Regular', lineHeight: 78, letterSpacing: 2 },
-  scoreSep: { fontSize: 14, color: 'rgba(255,255,255,0.08)', fontWeight: '300', lineHeight: 48 },
+  scoreSep: { fontSize: 28, color: 'rgba(255,255,255,0.25)', fontWeight: '300', lineHeight: 78 },
   scoreClock: { fontSize: 13, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 4 },
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

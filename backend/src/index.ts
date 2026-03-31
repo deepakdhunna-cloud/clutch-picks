@@ -170,6 +170,7 @@ const port = Number(process.env.PORT) || 3000;
 // ─── Background jobs ────────────────────────────────────────────────────────
 
 import { resolvePicks } from "./lib/resolve-picks";
+import { checkLiveGamesAndNotify, checkBigGameAlerts } from "./lib/notification-jobs";
 import { prisma } from "./prisma";
 
 async function resolvePicksInBackground() {
@@ -199,6 +200,22 @@ async function warmPredictions() {
 }
 setInterval(warmPredictions, 4 * 60 * 1000);
 setTimeout(warmPredictions, 10_000);
+
+// Check for live games and notify users who picked them — every 2 minutes
+setInterval(() => {
+  checkLiveGamesAndNotify().catch(err => console.error("[notify] Live game check failed:", err));
+}, 2 * 60 * 1000);
+setTimeout(() => {
+  checkLiveGamesAndNotify().catch(err => console.error("[notify] Live game check failed:", err));
+}, 45_000);
+
+// Check for big upcoming games — every 30 minutes
+setInterval(() => {
+  checkBigGameAlerts().catch(err => console.error("[notify] Big game alert failed:", err));
+}, 30 * 60 * 1000);
+setTimeout(() => {
+  checkBigGameAlerts().catch(err => console.error("[notify] Big game alert failed:", err));
+}, 60_000);
 
 // Clean up old resolved predictions (keep 90 days) — runs daily
 async function cleanupOldData() {

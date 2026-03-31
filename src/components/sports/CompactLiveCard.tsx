@@ -110,18 +110,18 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
         {/* Top section: LIVE badge + sport */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 9, paddingBottom: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#F5A896', marginRight: 4 }} />
-            <Text style={{ color: '#F5A896', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>LIVE</Text>
+            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#DC2626', marginRight: 4 }} />
+            <Text style={{ color: '#DC2626', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>LIVE</Text>
           </View>
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.1)',
+            backgroundColor: 'rgba(122,157,184,0.15)',
             paddingHorizontal: 7,
             paddingVertical: 2,
             borderRadius: 5,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
+            borderColor: 'rgba(122,157,184,0.3)',
           }}>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{game.sport}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
           </View>
         </View>
 

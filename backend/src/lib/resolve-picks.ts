@@ -5,6 +5,7 @@
 
 import { prisma } from "../prisma";
 import { createNotification } from "../routes/notifications";
+import { notifyPickResult, checkStreakMilestone, calculateWinStreak } from "./notification-jobs";
 
 const ESPN_ENDPOINTS: Record<string, string> = {
   NFL: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
@@ -105,7 +106,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
   try {
     const unresolvedPicks = await prisma.userPick.findMany({
       where: { result: null },
-      select: { id: true, gameId: true, pickedTeam: true },
+      select: { id: true, gameId: true, pickedTeam: true, odId: true, homeTeam: true, awayTeam: true },
     });
 
     if (unresolvedPicks.length === 0) return { resolved: 0, skipped: 0 };
@@ -145,9 +146,13 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
         });
         resolved++;
 
-        // Notify user of resolved pick
+        // Notify user of resolved pick (in-app + push)
+        const homeAbbr = pick.homeTeam ?? 'HOME';
+        const awayAbbr = pick.awayTeam ?? 'AWAY';
+        const teams = [awayAbbr, homeAbbr].filter(Boolean).join(" vs ");
+
+        // In-app notification
         const emoji = result === "win" ? "W" : "L";
-        const teams = [pick.homeTeam, pick.awayTeam].filter(Boolean).join(" vs ");
         createNotification(
           pick.odId,
           "pick_resolved",
@@ -155,6 +160,16 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
           `Your pick on ${teams || "a game"} was a ${result}!`,
           { gameId: pick.gameId }
         );
+
+        // Rich push notification (deduped in notifyPickResult)
+        notifyPickResult(pick.odId, pick.gameId, result, homeAbbr, awayAbbr);
+
+        // Check if this win extends a streak worth celebrating
+        if (result === 'win') {
+          calculateWinStreak(pick.odId).then(streak => {
+            checkStreakMilestone(pick.odId, streak);
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error(`[resolve-picks] Error updating pick ${pick.id}:`, err);
         skipped++;

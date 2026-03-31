@@ -104,7 +104,7 @@ export default function SearchExploreScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [sportFilter, setSportFilter] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const onChangeText = useCallback((text: string, instant?: boolean) => {
     setQuery(text);

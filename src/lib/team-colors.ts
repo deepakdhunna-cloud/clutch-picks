@@ -694,8 +694,9 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
 
   // If colors weren't found, use ESPN color if available, otherwise default
   if (!colors) {
-    if (espnColor && espnColor !== '#000000') {
+    if (espnColor && espnColor.length >= 4) {
       // Use ESPN color as primary and white as secondary
+      // enhanceDarkColor below will handle black/near-black
       colors = { primary: espnColor.startsWith('#') ? espnColor : `#${espnColor}`, secondary: '#FFFFFF' };
     } else {
       colors = defaultColors;

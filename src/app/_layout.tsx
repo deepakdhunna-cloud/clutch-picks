@@ -15,6 +15,7 @@ import { SplashProvider, useSplash } from '@/lib/splash-context';
 import { SubscriptionProvider } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNotificationRegistration, useNotificationNavigation } from '@/hooks/useNotifications';
 import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
 
@@ -83,6 +84,10 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
   const { markAnimationComplete } = useSplash();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
+
+  // Register push notifications when user is signed in
+  useNotificationRegistration();
+  useNotificationNavigation(router);
 
   // Pre-check onboarding status once on mount
   useEffect(() => {

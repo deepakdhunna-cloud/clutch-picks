@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from 'react-native-reanimated';
 import { X } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import Purchases from 'react-native-purchases';
@@ -303,7 +304,7 @@ export default function PaywallScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <Pressable onPress={() => router.back()} style={{
+          <Pressable onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
             width: 34, height: 34, borderRadius: 12,
             backgroundColor: 'rgba(255,255,255,0.04)',
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
@@ -449,12 +450,16 @@ export default function PaywallScreen() {
               shadowColor: MAROON,
               shadowOffset: { width: 0, height: 0 },
             }, ctaGlowStyle]}>
+              <View style={{ borderRadius: 22, overflow: 'hidden' }}>
+              <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill]} />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,14,0.7)' }]} />
               <LinearGradient
-                colors={['rgba(139,10,31,0.06)', 'rgba(139,10,31,0.02)', BG]}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-                style={{ padding: 24 }}
-              >
+                colors={['rgba(139,10,31,0.08)', 'transparent', 'rgba(122,157,184,0.04)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[StyleSheet.absoluteFill]}
+              />
+              <View style={{ padding: 24 }}>
                 {/* Price row */}
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 }}>
                   <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{priceString}</Text>
@@ -549,7 +554,8 @@ export default function PaywallScreen() {
                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 6, lineHeight: 15 }}>
                   Subscription provides access to AI-generated predictions for entertainment purposes only.
                 </Text>
-              </LinearGradient>
+              </View>
+              </View>
             </Animated.View>
           </Animated.View>
 
