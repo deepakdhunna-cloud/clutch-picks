@@ -5,10 +5,10 @@ import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 
 // Polling intervals for different contexts
-const LIVE_POLLING_INTERVAL = 30000; // 30 seconds — SSE handles real-time, this is a fallback
-const DEFAULT_POLLING_INTERVAL = 120000; // 2 minutes — no live games, minimal polling
-const STALE_TIME = 30000; // 30 seconds — prevents excessive refetches on tab focus
-const GAME_DETAIL_STALE_TIME = 15000; // 15 seconds — game detail
+const LIVE_POLLING_INTERVAL = 5000; // 5 seconds — fast fallback when SSE drops
+const DEFAULT_POLLING_INTERVAL = 20000; // 20 seconds — keeps cards fresh even without live games
+const STALE_TIME = 5000; // 5 seconds — quick staleness for snappy tab switches
+const GAME_DETAIL_STALE_TIME = 3000; // 3 seconds — game detail stays very fresh
 
 // Prefetch news for a game's teams
 async function prefetchNewsForGame(queryClient: ReturnType<typeof useQueryClient>, game: GameWithPrediction) {
@@ -166,10 +166,10 @@ export function useGame(gameId: string) {
       const game = query.state.data;
       if (game?.status === GameStatus.LIVE) {
         // SSE already writes live scores to ['game', id] cache.
-        // Only poll as a fallback in case SSE drops. Use longer interval.
-        return sseConnectedRef.current ? 30000 : LIVE_POLLING_INTERVAL;
+        // Poll as fast fallback in case SSE drops.
+        return sseConnectedRef.current ? LIVE_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;
       }
-      return DEFAULT_POLLING_INTERVAL; // 45 seconds otherwise
+      return DEFAULT_POLLING_INTERVAL;
     },
     refetchIntervalInBackground: false,
     // Refetch immediately on mount if no prediction yet, skip if data is fresh
@@ -212,9 +212,9 @@ export function useWeekGamesBySport(sport: string) {
       );
     },
     enabled: !!sport,
-    staleTime: 15000, // 15 seconds
+    staleTime: GAME_DETAIL_STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: 45000, // 45 seconds for week view
+    refetchInterval: DEFAULT_POLLING_INTERVAL,
     refetchIntervalInBackground: false,
   });
 }
@@ -269,9 +269,9 @@ export function useTopPicks() {
       const result = await api.get<GameWithPrediction[]>('/api/games/top-picks');
       return result ?? [];
     },
-    staleTime: 60000, // 1 minute - predictions don't change often
+    staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    refetchInterval: 60000, // Refresh every minute
     refetchIntervalInBackground: false,
   });
 }

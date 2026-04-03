@@ -170,7 +170,10 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
           <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
           <Stack.Screen name="model-accuracy" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="confidence-explained" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="search-explore" options={{ freezeOnBlur: true, animation: 'fade' }} />
+          <Stack.Screen name="picks-history" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="confidence-tiers" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', freezeOnBlur: true, animation: 'slide_from_bottom', animationDuration: 250 }} />
         </Stack>
       </ThemeProvider>

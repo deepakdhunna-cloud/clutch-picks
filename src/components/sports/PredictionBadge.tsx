@@ -11,6 +11,13 @@ interface PredictionBadgeProps {
   isTossUp?: boolean;
 }
 
+function getTier(confidence: number, isTossUp?: boolean) {
+  if (isTossUp || confidence < 53) return { label: 'Toss-Up', color: '#6B7C94' };
+  if (confidence < 60) return { label: 'Solid Pick', color: '#7A9DB8' };
+  if (confidence < 72) return { label: 'Strong Pick', color: '#4ECDC4' };
+  return { label: 'Lock', color: '#FFD700' };
+}
+
 export const PredictionBadge = memo(function PredictionBadge({
   confidence,
   predictedWinner,
@@ -18,90 +25,46 @@ export const PredictionBadge = memo(function PredictionBadge({
   showBar = true,
   isTossUp = false,
 }: PredictionBadgeProps) {
-  // Toss-up gets muted neutral styling
-  const getTossUpColors = () => ({
-    bg: 'bg-[#4B5563]/20',
-    text: 'rgba(255,255,255,0.4)',
-    bar: 'rgba(255,255,255,0.2)',
-    glow: 'rgba(255,255,255,0.1)',
-  });
-
-  // Color coding: maroon for high confidence, teal for medium, muted for low
-  const getConfidenceColor = () => {
-    if (isTossUp) return getTossUpColors();
-    // High confidence (75%+): Maroon text on maroon bg
-    if (confidence >= 75) return { bg: 'bg-[#8B0A1F]/25', text: '#8B0A1F', bar: '#8B0A1F', glow: '#8B0A1F' };
-    // Good confidence (65-74%): Maroon
-    if (confidence >= 65) return { bg: 'bg-[#8B0A1F]/20', text: '#8B0A1F', bar: '#8B0A1F', glow: '#8B0A1F' };
-    // Medium confidence (55-64%): Maroon lighter
-    if (confidence >= 55) return { bg: 'bg-[#8B0A1F]/15', text: '#8B0A1F', bar: '#8B0A1F', glow: '#8B0A1F' };
-    // Lower confidence (<55%): Muted maroon
-    return { bg: 'bg-[#8B0A1F]/10', text: '#6B4450', bar: '#6B4450', glow: '#6B4450' };
-  };
-
-  const colors = getConfidenceColor();
-
-  const sizeClasses = {
-    small: {
-      container: 'px-3 py-1.5',
-      text: 'text-xs',
-      confidence: 'text-base font-black',
-    },
-    medium: {
-      container: 'px-4 py-2',
-      text: 'text-xs',
-      confidence: 'text-lg font-black',
-    },
-    large: {
-      container: 'px-5 py-3',
-      text: 'text-sm',
-      confidence: 'text-2xl font-black',
-    },
-  };
-
-  const styles = sizeClasses[size];
-
-  // Label text: toss-up shows "Toss-Up", otherwise the team abbreviation
+  const tier = getTier(confidence, isTossUp);
   const pickLabel = isTossUp ? 'Toss-Up' : predictedWinner;
-  // Confidence display: gray for toss-up
-  const confidenceTextColor = isTossUp ? 'rgba(255,255,255,0.4)' : colors.text;
-  const barColor = isTossUp ? 'rgba(255,255,255,0.2)' : colors.bar;
-  const borderColor = isTossUp ? 'rgba(255,255,255,0.1)' : colors.bar + '40';
+
+  const sizeStyles = {
+    small: { container: 'px-3 py-1.5', label: 13 as const, sub: 10 as const },
+    medium: { container: 'px-4 py-2', label: 15 as const, sub: 11 as const },
+    large: { container: 'px-5 py-3', label: 18 as const, sub: 12 as const },
+  };
+  const s = sizeStyles[size];
 
   return (
     <Animated.View
       entering={FadeIn.duration(400)}
-      className={cn('rounded-xl', colors.bg, styles.container)}
+      className={cn('rounded-xl', s.container)}
       style={{
         borderWidth: 1,
-        borderColor,
+        borderColor: `${tier.color}40`,
+        backgroundColor: `${tier.color}12`,
       }}
     >
       <View className="flex-row items-center gap-2">
         <View className="items-center">
-          <Text style={{ color: '#FFFFFF' }} className={styles.confidence}>
-            {confidence}%
+          <Text style={{ fontSize: s.label, fontWeight: '800', color: tier.color, letterSpacing: 0.3 }}>
+            {tier.label}
           </Text>
-          {size !== 'small' ? (
-            <Text className={cn('text-zinc-500 uppercase tracking-wider', styles.text)}>
-              {isTossUp ? 'toss-up' : 'confidence'}
-            </Text>
-          ) : null}
         </View>
 
-        {showBar ? (
+        {showBar && size !== 'small' ? (
           <View className="flex-1 ml-2">
             <View className="h-2 bg-zinc-700/50 rounded-full overflow-hidden">
               <View
                 style={{
                   width: `${confidence}%`,
-                  backgroundColor: barColor,
+                  backgroundColor: `${tier.color}B3`,
                   height: '100%',
                   borderRadius: 999,
                 }}
               />
             </View>
-            <Text className={cn('text-zinc-400 mt-1', styles.text)} numberOfLines={1}>
+            <Text style={{ fontSize: s.sub, color: 'rgba(255,255,255,0.4)', marginTop: 4 }} numberOfLines={1}>
               Pick: {pickLabel}
             </Text>
           </View>

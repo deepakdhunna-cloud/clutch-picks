@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { TeamJerseyCompact } from './TeamJersey';
+import { displaySport } from '@/lib/display-confidence';
 
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 165;
@@ -121,7 +122,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             borderWidth: 1,
             borderColor: 'rgba(122,157,184,0.3)',
           }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
           </View>
         </View>
 
@@ -154,10 +155,11 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               ) : null}
             </View>
             <Text style={{
-              color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+              color: '#FFFFFF',
               fontSize: 20,
-              fontWeight: awayWinning ? '900' : '500',
+              fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
+              opacity: awayWinning ? 1 : 0.35,
             }}>
               {awayScore}
             </Text>
@@ -189,10 +191,11 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               ) : null}
             </View>
             <Text style={{
-              color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+              color: '#FFFFFF',
               fontSize: 20,
-              fontWeight: homeWinning ? '900' : '500',
+              fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
+              opacity: homeWinning ? 1 : 0.35,
             }}>
               {homeScore}
             </Text>

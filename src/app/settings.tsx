@@ -1,11 +1,11 @@
-import { View, Text, Pressable, ScrollView, Alert, Linking, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert, Linking, Platform, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift } from 'lucide-react-native';
+import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift, Bell, Zap, TrendingUp, AlertTriangle, Activity } from 'lucide-react-native';
 import { Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -108,6 +108,30 @@ export default function SettingsScreen() {
   const [promoLoading, setPromoLoading] = useState(false);
   const { isPremium, isLoading: isSubscriptionLoading, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
+
+  // Notification preferences — stored in AsyncStorage
+  const [notifPrefs, setNotifPrefs] = useState({
+    gameLive: true,
+    pickResult: true,
+    predictionShift: true,
+    bigGame: true,
+    streak: true,
+  });
+
+  useEffect(() => {
+    AsyncStorage.getItem('clutch_notif_prefs').then(val => {
+      if (val) { try { setNotifPrefs(JSON.parse(val)); } catch {} }
+    });
+  }, []);
+
+  const toggleNotif = useCallback((key: keyof typeof notifPrefs) => {
+    setNotifPrefs(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      AsyncStorage.setItem('clutch_notif_prefs', JSON.stringify(next));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      return next;
+    });
+  }, []);
 
   const handleRedeemPromo = async (code: string) => {
     if (!code.trim()) return;
@@ -350,8 +374,84 @@ export default function SettingsScreen() {
             </SettingSection>
           </Animated.View>
 
+          {/* Notifications */}
+          <Animated.View entering={FadeInDown.delay(175).duration(400)}>
+            <SettingSection title="NOTIFICATIONS">
+              <SettingItem
+                icon={Activity}
+                title="Game Going Live"
+                subtitle="When a game you picked starts"
+                showArrow={false}
+                rightElement={
+                  <Switch
+                    value={notifPrefs.gameLive}
+                    onValueChange={() => toggleNotif('gameLive')}
+                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
+                    thumbColor={notifPrefs.gameLive ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
+                  />
+                }
+              />
+              <SettingItem
+                icon={Zap}
+                title="Pick Results"
+                subtitle="Win or loss when your pick resolves"
+                showArrow={false}
+                rightElement={
+                  <Switch
+                    value={notifPrefs.pickResult}
+                    onValueChange={() => toggleNotif('pickResult')}
+                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
+                    thumbColor={notifPrefs.pickResult ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
+                  />
+                }
+              />
+              <SettingItem
+                icon={AlertTriangle}
+                title="Prediction Shifts"
+                subtitle="When the model changes its predicted winner"
+                showArrow={false}
+                rightElement={
+                  <Switch
+                    value={notifPrefs.predictionShift}
+                    onValueChange={() => toggleNotif('predictionShift')}
+                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
+                    thumbColor={notifPrefs.predictionShift ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
+                  />
+                }
+              />
+              <SettingItem
+                icon={TrendingUp}
+                title="Big Game Alerts"
+                subtitle="High-confidence picks 3 hours before tip-off"
+                showArrow={false}
+                rightElement={
+                  <Switch
+                    value={notifPrefs.bigGame}
+                    onValueChange={() => toggleNotif('bigGame')}
+                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
+                    thumbColor={notifPrefs.bigGame ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
+                  />
+                }
+              />
+              <SettingItem
+                icon={Bell}
+                title="Win Streak Milestones"
+                subtitle="Celebrate 5, 7, 10+ correct picks in a row"
+                showArrow={false}
+                rightElement={
+                  <Switch
+                    value={notifPrefs.streak}
+                    onValueChange={() => toggleNotif('streak')}
+                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
+                    thumbColor={notifPrefs.streak ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
+                  />
+                }
+              />
+            </SettingSection>
+          </Animated.View>
+
           {/* Privacy & Security */}
-          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(225).duration(400)}>
             <SettingSection title="PRIVACY & SECURITY">
               <SettingItem
                 icon={Lock}

@@ -17,6 +17,7 @@ import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { api } from '@/lib/api/api';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
+import { displayConfidence, displaySport } from '@/lib/display-confidence';
 import { authClient } from '@/lib/auth/auth-client';
 import { GameWithPrediction, GameStatus } from '@/types/sports';
 import { isRevenueCatEnabled, logoutUser } from '@/lib/revenuecatClient';
@@ -161,7 +162,7 @@ const SportMasteryRing = memo(function SportMasteryRing({ sport, pct, wins, tota
           <Text style={{ fontSize: 13, fontWeight: '800', color: C.TEXT_PRIMARY }}>{pct}%</Text>
         </View>
       </View>
-      <Text style={{ fontSize: 10, fontWeight: '700', color: C.TEXT_PRIMARY, marginBottom: 2 }}>{sport}</Text>
+      <Text style={{ fontSize: 10, fontWeight: '700', color: C.TEXT_PRIMARY, marginBottom: 2 }}>{displaySport(sport)}</Text>
       <Text style={{ fontSize: 8, color: C.TEXT_MUTED }}>{wins}-{total - wins}</Text>
     </View>
   );
@@ -278,7 +279,7 @@ export default function ProfileScreen() {
     if (!picks || picks.length === 0) return [];
     if (__DEV__) console.log('[Profile] picks count:', picks.length, 'games count:', allGames?.length ?? 0);
     const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
-    const tiles = [...picks].reverse().slice(0, 15).map((p) => {
+    const tiles = [...picks].reverse().slice(0, 5).map((p) => {
       const game = gameMap.get(p.gameId);
       // Use game data if available, fall back to pick's own fields
       const pickedAbbr = p.pickedTeam === 'home'
@@ -306,7 +307,7 @@ export default function ProfileScreen() {
 
   const formLine = useMemo(() => {
     if (!picks) return [];
-    return [...picks].reverse().slice(0, 10).map((p) => p.result ?? 'pending');
+    return [...picks].reverse().slice(0, 20).map((p) => p.result ?? 'pending');
   }, [picks]);
 
   const formRecord = useMemo(() => {
@@ -386,7 +387,7 @@ export default function ProfileScreen() {
           away: game.awayTeam.abbreviation, home: game.homeTeam.abbreviation,
           awayScore: game.awayScore ?? 0, homeScore: game.homeScore ?? 0,
           sport: game.sport, date: new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          detail: `Called at ${conf}% confidence. The model's top-rated pick that day.`,
+          detail: `Called at ${displayConfidence(conf)}% confidence. The model's top-rated pick that day.`,
         };
       }
     }
@@ -408,8 +409,8 @@ export default function ProfileScreen() {
             awayScore: game.awayScore ?? 0, homeScore: game.homeScore ?? 0,
             sport: game.sport, date: new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             detail: wentAgainstModel
-              ? `Went against the model and won. ${conf}% said the other side.`
-              : `Picked at just ${conf}% confidence. Saw value others missed.`,
+              ? `Went against the model and won. ${displayConfidence(conf)}% said the other side.`
+              : `Picked at just ${displayConfidence(conf)}% confidence. Saw value others missed.`,
           };
         }
       }
@@ -595,7 +596,7 @@ export default function ProfileScreen() {
               {/* Form line */}
               <View style={{ marginTop: 16 }}>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {Array.from({ length: 10 }).map((_, i) => {
+                  {Array.from({ length: 20 }).map((_, i) => {
                     const result = formLine[i];
                     const isWin = result === 'win';
                     const isLoss = result === 'loss';
@@ -603,7 +604,7 @@ export default function ProfileScreen() {
                   })}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-                  <Text style={{ fontSize: 9, color: C.TEXT_MUTED }}>Last 10 predictions</Text>
+                  <Text style={{ fontSize: 9, color: C.TEXT_MUTED }}>Last 20 predictions</Text>
                   <Text style={{ fontSize: 9, fontWeight: '600', color: C.TEAL }}>{formRecord.w}-{formRecord.l}</Text>
                 </View>
               </View>
@@ -721,7 +722,17 @@ export default function ProfileScreen() {
               <View style={{ width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 10, color: C.TEXT_MUTED, textAlign: 'center' }}>Make picks to see them here</Text>
               </View>
-            ) : null}
+            ) : (
+              <Pressable
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/picks-history'); }}
+                style={{ width: 80, height: 130, backgroundColor: C.GLASS, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(122,157,184,0.2)', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.TEAL_DIM, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, color: C.TEAL, fontWeight: '700' }}>›</Text>
+                </View>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEAL, letterSpacing: 0.5 }}>View All</Text>
+              </Pressable>
+            )}
           </ScrollView>
         </Animated.View>
 

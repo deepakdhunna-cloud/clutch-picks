@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "ff8c8819-996d-4f95-bae2-7f3ae308a3e6"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.deepakdhunna.backend",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

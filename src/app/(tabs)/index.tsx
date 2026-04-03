@@ -1,4 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
@@ -9,15 +9,16 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
+  withSequence,
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
 import React, { useState, useCallback, useEffect, useMemo, memo, useRef } from 'react';
 import { ChevronRight, X, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Rect as SvgRect, Defs, Pattern as SvgPattern, Line as SvgLine } from 'react-native-svg';
 import { PicksBadge } from '@/components/shared/PicksBadge';
-import { SportCard, GameCard, getTicketColor } from '@/components/sports';
+import { SportCard, GameCard, getTicketColor, getSportIcon, DotMatrixText, DotMatrixIcon } from '@/components/sports';
 import CompactLiveCard from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
 import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
@@ -27,9 +28,27 @@ import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
 import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
+import { displaySport } from '@/lib/display-confidence';
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
+
+// Pixel grid overlay for jumbotron aesthetic
+const JBPixelGrid = memo(function JBPixelGrid() {
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFillObject}>
+        <Defs>
+          <SvgPattern id="jbpixelgrid" x="0" y="0" width="2" height="2" patternUnits="userSpaceOnUse">
+            <SvgRect width="2" height="2" fill="transparent" />
+            <SvgRect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
+          </SvgPattern>
+        </Defs>
+        <SvgRect x="0" y="0" width="100%" height="100%" fill="url(#jbpixelgrid)" />
+      </Svg>
+    </View>
+  );
+});
 
 // Field goal post to replace "U" - with football going through - memoized
 const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: string; size?: number }) {
@@ -99,6 +118,7 @@ interface HomeHeaderProps {
   horizontalPadding: number;
   headerFontSize: number;
   responsive: ReturnType<typeof useResponsive>;
+  statusFilter: 'all' | 'upcoming' | 'final';
 }
 
 const HomeHeader = React.memo(function HomeHeader({
@@ -122,13 +142,30 @@ const HomeHeader = React.memo(function HomeHeader({
   horizontalPadding,
   headerFontSize,
   responsive,
+  statusFilter,
 }: HomeHeaderProps) {
+  // Scanline for Today's Games bar — synced with sport chips via global clock
+  const barScanY = useSharedValue(-24);
+  useEffect(() => {
+    const SCAN_DUR = 2500;
+    const phase = (Date.now() % SCAN_DUR) / SCAN_DUR;
+    const startVal = -24 + phase * 84; // -24 to 60 range
+    barScanY.value = startVal;
+    barScanY.value = withTiming(60, { duration: SCAN_DUR * (1 - phase), easing: Easing.linear });
+    const timer = setTimeout(() => {
+      barScanY.value = -24;
+      barScanY.value = withRepeat(withTiming(60, { duration: SCAN_DUR, easing: Easing.linear }), -1, false);
+    }, SCAN_DUR * (1 - phase));
+    return () => { clearTimeout(timer); cancelAnimation(barScanY); };
+  }, []);
+  const barScanStyle = useAnimatedStyle(() => ({ transform: [{ translateY: barScanY.value }] }));
+
   return (
     <>
-      {/* Today Games Bar — Ticket Style */}
+      {/* Today Games Bar — Jumbotron LED Style */}
       <Animated.View
         entering={FadeInDown.delay(150).duration(500)}
-        style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginTop: 12, marginBottom: 16 }}
+        style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 14, marginTop: 0, marginBottom: 12 }}
       >
         <Pressable
           onPress={() => {
@@ -144,133 +181,67 @@ const HomeHeader = React.memo(function HomeHeader({
           })}
         >
           {(() => {
-            const hasFilter = !!selectedSportFilter;
-            const barColor = hasFilter ? getTicketColor(selectedSportFilter!) : '#1C2A3A';
-            const barCount = hasFilter
-              ? (gameCounts?.[selectedSportFilter!] ?? 0)
+            const barCount = selectedSportFilter
+              ? (gameCounts?.[selectedSportFilter] ?? 0)
               : Object.values(gameCounts ?? {}).reduce((s: number, c) => s + ((c as number) ?? 0), 0);
-
-            if (!hasFilter) {
-              // ── DEFAULT STATE: dark glass with blur ──
-              return (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: 12,
-                    paddingHorizontal: 16,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.2)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.03)' }]} />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }}>
-                    {/* Mini ticket — glass style */}
-                    <View style={{
-                      width: 26, height: 32, borderRadius: 6, overflow: 'hidden',
-                      borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-                      backgroundColor: 'rgba(255,255,255,0.03)',
-                    }}>
-                      {/* Top accent */}
-                      <View style={{ height: 2, backgroundColor: '#5A7A8A' }} />
-                      {/* Number */}
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{barCount}</Text>
-                      </View>
-                      {/* Perforation */}
-                      <View style={{ marginHorizontal: 2, height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: 'rgba(255,255,255,0.1)' }} />
-                      {/* Zigzag */}
-                      <View style={{ height: 4, backgroundColor: '#040608', flexDirection: 'row' }}>
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 2.5, borderRightWidth: 2.5, borderTopWidth: 3, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#040608', marginTop: -3 }} />
-                        ))}
-                      </View>
-                    </View>
-                    <View>
-                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Today's Games</Text>
-                      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>
-                        {barCount} games on the board
-                      </Text>
-                    </View>
-                  </View>
-                  <View
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                      backgroundColor: 'rgba(90,122,138,0.15)',
-                      borderWidth: 1,
-                      borderColor: 'rgba(90,122,138,0.25)',
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#7A9DB8', letterSpacing: 0.5 }}>VIEW ALL</Text>
-                  </View>
-                </View>
-              );
-            }
-
-            // ── FILTERED STATE: dark glass with maroon accent ──
+            const sportLabel = selectedSportFilter
+              ? (displaySport(selectedSportFilter!))
+              : null;
+            const barLabel = selectedSportFilter
+              ? statusFilter === 'all' ? `${sportLabel!} TODAY` : statusFilter === 'final' ? `${sportLabel!} FINALS` : `${sportLabel!} SCHEDULED`
+              : statusFilter === 'all' ? "TODAY'S GAMES" : statusFilter === 'final' ? "FINAL RESULTS" : "SCHEDULED GAMES";
             return (
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: 12,
+                  padding: 14,
                   paddingHorizontal: 16,
-                  borderRadius: 14,
+                  borderRadius: 3,
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.2)',
+                  borderColor: 'rgba(255,255,255,0.1)',
                   overflow: 'hidden',
+                  backgroundColor: '#080c10',
+                  shadowColor: '#7A9DB8',
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 14,
                 }}
               >
-                <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(139,10,31,0.06)' }]} />
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }}>
-                  {/* Mini ticket — glass style with maroon accent */}
-                  <View style={{
-                    width: 26, height: 32, borderRadius: 6, overflow: 'hidden',
-                    borderWidth: 1, borderColor: 'rgba(139,10,31,0.35)',
-                    backgroundColor: 'rgba(255,255,255,0.03)',
-                  }}>
-                    {/* Top accent */}
-                    <View style={{ height: 2, backgroundColor: '#8B0A1F' }} />
-                    {/* Number */}
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{barCount}</Text>
-                    </View>
-                    {/* Perforation */}
-                    <View style={{ marginHorizontal: 2, height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: 'rgba(255,255,255,0.1)' }} />
-                    {/* Zigzag */}
-                    <View style={{ height: 4, backgroundColor: '#040608', flexDirection: 'row' }}>
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 2.5, borderRightWidth: 2.5, borderTopWidth: 3, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#040608', marginTop: -3 }} />
-                      ))}
-                    </View>
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Today's Games</Text>
-                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>
-                      {selectedSportFilter} · {barCount} matchups
-                    </Text>
-                  </View>
+                {/* Top specular highlight */}
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.04)', zIndex: 3 }} pointerEvents="none" />
+                {/* Pixel grid */}
+                <View style={StyleSheet.absoluteFillObject} pointerEvents="none"><JBPixelGrid /></View>
+
+                {/* Scanline sweep */}
+                <View style={[StyleSheet.absoluteFillObject, { overflow: 'hidden', borderRadius: 3 }]} pointerEvents="none">
+                  <Animated.View style={[barScanStyle, { position: 'absolute', left: 0, right: 0, height: 24 }]}>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(122,157,184,0.06)', 'rgba(255,255,255,0.03)', 'rgba(122,157,184,0.06)', 'transparent']}
+                      style={{ flex: 1 }}
+                    />
+                  </Animated.View>
                 </View>
-                <View
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 8,
-                    backgroundColor: 'rgba(139,10,31,0.15)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(139,10,31,0.3)',
-                  }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>VIEW ALL</Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 4 }}>
+                  {selectedSportFilter ? (
+                    <DotMatrixIcon sport={selectedSportFilter} litColor="#FFFFFF" pixelSize={1.5} />
+                  ) : (
+                    <Svg width={14} height={16} viewBox="0 0 14 16">
+                      {[[0,1,0,0,0,1,0],[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1],[1,0,1,0,1,0,1],[1,0,0,0,0,0,1],[1,0,1,0,1,0,1],[1,1,1,1,1,1,1]].map((row, r) =>
+                        row.map((px, c) => (
+                          <SvgRect key={`${r}-${c}`} x={c * 2} y={r * 2} width={1.5} height={1.5} rx={0.2} fill={px ? '#FFFFFF' : 'rgba(255,255,255,0.04)'} />
+                        ))
+                      )}
+                    </Svg>
+                  )}
+                  <DotMatrixText text={barLabel} litColor="#9BB8CF" pixelSize={1.5} />
                 </View>
+
+                {/* Count — dot matrix */}
+                <DotMatrixText text={String(barCount)} litColor="#FFFFFF" pixelSize={1.5} />
+
               </View>
             );
           })()}
@@ -280,12 +251,12 @@ const HomeHeader = React.memo(function HomeHeader({
       {/* Sports Categories */}
       <Animated.View
         entering={FadeInDown.delay(100).duration(500)}
-        style={{ paddingTop: 0, paddingBottom: 4 }}
+        style={{ paddingTop: 0, paddingBottom: 24 }}
       >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, paddingVertical: 10, gap: 10 }}
+          contentContainerStyle={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, paddingVertical: 6, gap: 10 }}
           style={{ flexGrow: 0 }}
           scrollEventThrottle={16}
           removeClippedSubviews={true}
@@ -302,6 +273,7 @@ const HomeHeader = React.memo(function HomeHeader({
                 compact
                 onPress={() => setSelectedSportFilter(isSelected ? null : sport)}
                 isSelected={isSelected}
+                hasActiveFilter={selectedSportFilter !== null}
               />
             );
           })}
@@ -311,29 +283,31 @@ const HomeHeader = React.memo(function HomeHeader({
       {/* Live Games Section — header always shows */}
       <Animated.View
         entering={FadeInDown.delay(100).duration(500)}
-        style={{ marginBottom: 20, marginTop: 20 }}
+        style={{ marginBottom: 24, marginTop: 0 }}
       >
-        <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
+        <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <LinearGradient
-              colors={filteredLiveGames.length > 0 ? ['#DC2626', '#8B0A1F'] : ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.06)']}
-              start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-              style={{ width: 4, height: 26, borderRadius: 2 }}
-            />
+            {/* Maroon→Teal gradient bar — pulses when live, dimmed when no live games */}
+            {filteredLiveGames.length > 0 ? (
+              <Animated.View style={[ring1Style, { width: 4, height: 26, borderRadius: 2, overflow: 'hidden' as const }]}>
+                <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ flex: 1, borderRadius: 2 }} />
+              </Animated.View>
+            ) : (
+              <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: 4, height: 26, borderRadius: 2, opacity: 0.35 }} />
+            )}
             <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.3 }}>
               Live Now
             </Text>
+            <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1, marginLeft: 4 }} />
             {filteredLiveGames.length > 0 ? (
-              <Animated.View style={[ring1Style, { width: 8, height: 8, borderRadius: 4, backgroundColor: '#DC2626' }]} />
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600' }}>
+                {filteredLiveGames.length}
+              </Text>
             ) : null}
-            <LinearGradient colors={[filteredLiveGames.length > 0 ? 'rgba(220,38,38,0.3)' : 'rgba(255,255,255,0.08)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1, marginLeft: 4 }} />
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600' }}>
-              {filteredLiveGames.length > 0 ? filteredLiveGames.length : null}
-            </Text>
           </View>
         </View>
 
-      {filteredLiveGames && filteredLiveGames.length > 0 ? (
+      {filteredLiveGames.length > 0 ? (
         <View>
 
           {/* Sport filter pills — only show when no top sport filter is active */}
@@ -363,7 +337,7 @@ const HomeHeader = React.memo(function HomeHeader({
               {availableLiveSports.map((sport) => {
                 const isChipSelected = selectedLiveSportFilter === sport;
                 const count = liveSportCounts.get(sport) ?? 0;
-                const displayName = sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport;
+                const displayName = displaySport(sport);
                 return (
                   <Pressable key={sport} onPress={() => setSelectedLiveSportFilter(isChipSelected ? null : sport)}>
                     <View style={{
@@ -423,48 +397,14 @@ const HomeHeader = React.memo(function HomeHeader({
             ) : null}
           </ScrollView>
         </View>
-      ) : (
-        <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>No live games right now</Text>
-        </View>
-      )}
+      ) : null}
       </Animated.View>
 
-      {/* Games Section Header */}
+      {/* Loading skeleton */}
       {isLoadingGames ? (
         <View className="px-4 pt-2">
           <GameCardSkeletonList />
         </View>
-      ) : nonLiveGames.length > 0 && selectedSportFilter ? (
-        <>
-          {/* Sport Name header — only when a sport filter is active */}
-          <Animated.View entering={FadeInRight.delay(280).duration(500)} style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 20, marginBottom: 14, marginTop: 8 }}>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{
-                  width: 26, height: 32, borderRadius: 6, overflow: 'hidden',
-                  borderWidth: 1, borderColor: 'rgba(139,10,31,0.35)',
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                }}>
-                  <View style={{ height: 2, backgroundColor: getTicketColor(selectedSportFilter) }} />
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>{gameCounts?.[selectedSportFilter] ?? 0}</Text>
-                  </View>
-                  <View style={{ marginHorizontal: 2, height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: 'rgba(255,255,255,0.1)' }} />
-                  <View style={{ height: 4, backgroundColor: '#040608', flexDirection: 'row' }}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 2.5, borderRightWidth: 2.5, borderTopWidth: 3, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#040608', marginTop: -3 }} />
-                    ))}
-                  </View>
-                </View>
-                <Text style={{ color: '#FFFFFF', fontSize: responsive.isTablet ? responsive.headerSize : headerFontSize, fontWeight: '800', letterSpacing: 0.5 }}>
-                  {selectedSportFilter === 'NCAAF' ? 'CFB' : selectedSportFilter === 'NCAAB' ? 'CBB' : selectedSportFilter}
-                </Text>
-              </View>
-              <View style={{ width: 40, height: 2.5, borderRadius: 1.5, backgroundColor: getTicketColor(selectedSportFilter), marginTop: 6 }} />
-            </View>
-          </Animated.View>
-        </>
       ) : null}
     </>
   );
@@ -567,7 +507,7 @@ const SearchGameCard = memo(function SearchGameCard({
             }}
           >
             <Text style={{ color: sportMeta.accentColor, fontSize: 9, fontWeight: '800', letterSpacing: 0.8 }}>
-              {game.sport}
+              {displaySport(game.sport)}
             </Text>
           </View>
 
@@ -682,35 +622,23 @@ export default function HomeScreen() {
 
     if (hasLive && !animationsActiveRef.current) {
       animationsActiveRef.current = true;
-      // First ring - expands outward
+      // Gentle breathing glow — scale subtly and pulse opacity
       pulseScale1.value = withRepeat(
-        withTiming(1.8, { duration: 1500, easing: Easing.out(Easing.ease) }),
+        withSequence(
+          withTiming(1.15, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.0, { duration: 1200, easing: Easing.inOut(Easing.ease) })
+        ),
         -1,
         false
       );
       pulseOpacity1.value = withRepeat(
-        withTiming(0, { duration: 1500, easing: Easing.out(Easing.ease) }),
+        withSequence(
+          withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.5, { duration: 1200, easing: Easing.inOut(Easing.ease) })
+        ),
         -1,
         false
       );
-
-      // Second ring - delayed, creates ripple effect
-      const timeoutId = setTimeout(() => {
-        pulseScale2.value = withRepeat(
-          withTiming(1.8, { duration: 1500, easing: Easing.out(Easing.ease) }),
-          -1,
-          false
-        );
-        pulseOpacity2.value = withRepeat(
-          withTiming(0, { duration: 1500, easing: Easing.out(Easing.ease) }),
-          -1,
-          false
-        );
-      }, 750);
-
-      return () => {
-        clearTimeout(timeoutId);
-      };
     } else if (!hasLive && animationsActiveRef.current) {
       animationsActiveRef.current = false;
       cancelAnimation(pulseScale1);
@@ -768,16 +696,45 @@ export default function HomeScreen() {
   }, [liveGamesPreview, selectedLiveSportFilter, selectedSportFilter]);
 
   // Compute game counts by sport from the games data
+  // ─── Date helpers (local timezone) ───
+  const getLocalDateStr = useCallback((dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const tomorrowStr = useMemo(() => {
+    const t = new Date();
+    t.setDate(t.getDate() + 1);
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  // Game counts reflect the active tab
   const gameCounts = useMemo(() => {
     const counts: Partial<Record<Sport, number>> = {};
-    if (todaysGames) {
-      todaysGames.forEach((game) => {
-        const sport = game.sport as Sport;
+    if (!todaysGames) return counts;
+    todaysGames.forEach((game) => {
+      const sport = game.sport as Sport;
+      const dateStr = getLocalDateStr(game.gameTime);
+      let include = false;
+      if (statusFilter === 'all') {
+        // Today tab: SCHEDULED only
+        include = game.status === GameStatus.SCHEDULED && dateStr === todayStr;
+      } else if (statusFilter === 'final') {
+        include = game.status === GameStatus.FINAL && dateStr === todayStr;
+      } else if (statusFilter === 'upcoming') {
+        include = game.status === GameStatus.SCHEDULED && dateStr === tomorrowStr;
+      }
+      if (include) {
         counts[sport] = (counts[sport] || 0) + 1;
-      });
-    }
+      }
+    });
     return counts;
-  }, [todaysGames]);
+  }, [todaysGames, statusFilter, todayStr, tomorrowStr, getLocalDateStr]);
 
   // Search results: filter todaysGames by query — includes FINAL, excludes POSTPONED/CANCELLED
   // Order: LIVE first, then SCHEDULED, then FINAL at the bottom
@@ -842,154 +799,98 @@ export default function HomeScreen() {
   type FlatListItem = SectionHeaderItem | DateSectionItem | GameItem;
 
   const flatListData = useMemo<FlatListItem[]>(() => {
-    if (!nonLiveGames.length || isLoadingGames) return [];
+    if (!todaysGames?.length || isLoadingGames) return [];
 
-    const filteredGames = selectedSportFilter
-      ? nonLiveGames.filter((game) => game.sport === selectedSportFilter)
-      : nonLiveGames;
+    // Step 1: Filter by tab (date + status)
+    let tabGames: GameWithPrediction[] = [];
 
-    const allGames = filteredGames ?? [];
-
-    const grouped = new Map<Sport, GameWithPrediction[]>();
-    allGames.forEach((game) => {
-      const sport = game.sport as Sport;
-      if (!grouped.has(sport)) grouped.set(sport, []);
-      grouped.get(sport)!.push(game);
-    });
-
-    grouped.forEach((games) => {
-      games.sort((a, b) => {
-        const statusOrder: Record<string, number> = { LIVE: 0, SCHEDULED: 1, FINAL: 2, POSTPONED: 3, CANCELLED: 4 };
-        const aOrder = statusOrder[a.status] ?? 5;
-        const bOrder = statusOrder[b.status] ?? 5;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+    if (statusFilter === 'all') {
+      // Today tab: SCHEDULED only, current day (LIVE games are in Live Now section)
+      tabGames = todaysGames.filter(g => {
+        const dateStr = getLocalDateStr(g.gameTime);
+        return dateStr === todayStr && g.status === GameStatus.SCHEDULED;
       });
-    });
+    } else if (statusFilter === 'final') {
+      // Final tab: FINAL games from today only
+      tabGames = todaysGames.filter(g => {
+        const dateStr = getLocalDateStr(g.gameTime);
+        return dateStr === todayStr && g.status === GameStatus.FINAL;
+      });
+    } else if (statusFilter === 'upcoming') {
+      // Scheduled tab: SCHEDULED games from tomorrow
+      tabGames = todaysGames.filter(g => {
+        const dateStr = getLocalDateStr(g.gameTime);
+        return dateStr === tomorrowStr && g.status === GameStatus.SCHEDULED;
+      });
+    }
 
-    const sportPriority: Sport[] = [
-      Sport.NFL, Sport.NBA, Sport.MLB, Sport.NHL,
-      Sport.MLS, Sport.EPL, Sport.NCAAF, Sport.NCAAB,
-    ];
+    // Step 2: Apply sport filter on top
+    if (selectedSportFilter) {
+      tabGames = tabGames.filter(g => g.sport === selectedSportFilter);
+    }
 
-    const sortedEntries = Array.from(grouped.entries()).sort(
-      ([a], [b]) => {
-        const pa = sportPriority.indexOf(a);
-        const pb = sportPriority.indexOf(b);
-        return (pa === -1 ? sportPriority.length : pa) - (pb === -1 ? sportPriority.length : pb);
-      }
-    );
+    // Step 3: Sort by gameTime ascending
+    tabGames.sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
 
-    const MAX_GAMES_PER_SPORT = 40;
+    // Step 4: Build FlatList items
     const items: FlatListItem[] = [];
 
     if (selectedSportFilter) {
-      // Live games for this sport (show at top)
-      const liveForSport = (liveGamesPreview ?? []).filter(g => g.sport === selectedSportFilter);
-
-      // Get today's date string for filtering
-      const today = new Date();
-      const todayStr = today.toDateString();
-
-      // Tomorrow's date for filtering
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toDateString();
-
-      // Today's scheduled games (exclude tomorrow's games)
-      const todayScheduled = (nonLiveGames ?? []).filter((g) => {
-        if (g.sport !== selectedSportFilter) return false;
-        if (g.status !== GameStatus.SCHEDULED) return false;
-        const gameDate = new Date(g.gameTime).toDateString();
-        return gameDate === todayStr; // Only include today's games
-      }).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
-      const tomorrowGames = (todaysGames ?? []).filter(g => {
-        if (g.sport !== selectedSportFilter) return false;
-        if (g.status !== GameStatus.SCHEDULED) return false;
-        return new Date(g.gameTime).toDateString() === tomorrowStr;
-      }).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
-
-      // Today's final results
-      const todayFinals = (todaysGames ?? []).filter((g) =>
-        g.sport === selectedSportFilter && g.status === GameStatus.FINAL
-      ).sort((a, b) => new Date(b.gameTime).getTime() - new Date(a.gameTime).getTime());
-
-      // Add live games first
-      if (liveForSport.length > 0) {
-        items.push({ type: 'date-header', label: 'LIVE NOW', count: liveForSport.length, key: 'live-header' });
-      }
-      liveForSport.forEach((game, idx) => {
-        items.push({ type: 'game', game, index: idx, key: `live-${game.id}` });
+      // Sport filter active — no section headers, just games
+      tabGames.forEach((game, idx) => {
+        items.push({ type: 'game', game, index: idx, key: game.id });
       });
-
-      // Finals right after live — easy to find
-      if (todayFinals.length > 0) {
-        items.push({ type: 'date-header', label: 'FINAL RESULTS', count: todayFinals.length, key: 'finals-header' });
-        todayFinals.forEach((game, idx) => {
-          items.push({ type: 'game', game, index: idx, key: `final-${game.id}` });
-        });
-      }
-
-      // Today's scheduled games
-      todayScheduled.forEach((game, idx) => {
-        items.push({ type: 'game', game, index: liveForSport.length + idx, key: game.id });
-      });
-
-      // Tomorrow section
-      if (tomorrowGames.length > 0) {
-        items.push({ type: 'date-header', label: 'TOMORROW', count: tomorrowGames.length, key: 'tomorrow-header' });
-        tomorrowGames.forEach((game, idx) => {
-          items.push({ type: 'game', game, index: idx, key: `tomorrow-${game.id}` });
-        });
-      }
     } else {
-      sortedEntries.forEach(([sport, games]) => {
-        const capped = games.slice(0, MAX_GAMES_PER_SPORT);
-        items.push({ type: 'sport-header', sport, gameCount: capped.length, key: `header-${sport}` });
-        capped.forEach((game, idx) => {
+      // No sport filter — group by sport with section headers
+      const grouped = new Map<Sport, GameWithPrediction[]>();
+      tabGames.forEach(game => {
+        const sport = game.sport as Sport;
+        if (!grouped.has(sport)) grouped.set(sport, []);
+        grouped.get(sport)!.push(game);
+      });
+
+      // Sort groups by game count (most first)
+      const sortedGroups = Array.from(grouped.entries()).sort(
+        ([, a], [, b]) => b.length - a.length
+      );
+
+      sortedGroups.forEach(([sport, games]) => {
+        items.push({ type: 'sport-header', sport, gameCount: games.length, key: `header-${sport}` });
+        games.forEach((game, idx) => {
           items.push({ type: 'game', game, index: idx, key: game.id });
         });
       });
     }
 
-    // Apply status filter
-    if (statusFilter === 'all') return items;
-    return items.filter(item => {
-      if (item.type !== 'game') return false;
-      if (statusFilter === 'final') return item.game.status === GameStatus.FINAL || (item.game.status as string) === 'post';
-      if (statusFilter === 'upcoming') return item.game.status === GameStatus.SCHEDULED;
-      return true;
-    });
-  }, [nonLiveGames, selectedSportFilter, isLoadingGames, liveGamesPreview, todaysGames, statusFilter]);
+    return items;
+  }, [todaysGames, selectedSportFilter, isLoadingGames, statusFilter, todayStr, tomorrowStr, getLocalDateStr]);
 
 
   // Render item for FlatList
   const renderGameListItem = useCallback(({ item }: { item: FlatListItem }) => {
     if (item.type === 'sport-header') {
-      const headerColor = getTicketColor(item.sport);
-      const sportLabel = item.sport === 'NCAAF' ? 'CFB' : item.sport === 'NCAAB' ? 'CBB' : item.sport;
+      const sportLabel = displaySport(item.sport);
       return (
-        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 28, marginBottom: 12 } : { paddingHorizontal: 20, marginTop: 28, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            {/* Compact dark tile */}
-            <View style={{ width: 52, height: 54, borderRadius: 14, backgroundColor: '#0C1018', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              <LinearGradient colors={[`${headerColor}20`, 'transparent']} style={StyleSheet.absoluteFillObject} />
-              <View style={{ marginBottom: 2, position: 'relative' }}>
-                {/* White outline — 4 offset copies */}
-                {[{ x: -0.8, y: 0 }, { x: 0.8, y: 0 }, { x: 0, y: -0.8 }, { x: 0, y: 0.8 }].map((o, i) => (
-                  <Text key={i} style={{ position: 'absolute', fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1, left: o.x, top: o.y }}>{sportLabel}</Text>
-                ))}
-                <Text style={{ fontSize: 10, fontWeight: '800', color: headerColor, letterSpacing: 1 }}>{sportLabel}</Text>
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', fontVariant: ['tabular-nums'] }}>{item.gameCount}</Text>
-            </View>
-            {/* Sport name + accent line */}
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', letterSpacing: 0.2, marginBottom: 6 }}>
-                {SPORT_META[item.sport].name}
-              </Text>
-              <LinearGradient colors={[headerColor, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 2, borderRadius: 1, opacity: 0.3 }} />
-            </View>
+        <View style={{ marginLeft: 20, marginTop: 20, marginBottom: 14, position: 'relative' as const, overflow: 'hidden' as const, borderRadius: 3, backgroundColor: '#080c10', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', height: 36, paddingHorizontal: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const }}>
+          {/* Pixel grid */}
+          <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+            <Svg width="100%" height="100%" style={StyleSheet.absoluteFillObject}>
+              <Defs>
+                <SvgPattern id={`secGrid-${item.sport}`} width="2" height="2" patternUnits="userSpaceOnUse">
+                  <SvgRect width="2" height="2" fill="transparent" />
+                  <SvgRect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
+                </SvgPattern>
+              </Defs>
+              <SvgRect width="100%" height="100%" fill={`url(#secGrid-${item.sport})`} />
+            </Svg>
+          </View>
+          {/* Left accent bar */}
+          <View style={{ position: 'absolute' as const, left: 0, top: 0, bottom: 0, width: 3, backgroundColor: '#7A9DB8', opacity: 0.6, zIndex: 4 }} />
+          {/* Dot matrix content */}
+          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, zIndex: 4, marginLeft: 4 }}>
+            <DotMatrixIcon sport={item.sport} litColor="#FFFFFF" pixelSize={1.5} />
+            <DotMatrixText text={sportLabel} litColor="#9BB8CF" pixelSize={1.5} />
+            <DotMatrixText text={String(item.gameCount)} litColor="#FFFFFF" pixelSize={1.5} />
           </View>
         </View>
       );
@@ -1004,10 +905,10 @@ export default function HomeScreen() {
         item.label === 'FINAL RESULTS' ? '#A1B3C9' :
         '#FFFFFF';
       return (
-        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 12 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 12 }}>
+        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 }}>
           {/* Subtle divider above — fades from edges */}
           {!isLive ? (
-            <LinearGradient colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1, marginBottom: 16 }} />
+            <LinearGradient colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1, marginBottom: 14 }} />
           ) : null}
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1031,7 +932,7 @@ export default function HomeScreen() {
 
     if (item.type === 'game') {
       return (
-        <View style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 10 }}>
+        <View style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 14 }}>
           <GameCard game={item.game} index={item.index} />
         </View>
       );
@@ -1060,8 +961,8 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
       <ErrorBoundary>
-      {/* Logo — rendered outside FlatList for instant display */}
-      <View style={{ alignItems: 'center', paddingTop: 16, paddingBottom: 8 }}>
+      {/* Logo */}
+      <View style={{ alignItems: 'center', paddingTop: 16, paddingBottom: 16 }}>
         <View style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 12 }}>
           <Image
             source={require('@/assets/clutch-logo-horizontal.png')}
@@ -1132,30 +1033,90 @@ export default function HomeScreen() {
             horizontalPadding={horizontalPadding}
             headerFontSize={headerFontSize}
             responsive={responsive}
+            statusFilter={statusFilter}
           />
           {/* Game Board header + status filter pills */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 8, marginTop: 28 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <View style={{ paddingHorizontal: 20, marginBottom: 6, marginTop: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: 4, height: 26, borderRadius: 2 }} />
               <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 }}>Game Board</Text>
-              <LinearGradient colors={['rgba(122,157,184,0.3)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1, marginLeft: 4 }} />
+              <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1, marginLeft: 4 }} />
             </View>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 8 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}>
             {([
               { key: 'all' as const, label: 'Today' },
               { key: 'final' as const, label: 'Final' },
               { key: 'upcoming' as const, label: 'Scheduled' },
             ]).map(f => {
               const active = statusFilter === f.key;
+              const hasFilter = statusFilter !== 'all';
+              const dimmed = hasFilter && !active;
               return (
                 <Pressable key={f.key} onPress={() => setStatusFilter(active ? 'all' : f.key)}
-                  style={{ backgroundColor: active ? MAROON : 'rgba(122,157,184,0.15)', borderWidth: 1, borderColor: active ? MAROON : 'rgba(122,157,184,0.25)', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 6 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#FFFFFF' : '#FFFFFF' }}>{f.label}</Text>
+                  style={{ borderRadius: 12, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1 }}>
+                  {active ? (
+                    <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.15)', borderRadius: 12 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
           </ScrollView>
+
+          {/* Selected sport tile + Clear button — separate */}
+          {selectedSportFilter ? (() => {
+            const sportLabel = displaySport(selectedSportFilter!);
+            const count = gameCounts?.[selectedSportFilter] ?? 0;
+            return (
+              <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginLeft: 20, marginRight: 20, marginTop: 0, marginBottom: 16 }}>
+                {/* Sport tile */}
+                <View style={{ position: 'relative' as const, overflow: 'hidden' as const, borderRadius: 3, backgroundColor: '#080c10', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', height: 36, paddingHorizontal: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5 }}>
+                  <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                    <Svg width="100%" height="100%" style={StyleSheet.absoluteFillObject}>
+                      <Defs>
+                        <SvgPattern id="secGridSelected" width="2" height="2" patternUnits="userSpaceOnUse">
+                          <SvgRect width="2" height="2" fill="transparent" />
+                          <SvgRect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
+                        </SvgPattern>
+                      </Defs>
+                      <SvgRect width="100%" height="100%" fill="url(#secGridSelected)" />
+                    </Svg>
+                  </View>
+                  <View style={{ position: 'absolute' as const, left: 0, top: 0, bottom: 0, width: 3, backgroundColor: '#7A9DB8', opacity: 0.6, zIndex: 4 }} />
+                  <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, zIndex: 4, marginLeft: 4 }}>
+                    <DotMatrixIcon sport={selectedSportFilter} litColor="#FFFFFF" pixelSize={1.5} />
+                    <DotMatrixText text={sportLabel} litColor="#9BB8CF" pixelSize={1.5} />
+                    <DotMatrixText text={String(count)} litColor="#FFFFFF" pixelSize={1.5} />
+                  </View>
+                </View>
+                {/* Clear button — separate jumbotron tile */}
+                <Pressable onPress={() => setSelectedSportFilter(null)}>
+                  <View style={{ position: 'relative' as const, overflow: 'hidden' as const, borderRadius: 3, backgroundColor: '#080c10', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', height: 36, paddingHorizontal: 10, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const }}>
+                    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                      <Svg width="100%" height="100%" style={StyleSheet.absoluteFillObject}>
+                        <Defs>
+                          <SvgPattern id="secGridClear" width="2" height="2" patternUnits="userSpaceOnUse">
+                            <SvgRect width="2" height="2" fill="transparent" />
+                            <SvgRect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
+                          </SvgPattern>
+                        </Defs>
+                        <SvgRect width="100%" height="100%" fill="url(#secGridClear)" />
+                      </Svg>
+                    </View>
+                    <View style={{ zIndex: 4 }}>
+                      <DotMatrixText text="CLEAR" litColor="#FFFFFF" pixelSize={1.5} />
+                    </View>
+                  </View>
+                </Pressable>
+              </View>
+            );
+          })() : null}
         </>
         }
         ListEmptyComponent={
