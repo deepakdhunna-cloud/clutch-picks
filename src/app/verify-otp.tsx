@@ -9,6 +9,7 @@ import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-s
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
+import { setUserId } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
 
 const BG = '#040608';
@@ -88,6 +89,10 @@ export default function VerifyOTP() {
       setCode('');
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
+      const userId = result.data?.user?.id;
+      if (userId) {
+        await setUserId(userId);
+      }
       await invalidateSession();
       const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
       router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');

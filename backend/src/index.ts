@@ -65,8 +65,10 @@ const rateLimitMessage = {
 };
 
 function ipKey(c: Context): string {
-  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
+  // Prefer non-spoofable headers set by infrastructure over client-supplied x-forwarded-for
+  return c.req.header("cf-connecting-ip")
     ?? c.req.header("x-real-ip")
+    ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
     ?? "unknown";
 }
 

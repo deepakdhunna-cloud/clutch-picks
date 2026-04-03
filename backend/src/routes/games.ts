@@ -1037,7 +1037,16 @@ async function fetchGamesBySport(sport: SportKey, date?: string, fullList = fals
 const gamesRouter = new Hono();
 
 // Force-refresh all predictions (clears cache so new engine params take effect)
+// Admin-only: requires authenticated user whose ID matches ADMIN_USER_ID env var
 gamesRouter.post("/refresh-predictions", async (c) => {
+  const user = c.get("user") as { id: string } | null;
+  if (!user) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+  const adminId = process.env.ADMIN_USER_ID;
+  if (adminId && user.id !== adminId) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
   clearAllPredictionCaches();
   return c.json({ data: { cleared: true, message: "Prediction caches cleared. New predictions will generate on next request." } });
 });
