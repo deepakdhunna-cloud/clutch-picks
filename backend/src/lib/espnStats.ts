@@ -716,7 +716,8 @@ export async function fetchAdvancedMetrics(
     const data = (await response.json()) as any;
 
     // ESPN wraps stats in results.splits.categories or stats at root
-    const categories: any[] = data?.results?.splits?.categories
+    const categories: any[] = data?.results?.stats?.categories
+      ?? data?.results?.splits?.categories
       ?? data?.stats?.splits?.categories
       ?? data?.splits?.categories
       ?? data?.categories
@@ -1015,6 +1016,7 @@ async function fetchMLBLineup(
 
   const data = (await response.json()) as any;
   const events: any[] = data?.events ?? [];
+  console.log(`[lineup] MLB scoreboard for ${dateStr}: ${events.length} events found`);
 
   for (const event of events) {
     const competitions: any[] = event?.competitions ?? [];
@@ -1025,6 +1027,11 @@ async function fetchMLBLineup(
 
       // ESPN puts probables as an array inside each competitor
       const probables: any[] = teamComp?.probables ?? [];
+      if (probables.length > 0) {
+        console.log(`[lineup] Team ${teamId}: ${probables.length} probables found — ${JSON.stringify(probables[0]?.athlete?.displayName ?? probables[0]?.displayName ?? 'unknown')}`);
+      } else {
+        console.log(`[lineup] Team ${teamId}: NO probables in competitor object. Keys: ${Object.keys(teamComp ?? {}).join(', ')}`);
+      }
       const probableEntry = probables.find(
         (p: any) =>
           (p?.name ?? "").toLowerCase().includes("probable") ||
