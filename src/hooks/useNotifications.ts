@@ -3,17 +3,45 @@ import { Platform, AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '@/lib/api/api';
 
+// Map notification data.type to preference key
+const TYPE_TO_PREF: Record<string, string> = {
+  game_live: 'gameLive',
+  pick_result: 'pickResult',
+  winner_flip: 'predictionShift',
+  big_game: 'bigGame',
+  streak: 'streak',
+};
+
 // Configure how notifications appear when app is in foreground
+// Checks user preferences before showing
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const type = (notification.request.content.data as any)?.type as string | undefined;
+    if (type) {
+      const prefKey = TYPE_TO_PREF[type];
+      if (prefKey) {
+        try {
+          const raw = await AsyncStorage.getItem('clutch_notif_prefs');
+          if (raw) {
+            const prefs = JSON.parse(raw);
+            if (prefs[prefKey] === false) {
+              return { shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false, shouldShowBanner: false, shouldShowList: false };
+            }
+          }
+        } catch {}
+      }
+    }
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 async function registerForPushNotifications(): Promise<string | null> {

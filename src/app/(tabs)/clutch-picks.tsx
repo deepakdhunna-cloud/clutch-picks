@@ -16,6 +16,7 @@ import { useTopPicks } from '@/hooks/useGames';
 import GridBackground from '@/components/GridBackground';
 import { useSubscription } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { displayConfidence, displayWinProbability, getConfidenceTierLabel, displaySport } from '@/lib/display-confidence';
 
 // Expandable analysis text — tap to show full, tap again to collapse
 const ExpandableText = memo(function ExpandableText({ text }: { text: string }) {
@@ -149,14 +150,18 @@ const TopPickCard = memo(function TopPickCard({
   index: number;
   onPress: () => void;
 }) {
+  const router = useRouter();
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport);
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport);
   const chartColors = getDistinctColors(awayColors.primary, homeColors.primary);
   const conf = game.prediction?.confidence ?? 70;
-  const awayPct = game.prediction?.predictedWinner === 'away'
-    ? Math.min(78, Math.max(52, Math.round(50 + (conf - 60) * 0.8)))
-    : Math.min(48, Math.max(22, Math.round(50 - (conf - 60) * 0.8)));
-  const homePct = 100 - awayPct;
+  const dConf = displayConfidence(conf);
+  // Use real model probabilities — same data as game detail and analysis pages
+  const realHome = game.prediction?.homeWinProbability ?? 50;
+  const realAway = game.prediction?.awayWinProbability ?? 50;
+  const dp = displayWinProbability(realHome, realAway);
+  const awayPct = realAway;
+  const homePct = realHome;
 
   const isAwayPick = game.prediction?.predictedWinner === 'away';
 
@@ -268,7 +273,7 @@ const TopPickCard = memo(function TopPickCard({
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ backgroundColor: `${PREMIUM_BLUE}18`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: `${PREMIUM_BLUE}20` }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: PREMIUM_BLUE, letterSpacing: 0.5 }}>{game.sport}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: PREMIUM_BLUE, letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
                   </View>
                   {game.gameTime ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
@@ -342,7 +347,14 @@ const TopPickCard = memo(function TopPickCard({
                 {/* Confidence row */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>CONFIDENCE</Text>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFFFFF' }}>{conf}%</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFFFFF' }}>{dConf}%</Text>
+                    <Pressable onPress={(e) => { e.stopPropagation(); router.push('/confidence-tiers'); }} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#7A9DB8', opacity: 0.8 }} />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#7A9DB8', opacity: 0.8, letterSpacing: 1 }}>{getConfidenceTierLabel(conf)}</Text>
+                      <Text style={{ fontSize: 10, color: 'rgba(122,157,184,0.4)' }}>›</Text>
+                    </Pressable>
+                  </View>
                 </View>
                 {/* Confidence bar */}
                 <View style={{ height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 14 }}>
@@ -350,7 +362,7 @@ const TopPickCard = memo(function TopPickCard({
                     colors={conf >= 80 ? ['#8B0A1F', '#5A0614'] : [PREMIUM_BLUE, '#5A7A8A']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={{ height: '100%', width: `${conf}%`, borderRadius: 2.5 }}
+                    style={{ height: '100%', width: `${dConf}%`, borderRadius: 2.5 }}
                   />
                 </View>
 
@@ -376,10 +388,10 @@ const TopPickCard = memo(function TopPickCard({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                     <View style={{ width: 6, height: 6, borderRadius: 2, backgroundColor: chartColors.away }} />
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{game.awayTeam.abbreviation}</Text>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{awayPct}%</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{dp.away}%</Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{homePct}%</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{dp.home}%</Text>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{game.homeTeam.abbreviation}</Text>
                     <View style={{ width: 6, height: 6, borderRadius: 2, backgroundColor: chartColors.home }} />
                   </View>

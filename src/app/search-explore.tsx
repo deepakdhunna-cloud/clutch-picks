@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGames } from '@/hooks/useGames';
 import { GameWithPrediction, GameStatus, Sport, SPORT_META } from '@/types/sports';
+import { displaySport } from '@/lib/display-confidence';
 import { getTeamColors } from '@/lib/team-colors';
 
 const MAROON = '#8B0A1F';
@@ -40,9 +41,9 @@ const SportCard = memo(function SportCard({ sport, count, onPress }: { sport: st
   return (
     <Pressable onPress={onPress} style={{ minWidth: 110, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
       <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: color, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-        <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport}</Text>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(sport)}</Text>
       </View>
-      <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 }}>{sport === 'NCAAF' ? 'CFB' : sport === 'NCAAB' ? 'CBB' : sport}</Text>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 }}>{displaySport(sport)}</Text>
       <Text style={{ fontSize: 10, color: '#6B7C94' }}>{count} game{count !== 1 ? 's' : ''} today</Text>
     </Pressable>
   );
@@ -64,7 +65,7 @@ const GameBar = memo(function GameBar({ game, onPress }: { game: GameWithPredict
       <View style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: sportColor }} />
       {/* Sport badge */}
       <View style={{ backgroundColor: `${sportColor}20`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', minWidth: 42, marginLeft: 4 }}>
-        <Text style={{ fontSize: 10, fontWeight: '800', color: sportColor, letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
+        <Text style={{ fontSize: 10, fontWeight: '800', color: sportColor, letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
       </View>
       {/* Teams */}
       <View style={{ flex: 1 }}>

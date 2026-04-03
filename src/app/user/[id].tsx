@@ -14,8 +14,8 @@ import * as Haptics from 'expo-haptics';
 const GLASS_BG = 'rgba(4,5,10,0.97)';
 const GLASS_BORDER = 'rgba(255,255,255,0.13)';
 const AMBER = '#8B0A1F';
-const TEAL = '#4ECDC4';
-const WIN_COLOR = '#22C55E';
+const TEAL = '#7A9DB8';
+const WIN_COLOR = '#7A9DB8';
 const LOSS_COLOR = '#EF4444';
 
 interface Pick {

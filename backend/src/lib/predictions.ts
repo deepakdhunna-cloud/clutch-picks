@@ -13,14 +13,14 @@ import { enqueueWrite } from "./writeQueue";
 // ─── Calibration ───────────────────────────────────────────────────────────
 // Sport-specific calibration: different sports have different predictability
 const SPORT_CALIBRATION: Record<string, { dampener: number; ceiling: number; tossUpCeiling: number }> = {
-  NBA:   { dampener: 0.85, ceiling: 88, tossUpCeiling: 54 },
-  NFL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 53 },
-  NCAAF: { dampener: 0.75, ceiling: 85, tossUpCeiling: 53 },
-  NCAAB: { dampener: 0.80, ceiling: 87, tossUpCeiling: 54 },
-  MLB:   { dampener: 0.55, ceiling: 75, tossUpCeiling: 53 },
-  NHL:   { dampener: 0.65, ceiling: 80, tossUpCeiling: 53 },
-  MLS:   { dampener: 0.65, ceiling: 78, tossUpCeiling: 53 },
-  EPL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 53 },
+  NBA:   { dampener: 0.85, ceiling: 88, tossUpCeiling: 57 },
+  NFL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 56 },
+  NCAAF: { dampener: 0.75, ceiling: 85, tossUpCeiling: 56 },
+  NCAAB: { dampener: 0.80, ceiling: 87, tossUpCeiling: 57 },
+  MLB:   { dampener: 0.78, ceiling: 75, tossUpCeiling: 53 },
+  NHL:   { dampener: 0.70, ceiling: 80, tossUpCeiling: 57 },
+  MLS:   { dampener: 0.75, ceiling: 78, tossUpCeiling: 53 },
+  EPL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 56 },
 };
 function getCalibration(sport: string) {
   return SPORT_CALIBRATION[sport] ?? { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 };
@@ -42,10 +42,10 @@ function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
-// ─── Sport-specific sigmoid scaling: NBA is most predictable, MLB least ─────
+// ─── Sigmoid scaling: neutral (1.0) — let the raw math produce honest probabilities
 const SIGMOID_SCALING: Record<string, number> = {
-  NBA: 5.5, NFL: 4.0, NCAAF: 4.5, NCAAB: 5.0,
-  MLB: 3.0, NHL: 3.5, MLS: 4.0, EPL: 4.5,
+  NBA: 1.0, NFL: 1.0, NCAAF: 1.0, NCAAB: 1.0,
+  MLB: 1.0, NHL: 1.0, MLS: 1.0, EPL: 1.0,
 };
 
 // ─── Over/Under baseline by sport (fallback if ESPN doesn't provide) ────────
@@ -144,6 +144,15 @@ function setCachedAIAnalysis(
 ): void {
   const key = aiCacheKey(gameId, homeInjuries, awayInjuries);
   aiAnalysisCache.set(key, { text, timestamp: Date.now() });
+}
+
+/** Bust all AI analysis cache entries for a game (any injury hash). */
+export function bustAIAnalysisCache(gameId: string): void {
+  for (const key of aiAnalysisCache.keys()) {
+    if (key.startsWith(`${gameId}_`)) {
+      aiAnalysisCache.delete(key);
+    }
+  }
 }
 
 // ─── Rest label helper ───────────────────────────────────────────────────────
@@ -325,8 +334,7 @@ async function generateAIAnalysis(
     .join("\n");
 
   // ── Build Elo section ───────────────────────────────────────────────────
-  const eloPredLocal = getEloPrediction(homeElo, awayElo, game.sport.toString());
-  const eloSection = `Elo ratings: Home Elo: ${Math.round(homeElo)} | Away Elo: ${Math.round(awayElo)} | Elo win prob: ${(eloPredLocal.homeWinProb * 100).toFixed(0)}% home`;
+  const eloSection = `Elo ratings: Home Elo: ${Math.round(homeElo)} | Away Elo: ${Math.round(awayElo)} | Elo gap: ${Math.abs(Math.round(homeElo - awayElo))} pts ${homeElo > awayElo ? 'home advantage' : 'away advantage'}`;
 
   // ── Build rest section ──────────────────────────────────────────────────
   const homeRestStr = homeExtended.restDays !== null
@@ -432,7 +440,7 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           {
             role: "system",
             content:
-              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write exactly 2-3 sentences that are specific, data-driven, and reference concrete numbers: rest days, head-to-head records, scoring trends, Elo ratings, and key injuries when they tell a meaningful story. Never use generic phrases like 'should be a good game' or 'anything can happen'.",
+              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write exactly 2-3 sentences that are specific, data-driven, and reference concrete numbers: rest days, head-to-head records, scoring trends, Elo rating gaps, and key injuries when they tell a meaningful story. Never use generic phrases like 'should be a good game' or 'anything can happen'. CRITICAL: Do NOT cite any win probability percentages (e.g. '93% win probability' or '78% chance'). Instead, describe the statistical edge using the supporting data — records, point differentials, Elo gap, rest, injuries.",
           },
           { role: "user", content: userPrompt },
         ],
@@ -539,10 +547,9 @@ function calcValueRating(
 // ─── Edge rating ──────────────────────────────────────────────────────────────
 
 function calcEdgeRating(confidence: number): number {
-  // Use a power curve: confidence 50 -> 1, 65 -> 4, 75 -> 6, 85 -> 8, 95 -> 10
-  const normalized = (confidence - 50) / 45; // 0 to 1
-  const curved = Math.pow(normalized, 0.6); // More aggressive curve rewarding higher confidence
-  return clamp(Math.round(curved * 9 + 1), 1, 10);
+  // Linear edge rating: confidence 50 → 1, 55 → 2, 60 → 3, ... 95 → 10
+  const normalized = clamp((confidence - 50) / 45, 0, 1);
+  return clamp(Math.round(normalized * 9 + 1), 1, 10);
 }
 
 // ─── Sport factor weights ────────────────────────────────────────────────────
@@ -931,7 +938,7 @@ export interface EnsembleResult {
  */
 function eloOnlyModel(homeElo: number, awayElo: number, sport: string): SubModelResult {
   const { homeWinProb } = getEloPrediction(homeElo, awayElo, sport);
-  const prob100 = clamp(Math.round(homeWinProb * 100), 8, 92);
+  const prob100 = Math.round(homeWinProb * 100);
   // Confidence = how far from 50, dampened — Elo alone is moderate signal
   const rawConf = 50 + Math.abs(prob100 - 50) * 0.35;
   return { homeWinProb: prob100, confidence: clamp(Math.round(rawConf), 50, 80) };
@@ -970,7 +977,7 @@ function recentFormModel(
   const rawScore = 0.55 * wrAdv + 0.30 * ptsDiff + 0.15 * streakAdv;
 
   const rawProb = 1 / (1 + Math.exp(-rawScore * 4));
-  const prob100 = clamp(Math.round(rawProb * 100), 8, 92);
+  const prob100 = Math.round(rawProb * 100);
 
   // Recent form is moderate-reliability signal; dampen confidence similarly to composite
   const rawConf = 50 + Math.abs(prob100 - 50) * 0.30;
@@ -1035,7 +1042,7 @@ function ensemblePrediction(
   const finalConf = clamp(Math.round(rawEnsembleConf) - confidencePenalty, 50, sportCeiling);
 
   return {
-    homeWinProb:   clamp(ensembleProb, 8, 92),
+    homeWinProb:   ensembleProb,
     confidence:    finalConf,
     divergenceFlag,
     subModels: {
@@ -1139,7 +1146,11 @@ export async function generatePrediction(
   const seasonProgress = avgGamesPlayed / seasonTotal;
 
   let seasonDampening: number;
-  if (seasonProgress < 0.2) {
+  if (sportKey === 'MLB' || sportKey === 'NHL' || sportKey === 'MLS' || sportKey === 'EPL') {
+    // Gradual ramp for long-season sports — less punishing for slow data buildup
+    // Floor of 0.7 instead of 0.6, ramps linearly to 1.0 by ~40% of season
+    seasonDampening = Math.min(1.0, 0.7 + seasonProgress * 0.75);
+  } else if (seasonProgress < 0.2) {
     seasonDampening = 0.6;
   } else if (seasonProgress < 0.4) {
     seasonDampening = 0.8;
@@ -1660,14 +1671,15 @@ export async function generatePrediction(
   const compositeDifferential = homeWeightedSum - awayWeightedSum;
   const rawHomeProb = 1 / (1 + Math.exp(-compositeDifferential * sigmoidScale));
   const rawAwayProb = 1 - rawHomeProb;
-  // Scale to percentage
-  const homeWinProbability = clamp(Math.round(rawHomeProb * 100), 8, 92);
+  // Scale to percentage — no artificial clamp, let the math speak
+  const homeWinProbability = Math.round(rawHomeProb * 100);
   const awayWinProbability = 100 - homeWinProbability;
 
   const predictedWinner: "home" | "away" = homeWinProbability >= 50 ? "home" : "away";
 
   // ── Toss-up detection ───────────────────────────────────────────────────
-  const isTossUp = Math.abs(homeWinProbability - 50) < 5;
+  // Only flag as toss-up when the model truly can't separate the teams
+  const isTossUp = Math.abs(homeWinProbability - 50) < 2;
 
   // ── Confidence ─────────────────────────────────────────────────────────
   const winnerProb = predictedWinner === "home" ? homeWinProbability : awayWinProbability;
@@ -1693,10 +1705,11 @@ export async function generatePrediction(
     : 1.0;
   const lowDataWarning = dataCoverage < 0.6;
 
-  // Compress confidence toward 50% proportionally to missing data.
-  // Full data (1.0) → no compression. Half data (0.5) → 50% compression.
-  // Floor of 0.5 ensures we never compress more than 50% even with zero data.
-  const coverageMultiplier = Math.max(0.4, Math.pow(dataCoverage, 1.5));
+  // Linear coverage penalty — the old 1.5 exponent created a cliff at 60-70%
+  // coverage that destroyed all signal for early-season sports.
+  // Linear (exponent 1.0) with a higher floor of 0.6 preserves differentiation
+  // while still penalizing missing data proportionally.
+  const coverageMultiplier = Math.max(0.6, dataCoverage);
   const confidence = clamp(
     Math.round(50 + (calibratedConfidence - 50) * coverageMultiplier),
     50,
@@ -1711,16 +1724,26 @@ export async function generatePrediction(
   const formSubModel   = recentFormModel(homeForm, awayForm);
   const ensemble       = ensemblePrediction(compositeSubModel, eloSubModel, formSubModel, sportKey);
 
-  // Apply ensemble divergence penalty on top of the existing confidence
-  const postEnsembleConf = Math.min(confidence, ensemble.confidence);
-  // Lineup confirmation modifier: unconfirmed lineups = uncertainty tax
-  const lineupPenalties: Record<string, number> = { MLB: -8, NFL: -6, NBA: -4, NHL: -5, NCAAB: -3, NCAAF: -4, MLS: -3, EPL: -3 };
-  const maxLineupPenalty = lineupPenalties[sportKey] ?? -4;
-  let lineupPenalty = 0;
-  if (!homeLineup || homeLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
-  if (!awayLineup || awayLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
+  // In early season, sub-models (especially form) have too little data — their
+  // disagreement is noise, not signal. Blend instead of taking minimum.
+  // At 33%+ of season, revert to full Math.min behavior.
+  const ensembleBlendWeight = Math.min(1.0, seasonProgress * 3);
+  const minConf = Math.min(confidence, ensemble.confidence);
+  const postEnsembleConf = Math.round(
+    confidence * (1 - ensembleBlendWeight) + minConf * ensembleBlendWeight
+  );
+  // Lineup confirmation modifier: unconfirmed lineups compress confidence toward 50%
+  // proportionally instead of flat subtraction. Flat subtraction destroyed all signal
+  // for sports like MLB where lineups aren't posted until game day.
+  // Scale: 1.0 = full confidence, lower = compressed toward 50%.
+  const lineupRetention: Record<string, number> = { MLB: 0.75, NFL: 0.70, NBA: 0.80, NHL: 0.75, NCAAB: 0.85, NCAAF: 0.80, MLS: 0.80, EPL: 0.80 };
+  const fullRetention = lineupRetention[sportKey] ?? 0.80;
+  // Each unconfirmed lineup applies half the penalty
+  let retention = 1.0;
+  if (!homeLineup || homeLineup.starters.length === 0) retention -= (1 - fullRetention) / 2;
+  if (!awayLineup || awayLineup.starters.length === 0) retention -= (1 - fullRetention) / 2;
   const finalConfidence = clamp(
-    Math.round(postEnsembleConf + lineupPenalty),
+    Math.round(50 + (postEnsembleConf - 50) * retention),
     50,
     isTossUp ? cal.tossUpCeiling : cal.ceiling
   );

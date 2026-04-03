@@ -14,6 +14,7 @@ import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, GameStatus, SPORT_META, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
+import { displaySport } from '@/lib/display-confidence';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Calendar, Clock, Tv, TrendingUp, Star, ChevronRight, Check } from 'lucide-react-native';
@@ -565,7 +566,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   }}
                 >
                   <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }}>
-                    {game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}
+                    {displaySport(game.sport)}
                   </Text>
                 </View>
                 <PulsingLiveBadge />
@@ -631,10 +632,11 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <Text style={{
                 color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                 fontSize: 22,
-                fontWeight: awayWinning ? '900' : '500',
+                fontFamily: 'VT323_400Regular',
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
+                opacity: awayWinning ? 1 : 0.35,
               }}>
                 {awayScore}
               </Text>
@@ -668,12 +670,13 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 ) : null}
               </View>
               <Text style={{
-                color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                color: '#FFFFFF',
                 fontSize: 22,
-                fontWeight: homeWinning ? '900' : '500',
+                fontFamily: 'VT323_400Regular',
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
+                opacity: homeWinning ? 1 : 0.35,
               }}>
                 {homeScore}
               </Text>
@@ -988,7 +991,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 }}
               >
                 <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
-                  {game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}
+                  {displaySport(game.sport)}
                 </Text>
               </View>
               {/* FAV Badge - maroon with white text */}
@@ -1064,14 +1067,16 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 <View className="flex-1">
                   <Text
                     style={{
-                      fontSize: 14,
-                      fontWeight: '900',
+                      fontSize: 12,
+                      fontWeight: '800',
                       color: userPrediction?.pickedTeam === 'away' ? '#8B0A1F' : '#FFFFFF',
-                      letterSpacing: -0.2,
-                      lineHeight: 17,
+                      letterSpacing: -0.3,
+                      lineHeight: 15,
                       ...(isAwayLoser ? { opacity: 0.35, color: '#555' } : {}),
                     }}
                     numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
                   >
                     {game.awayTeam.name}
                   </Text>
@@ -1121,15 +1126,17 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 <View className="flex-1 items-end" style={{ marginRight: 10 }}>
                   <Text
                     style={{
-                      fontSize: 14,
-                      fontWeight: '900',
+                      fontSize: 12,
+                      fontWeight: '800',
                       color: userPrediction?.pickedTeam === 'home' ? '#8B0A1F' : '#FFFFFF',
-                      letterSpacing: -0.2,
-                      lineHeight: 17,
+                      letterSpacing: -0.3,
+                      lineHeight: 15,
                       textAlign: 'right',
                       ...(isHomeLoser ? { opacity: 0.35, color: '#555' } : {}),
                     }}
                     numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
                   >
                     {game.homeTeam.name}
                   </Text>

@@ -2,7 +2,8 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useGame } from '@/hooks/useGames';
+import { displayConfidence, displayWinProbability } from '@/lib/display-confidence';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useSubscription } from '@/lib/subscription-context';
@@ -171,17 +172,7 @@ export default function GameAnalysisScreen() {
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
 
-  const { data: game, isLoading } = useQuery<Game>({
-    queryKey: ['game', id],
-    queryFn: async () => {
-      const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
-      const res = await fetch(`${baseUrl}/api/games/id/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch game');
-      const json = await res.json();
-      return json.data ?? json;
-    },
-    enabled: !!id,
-  });
+  const { data: game, isLoading } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean };
 
   if (isLoading || !game || !game.prediction) {
     return (
@@ -266,21 +257,26 @@ export default function GameAnalysisScreen() {
                   <Text style={s.pickTeam}>{winner.name}</Text>
                 </View>
                 <View style={s.confBadge}>
-                  <Text style={s.confValue}>{prediction.confidence}%</Text>
+                  <Text style={s.confValue}>{displayConfidence(prediction.confidence)}%</Text>
                   <Text style={s.confLabel}>CONF</Text>
                 </View>
               </View>
 
               {/* Win probability bar — teal vs maroon */}
-              <View style={s.probRow}>
-                <Text style={[s.probTeam, { color: TEAL }]}>{homeTeam.abbreviation} {prediction.homeWinProbability}%</Text>
-                <View style={s.probBar}>
-                  <View style={[s.probFill, { flex: prediction.homeWinProbability, backgroundColor: TEAL }]} />
-                  <View style={{ width: 2 }} />
-                  <View style={[s.probFill, { flex: prediction.awayWinProbability, backgroundColor: MAROON }]} />
-                </View>
-                <Text style={[s.probTeam, { color: MAROON, textAlign: 'right' }]}>{prediction.awayWinProbability}% {awayTeam.abbreviation}</Text>
-              </View>
+              {(() => {
+                const dp = displayWinProbability(prediction.homeWinProbability, prediction.awayWinProbability);
+                return (
+                  <View style={s.probRow}>
+                    <Text style={[s.probTeam, { color: TEAL }]}>{homeTeam.abbreviation} {dp.home}%</Text>
+                    <View style={s.probBar}>
+                      <View style={[s.probFill, { flex: dp.home, backgroundColor: TEAL }]} />
+                      <View style={{ width: 2 }} />
+                      <View style={[s.probFill, { flex: dp.away, backgroundColor: MAROON }]} />
+                    </View>
+                    <Text style={[s.probTeam, { color: MAROON, textAlign: 'right' }]}>{dp.away}% {awayTeam.abbreviation}</Text>
+                  </View>
+                );
+              })()}
             </View>
           </View>
         </View>

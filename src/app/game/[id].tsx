@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useGame } from '@/hooks/useGames';
+import { displayConfidence, displayWinProbability, displayEdgeRating, getConfidenceTierLabel, displaySport } from '@/lib/display-confidence';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -653,7 +654,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
             {/* Confidence bar — shows shape but hides the actual number */}
             <View style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Confidence</Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Pick Strength</Text>
                 <View style={{ width: 32, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
               </View>
               <View style={{ flexDirection: 'row', gap: 2.5 }}>
@@ -670,13 +671,9 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
               <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.035)', width: '72%' }} />
             </View>
 
-            {/* Stat tiles — visible labels, redacted values */}
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-              <View style={[styles.statTile, { flex: 1 }]}>
-                <Text style={styles.statTileLabel}>Edge Rating</Text>
-                <View style={{ width: 36, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
-              </View>
-              <View style={[styles.statTile, { flex: 1 }]}>
+            {/* Stat tile — visible label, redacted value */}
+            <View style={{ marginBottom: 10 }}>
+              <View style={[styles.statTile]}>
                 <Text style={styles.statTileLabel}>Value Signal</Text>
                 <View style={{ width: 52, height: 16, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 4 }} />
               </View>
@@ -689,7 +686,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
                 </View>
                 <View>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock Full Analysis</Text>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Confidence, stats, and detailed breakdown</Text>
+                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Pick strength, analysis, and detailed breakdown</Text>
                 </View>
               </View>
             </View>
@@ -800,19 +797,19 @@ function safeTeamColor(color: string, fallback: string = '#5A7A8A'): string {
 }
 
 function WinProbBar({ prediction, homeTeam, awayTeam }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam }) {
-  const hp = prediction.homeWinProbability, ap = prediction.awayWinProbability;
+  const dp = displayWinProbability(prediction.homeWinProbability, prediction.awayWinProbability);
   const hColor = safeTeamColor(homeTeam.color);
   const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
   return (
     <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <Text style={{ fontSize: 9, fontWeight: '800', color: hColor, letterSpacing: 0.4 }}>{homeTeam.abbreviation} {hp}%</Text>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: hColor, letterSpacing: 0.4 }}>{homeTeam.abbreviation} {dp.home}%</Text>
         <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
-        <Text style={{ fontSize: 9, fontWeight: '800', color: aColor, letterSpacing: 0.4 }}>{ap}% {awayTeam.abbreviation}</Text>
+        <Text style={{ fontSize: 9, fontWeight: '800', color: aColor, letterSpacing: 0.4 }}>{dp.away}% {awayTeam.abbreviation}</Text>
       </View>
       <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', overflow: 'hidden' }}>
-        <View style={{ flex: hp, backgroundColor: hColor, borderRadius: 5 }} />
-        <View style={{ flex: ap, backgroundColor: aColor, borderRadius: 5 }} />
+        <View style={{ flex: dp.home, backgroundColor: hColor, borderRadius: 5 }} />
+        <View style={{ flex: dp.away, backgroundColor: aColor, borderRadius: 5 }} />
       </View>
     </View>
   );
@@ -856,10 +853,19 @@ function ConfidenceBarSegment({ index, filled }: { index: number; filled: boolea
   );
 }
 
-function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport'] }) {
+function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport']; gameId: string }) {
+  const router = useRouter();
   const winner = prediction.predictedWinner === 'home' ? homeTeam : awayTeam;
   const SEGS = 10;
-  const filledSegs = Math.round((prediction.confidence / 100) * SEGS);
+  const conf = prediction.confidence;
+  const filledSegs = Math.round((conf / 100) * SEGS);
+
+  // Tier mapping
+  const isTossUp = prediction.isTossUp || conf < 53;
+  const tier = isTossUp ? { label: 'Toss-Up', color: '#6B7C94' }
+    : conf < 60 ? { label: 'Solid Pick', color: '#7A9DB8' }
+    : conf < 72 ? { label: 'Strong Pick', color: '#4ECDC4' }
+    : { label: 'Lock', color: '#FFD700' };
 
   const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
   const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
@@ -974,24 +980,25 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction
                 {winner.name}
               </Text>
             </View>
-            <View style={{
-              paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6,
-              backgroundColor: 'rgba(139,10,31,0.15)',
-              borderWidth: 1, borderColor: 'rgba(139,10,31,0.3)',
-            }}>
-              <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
-            </View>
+            {null}
           </View>
 
-          {/* Confidence */}
-          <View style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}>
+          {/* Pick Strength */}
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/confidence-explained', params: { id: gameId } }); }}
+            hitSlop={8}
+            style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
+          >
             <Text style={{ fontSize: 9, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.5, textTransform: 'uppercase' as const }}>
-              CONFIDENCE
+              PICK STRENGTH
             </Text>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF' }}>
-              {prediction.confidence}%
-            </Text>
-          </View>
+            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 }}>
+              <View style={{ backgroundColor: `${tier.color}20`, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: `${tier.color}40` }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: tier.color, letterSpacing: 0.5 }}>{tier.label}</Text>
+              </View>
+              <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)' }}>›</Text>
+            </View>
+          </Pressable>
 
           {/* Confidence bar — animated segments with staggered shimmer */}
           <View style={{ flexDirection: 'row' as const, gap: 3, marginBottom: 18 }}>
@@ -1005,32 +1012,19 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport }: { prediction
             {prediction.analysis}
           </Text>
 
-          {/* Stat tiles */}
-          <View style={{ flexDirection: 'row' as const, gap: 10 }}>
-            <View style={{
-              flex: 1, backgroundColor: 'rgba(255,255,255,0.02)',
-              borderRadius: 12, padding: 14,
-              borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-            }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
-                EDGE RATING
-              </Text>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF' }}>
-                {prediction.edgeRating}/10
-              </Text>
-            </View>
-            <View style={{
-              flex: 1, backgroundColor: 'rgba(255,255,255,0.02)',
-              borderRadius: 12, padding: 14,
-              borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-            }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
-                VALUE SIGNAL
-              </Text>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: valueColor }}>
-                {valueLabel}
-              </Text>
-            </View>
+          {/* Value Signal — full width */}
+          <View style={{
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            borderRadius: 12, padding: 14,
+            borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+          }}>
+            <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
+              VALUE SIGNAL
+            </Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: valueColor }}>
+              {valueLabel}
+            </Text>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Model vs. market line gap</Text>
           </View>
         </View>
       </View>
@@ -1345,18 +1339,7 @@ export default function GameDetailScreen() {
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
   const { data: userPick } = useGamePick(id ?? '');
   const makePick = useMakePick();
-  const { data: game, isLoading, error } = useQuery<Game>({
-    queryKey: ['game', id],
-    queryFn: async () => {
-      const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
-      const res = await fetch(`${baseUrl}/api/games/id/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch game');
-      const json = await res.json();
-      return json.data ?? json;
-    },
-    enabled: !!id,
-    refetchInterval: (query) => (query.state.data as Game | undefined)?.status === 'LIVE' ? 30000 : false,
-  });
+  const { data: game, isLoading, error } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean; error: any };
   if (isLoading) return <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#7A9DB8" /></View>;
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -1378,10 +1361,17 @@ export default function GameDetailScreen() {
           <LinearGradient colors={['transparent', hexToRgba(awayTeam.color, 0.22), hexToRgba(awayTeam.color, 0.45)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
           <View style={{ height: insets.top + 10 }} />
-          {/* Top bar — back + follow */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 }}>
+          {/* Top bar — back + sport badge + follow */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10 }}>
             <Pressable onPress={() => router.back()} style={styles.backBtn}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
-            {/* Follow button — bold and visible */}
+            {/* Sport + status pill — centered between back and follow */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
+              {isLive ? (<><LivePulseDot /><Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>LIVE</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
+              <View style={{ backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
+              </View>
+            </View>
+            {/* Follow button */}
             <Pressable
               onPress={() => { Haptics.impactAsync(followed ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium); toggleFollow(); }}
               style={({ pressed }) => ({
@@ -1395,21 +1385,6 @@ export default function GameDetailScreen() {
               <Text style={{ fontSize: 14, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? '✓' : '+'}</Text>
               <Text style={{ fontSize: 12, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? 'Following' : 'Follow'}</Text>
             </Pressable>
-          </View>
-
-          {/* Centered sport + status pill */}
-          <View style={{ alignItems: 'center', marginBottom: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 8 }}>
-              {isLive ? (<><LivePulseDot /><Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>LIVE</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
-              <View style={{ backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
-              </View>
-              {!isLive ? (
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                  {game.status === 'FINAL' ? 'Final' : new Date(game.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                </Text>
-              ) : null}
-            </View>
           </View>
           <View style={styles.teamNamesRow}>
             <View style={{ flex: 1 }}>
@@ -1471,7 +1446,7 @@ export default function GameDetailScreen() {
           </View>
           {prediction && isPremium ? (
             <>
-              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} /></View>
+              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
               <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
@@ -1574,7 +1549,7 @@ const styles = StyleSheet.create({
   scorePanel: { paddingHorizontal: 22, paddingVertical: 14, alignItems: 'center' },
   scoreNumber: { fontSize: 72, fontFamily: 'VT323_400Regular', lineHeight: 78, letterSpacing: 2 },
   scoreSep: { fontSize: 28, color: 'rgba(255,255,255,0.25)', fontWeight: '300', lineHeight: 78 },
-  scoreClock: { fontSize: 13, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
+  scoreClock: { fontSize: 16, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 4 },
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },

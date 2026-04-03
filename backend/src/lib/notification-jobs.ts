@@ -240,6 +240,46 @@ export async function checkBigGameAlerts() {
   }
 }
 
+// ─── PREDICTION WINNER CHANGED — notify users who picked the affected game ─
+export async function notifyWinnerFlip(gameId: string, homeAbbr: string, awayAbbr: string, sport: string, newWinner: 'home' | 'away', confidence: number) {
+  try {
+    const newWinnerAbbr = newWinner === 'home' ? homeAbbr : awayAbbr;
+
+    // Find all users who picked this game (pending picks only — game hasn't ended)
+    const picks = await prisma.userPick.findMany({
+      where: { gameId, result: null },
+      select: { odId: true },
+    });
+
+    const userIds = [...new Set(picks.map(p => p.odId))];
+
+    for (const userId of userIds) {
+      // Only send one winner-flip notification per game per user
+      const already = await prisma.notificationLog.findFirst({
+        where: { userId, type: 'winner_flip', gameId },
+      });
+      if (already) continue;
+
+      await sendPushToUser(userId,
+        `Prediction Update: ${awayAbbr} vs ${homeAbbr}`,
+        `Our model now favors ${newWinnerAbbr} at ${confidence}%. Updated data shifted the pick.`,
+        { type: 'winner_flip', gameId, screen: 'game' }
+      );
+    }
+
+    // Also notify all users (not just pickers) since this is a significant event
+    await sendPushToAll(
+      `Prediction Shift: ${awayAbbr} vs ${homeAbbr}`,
+      `${sport} — Model now picks ${newWinnerAbbr} (${confidence}%). New data changed the call.`,
+      { type: 'winner_flip', gameId, screen: 'game' }
+    );
+
+    console.log(`[NotifyJobs] Winner flip: ${awayAbbr} vs ${homeAbbr} → now ${newWinnerAbbr} (${confidence}%)`);
+  } catch (err) {
+    console.error('[NotifyJobs] notifyWinnerFlip error:', err);
+  }
+}
+
 // ─── STREAK MILESTONE — notify on 5, 7, 10 correct in a row ─
 export async function checkStreakMilestone(userId: string, currentStreak: number) {
   try {

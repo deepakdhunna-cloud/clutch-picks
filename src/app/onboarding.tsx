@@ -310,7 +310,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
 
           <View style={{ flexDirection: 'row', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 16, paddingVertical: 12 }}>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUT }}>57% confidence</Text>
+              <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>Solid Pick</Text>
             </View>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
               <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUT }}>MIN -3.5</Text>
@@ -374,7 +374,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
         </Pressable>
       </View>
 
-      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 20 }}>
+      <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24 }} style={{ flex: 1 }}>
         <Animated.Text entering={FadeInDown.duration(400)} style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'center', marginBottom: 6 }}>
           AI-Powered Picks
         </Animated.Text>
@@ -384,23 +384,16 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
 
         {/* Clutch Pick card — with rotating shimmer border */}
         <Animated.View entering={FadeInDown.delay(200).duration(500)} style={{ width: '100%' }}>
-          {/* Outer glow */}
           <Animated.View style={[{ borderRadius: 22, shadowColor: '#C0C8D0', shadowOffset: { width: 0, height: 0 } }, glowStyle]}>
-            {/* Depth shadow */}
             <View style={{ borderRadius: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 20 }}>
-              {/* Border container */}
               <View style={{ borderRadius: 22, overflow: 'hidden' }}>
-                {/* Static silver base */}
                 <LinearGradient colors={['#C0C8D0', '#8A929A', '#D4D8DC', '#8A929A', '#C0C8D0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
-                {/* Rotating beam */}
                 <Animated.View style={[{ position: 'absolute', top: -100, left: -100, right: -100, bottom: -100 }, rotatingStyle]}>
                   <LinearGradient colors={['transparent', 'transparent', 'rgba(122,157,184,0.7)', '#7A9DB8', 'rgba(122,157,184,0.7)', 'transparent', 'transparent']} locations={[0, 0.35, 0.42, 0.5, 0.58, 0.65, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: '50%' }} />
                   <LinearGradient colors={['transparent', 'transparent', 'rgba(90,6,20,0.7)', '#8B0A1F', 'rgba(90,6,20,0.7)', 'transparent', 'transparent']} locations={[0, 0.35, 0.42, 0.5, 0.58, 0.65, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', top: '50%', left: 0, right: 0, bottom: 0 }} />
                 </Animated.View>
-                {/* Inner card */}
                 <View style={{ margin: 3, borderRadius: 18, overflow: 'hidden', backgroundColor: '#182028' }}>
                   <View style={{ padding: 18 }}>
-                    {/* Header */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                       <View style={{ backgroundColor: MAROON, width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: 12, fontWeight: '900', color: WHITE }}>#1</Text>
@@ -410,8 +403,6 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                         <Text style={{ fontSize: 9, fontWeight: '700', color: TEAL }}>NBA</Text>
                       </View>
                     </View>
-
-                    {/* Team row — shows the team user picked */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
                       <JerseyIcon teamCode={pickedCode} primaryColor={pickedColors.primary} secondaryColor={pickedColors.secondary} size={52} sport={jerseyType} />
                       <View>
@@ -419,11 +410,11 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                         <Text style={{ fontSize: 11, color: TEXT_MUT, marginTop: 2 }}>vs {opponentCode} {opponentName}</Text>
                       </View>
                     </View>
-
-                    {/* Confidence bar */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>CONFIDENCE</Text>
-                      <Text style={{ fontSize: 16, fontWeight: '900', color: WHITE }}>57%</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>PICK STRENGTH</Text>
+                      <View style={{ backgroundColor: 'rgba(122,157,184,0.08)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(122,157,184,0.19)' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: TEAL }}>Solid Pick</Text>
+                      </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 3, height: 5, marginBottom: 16 }}>
                       {Array.from({ length: 10 }).map((_, i) => (
@@ -436,15 +427,11 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                         </View>
                       ))}
                     </View>
-
-                    {/* The Signal — creative breakdown replacing "WHY THIS PICK" */}
                     <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)', paddingTop: 14 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                         <View style={{ width: 3, height: 12, borderRadius: 1.5, backgroundColor: TEAL }} />
                         <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>THE SIGNAL</Text>
                       </View>
-
-                      {/* Factor bars — visual breakdown of what the AI sees */}
                       <View style={{ gap: 8 }}>
                         {[
                           { label: 'Recent Form', value: 0.8, color: TEAL },
@@ -462,8 +449,6 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                           </View>
                         ))}
                       </View>
-
-                      {/* Full breakdown CTA */}
                       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(122,157,184,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(122,157,184,0.25)' }}>
                           <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Full breakdown</Text>
@@ -480,13 +465,52 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
           </Animated.View>
         </Animated.View>
 
-        <Animated.Text entering={FadeInDown.delay(500).duration(400)} style={{ fontSize: 12, color: TEXT_SEC, textAlign: 'center', marginTop: 20, lineHeight: 18 }}>
-          Tap any pick for edge rating, win probability, and full analysis.
-        </Animated.Text>
-        <Animated.Text entering={FadeInDown.delay(600).duration(400)} style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', marginTop: 12 }}>
+        {/* Confidence Tier Legend — glass tiles */}
+        <Animated.View entering={FadeInDown.delay(500).duration(500)} style={{ width: '100%', marginTop: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: 3, height: 14, borderRadius: 1.5 }} />
+            <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>PICK STRENGTH TIERS</Text>
+          </View>
+          <View style={{ gap: 8 }}>
+            {[
+              { range: '50–54%', label: 'Considered a Lean', desc: 'Slight edge detected by the model', accent: 'rgba(255,255,255,0.15)' },
+              { range: '55–59%', label: 'Considered a Solid Pick', desc: 'Clear advantage found across key factors', accent: 'rgba(122,157,184,0.25)' },
+              { range: '60–64%', label: 'Considered a Strong Pick', desc: 'Multiple prediction factors align', accent: 'rgba(122,157,184,0.35)' },
+              { range: '65–69%', label: 'Considered a High Confidence Pick', desc: 'Strong model agreement and data depth', accent: 'rgba(139,10,31,0.25)' },
+              { range: '70%+', label: 'Considered a Lock', desc: 'Dominant edge across all factors', accent: 'rgba(139,10,31,0.35)' },
+            ].map((tier, i) => (
+              <Animated.View key={i} entering={FadeInDown.delay(550 + i * 60).duration(400)}>
+                <View style={{
+                  backgroundColor: 'rgba(255,255,255,0.02)',
+                  borderRadius: 14,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.06)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  overflow: 'hidden',
+                }}>
+                  {/* Left accent */}
+                  <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: tier.accent, borderTopLeftRadius: 14, borderBottomLeftRadius: 14 }} />
+                  {/* Range badge */}
+                  <View style={{ backgroundColor: tier.accent, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginRight: 12, minWidth: 54, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', color: WHITE }}>{tier.range}</Text>
+                  </View>
+                  {/* Label + description */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: TEAL, letterSpacing: 0.3 }}>{tier.label}</Text>
+                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2, lineHeight: 14 }}>{tier.desc}</Text>
+                  </View>
+                </View>
+              </Animated.View>
+            ))}
+          </View>
+        </Animated.View>
+
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', marginTop: 16 }}>
           For entertainment only. Not gambling advice.
-        </Animated.Text>
-      </View>
+        </Text>
+      </Animated.ScrollView>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
         <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
@@ -630,9 +654,8 @@ function ArenaGameDay() {
               <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>Positive</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: 'rgba(2,3,8,0.92)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>KEY STAT</Text>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#C9CED6' }}>57%</Text>
-              <Text style={{ fontSize: 9, color: TEXT_MUT, marginTop: 2 }}>Confidence</Text>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>PICK STRENGTH</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: TEAL }}>Solid Pick</Text>
             </View>
           </View>
         </View>
@@ -676,7 +699,7 @@ function ArenaPrepMode() {
 
       {/* Ranked cards */}
       {[
-        { rank: 1, teams: 'MIN at CHI', story: 'Strong lean', detail: 'MIN clear favorite at 57% confidence' },
+        { rank: 1, teams: 'MIN at CHI', story: 'Solid Pick', detail: 'MIN rated a Solid Pick — clear statistical edge' },
         { rank: 2, teams: 'DEN at MIA', story: 'Upset watch', detail: 'MIA 7-3 in last 10 despite underdog status' },
       ].map(c => (
         <View key={c.rank} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: c.rank === 1 ? MAROON : TEAL }}>

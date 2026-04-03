@@ -130,7 +130,7 @@ export function useLiveScores() {
               setLiveScores(pendingScores.current);
               pendingScores.current = null;
             }
-          }, 500);
+          }, 200);
         }
       } catch {
         // malformed payload — ignore

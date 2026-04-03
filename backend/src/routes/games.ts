@@ -6,10 +6,12 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
-import { generatePrediction } from "../lib/predictions";
+import { generatePrediction, bustAIAnalysisCache } from "../lib/predictions";
 import { Sport as SportEnum, League, GameStatus as SportsGameStatus } from "../types/sports";
 import type { Game as SportsGame } from "../types/sports";
 import { resolvePicksInBackground } from "../lib/resolve-picks";
+import { notifyWinnerFlip } from "../lib/notification-jobs";
+import { prisma } from "../prisma";
 
 // ESPN API base URLs for each sport
 const ESPN_ENDPOINTS = {
@@ -258,6 +260,12 @@ function getCachedLivePrediction(gameId: string): GamePrediction | null {
 
 function setCachedLivePrediction(gameId: string, prediction: GamePrediction): void {
   livePredictionCache.set(gameId, { prediction, timestamp: Date.now() });
+}
+
+// Clear all prediction caches — forces regeneration with current engine parameters
+export function clearAllPredictionCaches(): void {
+  predictionCache.clear();
+  livePredictionCache.clear();
 }
 
 // ─── Live prediction logic ────────────────────────────────────────────────────
@@ -568,6 +576,35 @@ async function addPredictionToGame(game: Game): Promise<Game> {
     isTossUp: prediction.isTossUp ?? false,
   };
 
+  // ── Winner-change detection ─────────────────────────────────────────────────
+  // Compare new prediction with previous cached version. If the predicted winner
+  // flipped, notify users and update the database record so the app always shows
+  // the latest pick — never stale data.
+  if (cachedPrediction && cachedPrediction.predictedWinner !== predictionResult.predictedWinner) {
+    console.log(`[PredictionFlip] ${game.id}: ${cachedPrediction.predictedWinner} → ${predictionResult.predictedWinner} (${predictionResult.confidence}%)`);
+    // Bust the AI analysis cache so it regenerates text for the new winner
+    bustAIAnalysisCache(game.id);
+    // Update DB record to reflect the new winner
+    prisma.predictionResult.updateMany({
+      where: { gameId: game.id },
+      data: {
+        predictedWinner: predictionResult.predictedWinner,
+        confidence: predictionResult.confidence,
+        isTossUp: predictionResult.isTossUp ?? false,
+      },
+    }).catch(err => console.error('[PredictionFlip] DB update failed:', err));
+
+    // Fire notification in background — don't block the response
+    notifyWinnerFlip(
+      game.id,
+      game.homeTeam.abbreviation,
+      game.awayTeam.abbreviation,
+      game.sport,
+      predictionResult.predictedWinner,
+      predictionResult.confidence
+    ).catch(err => console.error('[PredictionFlip] Notify failed:', err));
+  }
+
   // Cache the pregame prediction (15-min TTL)
   setCachedPrediction(game.id, predictionResult);
 
@@ -589,6 +626,20 @@ async function addPredictionToGame(game: Game): Promise<Game> {
     };
 
     finalPrediction = updateLivePrediction(predictionResult, liveData, game.sport);
+
+    // Check if the live adjustment flipped the winner vs the pregame prediction
+    if (predictionResult.predictedWinner !== finalPrediction.predictedWinner) {
+      console.log(`[LiveFlip] ${game.id}: ${predictionResult.predictedWinner} → ${finalPrediction.predictedWinner} (live score shift)`);
+      notifyWinnerFlip(
+        game.id,
+        game.homeTeam.abbreviation,
+        game.awayTeam.abbreviation,
+        game.sport,
+        finalPrediction.predictedWinner,
+        finalPrediction.confidence
+      ).catch(err => console.error('[LiveFlip] Notify failed:', err));
+    }
+
     setCachedLivePrediction(game.id, finalPrediction);
   }
 
@@ -985,6 +1036,12 @@ async function fetchGamesBySport(sport: SportKey, date?: string, fullList = fals
 
 const gamesRouter = new Hono();
 
+// Force-refresh all predictions (clears cache so new engine params take effect)
+gamesRouter.post("/refresh-predictions", async (c) => {
+  clearAllPredictionCaches();
+  return c.json({ data: { cleared: true, message: "Prediction caches cleared. New predictions will generate on next request." } });
+});
+
 gamesRouter.get("/", async (c) => {
   try {
     const now = new Date();
@@ -1281,7 +1338,7 @@ interface LiveScore {
 }
 
 let liveGamesCache: { data: LiveScore[]; timestamp: number } | null = null;
-const LIVE_POLL_INTERVAL = 6_000;
+const LIVE_POLL_INTERVAL = 4_000; // 4 seconds — fast ESPN polling for live scores
 
 // Fix 1: throttle resolvePicksInBackground — at most once per minute
 let lastResolveTime = 0;
@@ -1290,7 +1347,7 @@ const RESOLVE_COOLDOWN_MS = 60_000;
 // Fix 3: track which sports currently have live games so SSE skips idle ones
 let activeSports: Set<SportKey> = new Set();
 let lastFullScanTime = 0;
-const FULL_SCAN_INTERVAL_MS = 45_000;
+const FULL_SCAN_INTERVAL_MS = 30_000; // 30s — discover new live games quickly
 
 // Fix 4: gameId → sport for targeted /id/:id fallback searches
 const gameIdToSport = new Map<string, SportKey>();
@@ -1385,7 +1442,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
   return data;
 }
 
-// SSE endpoint: streams live scores every 10 seconds
+// SSE endpoint: streams live scores every 4 seconds
 gamesRouter.get("/live-stream", async (c) => {
   return streamSSE(c, async (stream) => {
     let aborted = false;
@@ -1406,18 +1463,17 @@ gamesRouter.get("/live-stream", async (c) => {
     // Send immediately
     if (!(await sendScores())) return;
 
-    // Loop every 10 seconds; send a heartbeat comment every 30s to keep NAT/proxy alive
+    // Loop every 4 seconds; send a heartbeat every 3rd tick (~12s) to keep NAT/proxy alive
     let ticksSinceHeartbeat = 0;
     while (!aborted) {
       try {
         await stream.sleep(LIVE_POLL_INTERVAL);
       } catch {
-        // sleep throws when the connection is aborted
         break;
       }
       if (aborted) break;
       ticksSinceHeartbeat++;
-      if (ticksSinceHeartbeat >= 2) {
+      if (ticksSinceHeartbeat >= 3) {
         ticksSinceHeartbeat = 0;
         try { await stream.writeSSE({ data: "", event: "heartbeat" }); } catch { break; }
         if (aborted) break;

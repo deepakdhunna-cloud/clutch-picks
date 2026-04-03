@@ -23,6 +23,7 @@ import { useTeamFollows } from '@/hooks/useTeamFollows';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
+import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport } from '@/lib/display-confidence';
 
 // ─── COLORS ───
 const MAROON = '#8B0A1F';
@@ -183,7 +184,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
         {/* Sport badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <View style={{ backgroundColor: 'rgba(122,157,184,0.1)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-            <Text style={{ fontSize: 8, fontWeight: '800', color: TEAL, letterSpacing: 1 }}>{game.sport}</Text>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: TEAL, letterSpacing: 1 }}>{displaySport(game.sport)}</Text>
           </View>
           {live ? (
             <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: LIVE_RED }, ds]} />
@@ -284,7 +285,7 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
             <Text style={{ fontSize: 11, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>LIVE</Text>
           </View>
           <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
-            <Text style={{ fontSize: 9, fontWeight: '700', color: WHITE, letterSpacing: 0.5 }}>{game.sport === 'NCAAF' ? 'CFB' : game.sport === 'NCAAB' ? 'CBB' : game.sport}</Text>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: WHITE, letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
           </View>
         </View>
 
@@ -324,11 +325,16 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
               </View>
               <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>{lead ? 'Positive' : 'Neutral'}</Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>KEY STAT</Text>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: SILVER }}>{game.prediction?.confidence ?? 50}%</Text>
-              <Text style={{ fontSize: 9, color: TEXT_MUTED, marginTop: 2 }}>Confidence</Text>
-            </View>
+            {(() => {
+              const c = game.prediction?.confidence ?? 50;
+              const t = game.prediction?.isTossUp || c < 53 ? { label: 'Toss-Up', color: '#6B7C94' } : c < 60 ? { label: 'Solid Pick', color: '#7A9DB8' } : c < 72 ? { label: 'Strong Pick', color: '#4ECDC4' } : { label: 'Lock', color: '#FFD700' };
+              return (
+                <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
+                  <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>PICK STRENGTH</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: t.color }}>{t.label}</Text>
+                </View>
+              );
+            })()}
           </View>
         </View>
       </View>
@@ -337,10 +343,10 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
 });
 
 // ─── GENERATE LIVE INTEL ───
-function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'alert'|'shift'|'trend'; title: string; body: string }> {
+function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'alert'|'shift'|'trend'|'pulse'; title: string; body: string }> {
   if (!game) return [];
   const pred = game.prediction;
-  const intel: Array<{ type: 'alert'|'shift'|'trend'; title: string; body: string }> = [];
+  const intel: Array<{ type: 'alert'|'shift'|'trend'|'pulse'; title: string; body: string }> = [];
   const home = game.homeTeam; const away = game.awayTeam;
   const homeScore = game.homeScore ?? 0; const awayScore = game.awayScore ?? 0;
   const scoreDiff = Math.abs(homeScore - awayScore);
@@ -348,13 +354,41 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
   const trailer = homeScore > awayScore ? away : homeScore < awayScore ? home : null;
   const quarter = game.quarter ?? '';
   const isEarly = quarter.includes('1') || quarter.includes('Top 1') || quarter.includes('Bot 1') || quarter.includes('Top 2');
+  const isLate = quarter.includes('4') || quarter.includes('OT') || quarter.includes('9') || quarter.includes('3rd Period') || quarter.includes('2nd Half');
   const isTied = homeScore === awayScore;
-  const conf = pred?.confidence ?? 50;
+  const conf = displayConfidence(pred?.confidence ?? 50);
+  const tierLabel = pred?.isTossUp || conf < 53 ? 'Toss-Up' : conf < 60 ? 'Solid Pick' : conf < 72 ? 'Strong Pick' : 'Lock';
   const predictedWinner = pred ? (pred.predictedWinner === 'home' ? home : away) : null;
+  const sport = game.sport;
+
+  // PULSE — Live game pulse: key events, momentum, situational factors
+  // This sits at the top of the intel stack for immediate context
+  if (isLate && scoreDiff <= 3 && leader && trailer) {
+    intel.push({ type: 'pulse', title: 'Crunch Time', body: `${leader.abbreviation} leads by just ${scoreDiff} in ${quarter}. Every possession matters. ${sport === 'NBA' || sport === 'NCAAB' ? 'Watch for intentional fouling and free throw shooting down the stretch.' : sport === 'NFL' || sport === 'NCAAF' ? 'Clock management and timeouts become critical.' : sport === 'MLB' ? 'Bullpen matchups will decide this one.' : sport === 'NHL' ? 'Expect the trailing team to pull their goalie late.' : sport === 'MLS' || sport === 'EPL' ? 'Late tactical substitutions and set pieces could swing it.' : 'Closing stretch — anything can happen.'}` });
+  } else if (isLate && isTied) {
+    intel.push({ type: 'pulse', title: 'Overtime Watch', body: `Tied ${homeScore}-${awayScore} late in ${quarter}. ${sport === 'NBA' || sport === 'NCAAB' ? 'Could come down to a last-second shot. Timeout management and free throws are key.' : sport === 'NFL' || sport === 'NCAAF' ? 'Both teams playing for the final drive. Field goal range could decide it.' : sport === 'MLB' ? 'Extra innings looming — bullpen depth becomes the deciding factor.' : sport === 'NHL' ? 'Overtime means 3-on-3 — wide open and unpredictable.' : sport === 'MLS' || sport === 'EPL' ? 'Extra time or penalties could decide this one.' : 'Winner takes all in the closing stretch.'}` });
+  } else if (isEarly && scoreDiff >= 8 && leader) {
+    intel.push({ type: 'pulse', title: 'Fast Start', body: `${leader.abbreviation} jumped out to a ${scoreDiff}-point lead early. ${trailer?.abbreviation ?? 'The trailing team'} needs to settle in quickly. ${sport === 'NBA' ? 'Early runs don\'t always hold — watch for a timeout and adjustment.' : sport === 'NFL' ? 'Early deficit forces the trailing offense to abandon the run game.' : 'Momentum is real but fragile this early.'}` });
+  } else if (scoreDiff >= 15 && leader && trailer) {
+    intel.push({ type: 'pulse', title: 'Blowout Developing', body: `${leader.abbreviation} up by ${scoreDiff}. ${sport === 'NBA' ? 'Starters may rest soon — garbage time approaching.' : sport === 'NFL' ? 'Play-calling shifts to clock-killing mode.' : `${trailer.abbreviation} running out of time to mount a comeback.`} The model's prediction ${predictedWinner?.abbreviation === leader.abbreviation ? 'is holding strong.' : 'has been overturned by the scoreboard.'}` });
+  } else if (pred?.ensembleDivergence && !isTied) {
+    intel.push({ type: 'pulse', title: 'Models Were Split', body: `The prediction models disagreed pre-game on this one. ${leader ? `${leader.abbreviation} currently leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. ` : null}When models diverge, in-game swings are more likely — stay alert for a momentum shift.` });
+  } else if (pred?.isTossUp && scoreDiff > 0 && leader) {
+    intel.push({ type: 'pulse', title: 'Coin Flip Playing Out', body: `This was flagged as a toss-up pre-game and it\'s living up to it. ${leader.abbreviation} leads by ${scoreDiff} but separation is thin. Either team could take control with one big play.` });
+  } else if (homeScore + awayScore > 0) {
+    // Default pulse for any active game
+    const totalScore = homeScore + awayScore;
+    const paceNote = sport === 'NBA' ? (totalScore > 60 ? 'High-scoring pace so far.' : 'Defensive battle developing.') :
+                     sport === 'NFL' ? (totalScore > 20 ? 'Offenses are clicking.' : 'Defense-first game so far.') :
+                     sport === 'MLB' ? (totalScore > 6 ? 'Bats are alive tonight.' : 'Pitching duel.') :
+                     sport === 'NHL' ? (totalScore > 4 ? 'Plenty of offense tonight.' : 'Tight checking game.') :
+                     (totalScore > 2 ? 'Open game with chances.' : 'Cagey affair so far.');
+    intel.push({ type: 'pulse', title: 'Game Flow', body: `${quarter} — ${home.abbreviation} ${homeScore}, ${away.abbreviation} ${awayScore}. ${paceNote} ${leader ? `${leader.abbreviation} in front.` : 'All square.'}` });
+  }
 
   // ALERT
   if (pred?.analysis) {
-    intel.push({ type: 'alert', title: 'Game Analysis', body: pred.analysis.length > 160 ? pred.analysis.substring(0, 160) + '...' : pred.analysis });
+    intel.push({ type: 'alert', title: 'Game Analysis', body: pred.analysis });
   } else if (predictedWinner) {
     const edge = pred?.edgeRating ?? 5;
     let ctx = '';
@@ -362,7 +396,7 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
     else if (leader) ctx = `${leader.abbreviation} leads against the model's pick — potential upset developing.`;
     else if (isTied && isEarly) ctx = 'Game tracking as expected in early stages.';
     else if (isTied) ctx = 'Tied up — model separation hasn\'t materialized yet.';
-    intel.push({ type: 'alert', title: 'Pre-Game Edge', body: `${predictedWinner.abbreviation} entered as the ${conf}% favorite with a ${edge}/10 edge rating. ${ctx}` });
+    intel.push({ type: 'alert', title: 'Pre-Game Edge', body: `${predictedWinner.abbreviation} entered as a ${tierLabel} pick. ${ctx}` });
   }
 
   // SHIFT
@@ -371,11 +405,11 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
   } else if (isTied && isEarly) {
     intel.push({ type: 'shift', title: 'Level Playing Field', body: `Knotted at ${homeScore}-${awayScore} early. Neither side has found separation yet.` });
   } else if (isTied) {
-    intel.push({ type: 'shift', title: 'Deadlocked', body: `${homeScore}-${awayScore} tie. Neither team can pull away — close game the model predicted at ${conf}% confidence.` });
+    intel.push({ type: 'shift', title: 'Deadlocked', body: `${homeScore}-${awayScore} tie. Neither team can pull away — the model rated this a ${tierLabel}.` });
   } else if (scoreDiff >= 10 && leader && trailer) {
     intel.push({ type: 'shift', title: `${leader.abbreviation} Pulling Away`, body: `${leader.abbreviation} leads by ${scoreDiff}. ${trailer.abbreviation} needs a response soon. ${predictedWinner?.abbreviation === leader.abbreviation ? 'This aligns with the pre-game model.' : 'The model had this going the other way — upset unfolding.'}` });
   } else if (scoreDiff > 0 && scoreDiff <= 3 && leader) {
-    intel.push({ type: 'shift', title: `${leader.abbreviation} Has the Edge`, body: `Slim ${scoreDiff}-point lead for ${leader.abbreviation}, up ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. ${conf > 60 ? `The model's ${conf}% confidence suggests the favorite should hold.` : `At just ${conf}% confidence, anything can happen.`}` });
+    intel.push({ type: 'shift', title: `${leader.abbreviation} Has the Edge`, body: `Slim ${scoreDiff}-point lead for ${leader.abbreviation}, up ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. ${conf >= 60 ? `The model rates this a Strong Pick — the favorite should hold.` : `The model sees this as a ${tierLabel} — close game, slight edge.`}` });
   } else if (scoreDiff > 3 && leader && trailer) {
     intel.push({ type: 'shift', title: `${leader.abbreviation} in Control`, body: `${leader.abbreviation} leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. A comfortable cushion. ${trailer.abbreviation} needs a big rally.` });
   }
@@ -388,22 +422,26 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
   } else if (pred?.ensembleDivergence) {
     intel.push({ type: 'trend', title: 'Model Uncertainty', body: `Prediction models were split pre-game. ${isTied ? 'The tie validates the uncertainty.' : `${leader?.abbreviation ?? 'One team'} making a case, but don't trust the lead yet.`}` });
   } else {
-    intel.push({ type: 'trend', title: 'Tracking the Model', body: `Pre-game model had ${conf}% confidence. ${leader ? `${leader.abbreviation} leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)} — ${predictedWinner?.abbreviation === leader.abbreviation ? 'tracking within expected range.' : 'diverging from expectations.'}` : 'Game is level — still within expected range.'}` });
+    intel.push({ type: 'trend', title: 'Tracking the Model', body: `Pre-game model rated this a ${tierLabel}. ${leader ? `${leader.abbreviation} leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)} — ${predictedWinner?.abbreviation === leader.abbreviation ? 'tracking within expected range.' : 'diverging from expectations.'}` : 'Game is level — still within expected range.'}` });
   }
   return intel;
 }
 
 // ─── INTEL CARD ───
-const IntelCard = memo(function IntelCard({ type, title, body }: { type: 'alert'|'shift'|'trend'; title: string; body: string }) {
-  const bc = type === 'alert' ? LIVE_RED : type === 'shift' ? TEAL_DARK : SILVER;
-  const bl = type === 'alert' ? 'ALERT' : type === 'shift' ? 'SHIFT' : 'TREND';
+const IntelCard = memo(function IntelCard({ type, title, body }: { type: 'alert'|'shift'|'trend'|'pulse'; title: string; body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = body.length > 140;
+  const displayBody = expanded || !isLong ? body : body.substring(0, 140) + '...';
+  const bc = type === 'pulse' ? '#F59E0B' : type === 'alert' ? LIVE_RED : type === 'shift' ? TEAL_DARK : SILVER;
+  const bl = type === 'pulse' ? 'PULSE' : type === 'alert' ? 'ALERT' : type === 'shift' ? 'SHIFT' : 'TREND';
   return (
-    <View style={{ backgroundColor: GLASS, borderRadius: 14, padding: 13, paddingLeft: 18, borderWidth: 1, borderColor: BORDER, marginBottom: 8, position: 'relative' }}>
+    <Pressable onPress={() => { if (isLong) setExpanded(!expanded); }} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 13, paddingLeft: 18, borderWidth: 1, borderColor: BORDER, marginBottom: 8, position: 'relative' }}>
       <View style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, backgroundColor: bc, borderRadius: 2 }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}><View style={{ backgroundColor: `${bc}22`, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}><Text style={{ fontSize: 8, fontWeight: '700', color: bc, letterSpacing: 0.5 }}>{bl}</Text></View></View>
       <Text style={{ fontSize: 12, fontWeight: '600', color: WHITE, marginBottom: 4 }}>{title}</Text>
-      <Text style={{ fontSize: 11, color: TEXT_SECONDARY, lineHeight: 16.5 }}>{body}</Text>
-    </View>
+      <Text style={{ fontSize: 11, color: TEXT_SECONDARY, lineHeight: 16.5 }}>{displayBody}</Text>
+      {isLong && !expanded ? <Text style={{ fontSize: 10, color: bc, fontWeight: '600', marginTop: 4 }}>Tap to read more</Text> : null}
+    </Pressable>
   );
 });
 
@@ -475,6 +513,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   const loser = p.predictedWinner === 'home' ? away : home;
   const tags: string[] = [];
   const conf = p.confidence ?? 55; const edge = p.edgeRating ?? 5;
+  const mTier = p.isTossUp || conf < 53 ? 'Toss-Up' : conf < 60 ? 'Solid Pick' : conf < 72 ? 'Strong Pick' : 'Lock';
   const hStreak = p.homeStreak ?? 0; const aStreak = p.awayStreak ?? 0;
 
   // Parse form — handle both "WWLWL" and "W-L-W" formats
@@ -496,14 +535,14 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   if (!hl && hStreak >= 3 && aStreak >= 3 && trySet('streak_clash')) {
     hl = 'Streak vs streak';
     tags.push('CLASH',`${home.abbreviation} W${hStreak}`,`${away.abbreviation} W${aStreak}`);
-    dt = `${home.abbreviation} riding a ${hStreak}-game win streak meets ${away.abbreviation} on a ${aStreak}-game tear. Something has to give. ${winner.abbreviation} gets the edge at ${conf}%.`;
+    dt = `${home.abbreviation} riding a ${hStreak}-game win streak meets ${away.abbreviation} on a ${aStreak}-game tear. Something has to give. ${winner.abbreviation} rated a ${mTier}.`;
   }
 
   // 2. DOMINANT FAVORITE
   if (!hl && conf >= 64 && edge >= 5 && trySet('dominant_favorite')) {
     hl = 'Strong lean';
-    tags.push('HIGH CONFIDENCE',`${conf}%`);
-    dt = `${winner.abbreviation} (${winner.record}) is a clear favorite at ${conf}% with a ${edge}/10 edge rating. ${loser.abbreviation} (${loser.record}) is outmatched across the model's key factors.`;
+    tags.push('HIGH CONFIDENCE', mTier.toUpperCase());
+    dt = `${winner.abbreviation} (${winner.record}) is a clear favorite — rated a ${mTier}. ${loser.abbreviation} (${loser.record}) is outmatched across the model's key factors.`;
   }
 
   // 3. UPSET BREWING — lowered threshold
@@ -514,7 +553,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     if (uW >= 5) {
       hl = 'Upset watch';
       tags.push('UPSET ALERT', `${loser.abbreviation} ${uW}-${uT - uW} L10`);
-      dt = `${loser.abbreviation} has been hotter recently with ${uW} wins in their last 10. The model still leans ${winner.abbreviation} at ${conf}%, but the gap is closing. High-variance spot.`;
+      dt = `${loser.abbreviation} has been hotter recently with ${uW} wins in their last 10. The model still leans ${winner.abbreviation} as a ${mTier}, but the gap is closing. High-variance spot.`;
     } else { hl = ''; drawType = 'default'; }
   }
 
@@ -529,7 +568,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   if (!hl && p.ensembleDivergence && trySet('model_conflict')) {
     hl = 'Models disagree';
     tags.push('SPLIT DECISION');
-    dt = `The prediction models can't agree. Some factors favor ${home.abbreviation}, others point to ${away.abbreviation}. The composite leans ${winner.abbreviation} at ${conf}%, but certainty is lower than the number suggests.`;
+    dt = `The prediction models can't agree. Some factors favor ${home.abbreviation}, others point to ${away.abbreviation}. The composite leans ${winner.abbreviation} as a ${mTier}, but certainty is lower than usual.`;
   }
 
   // 6. HOT TEAM
@@ -537,14 +576,14 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     const hot = hStreak >= aStreak ? home : away; const streak = Math.max(hStreak, aStreak);
     hl = `${hot.abbreviation} is rolling`;
     tags.push(`W${streak} STREAK`);
-    dt = `${hot.abbreviation} has won ${streak} straight and shows no signs of slowing. Model gives ${winner.abbreviation} ${conf}%.`;
+    dt = `${hot.abbreviation} has won ${streak} straight and shows no signs of slowing. Model rates ${winner.abbreviation} a ${mTier}.`;
   }
 
   // 7. HIGH VALUE
   if (!hl && edge >= 7 && trySet('high_value')) {
     hl = 'Best value tonight';
-    tags.push('HIGH EDGE',`${edge}/10`);
-    dt = `Edge rating ${edge}/10 — one of the sharpest on the board. ${winner.abbreviation} (${winner.record}) has a clear statistical advantage over ${loser.abbreviation} (${loser.record}).`;
+    tags.push('HIGH VALUE');
+    dt = `One of the sharpest on the board. ${winner.abbreviation} (${winner.record}) rated a ${mTier} with a clear statistical advantage over ${loser.abbreviation} (${loser.record}).`;
   }
 
   // 8. COLD TEAM — lowered threshold
@@ -554,7 +593,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     const cT = Math.max(hf.total, af.total);
     hl = `${cold.abbreviation} struggling`;
     tags.push(`${cold.abbreviation} ${cW}-${cT - cW} L10`);
-    dt = `${cold.abbreviation} has won just ${cW} of their last 10. ${winner.abbreviation} should capitalize — model gives them ${conf}% with a ${edge}/10 edge.`;
+    dt = `${cold.abbreviation} has won just ${cW} of their last 10. ${winner.abbreviation} should capitalize — model rates them a ${mTier}.`;
   }
 
   // 9. RECORD MISMATCH — lowered threshold
@@ -566,7 +605,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
       const worse = better === home ? away : home;
       hl = 'Mismatch on paper';
       tags.push(`${better.abbreviation} ${better.record}`,`${worse.abbreviation} ${worse.record}`);
-      dt = `${better.abbreviation} (${better.record}) has a significantly better record than ${worse.abbreviation} (${worse.record}). The model agrees — ${winner.abbreviation} at ${conf}%.`;
+      dt = `${better.abbreviation} (${better.record}) has a significantly better record than ${worse.abbreviation} (${worse.record}). The model agrees — ${winner.abbreviation} rated a ${mTier}.`;
     } else { hl = ''; drawType = 'default'; }
   }
 
@@ -581,26 +620,26 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
 
     if (conf >= 62 && edge >= 5) {
       hl = `${winner.abbreviation} has the numbers`;
-      dt = `${winner.abbreviation} enters at ${conf}% confidence with a ${edge}/10 edge. The data favors them over ${loser.abbreviation} (${loser.record}) across multiple factors.`;
+      dt = `${winner.abbreviation} rated a ${mTier} — the data favors them over ${loser.abbreviation} (${loser.record}) across multiple factors.`;
     } else if (isHomeGame && homeWinPct > 0.55) {
       hl = `Home court matters`;
-      dt = `${home.abbreviation} (${home.record}) has home-field advantage and the model's backing at ${conf}%. ${away.abbreviation} (${away.record}) faces an uphill battle on the road.`;
+      dt = `${home.abbreviation} (${home.record}) has home-field advantage and the model's backing as a ${mTier}. ${away.abbreviation} (${away.record}) faces an uphill battle on the road.`;
     } else if (!isHomeGame && awayWinPct > 0.55) {
       hl = `Road warriors`;
-      dt = `${away.abbreviation} (${away.record}) is favored despite playing away. ${conf}% confidence suggests their talent overcomes the venue disadvantage against ${home.abbreviation} (${home.record}).`;
+      dt = `${away.abbreviation} (${away.record}) is favored despite playing away. Rated a ${mTier} — their talent overcomes the venue disadvantage against ${home.abbreviation} (${home.record}).`;
     } else if (Math.abs(formDiff) >= 2 && hf.total >= 5) {
       const hotterTeam = formDiff > 0 ? home : away;
       const colderTeam = formDiff > 0 ? away : home;
       const hotWins = formDiff > 0 ? hf.wins : af.wins;
       const hotTotal = formDiff > 0 ? hf.total : af.total;
       hl = `Form favors ${hotterTeam.abbreviation}`;
-      dt = `${hotterTeam.abbreviation} is ${hotWins}-${hotTotal - hotWins} in their last ${hotTotal} while ${colderTeam.abbreviation} has been inconsistent. Model picks ${winner.abbreviation} at ${conf}%.`;
+      dt = `${hotterTeam.abbreviation} is ${hotWins}-${hotTotal - hotWins} in their last ${hotTotal} while ${colderTeam.abbreviation} has been inconsistent. Model rates ${winner.abbreviation} a ${mTier}.`;
     } else if (conf < 58) {
       hl = `Close call`;
-      dt = `Only ${conf}% separates these teams. ${winner.abbreviation} gets a slight edge over ${loser.abbreviation} but this one could go either way. Edge rating: ${edge}/10.`;
+      dt = `A ${mTier} at best — ${winner.abbreviation} gets a slight edge over ${loser.abbreviation} but this one could go either way.`;
     } else {
       hl = `${away.abbreviation} at ${home.abbreviation}`;
-      dt = `${winner.abbreviation} (${winner.record}) favored at ${conf}% over ${loser.abbreviation} (${loser.record}). ${edge >= 6 ? `Edge rating ${edge}/10 adds weight.` : 'A standard matchup by the numbers.'}`;
+      dt = `${winner.abbreviation} (${winner.record}) rated a ${mTier} over ${loser.abbreviation} (${loser.record}). ${conf >= 60 ? 'Multiple factors align.' : 'A standard matchup by the numbers.'}`;
     }
   }
 
@@ -853,7 +892,7 @@ const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR }: {
       {pfg.length>0?<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>Results</Text>{pfg.map(g=><ResultCard key={g.id} game={g} pick={pm.get(g.id)} />)}</View>:null}
       {fg.length>0?<View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:24}}>
         <Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>What The Data Caught</Text>
-        {fg.slice(0,3).map(g=>{const p=g.prediction;if(!p) return null;const ok=(p.predictedWinner==='home'&&(g.homeScore??0)>(g.awayScore??0))||(p.predictedWinner==='away'&&(g.awayScore??0)>(g.homeScore??0));return <View key={g.id} style={{marginBottom:10,paddingLeft:12,borderLeftWidth:3,borderLeftColor:ok?TEAL:ERROR}}><Text style={{fontSize:11,fontWeight:'600',color:WHITE,marginBottom:2}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11,color:TEXT_SECONDARY,lineHeight:16.5}}>{ok?`Model correctly predicted ${p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation} at ${p.confidence}% confidence.`:`Model missed — predicted ${p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation} at ${p.confidence}% but the upset came through.`}</Text></View>;})}
+        {fg.slice(0,3).map(g=>{const p=g.prediction;if(!p) return null;const ok=(p.predictedWinner==='home'&&(g.homeScore??0)>(g.awayScore??0))||(p.predictedWinner==='away'&&(g.awayScore??0)>(g.homeScore??0));return <View key={g.id} style={{marginBottom:10,paddingLeft:12,borderLeftWidth:3,borderLeftColor:ok?TEAL:ERROR}}><Text style={{fontSize:11,fontWeight:'600',color:WHITE,marginBottom:2}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11,color:TEXT_SECONDARY,lineHeight:16.5}}>{(() => { const tl = p.isTossUp || p.confidence < 53 ? 'a Toss-Up' : p.confidence < 60 ? 'a Solid Pick' : p.confidence < 72 ? 'a Strong Pick' : 'a Lock'; const tm = p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation; return ok ? `Model correctly predicted ${tm} as ${tl}.` : `Model missed — rated ${tm} as ${tl} but the upset came through.`; })()}</Text></View>;})}
       </View>:null}
       <View style={{backgroundColor:GLASS,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:24,flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}>
         <View><Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:4}}>SEASON RECORD</Text><Text style={{fontSize:28,fontWeight:'800',color:WHITE}}>{stats?.wins??0}-{stats?.losses??0}</Text></View>
@@ -932,7 +971,7 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed }: { gam
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text>
-                <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 2 }}>{g.sport === 'NCAAF' ? 'CFB' : g.sport === 'NCAAB' ? 'CBB' : g.sport}</Text>
+                <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 2 }}>{displaySport(g.sport)}</Text>
               </View>
               <ChevronRight size={16} color={TEXT_MUTED} />
             </Pressable>
@@ -1033,7 +1072,7 @@ function FreeGameList({ games, router }: { games: GameWithPrediction[]; router: 
     <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)}
       style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, padding: 12, borderBottomWidth: i < total - 1 ? 1 : 0, borderBottomColor: 'rgba(255,255,255,0.03)' }}>
       <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE, flex: 1 }}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text>
-      <Text style={{ fontSize: 10, color: TEXT_MUTED }}>{g.sport === 'NCAAF' ? 'CFB' : g.sport === 'NCAAB' ? 'CBB' : g.sport}</Text>
+      <Text style={{ fontSize: 10, color: TEXT_MUTED }}>{displaySport(g.sport)}</Text>
       <Text style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: '600' }}>{g.status === GameStatus.LIVE ? 'LIVE' : fmtTime(g.gameTime)}</Text>
     </Pressable>
   );
