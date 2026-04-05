@@ -1,4 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet, Platform } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet, Platform, Dimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
@@ -18,7 +18,7 @@ import { ChevronRight, X, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect as SvgRect, Defs, Pattern as SvgPattern, Line as SvgLine } from 'react-native-svg';
 import { PicksBadge } from '@/components/shared/PicksBadge';
-import { SportCard, GameCard, getTicketColor, getSportIcon, DotMatrixText, DotMatrixIcon } from '@/components/sports';
+import { SportCard, GameCard, getTicketColor, getSportIcon, DotMatrixText, DotMatrixIcon, PixelGrid, ScanLine } from '@/components/sports';
 import CompactLiveCard from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
 import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
@@ -28,27 +28,11 @@ import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
 import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
-import { displaySport } from '@/lib/display-confidence';
+import { displaySport, formatGameTime } from '@/lib/display-confidence';
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
 
-// Pixel grid overlay for jumbotron aesthetic
-const JBPixelGrid = memo(function JBPixelGrid() {
-  return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      <Svg width="100%" height="100%" style={StyleSheet.absoluteFillObject}>
-        <Defs>
-          <SvgPattern id="jbpixelgrid" x="0" y="0" width="2" height="2" patternUnits="userSpaceOnUse">
-            <SvgRect width="2" height="2" fill="transparent" />
-            <SvgRect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
-          </SvgPattern>
-        </Defs>
-        <SvgRect x="0" y="0" width="100%" height="100%" fill="url(#jbpixelgrid)" />
-      </Svg>
-    </View>
-  );
-});
 
 // Field goal post to replace "U" - with football going through - memoized
 const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: string; size?: number }) {
@@ -119,6 +103,8 @@ interface HomeHeaderProps {
   headerFontSize: number;
   responsive: ReturnType<typeof useResponsive>;
   statusFilter: 'all' | 'upcoming' | 'final';
+  sportFilterPage: number;
+  setSportFilterPage: (page: number) => void;
 }
 
 const HomeHeader = React.memo(function HomeHeader({
@@ -143,29 +129,15 @@ const HomeHeader = React.memo(function HomeHeader({
   headerFontSize,
   responsive,
   statusFilter,
+  sportFilterPage,
+  setSportFilterPage,
 }: HomeHeaderProps) {
-  // Scanline for Today's Games bar — synced with sport chips via global clock
-  const barScanY = useSharedValue(-24);
-  useEffect(() => {
-    const SCAN_DUR = 2500;
-    const phase = (Date.now() % SCAN_DUR) / SCAN_DUR;
-    const startVal = -24 + phase * 84; // -24 to 60 range
-    barScanY.value = startVal;
-    barScanY.value = withTiming(60, { duration: SCAN_DUR * (1 - phase), easing: Easing.linear });
-    const timer = setTimeout(() => {
-      barScanY.value = -24;
-      barScanY.value = withRepeat(withTiming(60, { duration: SCAN_DUR, easing: Easing.linear }), -1, false);
-    }, SCAN_DUR * (1 - phase));
-    return () => { clearTimeout(timer); cancelAnimation(barScanY); };
-  }, []);
-  const barScanStyle = useAnimatedStyle(() => ({ transform: [{ translateY: barScanY.value }] }));
-
   return (
     <>
-      {/* Today Games Bar — Jumbotron LED Style */}
+      {/* Today Games Bar — Jumbotron LED Style (same as sport chips) */}
       <Animated.View
         entering={FadeInDown.delay(150).duration(500)}
-        style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 14, marginTop: 0, marginBottom: 12 }}
+        style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, marginTop: 0, marginBottom: 12 }}
       >
         <Pressable
           onPress={() => {
@@ -193,54 +165,54 @@ const HomeHeader = React.memo(function HomeHeader({
             return (
               <View
                 style={{
+                  position: 'relative',
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: 14,
-                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  height: 42,
                   borderRadius: 3,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.1)',
-                  overflow: 'hidden',
                   backgroundColor: '#080c10',
-                  shadowColor: '#7A9DB8',
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 14,
+                  borderWidth: 1,
+                  borderColor: 'rgba(122,157,184,0.15)',
+                  overflow: 'hidden',
+                  ...Platform.select({
+                    ios: {
+                      shadowColor: '#7A9DB8',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 14,
+                    },
+                    android: { elevation: 4 },
+                  }),
                 }}
               >
-                {/* Top specular highlight */}
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.04)', zIndex: 3 }} pointerEvents="none" />
-                {/* Pixel grid */}
-                <View style={StyleSheet.absoluteFillObject} pointerEvents="none"><JBPixelGrid /></View>
+                {/* Shared pixel grid */}
+                <PixelGrid />
 
-                {/* Scanline sweep */}
-                <View style={[StyleSheet.absoluteFillObject, { overflow: 'hidden', borderRadius: 3 }]} pointerEvents="none">
-                  <Animated.View style={[barScanStyle, { position: 'absolute', left: 0, right: 0, height: 24 }]}>
-                    <LinearGradient
-                      colors={['transparent', 'rgba(122,157,184,0.06)', 'rgba(255,255,255,0.03)', 'rgba(122,157,184,0.06)', 'transparent']}
-                      style={{ flex: 1 }}
-                    />
-                  </Animated.View>
-                </View>
+                {/* Shared synced scanline */}
+                <ScanLine active={true} />
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 4 }}>
                   {selectedSportFilter ? (
-                    <DotMatrixIcon sport={selectedSportFilter} litColor="#FFFFFF" pixelSize={1.5} />
+                    <View style={{ height: 22, overflow: 'visible', justifyContent: 'center' }}>
+                      <DotMatrixIcon sport={selectedSportFilter} litColor="#FFFFFF" pixelSize={2} />
+                    </View>
                   ) : (
                     <Svg width={14} height={16} viewBox="0 0 14 16">
                       {[[0,1,0,0,0,1,0],[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1],[1,0,1,0,1,0,1],[1,0,0,0,0,0,1],[1,0,1,0,1,0,1],[1,1,1,1,1,1,1]].map((row, r) =>
                         row.map((px, c) => (
-                          <SvgRect key={`${r}-${c}`} x={c * 2} y={r * 2} width={1.5} height={1.5} rx={0.2} fill={px ? '#FFFFFF' : 'rgba(255,255,255,0.04)'} />
+                          <SvgRect key={`${r}-${c}`} x={c * 2} y={r * 2} width={2} height={2} rx={0.3} fill={px ? '#FFFFFF' : 'rgba(255,255,255,0.04)'} />
                         ))
                       )}
                     </Svg>
                   )}
-                  <DotMatrixText text={barLabel} litColor="#9BB8CF" pixelSize={1.5} />
+                  <DotMatrixText text={barLabel} litColor="#9BB8CF" pixelSize={2} />
                 </View>
 
                 {/* Count — dot matrix */}
-                <DotMatrixText text={String(barCount)} litColor="#FFFFFF" pixelSize={1.5} />
+                <DotMatrixText text={String(barCount)} litColor="#FFFFFF" pixelSize={2} />
 
               </View>
             );
@@ -248,36 +220,83 @@ const HomeHeader = React.memo(function HomeHeader({
         </Pressable>
       </Animated.View>
 
-      {/* Sports Categories */}
+      {/* Sports Categories — 2 rows, scroll horizontally to see more */}
       <Animated.View
         entering={FadeInDown.delay(100).duration(500)}
-        style={{ paddingTop: 0, paddingBottom: 24 }}
+        style={{ paddingTop: 0, paddingBottom: 16 }}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, paddingVertical: 6, gap: 10 }}
-          style={{ flexGrow: 0 }}
-          scrollEventThrottle={16}
-          removeClippedSubviews={true}
-          decelerationRate="fast"
-        >
-          {[...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0)).map((sport, index) => {
-            const isSelected = selectedSportFilter === sport;
-            return (
-              <SportCard
-                key={sport}
-                sport={sport}
-                gameCount={gameCounts?.[sport] ?? 0}
-                index={index}
-                compact
-                onPress={() => setSelectedSportFilter(isSelected ? null : sport)}
-                isSelected={isSelected}
-                hasActiveFilter={selectedSportFilter !== null}
-              />
-            );
-          })}
-        </ScrollView>
+        {(() => {
+          const sorted = [...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0));
+          const columns: [Sport, Sport | undefined][] = [];
+          for (let i = 0; i < sorted.length; i += 2) {
+            columns.push([sorted[i], sorted[i + 1]]);
+          }
+          const hPad = responsive.isTablet ? responsive.contentPadding : 16;
+          const colGap = 8;
+          const screenW = Dimensions.get('window').width;
+          const colWidth = (screenW - hPad * 2 - colGap) / 2;
+          const pages: [Sport, Sport | undefined][][] = [];
+          for (let i = 0; i < columns.length; i += 2) {
+            pages.push(columns.slice(i, i + 2));
+          }
+          return (
+            <>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                pagingEnabled
+                style={{ flexGrow: 0 }}
+                decelerationRate="fast"
+                onScroll={(e) => {
+                  const page = Math.round(e.nativeEvent.contentOffset.x / screenW);
+                  if (page !== sportFilterPage) setSportFilterPage(page);
+                }}
+                scrollEventThrottle={16}
+              >
+                {pages.map((page, pi) => (
+                  <View key={pi} style={{ width: screenW, paddingHorizontal: hPad, paddingVertical: 6, flexDirection: 'row', gap: colGap }}>
+                    {page.map((col, ci) => (
+                      <View key={ci} style={{ gap: 8, width: colWidth }}>
+                        {col.map((sport) => {
+                          if (!sport) return null;
+                          const isSelected = selectedSportFilter === sport;
+                          return (
+                            <SportCard
+                              key={sport}
+                              sport={sport}
+                              gameCount={gameCounts?.[sport] ?? 0}
+                              index={ci}
+                              compact
+                              onPress={() => setSelectedSportFilter(isSelected ? null : sport)}
+                              isSelected={isSelected}
+                              hasActiveFilter={selectedSportFilter !== null}
+                            />
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+              {/* Page dots */}
+              {pages.length > 1 ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                  {pages.map((_, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        width: sportFilterPage === i ? 16 : 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: sportFilterPage === i ? 'rgba(122,157,184,0.6)' : 'rgba(122,157,184,0.2)',
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </>
+          );
+        })()}
       </Animated.View>
 
       {/* Live Games Section — header always shows */}
@@ -286,24 +305,26 @@ const HomeHeader = React.memo(function HomeHeader({
         style={{ marginBottom: 24, marginTop: 0 }}
       >
         <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            {/* Maroon→Teal gradient bar — pulses when live, dimmed when no live games */}
-            {filteredLiveGames.length > 0 ? (
-              <Animated.View style={[ring1Style, { width: 4, height: 26, borderRadius: 2, overflow: 'hidden' as const }]}>
-                <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ flex: 1, borderRadius: 2 }} />
-              </Animated.View>
-            ) : (
-              <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: 4, height: 26, borderRadius: 2, opacity: 0.35 }} />
-            )}
-            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.3 }}>
-              Live Now
-            </Text>
-            <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1, marginLeft: 4 }} />
-            {filteredLiveGames.length > 0 ? (
-              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600' }}>
-                {filteredLiveGames.length}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
+            <LinearGradient colors={['transparent', 'rgba(122,157,184,0.15)', 'rgba(122,157,184,0.6)']} locations={[0, 0.6, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {filteredLiveGames.length > 0 ? (
+                <Animated.View style={[ring1Style, { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }]} />
+              ) : (
+                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+              )}
+              <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '800', letterSpacing: -0.3 }}>
+                Live Now
               </Text>
-            ) : null}
+              {filteredLiveGames.length > 0 ? (
+                <View style={{ backgroundColor: 'rgba(220,38,38,0.15)', borderWidth: 1, borderColor: 'rgba(220,38,38,0.3)', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1, minWidth: 22, alignItems: 'center' }}>
+                  <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: '800' }}>
+                    {filteredLiveGames.length}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
           </View>
         </View>
 
@@ -315,22 +336,21 @@ const HomeHeader = React.memo(function HomeHeader({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 14, paddingTop: 6 }}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 14, paddingTop: 6, flexGrow: 1, justifyContent: 'center' }}
               style={{ flexGrow: 0 }}
               decelerationRate="fast"
             >
               {/* All pill */}
               <Pressable onPress={() => setSelectedLiveSportFilter(null)}>
-                <View style={{
-                  paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22,
-                  backgroundColor: !selectedLiveSportFilter ? MAROON : 'rgba(122,157,184,0.08)',
-                  borderWidth: !selectedLiveSportFilter ? 0 : 1,
-                  borderColor: !selectedLiveSportFilter ? 'transparent' : 'rgba(122,157,184,0.12)',
-                }}>
-                  <Text style={{ fontSize: 13, fontWeight: !selectedLiveSportFilter ? '700' : '600', color: !selectedLiveSportFilter ? '#FFFFFF' : TEAL }}>
-                    All ({filteredLiveGames.length})
-                  </Text>
-                </View>
+                {!selectedLiveSportFilter ? (
+                  <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>All ({filteredLiveGames.length})</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>All ({filteredLiveGames.length})</Text>
+                  </View>
+                )}
               </Pressable>
 
               {/* Per-sport pills */}
@@ -340,16 +360,15 @@ const HomeHeader = React.memo(function HomeHeader({
                 const displayName = displaySport(sport);
                 return (
                   <Pressable key={sport} onPress={() => setSelectedLiveSportFilter(isChipSelected ? null : sport)}>
-                    <View style={{
-                      paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22,
-                      backgroundColor: isChipSelected ? MAROON : 'rgba(122,157,184,0.08)',
-                      borderWidth: isChipSelected ? 0 : 1,
-                      borderColor: isChipSelected ? 'transparent' : 'rgba(122,157,184,0.12)',
-                    }}>
-                      <Text style={{ fontSize: 13, fontWeight: isChipSelected ? '700' : '600', color: isChipSelected ? '#FFFFFF' : TEAL }}>
-                        {displayName} ({count})
-                      </Text>
-                    </View>
+                    {isChipSelected ? (
+                      <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{displayName} ({count})</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{displayName} ({count})</Text>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
@@ -373,7 +392,7 @@ const HomeHeader = React.memo(function HomeHeader({
             {/* View All button — only show when there are more than 5 and not yet expanded */}
             {!showAllLive && filteredLiveGames.length > 5 ? (
             <Pressable
-              onPress={() => router.push('/(tabs)/search' as any)}
+              onPress={() => router.push('/live-games' as any)}
               className="active:opacity-75"
               style={{
                 height: 56,
@@ -427,10 +446,7 @@ const SearchGameCard = memo(function SearchGameCard({
 
   const gameTimeLabel = useMemo(() => {
     if (isLive) {
-      const parts: string[] = [];
-      if (game.quarter) parts.push(game.quarter);
-      if (game.clock) parts.push(game.clock);
-      return parts.length > 0 ? parts.join(' ') : 'LIVE';
+      return formatGameTime(game.sport, game.quarter, game.clock) || 'LIVE';
     }
     if (game.status === GameStatus.FINAL) return 'Final';
     const d = new Date(game.gameTime);
@@ -582,6 +598,7 @@ export default function HomeScreen() {
   const lastRefreshRef = useRef<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSportFilter, setSelectedSportFilter] = useState<Sport | null>(null);
+  const [sportFilterPage, setSportFilterPage] = useState(0);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -871,26 +888,20 @@ export default function HomeScreen() {
     if (item.type === 'sport-header') {
       const sportLabel = displaySport(item.sport);
       return (
-        <View style={{ marginLeft: 20, marginTop: 20, marginBottom: 14, position: 'relative' as const, overflow: 'hidden' as const, borderRadius: 3, backgroundColor: '#080c10', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', height: 36, paddingHorizontal: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const }}>
-          {/* Pixel grid */}
-          <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-            <Svg width="100%" height="100%" style={StyleSheet.absoluteFillObject}>
-              <Defs>
-                <SvgPattern id={`secGrid-${item.sport}`} width="2" height="2" patternUnits="userSpaceOnUse">
-                  <SvgRect width="2" height="2" fill="transparent" />
-                  <SvgRect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
-                </SvgPattern>
-              </Defs>
-              <SvgRect width="100%" height="100%" fill={`url(#secGrid-${item.sport})`} />
-            </Svg>
-          </View>
-          {/* Left accent bar */}
-          <View style={{ position: 'absolute' as const, left: 0, top: 0, bottom: 0, width: 3, backgroundColor: '#7A9DB8', opacity: 0.6, zIndex: 4 }} />
+        <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 14, position: 'relative' as const, overflow: 'hidden' as const, borderRadius: 3, backgroundColor: '#080c10', borderWidth: 1, borderColor: 'rgba(122,157,184,0.15)', height: 42, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const }}>
+          {/* Shared pixel grid */}
+          <PixelGrid />
+          {/* Shared synced scanline */}
+          <ScanLine active={true} />
           {/* Dot matrix content */}
-          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, zIndex: 4, marginLeft: 4 }}>
-            <DotMatrixIcon sport={item.sport} litColor="#FFFFFF" pixelSize={1.5} />
-            <DotMatrixText text={sportLabel} litColor="#9BB8CF" pixelSize={1.5} />
-            <DotMatrixText text={String(item.gameCount)} litColor="#FFFFFF" pixelSize={1.5} />
+          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, flex: 1, justifyContent: 'space-between' as const, zIndex: 4 }}>
+            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 }}>
+              <View style={{ height: 22, overflow: 'visible' as const, justifyContent: 'center' as const }}>
+                <DotMatrixIcon sport={item.sport} litColor="#FFFFFF" pixelSize={2} />
+              </View>
+              <DotMatrixText text={sportLabel} litColor="#9BB8CF" pixelSize={2} />
+            </View>
+            <DotMatrixText text={String(item.gameCount)} litColor="#FFFFFF" pixelSize={2} />
           </View>
         </View>
       );
@@ -1034,16 +1045,18 @@ export default function HomeScreen() {
             headerFontSize={headerFontSize}
             responsive={responsive}
             statusFilter={statusFilter}
+            sportFilterPage={sportFilterPage}
+            setSportFilterPage={setSportFilterPage}
           />
           {/* Game Board header + status filter pills */}
           <View style={{ paddingHorizontal: 20, marginBottom: 6, marginTop: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: 4, height: 26, borderRadius: 2 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
+              <LinearGradient colors={['transparent', 'rgba(122,157,184,0.15)', 'rgba(122,157,184,0.6)']} locations={[0, 0.6, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
               <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 }}>Game Board</Text>
-              <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1, marginLeft: 4 }} />
+              <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
             </View>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, flexGrow: 1, justifyContent: 'center' }}>
             {([
               { key: 'all' as const, label: 'Today' },
               { key: 'final' as const, label: 'Final' },
@@ -1054,14 +1067,14 @@ export default function HomeScreen() {
               const dimmed = hasFilter && !active;
               return (
                 <Pressable key={f.key} onPress={() => setStatusFilter(active ? 'all' : f.key)}
-                  style={{ borderRadius: 12, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1 }}>
+                  style={{ borderRadius: 20, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1 }}>
                   {active ? (
-                    <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
+                    <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
                     </LinearGradient>
                   ) : (
-                    <View style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.15)', borderRadius: 12 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
+                    <View style={{ paddingHorizontal: 16, paddingVertical: 7, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', borderRadius: 20 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{f.label}</Text>
                     </View>
                   )}
                 </Pressable>

@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '@/hooks/useGames';
-import { displayConfidence, displayWinProbability, displayEdgeRating, getConfidenceTierLabel, displaySport } from '@/lib/display-confidence';
+import { displayConfidence, displayWinProbability, displayEdgeRating, getConfidenceTierLabel, displaySport, formatGameTime } from '@/lib/display-confidence';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -1418,9 +1418,10 @@ export default function GameDetailScreen() {
                       color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.awayScore ?? ''}</Text>
                   </View>
-                  {isLive && game.quarter && game.clock
-                    ? <Text style={styles.scoreClock}>{game.quarter} · {game.clock}</Text>
-                    : <Text style={styles.scoreClock}>{game.status}</Text>}
+                  {(() => {
+                    const timeStr = isLive ? formatGameTime(game.sport, game.quarter, game.clock) : null;
+                    return <Text style={styles.scoreClock}>{timeStr || game.status}</Text>;
+                  })()}
                 </View>
               </View>
               <TappableJerseyHero

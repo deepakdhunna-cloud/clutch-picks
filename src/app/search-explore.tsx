@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGames } from '@/hooks/useGames';
 import { GameWithPrediction, GameStatus, Sport, SPORT_META } from '@/types/sports';
-import { displaySport } from '@/lib/display-confidence';
+import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { getTeamColors } from '@/lib/team-colors';
 
 const MAROON = '#8B0A1F';
@@ -82,7 +82,7 @@ const GameBar = memo(function GameBar({ game, onPress }: { game: GameWithPredict
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
           {live ? (
-            <><LiveDot /><Text style={{ fontSize: 11, fontWeight: '700', color: LIVE_RED }}>LIVE</Text><Text style={{ fontSize: 10, color: TEXT_MUTED }}>{game.quarter ?? null}</Text></>
+            <><LiveDot /><Text style={{ fontSize: 11, fontWeight: '700', color: LIVE_RED }}>LIVE</Text><Text style={{ fontSize: 10, color: TEXT_MUTED }}>{formatGameTime(game.sport, game.quarter, game.clock) ?? null}</Text></>
           ) : final ? (
             <><View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ fontSize: 8, fontWeight: '700', color: TEXT_MUTED }}>FINAL</Text></View><Text style={{ fontSize: 11, color: TEXT_SECONDARY }}>{game.awayScore ?? 0} - {game.homeScore ?? 0}</Text></>
           ) : (

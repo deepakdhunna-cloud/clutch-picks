@@ -23,7 +23,7 @@ import { useTeamFollows } from '@/hooks/useTeamFollows';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
-import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport } from '@/lib/display-confidence';
+import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport, formatGameTime } from '@/lib/display-confidence';
 
 // ─── COLORS ───
 const MAROON = '#8B0A1F';
@@ -200,7 +200,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
         {live ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE }}>{game.awayScore ?? 0} - {game.homeScore ?? 0}</Text>
-            <Text style={{ fontSize: 9, color: LIVE_RED, fontWeight: '700' }}>{game.quarter ?? null}</Text>
+            <Text style={{ fontSize: 9, color: LIVE_RED, fontWeight: '700' }}>{formatGameTime(game.sport, game.quarter, game.clock) ?? null}</Text>
           </View>
         ) : final ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -300,11 +300,14 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
             </View>
             <View style={{ alignItems: 'center', marginHorizontal: 8 }}>
               <Text style={{ fontSize: 20, fontWeight: '300', color: 'rgba(255,255,255,0.15)' }}>–</Text>
-              {game.quarter || game.clock ? (
-                <Text style={{ fontSize: 14, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, marginTop: 2 }}>
-                  {game.quarter ?? null}{game.quarter && game.clock ? ' · ' : null}{game.clock ?? null}
-                </Text>
-              ) : null}
+              {(() => {
+                const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                return timeStr ? (
+                  <Text style={{ fontSize: 14, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, marginTop: 2 }}>
+                    {timeStr}
+                  </Text>
+                ) : null;
+              })()}
             </View>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SECONDARY, marginBottom: 2, letterSpacing: 0.5 }}>{game.homeTeam.abbreviation}</Text>
@@ -350,80 +353,137 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
   const home = game.homeTeam; const away = game.awayTeam;
   const homeScore = game.homeScore ?? 0; const awayScore = game.awayScore ?? 0;
   const scoreDiff = Math.abs(homeScore - awayScore);
+  const totalScore = homeScore + awayScore;
   const leader = homeScore > awayScore ? home : homeScore < awayScore ? away : null;
   const trailer = homeScore > awayScore ? away : homeScore < awayScore ? home : null;
   const quarter = game.quarter ?? '';
+  const clock = game.clock ?? '';
+  const situation = game.situation ?? '';
+  const lastPlay = game.lastPlay ?? '';
+  const leaders = game.leaders ?? [];
   const isEarly = quarter.includes('1') || quarter.includes('Top 1') || quarter.includes('Bot 1') || quarter.includes('Top 2');
+  const isMid = quarter.includes('2') || quarter.includes('3') || quarter.includes('Half');
   const isLate = quarter.includes('4') || quarter.includes('OT') || quarter.includes('9') || quarter.includes('3rd Period') || quarter.includes('2nd Half');
   const isTied = homeScore === awayScore;
   const conf = displayConfidence(pred?.confidence ?? 50);
   const tierLabel = pred?.isTossUp || conf < 53 ? 'Toss-Up' : conf < 60 ? 'Solid Pick' : conf < 72 ? 'Strong Pick' : 'Lock';
   const predictedWinner = pred ? (pred.predictedWinner === 'home' ? home : away) : null;
   const sport = game.sport;
+  const overUnder = game.overUnder;
+  const isUpset = leader && predictedWinner && leader.abbreviation !== predictedWinner.abbreviation;
 
-  // PULSE — Live game pulse: key events, momentum, situational factors
-  // This sits at the top of the intel stack for immediate context
-  if (isLate && scoreDiff <= 3 && leader && trailer) {
-    intel.push({ type: 'pulse', title: 'Crunch Time', body: `${leader.abbreviation} leads by just ${scoreDiff} in ${quarter}. Every possession matters. ${sport === 'NBA' || sport === 'NCAAB' ? 'Watch for intentional fouling and free throw shooting down the stretch.' : sport === 'NFL' || sport === 'NCAAF' ? 'Clock management and timeouts become critical.' : sport === 'MLB' ? 'Bullpen matchups will decide this one.' : sport === 'NHL' ? 'Expect the trailing team to pull their goalie late.' : sport === 'MLS' || sport === 'EPL' ? 'Late tactical substitutions and set pieces could swing it.' : 'Closing stretch — anything can happen.'}` });
+  // ═══ PULSE — PLAY-BY-PLAY FEED ═══
+  // Pure action — what just happened on the field/court/ice. No scores, no model talk.
+  if (lastPlay && lastPlay.length > 10) {
+    const lp = lastPlay.toLowerCase();
+    const playTitle = lp.includes('touchdown') ? 'TOUCHDOWN' :
+      (lp.includes('goal') && (sport === 'NHL' || sport === 'MLS' || sport === 'EPL')) ? 'GOAL' :
+      lp.includes('home run') ? 'HOME RUN' :
+      (lp.includes('three pointer') || lp.includes('3-pointer')) ? 'DEEP THREE' :
+      lp.includes('dunk') ? 'SLAM' :
+      lp.includes('interception') ? 'PICKED OFF' :
+      lp.includes('fumble') ? 'LOOSE BALL' :
+      lp.includes('steal') ? 'STOLEN' :
+      lp.includes('block') ? 'REJECTED' :
+      lp.includes('strikeout') ? 'PUNCHOUT' :
+      lp.includes('sack') ? 'SACKED' :
+      lp.includes('field goal') ? 'THROUGH THE UPRIGHTS' :
+      (lp.includes('injury') || lp.includes('hurt') || lp.includes('down on')) ? 'INJURY REPORT' :
+      lp.includes('penalty') ? 'FLAG DOWN' :
+      lp.includes('foul') ? 'WHISTLE' :
+      lp.includes('double') || lp.includes('triple') ? 'EXTRA BASES' :
+      lp.includes('save') ? 'BIG SAVE' :
+      'LIVE ACTION';
+    intel.push({ type: 'pulse', title: playTitle, body: lastPlay });
+  } else if (situation) {
+    // No last play available — show live game situation instead
+    if (sport === 'NFL' || sport === 'NCAAF') {
+      intel.push({ type: 'pulse', title: 'ON THE FIELD', body: situation });
+    } else if (sport === 'MLB') {
+      const isTopHalf = quarter.toLowerCase().includes('top');
+      const battingTeam = isTopHalf ? away : home;
+      intel.push({ type: 'pulse', title: `${battingTeam.abbreviation} BATTING`, body: `${quarter} — ${situation}` });
+    }
+  } else if (isLate && scoreDiff <= 3 && leader && trailer) {
+    const clockNote = clock ? `${clock} left.` : '';
+    intel.push({ type: 'pulse', title: 'CRUNCH TIME', body: `${
+      sport === 'NBA' || sport === 'NCAAB' ? `${scoreDiff <= 1 ? 'One bucket changes everything.' : 'Fouling game starting.'} ${clockNote}` :
+      sport === 'NFL' || sport === 'NCAAF' ? `Timeouts and clock management decide this. ${clockNote}` :
+      sport === 'MLB' ? `Bullpen matchup is critical. ${trailer.abbreviation} running out of outs.` :
+      sport === 'NHL' ? `${trailer.abbreviation} pulling their goalie for the extra attacker.` :
+      `${trailer.abbreviation} throwing bodies forward. ${clockNote}`
+    }` });
   } else if (isLate && isTied) {
-    intel.push({ type: 'pulse', title: 'Overtime Watch', body: `Tied ${homeScore}-${awayScore} late in ${quarter}. ${sport === 'NBA' || sport === 'NCAAB' ? 'Could come down to a last-second shot. Timeout management and free throws are key.' : sport === 'NFL' || sport === 'NCAAF' ? 'Both teams playing for the final drive. Field goal range could decide it.' : sport === 'MLB' ? 'Extra innings looming — bullpen depth becomes the deciding factor.' : sport === 'NHL' ? 'Overtime means 3-on-3 — wide open and unpredictable.' : sport === 'MLS' || sport === 'EPL' ? 'Extra time or penalties could decide this one.' : 'Winner takes all in the closing stretch.'}` });
-  } else if (isEarly && scoreDiff >= 8 && leader) {
-    intel.push({ type: 'pulse', title: 'Fast Start', body: `${leader.abbreviation} jumped out to a ${scoreDiff}-point lead early. ${trailer?.abbreviation ?? 'The trailing team'} needs to settle in quickly. ${sport === 'NBA' ? 'Early runs don\'t always hold — watch for a timeout and adjustment.' : sport === 'NFL' ? 'Early deficit forces the trailing offense to abandon the run game.' : 'Momentum is real but fragile this early.'}` });
-  } else if (scoreDiff >= 15 && leader && trailer) {
-    intel.push({ type: 'pulse', title: 'Blowout Developing', body: `${leader.abbreviation} up by ${scoreDiff}. ${sport === 'NBA' ? 'Starters may rest soon — garbage time approaching.' : sport === 'NFL' ? 'Play-calling shifts to clock-killing mode.' : `${trailer.abbreviation} running out of time to mount a comeback.`} The model's prediction ${predictedWinner?.abbreviation === leader.abbreviation ? 'is holding strong.' : 'has been overturned by the scoreboard.'}` });
-  } else if (pred?.ensembleDivergence && !isTied) {
-    intel.push({ type: 'pulse', title: 'Models Were Split', body: `The prediction models disagreed pre-game on this one. ${leader ? `${leader.abbreviation} currently leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. ` : null}When models diverge, in-game swings are more likely — stay alert for a momentum shift.` });
-  } else if (pred?.isTossUp && scoreDiff > 0 && leader) {
-    intel.push({ type: 'pulse', title: 'Coin Flip Playing Out', body: `This was flagged as a toss-up pre-game and it\'s living up to it. ${leader.abbreviation} leads by ${scoreDiff} but separation is thin. Either team could take control with one big play.` });
-  } else if (homeScore + awayScore > 0) {
-    // Default pulse for any active game
-    const totalScore = homeScore + awayScore;
-    const paceNote = sport === 'NBA' ? (totalScore > 60 ? 'High-scoring pace so far.' : 'Defensive battle developing.') :
-                     sport === 'NFL' ? (totalScore > 20 ? 'Offenses are clicking.' : 'Defense-first game so far.') :
-                     sport === 'MLB' ? (totalScore > 6 ? 'Bats are alive tonight.' : 'Pitching duel.') :
-                     sport === 'NHL' ? (totalScore > 4 ? 'Plenty of offense tonight.' : 'Tight checking game.') :
-                     (totalScore > 2 ? 'Open game with chances.' : 'Cagey affair so far.');
-    intel.push({ type: 'pulse', title: 'Game Flow', body: `${quarter} — ${home.abbreviation} ${homeScore}, ${away.abbreviation} ${awayScore}. ${paceNote} ${leader ? `${leader.abbreviation} in front.` : 'All square.'}` });
+    intel.push({ type: 'pulse', title: 'DEADLOCK', body: `${
+      sport === 'NBA' || sport === 'NCAAB' ? 'Last possession decides it. Who draws the play?' :
+      sport === 'NFL' || sport === 'NCAAF' ? 'Both coaches want the ball last. Field goal range wins it.' :
+      sport === 'MLB' ? 'Free baseball incoming — bullpen depth decides extras.' :
+      sport === 'NHL' ? 'Next goal wins. 3-on-3 OT is pure chaos.' :
+      'Set pieces and late subs are everything right now.'
+    }` });
   }
 
-  // ALERT
-  if (pred?.analysis) {
-    intel.push({ type: 'alert', title: 'Game Analysis', body: pred.analysis });
-  } else if (predictedWinner) {
-    const edge = pred?.edgeRating ?? 5;
-    let ctx = '';
-    if (leader && leader.abbreviation === predictedWinner.abbreviation) ctx = 'Holding to form so far.';
-    else if (leader) ctx = `${leader.abbreviation} leads against the model's pick — potential upset developing.`;
-    else if (isTied && isEarly) ctx = 'Game tracking as expected in early stages.';
-    else if (isTied) ctx = 'Tied up — model separation hasn\'t materialized yet.';
-    intel.push({ type: 'alert', title: 'Pre-Game Edge', body: `${predictedWinner.abbreviation} entered as a ${tierLabel} pick. ${ctx}` });
+  // ═══ ALERT — PERFORMERS & IMPACT PLAYERS ═══
+  // Who's making plays. No game state, no model — just the players doing damage.
+  const homeLeaders = leaders.filter(l => l.team === 'home');
+  const awayLeaders = leaders.filter(l => l.team === 'away');
+  if (homeLeaders.length > 0 || awayLeaders.length > 0) {
+    const lines: string[] = [];
+    if (homeLeaders[0]) lines.push(`${homeLeaders[0].name} — ${homeLeaders[0].stat}`);
+    if (awayLeaders[0]) lines.push(`${awayLeaders[0].name} — ${awayLeaders[0].stat}`);
+    // Add second performers if available for depth
+    if (homeLeaders[1]) lines.push(`${homeLeaders[1].name} — ${homeLeaders[1].stat}`);
+    if (awayLeaders[1]) lines.push(`${awayLeaders[1].name} — ${awayLeaders[1].stat}`);
+    intel.push({ type: 'alert', title: 'Impact Players', body: lines.join('\n') });
+  } else if (pred?.analysis) {
+    intel.push({ type: 'alert', title: 'Scouting Report', body: pred.analysis });
   }
 
-  // SHIFT
-  if (isTied && homeScore === 0 && awayScore === 0) {
-    intel.push({ type: 'shift', title: 'Early Stages', body: `Both teams still settling in. ${home.abbreviation} has home-field advantage with the model giving them a ${pred?.homeWinProbability ?? 50}% edge. First score could set the tone.` });
-  } else if (isTied && isEarly) {
-    intel.push({ type: 'shift', title: 'Level Playing Field', body: `Knotted at ${homeScore}-${awayScore} early. Neither side has found separation yet.` });
-  } else if (isTied) {
-    intel.push({ type: 'shift', title: 'Deadlocked', body: `${homeScore}-${awayScore} tie. Neither team can pull away — the model rated this a ${tierLabel}.` });
-  } else if (scoreDiff >= 10 && leader && trailer) {
-    intel.push({ type: 'shift', title: `${leader.abbreviation} Pulling Away`, body: `${leader.abbreviation} leads by ${scoreDiff}. ${trailer.abbreviation} needs a response soon. ${predictedWinner?.abbreviation === leader.abbreviation ? 'This aligns with the pre-game model.' : 'The model had this going the other way — upset unfolding.'}` });
-  } else if (scoreDiff > 0 && scoreDiff <= 3 && leader) {
-    intel.push({ type: 'shift', title: `${leader.abbreviation} Has the Edge`, body: `Slim ${scoreDiff}-point lead for ${leader.abbreviation}, up ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. ${conf >= 60 ? `The model rates this a Strong Pick — the favorite should hold.` : `The model sees this as a ${tierLabel} — close game, slight edge.`}` });
-  } else if (scoreDiff > 3 && leader && trailer) {
-    intel.push({ type: 'shift', title: `${leader.abbreviation} in Control`, body: `${leader.abbreviation} leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)}. A comfortable cushion. ${trailer.abbreviation} needs a big rally.` });
+  // ═══ SHIFT — AI MODEL VS THE SCOREBOARD ═══
+  // This is unique to Clutch Picks — no other app shows this. Pure model intelligence.
+  if (isUpset && leader && trailer) {
+    intel.push({ type: 'shift', title: 'Upset Brewing', body: `The model had ${predictedWinner?.abbreviation} as a ${tierLabel} — but ${leader.abbreviation} is proving otherwise. ${
+      isLate ? `This upset looks real. ${predictedWinner?.abbreviation} is out of answers.` :
+      scoreDiff >= 10 ? `Miracle rally territory for ${predictedWinner?.abbreviation}.` :
+      `${predictedWinner?.abbreviation} still has time but the pressure is mounting.`
+    }` });
+  } else if (leader && predictedWinner && leader.abbreviation === predictedWinner.abbreviation && scoreDiff >= 5) {
+    intel.push({ type: 'shift', title: 'Model Holding', body: `${tierLabel} pick on ${predictedWinner.abbreviation} is playing out. The AI saw the mismatch pre-game and the scoreboard confirms it.` });
+  } else if (isTied && totalScore === 0) {
+    intel.push({ type: 'shift', title: 'First Blood Pending', body: `Model gives ${home.abbreviation} a ${pred?.homeWinProbability ?? 50}% win probability with home-field advantage. First score sets the tone for how this plays out.` });
+  } else if (isTied && totalScore > 0) {
+    intel.push({ type: 'shift', title: 'Model Waiting', body: `${pred?.isTossUp ? 'Rated Toss-Up pre-game — the tie is expected.' : `The model picked ${predictedWinner?.abbreviation} — they need to separate soon or this becomes anyone\'s game.`}` });
+  } else if (leader && predictedWinner && leader.abbreviation === predictedWinner.abbreviation && scoreDiff <= 4) {
+    intel.push({ type: 'shift', title: 'Razor Thin', body: `${predictedWinner.abbreviation} leads but barely. The model's ${tierLabel} pick is surviving, not thriving. ${isLate ? 'Execution wins close ones.' : 'This could flip any moment.'}` });
   }
 
-  // TREND
-  if (pred?.homeStreak && pred.homeStreak >= 3) {
-    intel.push({ type: 'trend', title: `${home.abbreviation} Streak Watch`, body: `${home.abbreviation} entered on a ${pred.homeStreak}-game win streak. ${leader?.abbreviation === home.abbreviation ? 'The streak looks alive — they lead.' : isTied ? 'Being tested — game is tied.' : 'Streak in danger.'}` });
-  } else if (pred?.awayStreak && pred.awayStreak >= 3) {
-    intel.push({ type: 'trend', title: `${away.abbreviation} Road Streak`, body: `${away.abbreviation} riding a ${pred.awayStreak}-game win streak. ${leader?.abbreviation === away.abbreviation ? 'Continuing to roll.' : isTied ? 'Being tested away from home.' : 'Could end tonight.'}` });
-  } else if (pred?.ensembleDivergence) {
-    intel.push({ type: 'trend', title: 'Model Uncertainty', body: `Prediction models were split pre-game. ${isTied ? 'The tie validates the uncertainty.' : `${leader?.abbreviation ?? 'One team'} making a case, but don't trust the lead yet.`}` });
-  } else {
-    intel.push({ type: 'trend', title: 'Tracking the Model', body: `Pre-game model rated this a ${tierLabel}. ${leader ? `${leader.abbreviation} leads ${Math.max(homeScore,awayScore)}-${Math.min(homeScore,awayScore)} — ${predictedWinner?.abbreviation === leader.abbreviation ? 'tracking within expected range.' : 'diverging from expectations.'}` : 'Game is level — still within expected range.'}` });
+  // ═══ TREND — PACE, OVER/UNDER, STREAKS ═══
+  // Data-driven insight you can't get from watching — pace projections, streak context.
+  if (overUnder && totalScore > 0 && (isMid || isLate)) {
+    const periodFactor = sport === 'NBA' || sport === 'NCAAB' ? 2 : sport === 'MLB' ? (9 / Math.max(1, parseInt(quarter.match(/\d+/)?.[0] ?? '5'))) : 2.5;
+    const projectedTotal = Math.round(totalScore * periodFactor);
+    const diff = projectedTotal - overUnder;
+    if (Math.abs(diff) > overUnder * 0.1) {
+      const direction = diff > 0 ? 'OVER' : 'UNDER';
+      intel.push({ type: 'trend', title: `Pace: ${direction}`, body: `Projected ${projectedTotal} total vs the ${overUnder} line. ${
+        diff > 0 ? (sport === 'NBA' ? 'No defense tonight — both teams running.' : sport === 'MLB' ? 'Pitching staffs getting lit up.' : 'Offenses are in control.') :
+        (sport === 'NBA' ? 'Grind-it-out game. Half-court sets and tough defense.' : sport === 'MLB' ? 'Pitchers dealing. Runs are hard to come by.' : 'Low-event game — defenses suffocating.')
+      }` });
+    }
   }
+
+  if (!intel.some(i => i.type === 'trend')) {
+    if (pred?.homeStreak && pred.homeStreak >= 3) {
+      const streakStatus = leader?.abbreviation === home.abbreviation ? 'alive and well' : leader ? 'hanging by a thread' : 'being tested';
+      intel.push({ type: 'trend', title: `${pred.homeStreak}-Game Streak`, body: `${home.abbreviation} entered on a ${pred.homeStreak}-game heater. Tonight the streak is ${streakStatus}.` });
+    } else if (pred?.awayStreak && pred.awayStreak >= 3) {
+      const streakStatus = leader?.abbreviation === away.abbreviation ? 'rolling' : leader ? 'in jeopardy' : 'being challenged';
+      intel.push({ type: 'trend', title: `${away.abbreviation} on a ${pred.awayStreak}-Game Run`, body: `Road warriors. ${away.abbreviation} has been unbeatable recently and tonight they're ${streakStatus}.` });
+    } else if (pred?.ensembleDivergence) {
+      intel.push({ type: 'trend', title: 'Volatile Game', body: `Our 3-model ensemble couldn't agree on this one pre-game. When models split, in-game swings are 40% more likely. Stay locked in.` });
+    }
+  }
+
   return intel;
 }
 
@@ -432,7 +492,7 @@ const IntelCard = memo(function IntelCard({ type, title, body }: { type: 'alert'
   const [expanded, setExpanded] = useState(false);
   const isLong = body.length > 140;
   const displayBody = expanded || !isLong ? body : body.substring(0, 140) + '...';
-  const bc = type === 'pulse' ? '#F59E0B' : type === 'alert' ? LIVE_RED : type === 'shift' ? TEAL_DARK : SILVER;
+  const bc = type === 'pulse' ? '#8B0A1F' : type === 'alert' ? LIVE_RED : type === 'shift' ? TEAL_DARK : SILVER;
   const bl = type === 'pulse' ? 'PULSE' : type === 'alert' ? 'ALERT' : type === 'shift' ? 'SHIFT' : 'TREND';
   return (
     <Pressable onPress={() => { if (isLong) setExpanded(!expanded); }} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 13, paddingLeft: 18, borderWidth: 1, borderColor: BORDER, marginBottom: 8, position: 'relative' }}>
@@ -469,21 +529,38 @@ const HorizonCard = memo(function HorizonCard({ game, index }: { game: GameWithP
 
 // ─── PREDICTIONS STRIP ───
 const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
-  const l10 = picks.slice(-10);
+  // Sort by date descending, take last 10 resolved picks for the chart
+  const sorted = [...picks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const resolved = sorted.filter(p => p.result === 'win' || p.result === 'loss');
+  const pending = sorted.filter(p => p.result !== 'win' && p.result !== 'loss');
+  const l10 = resolved.slice(0, 10);
+  const pendingCount = pending.length;
   const c = l10.filter(p => p.result === 'win').length;
-  const t = l10.filter(p => p.result === 'win' || p.result === 'loss').length;
-  const a = t > 0 ? Math.round((c/t)*100) : 0;
+  const t = l10.length;
+  const a = t > 0 ? Math.round((c / t) * 100) : 0;
+  // Show oldest first in the chart (left = oldest, right = newest)
+  const chartPicks = [...l10].reverse();
   return (
     <View style={{ backgroundColor: GLASS, borderWidth: 1, borderColor: 'rgba(139,10,31,0.14)', borderRadius: 18, padding: 18, marginHorizontal: 20, marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>Your predictions</Text>
-        <Text style={{ fontSize: 12, fontWeight: '700', color: MAROON }}>{a}%</Text>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: a >= 50 ? TEAL : MAROON }}>{a}%</Text>
       </View>
       <View style={{ flexDirection: 'row', gap: 4, alignItems: 'flex-end', height: 24, marginBottom: 8 }}>
-        {l10.map((p,i) => <View key={p.id||String(i)} style={{ width: 10, height: (p.result==='win'?0.85:p.result==='loss'?0.35:0.5)*24, borderRadius: 2, backgroundColor: p.result==='win'?TEAL:p.result==='loss'?ERROR:TEXT_MUTED, opacity: p.result==='win'?0.9:p.result==='loss'?0.5:0.3 }} />)}
+        {chartPicks.map((p, i) => (
+          <View key={p.id || String(i)} style={{
+            flex: 1,
+            height: p.result === 'win' ? 24 : 8,
+            borderRadius: 2,
+            backgroundColor: p.result === 'win' ? TEAL : ERROR,
+            opacity: p.result === 'win' ? 0.9 : 0.5,
+          }} />
+        ))}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 10, color: TEXT_MUTED }}>Last 10 predictions</Text>
+        <Text style={{ fontSize: 10, color: TEXT_MUTED }}>
+          Last {t} resolved{pendingCount > 0 ? ` · ${pendingCount} pending` : null}
+        </Text>
         <Text style={{ fontSize: 10, color: TEAL }}>{c} correct</Text>
       </View>
     </View>
@@ -493,15 +570,40 @@ const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
 // ─── INSIGHT FUNCTIONS ───
 function genInsight(games: GameWithPrediction[]): { headline: string; teams: string[] } {
   const s = games.filter(g => g.status === GameStatus.SCHEDULED && g.prediction);
-  const hu = s.filter(g => g.prediction!.predictedWinner === 'home' && g.prediction!.confidence < 55);
-  if (hu.length >= 3) return { headline: `${hu.length} home underdogs are in play tonight — a pattern hitting at a high rate this week.`, teams: hu.slice(0,3).map(g => g.homeTeam.name) };
-  const he = s.filter(g => (g.prediction!.edgeRating??0) >= 7);
-  if (he.length >= 2) return { headline: `${he.length} games tonight have edge rating 7+ — the model sees clear separation.`, teams: he.slice(0,3).map(g => g.prediction!.predictedWinner==='home'?g.homeTeam.name:g.awayTeam.name) };
-  const sg = s.filter(g => (g.prediction!.homeStreak??0) >= 4||(g.prediction!.awayStreak??0) >= 4);
-  if (sg.length >= 2) return { headline: `${sg.length} teams on 4+ game streaks in action tonight. Streaks continue 68% of the time.`, teams: sg.slice(0,3).map(g => (g.prediction!.homeStreak??0) >= 4?g.homeTeam.name:g.awayTeam.name) };
-  const tu = s.filter(g => g.prediction!.isTossUp);
-  if (tu.length >= 3) return { headline: `Coin-flip night: ${tu.length} games within 3 points. Proceed with caution.`, teams: tu.slice(0,3).map(g => `${g.awayTeam.abbreviation}/${g.homeTeam.abbreviation}`) };
-  return { headline: `${s.length} games tonight across ${new Set(s.map(g => g.sport)).size} sports. Here's what stands out.`, teams: [] };
+  if (s.length === 0) return { headline: 'No games on the board yet — check back closer to game time.', teams: [] };
+
+  const locks = s.filter(g => g.prediction!.confidence >= 72);
+  const strong = s.filter(g => g.prediction!.confidence >= 60 && g.prediction!.confidence < 72);
+  const tossups = s.filter(g => g.prediction!.isTossUp);
+  const streakers = s.filter(g => (g.prediction!.homeStreak??0) >= 4 || (g.prediction!.awayStreak??0) >= 4);
+  const upsets = s.filter(g => {
+    const p = g.prediction!;
+    const loser = p.predictedWinner === 'home' ? g.awayTeam : g.homeTeam;
+    const loserRec = loser.record.split('-').map(Number);
+    const loserPct = loserRec[0] / Math.max(loserRec[0] + (loserRec[1] ?? 0), 1);
+    return p.confidence >= 55 && p.confidence <= 65 && loserPct > 0.5;
+  });
+  const sports = new Set(s.map(g => g.sport));
+
+  if (locks.length >= 2) {
+    return { headline: `${locks.length} games tonight hit Lock status — that's rare. The model sees dominant edges. Don't sleep on these.`, teams: locks.slice(0,3).map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name) };
+  }
+  if (upsets.length >= 2) {
+    return { headline: `${upsets.length} upset candidates are lurking tonight. The underdogs have the recent form to pull it off — high-risk, high-reward slate.`, teams: upsets.slice(0,3).map(g => { const p = g.prediction!; return p.predictedWinner === 'home' ? g.awayTeam.name : g.homeTeam.name; }) };
+  }
+  if (streakers.length >= 2) {
+    return { headline: `${streakers.length} teams riding hot streaks collide tonight. History says streaks break in spots like this — watch closely.`, teams: streakers.slice(0,3).map(g => (g.prediction!.homeStreak??0) >= 4 ? g.homeTeam.name : g.awayTeam.name) };
+  }
+  if (strong.length >= 3) {
+    return { headline: `Loaded slate — ${strong.length} Strong Picks across ${sports.size} sports. The model found real separation in multiple matchups tonight.`, teams: strong.slice(0,3).map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name) };
+  }
+  if (tossups.length >= 3) {
+    return { headline: `Chaos night. ${tossups.length} games are dead even — the model can barely separate them. Gut-check picks only.`, teams: tossups.slice(0,3).map(g => `${g.awayTeam.abbreviation}/${g.homeTeam.abbreviation}`) };
+  }
+  if (s.length >= 8) {
+    return { headline: `Massive slate tonight — ${s.length} games across ${sports.size} sports. The model has scanned every angle. Your edge is here.`, teams: [] };
+  }
+  return { headline: `${s.length} games tonight. The AI has broken down every matchup — here's where the value is.`, teams: [] };
 }
 
 type DrawType = 'streak_clash'|'dominant_favorite'|'upset_brewing'|'toss_up'|'high_value'|'model_conflict'|'hot_team'|'cold_team'|'record_mismatch'|'default';
@@ -512,139 +614,165 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   const winner = p.predictedWinner === 'home' ? home : away;
   const loser = p.predictedWinner === 'home' ? away : home;
   const tags: string[] = [];
-  const conf = p.confidence ?? 55; const edge = p.edgeRating ?? 5;
+  const conf = p.confidence ?? 55; const edge = p.edgeRating ?? 5; const value = p.valueRating ?? 5;
   const mTier = p.isTossUp || conf < 53 ? 'Toss-Up' : conf < 60 ? 'Solid Pick' : conf < 72 ? 'Strong Pick' : 'Lock';
   const hStreak = p.homeStreak ?? 0; const aStreak = p.awayStreak ?? 0;
+  const sport = game.sport;
+  const homeWP = p.homeWinProbability ?? 50;
+  const awayWP = p.awayWinProbability ?? 50;
+  const spread = game.spread;
+  const overUnder = game.overUnder;
+  const venue = game.venue;
 
-  // Parse form — handle both "WWLWL" and "W-L-W" formats
   const parseForm = (form: string | undefined) => {
-    if (!form) return { wins: 0, total: 0 };
+    if (!form) return { wins: 0, total: 0, str: '' };
     const chars = form.split('').filter((c: string) => c === 'W' || c === 'L');
-    return { wins: chars.filter((c: string) => c === 'W').length, total: Math.max(chars.length, 1) };
+    return { wins: chars.filter((c: string) => c === 'W').length, total: Math.max(chars.length, 1), str: chars.join('') };
   };
   const hf = parseForm(p.recentFormHome);
   const af = parseForm(p.recentFormAway);
 
   const pr = (r: string) => { const [w,l] = r.split('-').map(Number); return { w: w??0, l: l??0, t: (w??0)+(l??0) }; };
   const hr = pr(home.record); const ar = pr(away.record);
+  const hPct = hr.w / Math.max(hr.t, 1); const aPct = ar.w / Math.max(ar.t, 1);
+  const winnerIsHome = p.predictedWinner === 'home';
 
   let hl = ''; let dt = ''; let drawType: DrawType = 'default';
   const trySet = (type: DrawType): boolean => { if (usedTypes.has(type)) return false; drawType = type; return true; };
 
-  // 1. STREAK CLASH
+  // Sport-specific flavor
+  const sportAction = sport === 'NBA' || sport === 'NCAAB' ? 'on the hardwood' :
+    sport === 'NFL' || sport === 'NCAAF' ? 'under the lights' :
+    sport === 'MLB' ? 'on the diamond' :
+    sport === 'NHL' ? 'on the ice' :
+    'on the pitch';
+
+  // 1. STREAK CLASH — two hot teams collide
   if (!hl && hStreak >= 3 && aStreak >= 3 && trySet('streak_clash')) {
-    hl = 'Streak vs streak';
-    tags.push('CLASH',`${home.abbreviation} W${hStreak}`,`${away.abbreviation} W${aStreak}`);
-    dt = `${home.abbreviation} riding a ${hStreak}-game win streak meets ${away.abbreviation} on a ${aStreak}-game tear. Something has to give. ${winner.abbreviation} rated a ${mTier}.`;
+    hl = `${home.abbreviation} W${hStreak} vs ${away.abbreviation} W${aStreak}`;
+    tags.push('MUST WATCH', 'STREAK CLASH');
+    dt = `Two teams that refuse to lose. ${home.abbreviation} hasn't dropped a game in ${hStreak} tries. ${away.abbreviation} has won ${aStreak} straight on the road. One streak dies tonight ${sportAction}. This is appointment viewing.`;
   }
 
-  // 2. DOMINANT FAVORITE
+  // 2. DOMINANT FAVORITE — the model sees a clear mismatch
   if (!hl && conf >= 64 && edge >= 5 && trySet('dominant_favorite')) {
-    hl = 'Strong lean';
-    tags.push('HIGH CONFIDENCE', mTier.toUpperCase());
-    dt = `${winner.abbreviation} (${winner.record}) is a clear favorite — rated a ${mTier}. ${loser.abbreviation} (${loser.record}) is outmatched across the model's key factors.`;
+    hl = `${winner.abbreviation} looks unstoppable`;
+    tags.push(mTier.toUpperCase(), `${Math.max(homeWP,awayWP)}% WIN PROB`);
+    dt = `The AI gives ${winner.abbreviation} a ${Math.max(homeWP,awayWP)}% chance to win — and the data backs it up across ${edge >= 7 ? 'nearly every' : 'multiple'} factor${edge >= 7 ? '' : 's'}. ${loser.abbreviation} would need their best performance of the season to pull this off. ${winner.abbreviation} is built for this matchup.`;
   }
 
-  // 3. UPSET BREWING — lowered threshold
+  // 3. UPSET BREWING — the underdog has a real shot
   if (!hl && conf >= 55 && conf <= 65 && trySet('upset_brewing')) {
     const favHome = p.predictedWinner === 'home';
-    const uW = favHome ? af.wins : hf.wins;
-    const uT = favHome ? af.total : hf.total;
-    if (uW >= 5) {
-      hl = 'Upset watch';
-      tags.push('UPSET ALERT', `${loser.abbreviation} ${uW}-${uT - uW} L10`);
-      dt = `${loser.abbreviation} has been hotter recently with ${uW} wins in their last 10. The model still leans ${winner.abbreviation} as a ${mTier}, but the gap is closing. High-variance spot.`;
+    const underdog = favHome ? away : home;
+    const uForm = favHome ? af : hf;
+    if (uForm.wins >= 4 && uForm.total >= 5) {
+      hl = `${underdog.abbreviation} could shock everyone`;
+      tags.push('UPSET ALERT', `${underdog.abbreviation} ${uForm.wins}-${uForm.total - uForm.wins} RECENT`);
+      dt = `Don't look at the records — look at the trajectory. ${underdog.abbreviation} has won ${uForm.wins} of their last ${uForm.total} and they're playing with house money tonight. ${winner.abbreviation} is favored, but this is the kind of game where the "better team" loses. Popcorn game.`;
     } else { hl = ''; drawType = 'default'; }
   }
 
-  // 4. TOSS-UP — expanded range
+  // 4. TOSS-UP — pure drama
   if (!hl && (p.isTossUp || (conf >= 48 && conf <= 53)) && trySet('toss_up')) {
-    hl = 'Coin flip';
-    tags.push('TOSS-UP', `${p.homeWinProbability ?? 50}/${p.awayWinProbability ?? 50}`);
-    dt = `Dead even. ${home.abbreviation} (${home.record}) at home vs ${away.abbreviation} (${away.record}) — the model can't separate them. This could go either way.`;
+    hl = "This one's a war";
+    tags.push('TOSS-UP', `${homeWP}-${awayWP} SPLIT`);
+    dt = `The AI ran every angle and couldn't separate them. ${home.abbreviation} (${home.record}) vs ${away.abbreviation} (${away.record}) is as close to 50/50 as it gets. These are the games that come down to one play, one call, one moment. ${winnerIsHome ? 'Home crowd might be the tiebreaker.' : 'Road poise could be the difference.'}`;
   }
 
-  // 5. MODEL CONFLICT
+  // 5. MODEL CONFLICT — the AI is arguing with itself
   if (!hl && p.ensembleDivergence && trySet('model_conflict')) {
-    hl = 'Models disagree';
-    tags.push('SPLIT DECISION');
-    dt = `The prediction models can't agree. Some factors favor ${home.abbreviation}, others point to ${away.abbreviation}. The composite leans ${winner.abbreviation} as a ${mTier}, but certainty is lower than usual.`;
+    hl = 'The AI can\'t agree';
+    tags.push('MODELS SPLIT', 'VOLATILE');
+    dt = `Our 3-model ensemble is at war over this one. The composite model says ${winner.abbreviation}, but the Elo and form models have different takes. When our AI disagrees with itself, expect the unexpected. This game has chaos written all over it.`;
   }
 
-  // 6. HOT TEAM
+  // 6. HOT TEAM — riding momentum
   if (!hl && (hStreak >= 3 || aStreak >= 3) && trySet('hot_team')) {
-    const hot = hStreak >= aStreak ? home : away; const streak = Math.max(hStreak, aStreak);
-    hl = `${hot.abbreviation} is rolling`;
-    tags.push(`W${streak} STREAK`);
-    dt = `${hot.abbreviation} has won ${streak} straight and shows no signs of slowing. Model rates ${winner.abbreviation} a ${mTier}.`;
+    const hot = hStreak >= aStreak ? home : away; const cold = hot === home ? away : home;
+    const streak = Math.max(hStreak, aStreak);
+    const isHotOnRoad = hot === away;
+    hl = `${hot.abbreviation} is on fire`;
+    tags.push(`W${streak} STREAK`, isHotOnRoad ? 'ROAD ROLL' : 'HOME FORTRESS');
+    dt = `${hot.abbreviation} has won ${streak} straight — ${isHotOnRoad ? 'and they\'re doing it away from home, which is even scarier' : 'their building has become a nightmare for visitors'}. ${cold.abbreviation} walks into a buzzsaw tonight. Can they be the team to snap it? The model says ${winner.abbreviation === hot.abbreviation ? 'probably not' : 'maybe — the streak is due to end'}.`;
   }
 
-  // 7. HIGH VALUE
+  // 7. HIGH VALUE — the sharpest edge on the board
   if (!hl && edge >= 7 && trySet('high_value')) {
-    hl = 'Best value tonight';
-    tags.push('HIGH VALUE');
-    dt = `One of the sharpest on the board. ${winner.abbreviation} (${winner.record}) rated a ${mTier} with a clear statistical advantage over ${loser.abbreviation} (${loser.record}).`;
+    hl = 'Best edge on the board';
+    tags.push('SHARP', `EDGE ${edge}/10`);
+    dt = `If you only watch one game tonight, make it this one. ${winner.abbreviation} grades out at ${edge}/10 on edge rating — that means the model found a real statistical gap that the average fan won't see. ${loser.abbreviation} has a blind spot and ${winner.abbreviation} is built to exploit it.`;
   }
 
-  // 8. COLD TEAM — lowered threshold
+  // 8. COLD TEAM — fading fast
   if (!hl && (hf.wins <= 3 || af.wins <= 3) && hf.total >= 5 && trySet('cold_team')) {
     const cold = hf.wins <= af.wins ? home : away;
-    const cW = Math.min(hf.wins, af.wins);
-    const cT = Math.max(hf.total, af.total);
-    hl = `${cold.abbreviation} struggling`;
-    tags.push(`${cold.abbreviation} ${cW}-${cT - cW} L10`);
-    dt = `${cold.abbreviation} has won just ${cW} of their last 10. ${winner.abbreviation} should capitalize — model rates them a ${mTier}.`;
+    const hot = cold === home ? away : home;
+    const cW = cold === home ? hf.wins : af.wins;
+    const cT = cold === home ? hf.total : af.total;
+    hl = `${cold.abbreviation} is spiraling`;
+    tags.push(`${cold.abbreviation} ${cW}-${cT - cW} L${cT}`, 'FADE ALERT');
+    dt = `${cold.abbreviation} has won just ${cW} of their last ${cT}. The slide is real — confidence is low, the locker room energy is off. ${hot.abbreviation} smells blood. This is a dangerous spot for ${cold.abbreviation} and the AI knows it.`;
   }
 
-  // 9. RECORD MISMATCH — lowered threshold
+  // 9. RECORD MISMATCH — talent gap
   if (!hl && trySet('record_mismatch')) {
-    const hPct = hr.w / Math.max(hr.t, 1);
-    const aPct = ar.w / Math.max(ar.t, 1);
     if (Math.abs(hPct - aPct) > 0.15) {
       const better = hPct > aPct ? home : away;
       const worse = better === home ? away : home;
-      hl = 'Mismatch on paper';
-      tags.push(`${better.abbreviation} ${better.record}`,`${worse.abbreviation} ${worse.record}`);
-      dt = `${better.abbreviation} (${better.record}) has a significantly better record than ${worse.abbreviation} (${worse.record}). The model agrees — ${winner.abbreviation} rated a ${mTier}.`;
+      hl = `${better.abbreviation} is a different class`;
+      tags.push(`${better.abbreviation} ${better.record}`, `${worse.abbreviation} ${worse.record}`);
+      dt = `The records tell the story before the game starts. ${better.abbreviation} at ${better.record} vs ${worse.abbreviation} at ${worse.record} — that's a ${Math.round(Math.abs(hPct - aPct) * 100)}% win-rate gap. ${worse.abbreviation} needs their A-game just to keep it close. ${better.abbreviation} just needs to show up.`;
     } else { hl = ''; drawType = 'default'; }
   }
 
-  // 10. DEFAULT — rotate through varied templates based on game data
+  // 10. DEFAULT — each one gets a unique angle based on the data
   if (!hl) {
     drawType = 'default';
-    // Use game-specific data to pick a unique angle
-    const homeWinPct = hr.w / Math.max(hr.t, 1);
-    const awayWinPct = ar.w / Math.max(ar.t, 1);
-    const isHomeGame = p.predictedWinner === 'home';
     const formDiff = hf.wins - af.wins;
+    const gameTime = new Date(game.gameTime);
+    const isNightGame = gameTime.getHours() >= 19;
+    const isMatinee = gameTime.getHours() < 16;
 
-    if (conf >= 62 && edge >= 5) {
-      hl = `${winner.abbreviation} has the numbers`;
-      dt = `${winner.abbreviation} rated a ${mTier} — the data favors them over ${loser.abbreviation} (${loser.record}) across multiple factors.`;
-    } else if (isHomeGame && homeWinPct > 0.55) {
-      hl = `Home court matters`;
-      dt = `${home.abbreviation} (${home.record}) has home-field advantage and the model's backing as a ${mTier}. ${away.abbreviation} (${away.record}) faces an uphill battle on the road.`;
-    } else if (!isHomeGame && awayWinPct > 0.55) {
-      hl = `Road warriors`;
-      dt = `${away.abbreviation} (${away.record}) is favored despite playing away. Rated a ${mTier} — their talent overcomes the venue disadvantage against ${home.abbreviation} (${home.record}).`;
+    if (conf >= 62 && value >= 6) {
+      hl = `${winner.abbreviation} checks every box`;
+      tags.push('ALL SYSTEMS GO');
+      dt = `Form, fundamentals, and matchup advantages all point to ${winner.abbreviation}. The AI found edge in ${edge >= 6 ? 'multiple categories' : 'the key areas'}. ${loser.abbreviation} is decent but they're walking into a bad stylistic matchup tonight.`;
+    } else if (spread !== undefined && Math.abs(spread) >= 7) {
+      hl = `Vegas and the AI agree`;
+      tags.push(`SPREAD ${spread > 0 ? home.abbreviation : away.abbreviation} -${Math.abs(spread)}`);
+      dt = `The line says ${Math.abs(spread)} points, and our model doesn't disagree. ${winner.abbreviation} should control this one from wire to wire. The question isn't who wins — it's by how much.`;
+    } else if (overUnder && overUnder >= (sport === 'NBA' ? 230 : sport === 'NFL' ? 50 : sport === 'MLB' ? 9 : sport === 'NHL' ? 6.5 : 3.5)) {
+      hl = 'Fireworks incoming';
+      tags.push(`O/U ${overUnder}`, 'HIGH SCORING');
+      dt = `The over/under is set at ${overUnder} — this has shootout written all over it. Both teams push pace and neither defense inspires confidence. Grab a seat and enjoy the show.`;
+    } else if (winnerIsHome && hPct > 0.55 && isNightGame) {
+      hl = `${home.abbreviation}'s house, ${home.abbreviation}'s rules`;
+      tags.push('HOME ADVANTAGE');
+      dt = `Primetime at ${venue !== 'TBD' ? venue : 'home'}. ${home.abbreviation} (${home.record}) thrives in front of their crowd and the AI has them favored tonight. ${away.abbreviation} needs to silence the building early or this one gets away from them.`;
+    } else if (!winnerIsHome && aPct > 0.55) {
+      hl = `${away.abbreviation} fears nobody`;
+      tags.push('ROAD PICK');
+      dt = `${away.abbreviation} (${away.record}) doesn't care about the travel. They're favored ${sportAction} despite being the visitor — that's how good they are right now. ${home.abbreviation} can't rely on crowd noise alone.`;
     } else if (Math.abs(formDiff) >= 2 && hf.total >= 5) {
-      const hotterTeam = formDiff > 0 ? home : away;
-      const colderTeam = formDiff > 0 ? away : home;
-      const hotWins = formDiff > 0 ? hf.wins : af.wins;
-      const hotTotal = formDiff > 0 ? hf.total : af.total;
-      hl = `Form favors ${hotterTeam.abbreviation}`;
-      dt = `${hotterTeam.abbreviation} is ${hotWins}-${hotTotal - hotWins} in their last ${hotTotal} while ${colderTeam.abbreviation} has been inconsistent. Model rates ${winner.abbreviation} a ${mTier}.`;
-    } else if (conf < 58) {
-      hl = `Close call`;
-      dt = `A ${mTier} at best — ${winner.abbreviation} gets a slight edge over ${loser.abbreviation} but this one could go either way.`;
+      const hotter = formDiff > 0 ? home : away;
+      const colder = formDiff > 0 ? away : home;
+      const hotW = formDiff > 0 ? hf.wins : af.wins;
+      const hotT = formDiff > 0 ? hf.total : af.total;
+      hl = `Momentum belongs to ${hotter.abbreviation}`;
+      tags.push(`${hotter.abbreviation} ${hotW}-${hotT - hotW} RECENT`);
+      dt = `Forget the season record — recent form is everything. ${hotter.abbreviation} is ${hotW}-${hotT - hotW} in their last ${hotT} while ${colder.abbreviation} has been inconsistent. In sports, hot beats talented. ${hotter.abbreviation} has the energy right now.`;
+    } else if (isMatinee) {
+      hl = `Early tip, big opportunity`;
+      tags.push(displaySport(sport));
+      dt = `Matinee matchup — ${away.abbreviation} at ${home.abbreviation}. The model leans ${winner.abbreviation} and gives them a ${Math.max(homeWP,awayWP)}% win probability. Early games fly under the radar — that's where smart pickers find value.`;
     } else {
-      hl = `${away.abbreviation} at ${home.abbreviation}`;
-      dt = `${winner.abbreviation} (${winner.record}) rated a ${mTier} over ${loser.abbreviation} (${loser.record}). ${conf >= 60 ? 'Multiple factors align.' : 'A standard matchup by the numbers.'}`;
+      hl = `${away.abbreviation} invades ${home.abbreviation}`;
+      tags.push(displaySport(sport), `${Math.max(homeWP,awayWP)}% WIN PROB`);
+      dt = `${away.abbreviation} (${away.record}) travels to face ${home.abbreviation} (${home.record}) tonight. The AI sees a ${conf >= 60 ? 'clear' : 'slight'} edge for ${winner.abbreviation}. ${conf < 58 ? 'Tight matchup — trust the process but stay nimble.' : 'The data is leaning one direction. Make your move.'}`;
     }
   }
 
-  const ic = tags.filter(t => !['CLASH','TOSS-UP','SPLIT DECISION','LIMITED DATA'].includes(t)).length;
-  if (ic > 0) tags.unshift(`${Math.max(ic,1)} INSIGHT${ic>1?'S':''}`);
   return { tags, headline: hl, detail: dt, drawType };
 }
 

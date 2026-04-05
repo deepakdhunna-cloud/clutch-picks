@@ -14,7 +14,7 @@ import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, GameStatus, SPORT_META, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
-import { displaySport } from '@/lib/display-confidence';
+import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Calendar, Clock, Tv, TrendingUp, Star, ChevronRight, Check } from 'lucide-react-native';
@@ -79,7 +79,7 @@ const PulsingLiveBadge = memo(function PulsingLiveBadge() {
   );
 });
 
-function formatGameTime(dateString: string): { date: string; time: string } {
+function formatScheduledTime(dateString: string): { date: string; time: string } {
   const date = new Date(dateString);
   const now = new Date();
 
@@ -237,7 +237,7 @@ const TappableJersey = memo(function TappableJersey({
       <Animated.View style={[containerStyle, styles.jerseyAnimatedContainer]}>
         <View style={{ position: 'relative', alignItems: 'center' }}>
           {/* Jersey — smoothly lifts when selected */}
-          <Animated.View style={[shadowStyle, isLoser ? { opacity: 0.5 } : undefined, jerseyLiftStyle]}>
+          <Animated.View style={[shadowStyle, isLoser ? { opacity: 0.35 } : undefined, isWinner ? { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 14 } : undefined, jerseyLiftStyle]}>
             <JerseyIcon
               teamCode={team.abbreviation}
               primaryColor={teamColors.primary}
@@ -264,7 +264,7 @@ const TappableJersey = memo(function TappableJersey({
           {/* Winner badge */}
           {isWinner ? (
             <View style={styles.winnerBadge}>
-              <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900' }}>W</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '900' }}>W</Text>
             </View>
           ) : null}
         </View>
@@ -686,26 +686,24 @@ const LiveGameLayout = memo(function LiveGameLayout({
             <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  {game.quarter ? (
-                    <View style={{
-                      backgroundColor: 'rgba(255,255,255,0.12)',
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 5,
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.18)',
-                    }}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{game.quarter}</Text>
-                    </View>
-                  ) : null}
-                  {game.clock ? (
-                    <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '700', letterSpacing: 0.3 }}>
-                      {game.clock}
-                    </Text>
-                  ) : null}
-                  {!game.quarter && !game.clock ? (
-                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600' }}>IN PROGRESS</Text>
-                  ) : null}
+                  {(() => {
+                    const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                    if (timeStr) {
+                      return (
+                        <View style={{
+                          backgroundColor: 'rgba(255,255,255,0.12)',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 5,
+                          borderWidth: 1,
+                          borderColor: 'rgba(255,255,255,0.18)',
+                        }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{timeStr}</Text>
+                        </View>
+                      );
+                    }
+                    return <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600' }}>IN PROGRESS</Text>;
+                  })()}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7 }}>
                   <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '500', marginRight: 2 }}>Details</Text>
@@ -733,7 +731,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
   // Memoize derived values
   const sportMeta = useMemo(() => SPORT_META[game.sport], [game.sport]);
-  const { date, time } = useMemo(() => formatGameTime(game.gameTime), [game.gameTime]);
+  const { date, time } = useMemo(() => formatScheduledTime(game.gameTime), [game.gameTime]);
   const statusBadge = useMemo(() => getStatusBadge(game.status), [game.status]);
 
   // Get team colors - memoized, pass ESPN color as fallback
@@ -1107,11 +1105,14 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF' }}>
                     {game.awayScore ?? 0} - {game.homeScore ?? 0}
                   </Text>
-                  {game.quarter ? (
-                    <Text style={{ color: '#DC2626', fontSize: 9, fontWeight: '700', marginTop: 2 }}>
-                      {game.quarter}{game.clock ? ` · ${game.clock}` : null}
-                    </Text>
-                  ) : null}
+                  {(() => {
+                    const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                    return timeStr ? (
+                      <Text style={{ color: '#DC2626', fontSize: 9, fontWeight: '700', marginTop: 2 }}>
+                        {timeStr}
+                      </Text>
+                    ) : null;
+                  })()}
                 </View>
               ) : (
                 <View style={{ alignItems: 'center', backgroundColor: 'rgba(2,3,8,0.88)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 8 }}>
@@ -1276,7 +1277,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                           e.stopPropagation();
                           handleTvChannelPress(game.tvChannel!);
                         }}
-      
+
                         style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}
                       >
                         <Tv size={10} color="#FFFFFF" />
@@ -1399,15 +1400,22 @@ const styles = StyleSheet.create({
   },
   winnerBadge: {
     position: 'absolute',
-    bottom: -8,
+    bottom: -6,
     left: '50%' as unknown as number,
-    marginLeft: -10,
-    width: 20,
-    height: 14,
-    borderRadius: 7,
+    marginLeft: -12,
+    width: 24,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#22C55E',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#040608',
+    shadowColor: '#22C55E',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 6,
   },
   // LiveGameLayout
   liveGlowShadowLayer: {
