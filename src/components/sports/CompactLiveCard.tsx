@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { TeamJerseyCompact } from './TeamJersey';
-import { displaySport } from '@/lib/display-confidence';
+import { displaySport, formatGameTime } from '@/lib/display-confidence';
 
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 165;
@@ -207,28 +207,26 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
           {/* Divider line */}
           <View style={{ position: 'absolute', top: 0, left: 16, right: 16, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)' }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            {/* Left: quarter + clock */}
+            {/* Left: game time */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {game.quarter ? (
-                <View style={{
-                  backgroundColor: 'rgba(255,255,255,0.12)',
-                  paddingHorizontal: 7,
-                  paddingVertical: 2,
-                  borderRadius: 5,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.22)',
-                }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{game.quarter}</Text>
-                </View>
-              ) : null}
-              {game.clock ? (
-                <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>
-                  {game.clock}
-                </Text>
-              ) : null}
-              {!game.quarter && !game.clock ? (
-                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600' }}>IN PROGRESS</Text>
-              ) : null}
+              {(() => {
+                const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                if (timeStr) {
+                  return (
+                    <View style={{
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderRadius: 5,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.22)',
+                    }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{timeStr}</Text>
+                    </View>
+                  );
+                }
+                return <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600' }}>IN PROGRESS</Text>;
+              })()}
             </View>
             {/* Right: TV channel badge */}
             {game.tvChannel ? (

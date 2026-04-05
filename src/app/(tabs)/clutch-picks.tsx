@@ -236,29 +236,29 @@ const TopPickCard = memo(function TopPickCard({
             {/* Card body — inset to reveal rotating border */}
             <View style={{ margin: 3.5, borderRadius: 20.5, overflow: 'hidden', backgroundColor: '#182028' }}>
               {/* Coral radial glow — top right */}
-              <View style={{ position: 'absolute', top: 0, right: 0, width: '100%', height: '100%' }} pointerEvents="none">
-                <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 100" preserveAspectRatio="none">
                   <Defs>
-                    <RadialGradient id={`coral_${index}`} cx="85%" cy="15%" rx="50%" ry="50%">
+                    <RadialGradient id={`coral_${index}`} cx="85" cy="15" rx="50" ry="50" gradientUnits="userSpaceOnUse">
                       <Stop offset="0%" stopColor="#8B0A1F" stopOpacity={0.5} />
                       <Stop offset="60%" stopColor="#8B0A1F" stopOpacity={0.1} />
                       <Stop offset="100%" stopColor="#8B0A1F" stopOpacity={0} />
                     </RadialGradient>
                   </Defs>
-                  <Rect x="0" y="0" width="100%" height="100%" fill={`url(#coral_${index})`} />
+                  <Rect x="0" y="0" width="100" height="100" fill={`url(#coral_${index})`} />
                 </Svg>
               </View>
               {/* Steel blue radial glow — bottom left */}
-              <View style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} pointerEvents="none">
-                <Svg width="100%" height="100%" style={{ position: 'absolute' }}>
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 100" preserveAspectRatio="none">
                   <Defs>
-                    <RadialGradient id={`blue_${index}`} cx="15%" cy="85%" rx="60%" ry="60%">
+                    <RadialGradient id={`blue_${index}`} cx="15" cy="85" rx="60" ry="60" gradientUnits="userSpaceOnUse">
                       <Stop offset="0%" stopColor="#4E606F" stopOpacity={1} />
                       <Stop offset="50%" stopColor="#4E606F" stopOpacity={0.3} />
                       <Stop offset="100%" stopColor="#4E606F" stopOpacity={0} />
                     </RadialGradient>
                   </Defs>
-                  <Rect x="0" y="0" width="100%" height="100%" fill={`url(#blue_${index})`} />
+                  <Rect x="0" y="0" width="100" height="100" fill={`url(#blue_${index})`} />
                 </Svg>
               </View>
 

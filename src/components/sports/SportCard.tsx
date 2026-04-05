@@ -212,7 +212,7 @@ const JBIcons: Record<string, React.FC<JBIconProps>> = {
 };
 
 // ─── PIXEL GRID OVERLAY ────────────────────────────────────────
-const PixelGrid = memo(function PixelGrid() {
+export const PixelGrid = memo(function PixelGrid() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
@@ -262,7 +262,7 @@ const DeadPixels = memo(function DeadPixels({ visible }: { visible: boolean }) {
 
 // ─── SCANLINE (synced via global clock) ────────────────────────
 const SCAN_DURATION = 2500;
-const ScanLine = memo(function ScanLine({ active }: { active: boolean }) {
+export const ScanLine = memo(function ScanLine({ active }: { active: boolean }) {
   // Sync all scanlines by calculating where we are in the cycle
   const progress = useSharedValue(-24);
 
@@ -533,7 +533,7 @@ export const SportCard = memo(function SportCard({
     const isDimmed = hasActiveFilter && !isSelected;
     const isLit = !isDimmed; // fully lit by default, or when selected
     const isChosen = hasActiveFilter && isSelected; // the actively chosen one
-    const borderColor = isChosen ? 'rgba(122,157,184,0.25)' : isLit ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)';
+    const borderColor = isChosen ? 'rgba(122,157,184,0.35)' : 'rgba(122,157,184,0.15)';
 
     return (
       <AnimatedPressable
@@ -542,19 +542,20 @@ export const SportCard = memo(function SportCard({
           scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
         }}
         onPressOut={() => {
-          scale.value = withSpring(isChosen ? 1.08 : 1, { damping: 12, stiffness: 300 });
+          scale.value = withSpring(1, { damping: 12, stiffness: 300 });
         }}
-        style={[animatedStyle, { flexShrink: 0, transform: [{ scale: isChosen ? 1.08 : 1 }] }]}
+        style={[animatedStyle, { flex: 1 }]}
       >
         <View
           style={{
             position: 'relative' as const,
             flexDirection: 'row' as const,
             alignItems: 'center' as const,
+            justifyContent: 'space-between' as const,
             gap: 5,
-            paddingVertical: 6,
+            paddingVertical: 8,
             paddingHorizontal: 10,
-            height: 36,
+            height: 42,
             borderRadius: 3,
             backgroundColor: JB.bg,
             borderWidth: 1,
@@ -572,10 +573,6 @@ export const SportCard = memo(function SportCard({
             }),
           }}
         >
-          {/* Top specular highlight */}
-          <View style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.04)', zIndex: 3 }} pointerEvents="none" />
-
-
           {/* Pixel grid — ALWAYS visible */}
           <PixelGrid />
 
@@ -583,12 +580,14 @@ export const SportCard = memo(function SportCard({
           <ScanLine active={isLit} />
 
           {/* Content — all dot-matrix rendered */}
-          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, zIndex: 4 }}>
-            <View style={{ height: 18, overflow: 'visible' as const, justifyContent: 'center' as const }}>
-              <DotMatrixIcon sport={sport} litColor={isLit ? '#FFFFFF' : '#3a4a58'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={1.5} />
+          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, flex: 1, justifyContent: 'space-between' as const, zIndex: 4 }}>
+            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 }}>
+              <View style={{ height: 22, overflow: 'visible' as const, justifyContent: 'center' as const }}>
+                <DotMatrixIcon sport={sport} litColor={isLit ? '#FFFFFF' : '#3a4a58'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={2} />
+              </View>
+              <DotMatrixText text={displaySport(sport)} litColor={isLit ? '#9BB8CF' : '#4a5a68'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={2} />
             </View>
-            <DotMatrixText text={displaySport(sport)} litColor={isLit ? '#9BB8CF' : '#4a5a68'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={1.5} />
-            <DotMatrixText text={String(gameCount)} litColor={isLit ? '#FFFFFF' : '#4a5a68'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={1.5} />
+            <DotMatrixText text={String(gameCount)} litColor={isLit ? '#FFFFFF' : '#4a5a68'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={2} />
           </View>
 
         </View>
