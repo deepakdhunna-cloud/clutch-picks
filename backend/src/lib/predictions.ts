@@ -42,10 +42,17 @@ function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
-// ─── Sigmoid scaling: neutral (1.0) — let the raw math produce honest probabilities
+// ─── Sigmoid scaling: transforms composite factor differential → probability.
+// Per-sport values reflect typical signal variance and noise floor.
 const SIGMOID_SCALING: Record<string, number> = {
-  NBA: 1.0, NFL: 1.0, NCAAF: 1.0, NCAAB: 1.0,
-  MLB: 1.0, NHL: 1.0, MLS: 1.0, EPL: 1.0,
+  NBA:   4.0,
+  NCAAB: 4.5,
+  NFL:   3.5,
+  NCAAF: 4.0,
+  MLB:   2.8,
+  NHL:   3.0,
+  MLS:   3.0,
+  EPL:   3.2,
 };
 
 // ─── Over/Under baseline by sport (fallback if ESPN doesn't provide) ────────
@@ -1646,11 +1653,12 @@ export async function generatePrediction(
   ];
 
   // Factors that get early season dampening applied
+  // NOTE: Elo excluded — already normalized via in-memory replay, doesn't
+  // need additional early-season compression.
   const dampenedFactors: Set<keyof SportFactorWeights> = new Set([
     "winPct",
     "homeAwaySplit",
     "strengthOfSchedule",
-    "elo",
     "streak",
     "clutchFactor",
   ]);
@@ -1709,7 +1717,7 @@ export async function generatePrediction(
   // coverage that destroyed all signal for early-season sports.
   // Linear (exponent 1.0) with a higher floor of 0.6 preserves differentiation
   // while still penalizing missing data proportionally.
-  const coverageMultiplier = Math.max(0.6, dataCoverage);
+  const coverageMultiplier = Math.max(0.75, dataCoverage);
   const confidence = clamp(
     Math.round(50 + (calibratedConfidence - 50) * coverageMultiplier),
     50,
@@ -1728,10 +1736,21 @@ export async function generatePrediction(
   // disagreement is noise, not signal. Blend instead of taking minimum.
   // At 33%+ of season, revert to full Math.min behavior.
   const ensembleBlendWeight = Math.min(1.0, seasonProgress * 3);
-  const minConf = Math.min(confidence, ensemble.confidence);
-  const postEnsembleConf = Math.round(
-    confidence * (1 - ensembleBlendWeight) + minConf * ensembleBlendWeight
-  );
+  // Ensemble correction: sub-models only vote down confidence when they
+  // disagree with the composite on the WINNER. When they agree, composite
+  // confidence stands — sub-models are 1-2 factor models by design and
+  // their lower confidence is structural, not signal.
+  const compositePicksHome = homeWinProbability >= 50;
+  const ensemblePicksHome  = ensemble.homeWinProb >= 50;
+  const modelsDisagree     = compositePicksHome !== ensemblePicksHome;
+  let postEnsembleConf: number;
+  if (modelsDisagree) {
+    const conservativeFloor = Math.min(confidence, ensemble.confidence) + 3;
+    const rawBlend = confidence * (1 - ensembleBlendWeight) + ensemble.confidence * ensembleBlendWeight;
+    postEnsembleConf = Math.round(Math.min(rawBlend, conservativeFloor));
+  } else {
+    postEnsembleConf = confidence;
+  }
   // Lineup confirmation modifier: unconfirmed lineups compress confidence toward 50%
   // proportionally instead of flat subtraction. Flat subtraction destroyed all signal
   // for sports like MLB where lineups aren't posted until game day.
