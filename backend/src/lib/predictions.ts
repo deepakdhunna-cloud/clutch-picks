@@ -453,7 +453,7 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           },
           { role: "user", content: userPrompt },
         ],
-        max_completion_tokens: 150,
+        max_completion_tokens: 800,
       }),
       signal: AbortSignal.timeout(8000),
     });
@@ -466,11 +466,13 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
     }
 
     const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } };
     };
 
     const text = data.choices?.[0]?.message?.content?.trim();
     if (!text) {
+      console.log(`[ai-diag] FALLBACK: empty content from OpenAI for ${game.id} — usage=${JSON.stringify(data.usage ?? "none")} finish=${data.choices?.[0]?.finish_reason ?? "none"}`);
       const fallback = buildTemplateAnalysis(game, predictedWinner, confidence, homeForm, awayForm, homeExtended, awayExtended, homeInjuries, awayInjuries, homeElo, awayElo, isTossUp);
       return { text: fallback, aiAgreesWithModel: true };
     }
