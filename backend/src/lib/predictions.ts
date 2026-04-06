@@ -453,8 +453,7 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 150,
-        temperature: 0.15,
+        max_completion_tokens: 150,
       }),
       signal: AbortSignal.timeout(8000),
     });
