@@ -327,7 +327,9 @@ async function generateAIAnalysis(
   }
 
   const apiKey = env.OPENAI_API_KEY;
+  console.log(`[ai-diag] gameId=${game.id} keyPresent=${!!apiKey} keyLen=${apiKey?.length ?? 0} keyPrefix=${apiKey?.slice(0, 7) ?? "none"}`);
   if (!apiKey) {
+    console.log(`[ai-diag] FALLBACK: no apiKey, using template for ${game.id}`);
     const text = buildTemplateAnalysis(game, predictedWinner, confidence, homeForm, awayForm, homeExtended, awayExtended, homeInjuries, awayInjuries, homeElo, awayElo, isTossUp);
     return { text, aiAgreesWithModel: true };
   }
@@ -458,6 +460,8 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
     });
 
     if (!response.ok) {
+      const errBody = await response.text().catch(() => "<unreadable>");
+      console.log(`[ai-diag] FALLBACK: OpenAI ${response.status} ${response.statusText} — ${errBody.slice(0, 200)}`);
       const text = buildTemplateAnalysis(game, predictedWinner, confidence, homeForm, awayForm, homeExtended, awayExtended, homeInjuries, awayInjuries, homeElo, awayElo, isTossUp);
       return { text, aiAgreesWithModel: true };
     }
@@ -472,11 +476,13 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
       return { text: fallback, aiAgreesWithModel: true };
     }
 
+    console.log(`[ai-diag] SUCCESS: OpenAI returned ${text.length} chars for ${game.id}`);
     setCachedAIAnalysis(game.id, homeInjuries, awayInjuries, text);
     const aiPrefersHome = aiPrefersHomeTeam(text, game.homeTeam.name, game.awayTeam.name);
     const aiAgreesWithModel = aiPrefersHome === (predictedWinner === "home");
     return { text, aiAgreesWithModel };
-  } catch (_err) {
+  } catch (err) {
+    console.log(`[ai-diag] FALLBACK: fetch exception — ${err instanceof Error ? err.name + ": " + err.message : String(err)}`);
     const text = buildTemplateAnalysis(game, predictedWinner, confidence, homeForm, awayForm, homeExtended, awayExtended, homeInjuries, awayInjuries, homeElo, awayElo, isTossUp);
     return { text, aiAgreesWithModel: true };
   }
