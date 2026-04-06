@@ -449,11 +449,11 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           {
             role: "system",
             content:
-              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write exactly 2-3 sentences that are specific, data-driven, and reference concrete numbers: rest days, head-to-head records, scoring trends, Elo rating gaps, and key injuries when they tell a meaningful story. Never use generic phrases like 'should be a good game' or 'anything can happen'. CRITICAL: Do NOT cite any win probability percentages (e.g. '93% win probability' or '78% chance'). Instead, describe the statistical edge using the supporting data — records, point differentials, Elo gap, rest, injuries.",
+              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge and explain in depth WHY the model arrived at this pick. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write a rich, multi-paragraph narrative breakdown (3-5 short paragraphs, roughly 180-280 words total) that walks the reader through the matchup like an expert analyst would: open with the headline edge, then break down the key factors driving the pick (records, Elo gap, recent form, head-to-head when relevant, rest/travel, key injuries, situational angles like home/road splits or back-to-backs, scoring trends, and any matchup-specific dynamics). Reference concrete numbers throughout — Elo ratings, win-loss records, point differentials, rest days, specific player names from injury reports. Identify the single biggest reason this pick could be wrong (the key risk). Never use generic phrases like 'should be a good game' or 'anything can happen'. CRITICAL: Do NOT cite any win probability percentages (e.g. '93% win probability' or '78% chance'). Instead, describe the statistical edge using the supporting data — records, point differentials, Elo gap, rest, injuries.",
           },
           { role: "user", content: userPrompt },
         ],
-        max_completion_tokens: 800,
+        max_completion_tokens: 2000,
       }),
       signal: AbortSignal.timeout(8000),
     });
