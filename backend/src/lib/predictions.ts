@@ -455,7 +455,7 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
         ],
         max_completion_tokens: 2000,
       }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) {
