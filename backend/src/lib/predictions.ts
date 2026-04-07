@@ -444,7 +444,7 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-nano",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
