@@ -333,9 +333,13 @@ export async function fetchTeamExtendedStats(
   teamId: string,
   sport: string,
   opponentTeamId: string,
-  gameDate: Date = new Date()
+  gameDate: Date
 ): Promise<TeamExtendedStats> {
-  const cacheKey = `extended-${teamId}-${sport}-${opponentTeamId}`;
+  // Cache key MUST include gameDate — rest days and recent-form windows are
+  // gameDate-dependent. Without it a stats record computed for tomorrow's game
+  // would be returned for today's game with stale rest-day data.
+  const dateKey = gameDate.toISOString().slice(0, 10);
+  const cacheKey = `extended-${teamId}-${sport}-${opponentTeamId}-${dateKey}`;
   const cached = extendedStatsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < EXTENDED_CACHE_TTL_MS) {
     return cached.data;
@@ -969,7 +973,7 @@ const lineupCache = new LRUCache<string, { data: StartingLineup | null; timestam
 export async function fetchStartingLineup(
   teamId: string,
   sport: string,
-  gameDate: Date = new Date()
+  gameDate: Date
 ): Promise<StartingLineup | null> {
   const dateStr = gameDate.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
   const cacheKey = `lineup-${teamId}-${sport}-${dateStr}`;
