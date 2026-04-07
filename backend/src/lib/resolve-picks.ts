@@ -61,19 +61,31 @@ async function fetchGameResult(gameId: string): Promise<FinalGameResult | null> 
         if (!event) continue;
 
         const competition = event.competitions[0];
-        if (!competition) continue;
+        if (!competition) {
+          console.log(`[resolve-diag] gameId=${gameId} sport=${sport} date=${date}: found event but no competition data`);
+          return null;
+        }
 
         const status = competition.status.type;
         const isFinal = status.state.toLowerCase() === "post" || status.completed;
-        if (!isFinal) return null; // Game exists but isn't final yet
+        if (!isFinal) {
+          console.log(`[resolve-diag] gameId=${gameId} sport=${sport} date=${date}: NOT FINAL state=${status.state} completed=${status.completed}`);
+          return null; // Game exists but isn't final yet
+        }
 
         const home = competition.competitors.find((c) => c.homeAway === "home");
         const away = competition.competitors.find((c) => c.homeAway === "away");
-        if (!home || !away) return null;
+        if (!home || !away) {
+          console.log(`[resolve-diag] gameId=${gameId} sport=${sport} date=${date}: missing home/away competitor`);
+          return null;
+        }
 
         const homeScore = parseInt(home.score ?? "0", 10);
         const awayScore = parseInt(away.score ?? "0", 10);
-        if (isNaN(homeScore) || isNaN(awayScore)) return null;
+        if (isNaN(homeScore) || isNaN(awayScore)) {
+          console.log(`[resolve-diag] gameId=${gameId} sport=${sport} date=${date}: NaN scores home="${home.score}" away="${away.score}"`);
+          return null;
+        }
 
         return { gameId, homeScore, awayScore, isFinal: true };
       } catch {
@@ -82,6 +94,7 @@ async function fetchGameResult(gameId: string): Promise<FinalGameResult | null> 
     }
   }
 
+  console.log(`[resolve-diag] gameId=${gameId}: NOT FOUND in any sport across ±3 day window`);
   return null;
 }
 
@@ -109,10 +122,24 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
       select: { id: true, gameId: true, pickedTeam: true, odId: true, homeTeam: true, awayTeam: true },
     });
 
-    if (unresolvedPicks.length === 0) return { resolved: 0, skipped: 0 };
+    // Also pull unresolved PredictionResult rows for calibration data (independent of user picks).
+    // Only consider games whose prediction was created at least 30 min ago to allow them to finish.
+    const calibrationCutoff = new Date(Date.now() - 30 * 60 * 1000);
+    const unresolvedPredictions = await prisma.predictionResult.findMany({
+      where: { actualWinner: null, createdAt: { lt: calibrationCutoff } },
+      select: { gameId: true },
+    });
 
-    // Deduplicate by gameId so we only fetch each game once
-    const uniqueGameIds = [...new Set(unresolvedPicks.map((p) => p.gameId))];
+    if (unresolvedPicks.length === 0 && unresolvedPredictions.length === 0) {
+      return { resolved: 0, skipped: 0 };
+    }
+
+    // Union of all game IDs we need to check (user picks + calibration data)
+    const uniqueGameIds = [...new Set([
+      ...unresolvedPicks.map((p) => p.gameId),
+      ...unresolvedPredictions.map((p) => p.gameId),
+    ])];
+    console.log(`[resolve-picks] Checking ${uniqueGameIds.length} unique games (${unresolvedPicks.length} user picks, ${unresolvedPredictions.length} calibration rows)`);
     const gameResultMap = new Map<string, FinalGameResult | null>();
 
     for (const gameId of uniqueGameIds) {
