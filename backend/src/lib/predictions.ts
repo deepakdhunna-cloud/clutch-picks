@@ -221,6 +221,7 @@ function buildTemplateAnalysis(
   const winnerElo = predictedWinner === "home" ? homeElo : awayElo;
   const loserElo = predictedWinner === "home" ? awayElo : homeElo;
   const winnerInjuries = predictedWinner === "home" ? homeInjuries : awayInjuries;
+  const loserInjuries = predictedWinner === "home" ? awayInjuries : homeInjuries;
   const winnerExtended = predictedWinner === "home" ? homeExtended : awayExtended;
   const loserExtended = predictedWinner === "home" ? awayExtended : homeExtended;
 
@@ -228,40 +229,131 @@ function buildTemplateAnalysis(
   const loserRecord = `${loserTeam.record.wins}-${loserTeam.record.losses}`;
   const winnerFormStr = winnerForm.formString || "N/A";
   const loserFormStr = loserForm.formString || "N/A";
+  const eloDiff = Math.abs(winnerElo - loserElo);
+  const isHomeFav = predictedWinner === "home";
+  const winnerWins10 = winnerForm.results.filter(r => r === "W").length;
+  const loserWins10 = loserForm.results.filter(r => r === "W").length;
 
-  const locationStr = predictedWinner === "home" ? "at home" : "on the road";
-  const confLevel = confidence >= 80 ? "strong" : confidence >= 70 ? "solid" : confidence >= 60 ? "slight" : "marginal";
+  const paragraphs: string[] = [];
 
-  let line = `${winnerTeam.name} (${winnerRecord}, Elo ${Math.round(winnerElo)}, L10: ${winnerFormStr}) hold a ${confLevel} edge over ${loserTeam.name} (${loserRecord}, Elo ${Math.round(loserElo)}, L10: ${loserFormStr}) ${locationStr}.`;
+  // ── Paragraph 1 — Headline & Elo framing ─────────────────────────────────
+  if (isTossUp) {
+    paragraphs.push(
+      `${winnerTeam.name} hold the slimmest of edges over ${loserTeam.name}, but make no mistake — this projects as a coin flip. ${winnerTeam.name} (${winnerRecord}) and ${loserTeam.name} (${loserRecord}) enter with Elo ratings just ${Math.round(eloDiff)} points apart (${Math.round(winnerElo)} vs ${Math.round(loserElo)}), which is statistical noise rather than a meaningful talent gap. The model gives ${winnerTeam.name} the nudge, but the honest read is that either side could win and neither outcome would be a surprise.`
+    );
+  } else {
+    const edgeStrength = confidence >= 75 ? "a strong" : confidence >= 65 ? "a clear" : confidence >= 58 ? "a moderate" : "a slight";
+    const eloNarrative = eloDiff >= 100
+      ? "a substantial talent and performance gap"
+      : eloDiff >= 50
+        ? "a real but not dominant edge"
+        : eloDiff >= 25
+          ? "a modest underlying difference"
+          : "tight underlying quality, with the edge coming from situational factors more than raw rating";
+    paragraphs.push(
+      `${winnerTeam.name} hold ${edgeStrength} edge over ${loserTeam.name} ${isHomeFav ? "at home" : "on the road"}. ${winnerTeam.name} come in at ${winnerRecord} with an Elo of ${Math.round(winnerElo)}, while ${loserTeam.name} sit at ${loserRecord} (Elo ${Math.round(loserElo)}). The ${Math.round(eloDiff)}-point Elo gap reflects ${eloNarrative}. ${isHomeFav ? "Playing at home adds the standard 60-100 point advantage already baked into the model — the visible edge is on top of that." : "Note that this pick is a road favorite, meaning the model sees enough talent and form gap to overcome the typical home-team advantage."}`
+    );
+  }
 
-  // Rest sentence — only if there's a meaningful difference
+  // ── Paragraph 2 — Recent form & scoring trends ──────────────────────────
+  const formParts: string[] = [];
+  formParts.push(
+    `Over the last 10, ${winnerTeam.name} are ${winnerWins10}-${10 - winnerWins10} (${winnerFormStr}) versus ${loserTeam.name} at ${loserWins10}-${10 - loserWins10} (${loserFormStr}).`
+  );
+  if (winnerForm.streak >= 3) {
+    formParts.push(`${winnerTeam.name} ride a ${winnerForm.streak}-game win streak, which historically correlates with elevated short-term win probability.`);
+  } else if (winnerForm.streak <= -3) {
+    formParts.push(`${winnerTeam.name} are mired in a ${Math.abs(winnerForm.streak)}-game skid, a real concern for a side the model is otherwise backing.`);
+  }
+  if (loserForm.streak <= -3) {
+    formParts.push(`${loserTeam.name} are losers of ${Math.abs(loserForm.streak)} straight, compounding the case against them.`);
+  } else if (loserForm.streak >= 3) {
+    formParts.push(`${loserTeam.name} enter on a ${loserForm.streak}-game win streak, so don't dismiss them despite the underlying matchup gap.`);
+  }
+  if (winnerForm.avgScore > 0 && loserForm.avgScore > 0) {
+    formParts.push(`${winnerTeam.name} have averaged ${winnerForm.avgScore.toFixed(1)} points scored and ${winnerForm.avgAllowed.toFixed(1)} allowed in their recent sample, while ${loserTeam.name} are at ${loserForm.avgScore.toFixed(1)} for and ${loserForm.avgAllowed.toFixed(1)} against.`);
+  }
+  paragraphs.push(formParts.join(" "));
+
+  // ── Paragraph 3 — Rest, travel, situational ─────────────────────────────
   const homeRest = homeExtended.restDays;
   const awayRest = awayExtended.restDays;
-  if (homeRest !== null && awayRest !== null && Math.abs(homeRest - awayRest) >= 2) {
-    const restedTeam = homeRest > awayRest ? game.homeTeam.name : game.awayTeam.name;
-    const fatiguedTeam = homeRest > awayRest ? game.awayTeam.name : game.homeTeam.name;
-    const restedDays = homeRest > awayRest ? homeRest : awayRest;
-    const fatiguedDays = homeRest > awayRest ? awayRest : homeRest;
-    line += ` ${restedTeam} has ${restedDays} days rest while ${fatiguedTeam} plays on ${fatiguedDays === 0 ? "a back-to-back" : "short rest"}.`;
-  } else if ((homeRest === 0 || awayRest === 0) && homeRest !== awayRest) {
-    const b2bTeam = homeRest === 0 ? game.homeTeam.name : game.awayTeam.name;
-    line += ` ${b2bTeam} is on a back-to-back.`;
+  const situationalParts: string[] = [];
+  if (homeRest !== null && awayRest !== null) {
+    if (Math.abs(homeRest - awayRest) >= 2) {
+      const restedTeam = homeRest > awayRest ? game.homeTeam.name : game.awayTeam.name;
+      const fatiguedTeam = homeRest > awayRest ? game.awayTeam.name : game.homeTeam.name;
+      const restedDays = Math.max(homeRest, awayRest);
+      const fatiguedDays = Math.min(homeRest, awayRest);
+      situationalParts.push(
+        `Rest favors ${restedTeam}, who have had ${restedDays} day${restedDays === 1 ? "" : "s"} to recover compared to ${fatiguedDays === 0 ? `a back-to-back for ${fatiguedTeam}` : `${fatiguedDays} day${fatiguedDays === 1 ? "" : "s"} for ${fatiguedTeam}`}. Rest gaps of two or more days reliably correlate with better execution late in games — fewer turnovers, sharper shooting, stronger defensive rotations.`
+      );
+    } else if (homeRest === 0 || awayRest === 0) {
+      const b2bTeam = homeRest === 0 ? game.homeTeam.name : game.awayTeam.name;
+      situationalParts.push(
+        `${b2bTeam} are on a back-to-back, which historically drops win probability by 4-7 percentage points across all sports regardless of opponent. Watch for late-game fatigue if this stays close into the final period.`
+      );
+    } else {
+      situationalParts.push(`Both sides come in on similar rest (${homeRest} vs ${awayRest} days), so fatigue is not a factor either way.`);
+    }
+  }
+  if (loserExtended.consecutiveAwayGames >= 3) {
+    situationalParts.push(`${loserTeam.name} are on a ${loserExtended.consecutiveAwayGames}-game road trip, and travel-load research suggests cumulative road games beyond two start to erode performance.`);
+  } else if (winnerExtended.consecutiveAwayGames >= 3 && !isHomeFav) {
+    situationalParts.push(`${winnerTeam.name} are themselves ${winnerExtended.consecutiveAwayGames} games into a road swing, which is a meaningful counter-point to the otherwise positive read.`);
+  }
+  if (situationalParts.length > 0) {
+    paragraphs.push(situationalParts.join(" "));
   }
 
-  // Injury sentence — only if winner has notable absences
-  if (winnerInjuries.totalOut > 0) {
-    const outList = injuryList(winnerInjuries.out, 2);
-    line += ` Key absence${winnerInjuries.totalOut > 1 ? "s" : ""}: ${outList} (out) may limit ${winnerTeam.name}'s ceiling.`;
-  } else if (winnerInjuries.totalDoubtful > 0) {
-    const doubtList = injuryList(winnerInjuries.doubtful, 1);
-    line += ` Watch ${doubtList} (doubtful) for ${winnerTeam.name}.`;
+  // ── Paragraph 4 — Injuries ───────────────────────────────────────────────
+  if (winnerInjuries.totalOut > 0 || loserInjuries.totalOut > 0 || winnerInjuries.totalDoubtful > 0) {
+    const injuryParts: string[] = [];
+    if (loserInjuries.totalOut > 0) {
+      const outList = injuryList(loserInjuries.out, 3);
+      injuryParts.push(
+        `${loserTeam.name} are missing ${outList}${loserInjuries.totalOut > 3 ? ` and ${loserInjuries.totalOut - 3} other${loserInjuries.totalOut - 3 === 1 ? "" : "s"}` : ""}, which weakens their case beyond what the headline numbers show.`
+      );
+    }
+    if (winnerInjuries.totalOut > 0) {
+      const outList = injuryList(winnerInjuries.out, 3);
+      injuryParts.push(
+        `${winnerTeam.name} are not at full strength either — ${outList} ${winnerInjuries.totalOut > 1 ? "are" : "is"} out${winnerInjuries.totalOut > 3 ? ` along with ${winnerInjuries.totalOut - 3} other${winnerInjuries.totalOut - 3 === 1 ? "" : "s"}` : ""}, which caps their realistic ceiling.`
+      );
+    } else if (winnerInjuries.totalDoubtful > 0) {
+      const doubtList = injuryList(winnerInjuries.doubtful, 2);
+      injuryParts.push(`Watch ${doubtList} for ${winnerTeam.name} (doubtful) — their availability could swing the model's edge meaningfully.`);
+    }
+    if (injuryParts.length > 0) {
+      paragraphs.push(`Injury report matters here. ${injuryParts.join(" ")}`);
+    }
   }
 
-  if (isTossUp) {
-    line += ` This is a toss-up — Elo ratings (${Math.round(homeElo)} vs ${Math.round(awayElo)}) show neither team has a clear edge.`;
+  // ── Paragraph 5 — Risk to the pick ───────────────────────────────────────
+  const riskParts: string[] = [];
+  if (winnerWins10 < loserWins10) {
+    riskParts.push(`${loserTeam.name} have actually been the better team over their last 10 games (${loserWins10} wins to ${winnerWins10}), so the model is leaning on longer-horizon signals like Elo and season totals to make this call`);
+  }
+  if (loserExtended.scoringTrend > 0.15) {
+    riskParts.push(`${loserTeam.name}'s offense has been trending up recently, which could narrow or close the gap`);
+  }
+  if (loserForm.streak >= 3 && !isTossUp) {
+    riskParts.push(`${loserTeam.name}'s ${loserForm.streak}-game win streak suggests momentum the model may be discounting`);
+  }
+  if (eloDiff < 30 && !isTossUp) {
+    riskParts.push(`with the Elo gap as narrow as it is, normal in-game variance could easily flip this`);
+  }
+  if (riskParts.length > 0) {
+    paragraphs.push(
+      `Risk to the pick: ${riskParts.join("; ")}. ${isTossUp ? "Treat this as a coin flip — small data shifts could change the call entirely." : "The edge is real but it's not bulletproof, especially in a one-game sample."}`
+    );
+  } else if (!isTossUp && confidence < 65) {
+    paragraphs.push(
+      `Risk to the pick: this is a moderate-confidence call, not a lock. The supporting factors line up but the sample sizes and matchup-specific variance leave room for the underdog to win without it being a surprise.`
+    );
   }
 
-  return line;
+  return paragraphs.join("\n\n");
 }
 
 // ─── AI agreement helper ─────────────────────────────────────────────────────
@@ -447,7 +539,7 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           {
             role: "system",
             content:
-              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge and explain in depth WHY the model arrived at this pick. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write a rich, multi-paragraph narrative breakdown (3-5 short paragraphs, roughly 180-280 words total) that walks the reader through the matchup like an expert analyst would: open with the headline edge, then break down the key factors driving the pick (records, Elo gap, recent form, head-to-head when relevant, rest/travel, key injuries, situational angles like home/road splits or back-to-backs, scoring trends, and any matchup-specific dynamics). Reference concrete numbers throughout — Elo ratings, win-loss records, point differentials, rest days, specific player names from injury reports. Identify the single biggest reason this pick could be wrong (the key risk). Never use generic phrases like 'should be a good game' or 'anything can happen'. CRITICAL: Do NOT cite any win probability percentages (e.g. '93% win probability' or '78% chance'). Instead, describe the statistical edge using the supporting data — records, point differentials, Elo gap, rest, injuries.",
+              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Your job is to walk the reader through WHY the model arrived at its pick, in depth, like a sharp human analyst breaking down a game on a podcast or in a written column. Independently assess the matchup using only the data provided. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write a rich, multi-paragraph narrative breakdown of 4 to 6 short paragraphs (roughly 220 to 320 words total) structured roughly like this: (1) the headline edge and what the Elo gap really means, (2) recent form and scoring trends with specific records and L10 numbers, (3) rest, travel, and any situational angles like back-to-backs or long road trips, (4) the injury picture for both sides and how it shifts the math, (5) the single biggest risk to the pick — the honest counter-argument someone betting against this team would make. Reference concrete numbers throughout: Elo ratings, win-loss records, L10 streaks, point differentials, rest days, specific player names from the injury report. Never use empty filler like 'should be a good game,' 'anything can happen,' or 'tune in to find out.' CRITICAL: Do NOT cite any win probability percentages (e.g. '93% win probability' or '78% chance'). Instead, describe the statistical edge using the supporting data — records, point differentials, Elo gap, rest, injuries — and let the reader feel the weight of the evidence rather than seeing a number.",
           },
           { role: "user", content: userPrompt },
         ],
