@@ -222,17 +222,31 @@ export async function initializeEloFromSchedule(
     })
   );
 
-  // Sort all games chronologically. Games with no parseable date sort last
-  // (treated as most recent) so they don't corrupt early-season ratings.
-  const sorted = [...allTeamGames].sort((a, b) => {
-    const ta = a.date ? new Date(a.date).getTime() : Infinity;
-    const tb = b.date ? new Date(b.date).getTime() : Infinity;
-    return ta - tb;
+  // Filter out undated games BEFORE sorting/dedup. Undated entries cannot be
+  // reliably deduplicated — each physical game appears twice in the input
+  // (once per team perspective) and without a date or game ID, all undated
+  // games between the same pair collapse to one dedupe key, silently dropping
+  // data. The previous "treat as most recent" approach was dishonest because
+  // the dedupe collision wiped out everything but the first.
+  const datedGames = allTeamGames.filter(g => {
+    if (!g.date) return false;
+    const t = new Date(g.date).getTime();
+    return Number.isFinite(t);
+  });
+  const undatedCount = allTeamGames.length - datedGames.length;
+  if (undatedCount > 0) {
+    console.warn(`[elo] ${sport}: skipped ${undatedCount} undated game(s) during replay (data quality issue upstream)`);
+  }
+
+  // Sort all dated games chronologically.
+  const sorted = [...datedGames].sort((a, b) => {
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
   // Deduplicate: each matchup appears once per team in the input (home team
   // entry + away team entry). We only want to process each physical game once.
-  // Use a Set keyed on sorted team-pair + date string.
+  // Use a Set keyed on sorted team-pair + date string. Date is now guaranteed
+  // to exist because undated games were filtered out above.
   const processed = new Set<string>();
 
   for (const game of sorted) {
