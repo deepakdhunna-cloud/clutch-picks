@@ -191,18 +191,30 @@ setInterval(resolvePicksInBackground, 5 * 60 * 1000);
 // Also resolve once on startup after a 30-second delay
 setTimeout(resolvePicksInBackground, 30_000);
 
-// Pre-warm prediction cache every 4 minutes
+// Pre-warm prediction cache and refresh live games
 async function warmPredictions() {
   try {
     const response = await fetch(`http://localhost:${port}/api/games`);
-    if (response.ok) {
-      console.log("[prediction-warmer] Cache warmed successfully");
+    if (!response.ok) return;
+    const data = await response.json() as { data?: Array<{ id: string; status: string }> };
+    const games = data.data ?? [];
+    const liveGames = games.filter(g => g.status === "LIVE");
+    // Refresh live caches for in-progress games so the list page reflects
+    // current scores even when no user is actively viewing the detail page.
+    let warmed = 0;
+    for (const g of liveGames) {
+      try {
+        const detailRes = await fetch(`http://localhost:${port}/api/games/id/${g.id}`);
+        if (detailRes.ok) warmed++;
+      } catch { /* ignore single failures */ }
     }
+    console.log(`[prediction-warmer] Warmed ${games.length} games (${warmed}/${liveGames.length} live refreshed)`);
   } catch (err) {
     console.error("[prediction-warmer] Failed:", err);
   }
 }
-setInterval(warmPredictions, 4 * 60 * 1000);
+// Run more frequently so live caches don't go stale (was 4 min)
+setInterval(warmPredictions, 90 * 1000);
 setTimeout(warmPredictions, 10_000);
 
 // Check for live games and notify users who picked them — every 2 minutes

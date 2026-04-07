@@ -1101,11 +1101,17 @@ gamesRouter.get("/", async (c) => {
         new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
     );
 
-    // Attach cached predictions — never block the response for generation
+    // Attach cached predictions — never block the response for generation.
+    // For LIVE games, prefer the live-adjusted cache so the list winner matches
+    // the detail page (LiveFlip can change the predicted winner mid-game).
     for (let i = 0; i < filteredGames.length; i++) {
-      const cached = getCachedPrediction(filteredGames[i]!.id);
-      if (cached && !filteredGames[i]!.prediction) {
-        filteredGames[i] = { ...filteredGames[i]!, prediction: cached };
+      const game = filteredGames[i]!;
+      const isLive = game.status === "LIVE";
+      const cached = isLive
+        ? (getCachedLivePrediction(game.id) ?? getCachedPrediction(game.id))
+        : getCachedPrediction(game.id);
+      if (cached && !game.prediction) {
+        filteredGames[i] = { ...game, prediction: cached };
       }
     }
 
