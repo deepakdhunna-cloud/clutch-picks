@@ -1417,7 +1417,27 @@ export default function GameDetailScreen() {
                   </View>
                   {(() => {
                     const timeStr = isLive ? formatGameTime(game.sport, game.quarter, game.clock) : null;
-                    return <Text style={styles.scoreClock}>{timeStr || game.status}</Text>;
+                    if (timeStr) {
+                      return <Text style={styles.scoreClock}>{timeStr}</Text>;
+                    }
+                    // For non-live games, show the status (SCHEDULED / FINAL / etc.)
+                    // and — for scheduled games — the actual tip-off time underneath.
+                    if (game.status === 'SCHEDULED') {
+                      const d = new Date(game.gameTime);
+                      const now = new Date();
+                      const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+                      const isToday = d.toDateString() === now.toDateString();
+                      const isTomorrow = d.toDateString() === tomorrow.toDateString();
+                      const dateLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                      const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                      return (
+                        <>
+                          <Text style={styles.scoreClock}>{game.status}</Text>
+                          <Text style={styles.scoreClockSub}>{`${dateLabel} · ${timeLabel}`}</Text>
+                        </>
+                      );
+                    }
+                    return <Text style={styles.scoreClock}>{game.status}</Text>;
                   })()}
                 </View>
               </View>
@@ -1548,6 +1568,7 @@ const styles = StyleSheet.create({
   scoreNumber: { fontSize: 72, fontFamily: 'VT323_400Regular', lineHeight: 78, letterSpacing: 2 },
   scoreSep: { fontSize: 28, color: 'rgba(255,255,255,0.25)', fontWeight: '300', lineHeight: 78 },
   scoreClock: { fontSize: 16, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
+  scoreClockSub: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 4 },
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
