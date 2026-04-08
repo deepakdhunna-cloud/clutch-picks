@@ -995,7 +995,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
               {hasPrediction ? (
                 <View
                   style={{
-                    backgroundColor: 'rgba(78,205,196,0.18)',
+                    backgroundColor: 'rgba(139,10,31,0.25)',
                     paddingHorizontal: 6,
                     paddingVertical: 3,
                     borderRadius: 5,
@@ -1003,11 +1003,11 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     flexDirection: 'row',
                     alignItems: 'center',
                     borderWidth: 1,
-                    borderColor: 'rgba(78,205,196,0.45)',
+                    borderColor: 'rgba(139,10,31,0.4)',
                   }}
                 >
-                  <TrendingUp size={8} color="#4ECDC4" />
-                  <Text style={{ color: '#4ECDC4', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
+                  <TrendingUp size={8} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
                     {predictedWinnerTeam.abbreviation}
                   </Text>
                 </View>
