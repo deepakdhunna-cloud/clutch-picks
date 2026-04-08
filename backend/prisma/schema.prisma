@@ -2,12 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// TODO: Migrate to PostgreSQL before exceeding ~100 concurrent users.
-// SQLite write-locks will cause request failures under load.
-// Steps: 1) Change provider to "postgresql" 2) Update DATABASE_URL
-// 3) Run prisma migrate dev 4) Seed from SQLite export
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
