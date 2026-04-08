@@ -7,6 +7,12 @@ import { sseConnectedRef } from './useLiveScores';
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 5000; // 5 seconds — fast fallback when SSE drops
 const DEFAULT_POLLING_INTERVAL = 20000; // 20 seconds — keeps cards fresh even without live games
+// Burst-poll while ANY visible game is missing its prediction. The backend
+// generates predictions in the background and returns games without them on
+// first request, so we poll fast (~1.5s) to pick them up the moment they
+// finish — instead of waiting up to 20s for the next default poll. As soon as
+// every game has a prediction we drop back to LIVE/DEFAULT cadence.
+const PREDICTION_BURST_INTERVAL = 1500;
 const STALE_TIME = 5000; // 5 seconds — quick staleness for snappy tab switches
 const GAME_DETAIL_STALE_TIME = 3000; // 3 seconds — game detail stays very fresh
 
@@ -54,10 +60,15 @@ export function useGames() {
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
     refetchInterval: (query) => {
+      const games = query.state.data;
+      // Burst-poll while predictions are still being generated server-side.
+      // This is the dominant case right after first paint / sport-filter
+      // changes — without it the user stares at empty cards for up to 20s.
+      const hasMissingPredictions = games?.some((g) => !g.prediction);
+      if (hasMissingPredictions) return PREDICTION_BURST_INTERVAL;
       // When SSE is connected it pushes live scores, so no need for aggressive polling.
       // Fall back to fast polling only when SSE is disconnected and there are live games.
       if (sseConnectedRef.current) return DEFAULT_POLLING_INTERVAL;
-      const games = query.state.data;
       const hasLive = games?.some((g) => g.status === GameStatus.LIVE);
       return hasLive ? LIVE_POLLING_INTERVAL : DEFAULT_POLLING_INTERVAL;
     },
@@ -89,6 +100,12 @@ export function useGames() {
   return { ...query, prefetchGame };
 }
 
+// Shared adaptive interval — burst while predictions are missing, otherwise default.
+function predictionAwareInterval(games: GameWithPrediction[] | undefined): number {
+  if (games?.some((g) => !g.prediction)) return PREDICTION_BURST_INTERVAL;
+  return DEFAULT_POLLING_INTERVAL;
+}
+
 // Hook to fetch games for a specific sport, with optional date filter
 export function useGamesBySport(sport: string, date?: string) {
   return useQuery({
@@ -103,7 +120,7 @@ export function useGamesBySport(sport: string, date?: string) {
     enabled: !!sport,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: DEFAULT_POLLING_INTERVAL,
+    refetchInterval: (query) => predictionAwareInterval(query.state.data),
     refetchIntervalInBackground: false,
   });
 }
@@ -119,7 +136,7 @@ export function useGamesByDate(date: string) {
     enabled: !!date,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: DEFAULT_POLLING_INTERVAL,
+    refetchInterval: (query) => predictionAwareInterval(query.state.data),
     refetchIntervalInBackground: false,
   });
 }
@@ -161,13 +178,16 @@ export function useGame(gameId: string) {
     initialDataUpdatedAt: () => {
       return queryClient.getQueryState(['games'])?.dataUpdatedAt;
     },
-    // Adaptive polling: faster for live games
+    // Adaptive polling: burst when prediction missing, faster for live games
     refetchInterval: (query) => {
       const game = query.state.data;
+      // If the detail page is showing a game without a prediction yet, poll
+      // hard so it appears the moment background generation finishes.
+      if (game && !game.prediction) return PREDICTION_BURST_INTERVAL;
       if (game?.status === GameStatus.LIVE) {
         // SSE already writes live scores to ['game', id] cache.
         // Poll as fast fallback in case SSE drops.
-        return sseConnectedRef.current ? LIVE_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;
+        return LIVE_POLLING_INTERVAL;
       }
       return DEFAULT_POLLING_INTERVAL;
     },
