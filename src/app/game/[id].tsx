@@ -1297,10 +1297,20 @@ const SilkThread = React.memo(function SilkThread({
 });
 
 // ── Pre-game scoreboard countdown ────────────────────────────────────────────
-// Returns the seconds remaining until tip-off, ticking once per second.
-// Returns +Infinity until we have a parsable time (so callers default to "not
-// in countdown window") and 0 once the game has started or is past start.
-function useSecondsUntil(gameTime: string): number {
+// Window: countdown shows for the last 10 minutes before tip-off. If tip-off
+// passes and the backend hasn't flipped the game LIVE yet (real delays happen
+// — weather, broadcast pushes, ESPN data lag), we keep the same shrunk-score
+// + dim treatment and swap the LED text to "DELAYED" instead of an expired
+// timer, up to a 1-hour grace cap. Beyond that we assume something is wrong
+// with the data and bail back to the normal scheduled view.
+const COUNTDOWN_WINDOW_SEC = 10 * 60;
+const DELAY_GRACE_SEC = 60 * 60;
+
+// Returns the signed seconds until gameTime (negative once past start).
+// Re-fetches its target whenever gameTime changes — so when the backend
+// pushes back the start time on a delayed game, the timer naturally
+// resyncs to the new value on the next ['game', id] refetch.
+function useSignedSecondsUntil(gameTime: string): number {
   const target = useMemo(() => {
     const t = new Date(gameTime).getTime();
     return Number.isNaN(t) ? null : t;
@@ -1313,7 +1323,7 @@ function useSecondsUntil(gameTime: string): number {
     return () => clearInterval(id);
   }, [target]);
   if (target == null) return Number.POSITIVE_INFINITY;
-  return Math.max(0, Math.floor((target - now) / 1000));
+  return Math.floor((target - now) / 1000);
 }
 
 // Scoreboard-style mm:ss formatter (e.g. 9:05, 0:42)
@@ -1323,16 +1333,22 @@ function formatCountdown(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// Floating LED countdown clock shown above the 0–0 score within 10 minutes of
-// tip-off. Absolutely positioned so it sits *above* the score panel without
-// pushing it down. Above 10 minutes (or after the game starts) renders nothing.
+// Floating LED clock above the 0–0 score:
+//  - secondsLeft in (0, 600]    → "STARTING IN m:ss"
+//  - secondsLeft in (-3600, 0]  → "DELAYED" (game past tip-off, still scheduled)
+//  - everything else            → renders nothing
 function PreGameCountdown({ secondsLeft }: { secondsLeft: number }) {
-  if (secondsLeft > 600 || secondsLeft <= 0 || !Number.isFinite(secondsLeft)) return null;
+  if (!Number.isFinite(secondsLeft)) return null;
+  const isCountdown = secondsLeft > 0 && secondsLeft <= COUNTDOWN_WINDOW_SEC;
+  const isDelayed = secondsLeft <= 0 && secondsLeft > -DELAY_GRACE_SEC;
+  if (!isCountdown && !isDelayed) return null;
   return (
     <View style={{ position: 'absolute', top: -56, left: 0, right: 0, alignItems: 'center' }} pointerEvents="none">
-      <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 2.5, marginBottom: 4 }}>STARTING IN</Text>
+      <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 2.5, marginBottom: 4 }}>
+        {isCountdown ? 'STARTING IN' : 'STATUS'}
+      </Text>
       <Text style={{ fontSize: 32, color: '#FFFFFF', fontFamily: 'Orbitron_700Bold', letterSpacing: 3, textShadowColor: 'rgba(255,255,255,0.35)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
-        {formatCountdown(secondsLeft)}
+        {isCountdown ? formatCountdown(secondsLeft) : 'DELAYED'}
       </Text>
     </View>
   );
@@ -1380,8 +1396,9 @@ export default function GameDetailScreen() {
   const makePick = useMakePick();
   const { data: game, isLoading, error } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean; error: any };
   // Tick the pre-game countdown clock — called unconditionally to respect
-  // the rules of hooks. Returns +Infinity until we have a valid gameTime.
-  const secondsUntilStart = useSecondsUntil(game?.gameTime ?? '');
+  // the rules of hooks. Returns +Infinity until we have a valid gameTime,
+  // and signed seconds (negative once tip-off has passed) otherwise.
+  const secondsUntilStart = useSignedSecondsUntil(game?.gameTime ?? '');
   if (isLoading) return <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#7A9DB8" /></View>;
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -1392,8 +1409,15 @@ export default function GameDetailScreen() {
   const { homeTeam, awayTeam, prediction } = game;
   const isLive = game.status === 'LIVE';
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
-  // Show the LED countdown only for SCHEDULED games inside the 10-minute window
+  // Pre-game state derivations:
+  //  - isCountingDown: SCHEDULED + within the 10-minute window before tip-off
+  //  - isDelayed:      SCHEDULED + tip-off passed but within 1h grace
+  //  - isAwaitingStart: union of the above — drives both the dim overlay
+  //    and the shrunk-score treatment so the visual stays consistent
+  //    through "10:00 → 0:00 → DELAYED → LIVE".
   const isCountingDown = game.status === 'SCHEDULED' && secondsUntilStart > 0 && secondsUntilStart <= 600;
+  const isDelayed = game.status === 'SCHEDULED' && secondsUntilStart <= 0 && secondsUntilStart > -3600;
+  const isAwaitingStart = isCountingDown || isDelayed;
   const jerseyType = sportEnumToJersey(game.sport);
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
@@ -1430,6 +1454,11 @@ export default function GameDetailScreen() {
               <Text style={{ fontSize: 12, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? 'Following' : 'Follow'}</Text>
             </Pressable>
           </View>
+          {/* Pre-game wrapper — when the game is in the 10-min countdown
+              window OR delayed past tip-off, a subtle dim overlay covers the
+              team headers + jersey/score area (but stops above the win-prob
+              bar) to focus attention on the LED countdown. */}
+          <View style={{ position: 'relative' }}>
           <View style={styles.teamNamesRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.teamName} numberOfLines={1}>{homeTeam.name}</Text>
@@ -1455,11 +1484,11 @@ export default function GameDetailScreen() {
                 <View style={styles.scorePanel}>
                   <PreGameCountdown secondsLeft={secondsUntilStart} />
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                    <Text style={[styles.scoreNumber, isCountingDown && styles.scoreNumberShrunk, {
+                    <Text style={[styles.scoreNumber, isAwaitingStart && styles.scoreNumberShrunk, {
                       color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.homeScore ?? ''}</Text>
-                    <Text style={[styles.scoreSep, isCountingDown && styles.scoreSepShrunk]}>–</Text>
-                    <Text style={[styles.scoreNumber, isCountingDown && styles.scoreNumberShrunk, {
+                    <Text style={[styles.scoreSep, isAwaitingStart && styles.scoreSepShrunk]}>–</Text>
+                    <Text style={[styles.scoreNumber, isAwaitingStart && styles.scoreNumberShrunk, {
                       color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.awayScore ?? ''}</Text>
                   </View>
@@ -1498,6 +1527,17 @@ export default function GameDetailScreen() {
                 sport={game.sport}
               />
             </View>
+          </View>
+          {/* Subtle dim overlay — only while awaiting tip-off. Sits above the
+              team headers + jerseys + score (zIndex 5) but pointer-events
+              none so jersey taps still work. Stops short of the WinProbBar
+              because that's outside this wrapper. */}
+          {isAwaitingStart ? (
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.22)', zIndex: 5 }}
+            />
+          ) : null}
           </View>
           {prediction ? <View style={{ paddingTop: 20 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}
         </View>
