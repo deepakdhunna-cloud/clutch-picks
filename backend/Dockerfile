@@ -7,4 +7,4 @@ RUN bunx prisma generate
 COPY . .
 RUN mkdir -p /data
 EXPOSE 3000
-CMD ["sh", "-c", "bunx prisma migrate deploy && bun run start"]
+CMD ["sh", "-c", "bunx prisma db push --accept-data-loss && bun run start"]

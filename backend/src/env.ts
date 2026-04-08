@@ -9,7 +9,7 @@ const envSchema = z.object({
   PORT: z.string().optional().default("3000"),
   NODE_ENV: z.string().optional(),
   BACKEND_URL: z.url("BACKEND_URL must be a valid URL").default("http://localhost:3000"), // Set via the Vibecode enviroment at run-time
-  DATABASE_URL: z.string().default("file:./dev.db"),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required (PostgreSQL connection string)"),
   BETTER_AUTH_SECRET: z.string().min(1, "BETTER_AUTH_SECRET is required"),
   // OpenAI for AI analysis
   OPENAI_API_KEY: z.string().optional(),
