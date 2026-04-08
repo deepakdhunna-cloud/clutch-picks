@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotificationRegistration, useNotificationNavigation } from '@/hooks/useNotifications';
 import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
+import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 
 
 enableScreens(true);
@@ -183,7 +184,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-useFonts({ BebasNeue_400Regular, VT323_400Regular });
+useFonts({ BebasNeue_400Regular, VT323_400Regular, Orbitron_700Bold });
 
 
   return (

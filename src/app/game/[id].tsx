@@ -1323,14 +1323,15 @@ function formatCountdown(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// Inline LED countdown clock shown above the 0–0 score within 10 minutes of
-// tip-off. Above 10 minutes (or after the game starts) it renders nothing.
+// Floating LED countdown clock shown above the 0–0 score within 10 minutes of
+// tip-off. Absolutely positioned so it sits *above* the score panel without
+// pushing it down. Above 10 minutes (or after the game starts) renders nothing.
 function PreGameCountdown({ secondsLeft }: { secondsLeft: number }) {
   if (secondsLeft > 600 || secondsLeft <= 0 || !Number.isFinite(secondsLeft)) return null;
   return (
-    <View style={{ alignItems: 'center', marginBottom: 6 }}>
-      <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.45)', letterSpacing: 2, marginBottom: 2 }}>STARTING IN</Text>
-      <Text style={{ fontSize: 34, color: '#DC2626', fontFamily: 'VT323_400Regular', letterSpacing: 3, textShadowColor: 'rgba(220,38,38,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>
+    <View style={{ position: 'absolute', top: -56, left: 0, right: 0, alignItems: 'center' }} pointerEvents="none">
+      <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.55)', letterSpacing: 2.5, marginBottom: 4 }}>STARTING IN</Text>
+      <Text style={{ fontSize: 32, color: '#FFFFFF', fontFamily: 'Orbitron_700Bold', letterSpacing: 3, textShadowColor: 'rgba(255,255,255,0.35)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
         {formatCountdown(secondsLeft)}
       </Text>
     </View>
