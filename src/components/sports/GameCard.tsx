@@ -1003,7 +1003,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     flexDirection: 'row',
                     alignItems: 'center',
                     borderWidth: 1,
-                    borderColor: 'rgba(139,10,31,0.4)',
+                    borderColor: 'rgba(255,255,255,0.6)',
                   }}
                 >
                   <TrendingUp size={8} color="#FFFFFF" />
