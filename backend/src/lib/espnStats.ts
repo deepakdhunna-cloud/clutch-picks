@@ -5,6 +5,7 @@
 
 // ESPN sport path mappings
 import { LRUCache } from "lru-cache";
+import { fetchMLBDailyProbables, type MLBPitcherQuality } from "./mlbStatsApi";
 
 const ESPN_SPORT_PATHS: Record<string, string> = {
   NFL: "football/nfl",
@@ -942,8 +943,18 @@ export interface LineupPlayer {
   name: string;
   position: string;
   isConfirmed: boolean; // true = from ESPN's probables API; false = inferred from roster
-  era?: number;    // MLB pitchers only
-  record?: string; // MLB pitchers: "W-L" string
+  // ── MLB pitcher metrics (optional; populated for MLB SP only) ──
+  era?: number;
+  record?: string;          // MLB pitchers: "W-L" string
+  fip?: number;             // Fielding Independent Pitching
+  whip?: number;            // Walks + Hits per Inning Pitched
+  k9?: number;              // Strikeouts per 9 innings
+  bb9?: number;             // Walks per 9 innings
+  recent5Era?: number;      // ERA over the pitcher's last 5 starts
+  recent5WarningFlag?: boolean; // recent ERA worse than season ERA by >1.5 runs
+  mlbPersonId?: number;     // MLB StatsAPI person ID for cross-referencing
+  seasonGamesStarted?: number;
+  seasonInningsPitched?: number;
 }
 
 export interface StartingLineup {
@@ -1006,75 +1017,106 @@ export async function fetchStartingLineup(
 }
 
 /**
- * For MLB: hit the day's scoreboard and find this team's probable starting pitcher.
- * ESPN exposes competitors[].probables with ERA and W-L record pre-game.
+ * For MLB: fetch the team's probable starting pitcher with full quality stats.
+ * Runs ESPN scoreboard scrape AND MLB StatsAPI lookup in parallel, then merges
+ * results. MLB StatsAPI is preferred for stats (it's more reliable than ESPN's
+ * sparse statistics array), while ESPN is preferred for name display when both
+ * are available. Either source alone is enough to return a usable result.
  */
 async function fetchMLBLineup(
   teamId: string,
   sportPath: string,
   dateStr: string
 ): Promise<StartingLineup | null> {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/scoreboard?dates=${dateStr}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-  if (!response.ok) return null;
+  // dateStr arrives as YYYYMMDD; MLB StatsAPI requires YYYY-MM-DD
+  const isoDate = dateStr.length === 8
+    ? `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`
+    : dateStr;
+  const teamIdNum = parseInt(teamId, 10);
 
-  const data = (await response.json()) as any;
-  const events: any[] = data?.events ?? [];
-  console.log(`[lineup] MLB scoreboard for ${dateStr}: ${events.length} events found`);
+  // ── Helper: extract ESPN probable pitcher fields for this team ──
+  const espnPromise = (async (): Promise<{ name: string; position: string; era?: number; record?: string } | null> => {
+    try {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/scoreboard?dates=${dateStr}`;
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) return null;
+      const data = (await response.json()) as any;
+      const events: any[] = data?.events ?? [];
+      console.log(`[lineup] MLB scoreboard for ${dateStr}: ${events.length} events found`);
 
-  for (const event of events) {
-    const competitions: any[] = event?.competitions ?? [];
-    for (const comp of competitions) {
-      const competitors: any[] = comp?.competitors ?? [];
-      const teamComp = competitors.find((c: any) => String(c?.team?.id) === String(teamId));
-      if (!teamComp) continue;
-
-      // ESPN puts probables as an array inside each competitor
-      const probables: any[] = teamComp?.probables ?? [];
-      if (probables.length > 0) {
-        console.log(`[lineup] Team ${teamId}: ${probables.length} probables found — ${JSON.stringify(probables[0]?.athlete?.displayName ?? probables[0]?.displayName ?? 'unknown')}`);
-      } else {
-        console.log(`[lineup] Team ${teamId}: NO probables in competitor object. Keys: ${Object.keys(teamComp ?? {}).join(', ')}`);
+      for (const event of events) {
+        const competitions: any[] = event?.competitions ?? [];
+        for (const comp of competitions) {
+          const competitors: any[] = comp?.competitors ?? [];
+          const teamComp = competitors.find((c: any) => String(c?.team?.id) === String(teamId));
+          if (!teamComp) continue;
+          const probables: any[] = teamComp?.probables ?? [];
+          if (probables.length > 0) {
+            console.log(`[lineup] Team ${teamId}: ${probables.length} probables found — ${JSON.stringify(probables[0]?.athlete?.displayName ?? probables[0]?.displayName ?? 'unknown')}`);
+          }
+          const probableEntry = probables.find(
+            (p: any) =>
+              (p?.name ?? "").toLowerCase().includes("probable") ||
+              (p?.displayName ?? "").toLowerCase().includes("pitcher")
+          ) ?? probables[0];
+          if (!probableEntry) continue;
+          const athlete = probableEntry?.athlete ?? probableEntry;
+          const name: string = athlete?.displayName ?? athlete?.fullName ?? athlete?.name ?? "Unknown";
+          const position: string = athlete?.position?.abbreviation ?? athlete?.position?.name ?? "SP";
+          const stats: any[] = probableEntry?.statistics ?? [];
+          const eraStat = stats.find((s: any) => (s?.name ?? "").toLowerCase() === "era");
+          const era = eraStat?.value !== undefined ? Number(eraStat.value) : undefined;
+          const record: string | undefined = probableEntry?.record ?? undefined;
+          return { name, position, era, record };
+        }
       }
-      const probableEntry = probables.find(
-        (p: any) =>
-          (p?.name ?? "").toLowerCase().includes("probable") ||
-          (p?.displayName ?? "").toLowerCase().includes("pitcher")
-      ) ?? probables[0];
-
-      if (!probableEntry) continue;
-
-      const athlete = probableEntry?.athlete ?? probableEntry;
-      const name: string =
-        athlete?.displayName ?? athlete?.fullName ?? athlete?.name ?? "Unknown";
-      const position: string =
-        athlete?.position?.abbreviation ?? athlete?.position?.name ?? "SP";
-
-      // Extract ERA from statistics array
-      const stats: any[] = probableEntry?.statistics ?? [];
-      const eraStat = stats.find(
-        (s: any) => (s?.name ?? "").toLowerCase() === "era"
-      );
-      const era = eraStat?.value !== undefined ? Number(eraStat.value) : undefined;
-      const record: string | undefined = probableEntry?.record ?? undefined;
-
-      const pitcher: LineupPlayer = {
-        name,
-        position,
-        isConfirmed: true,
-        era,
-        record,
-      };
-
-      return {
-        sport: "MLB",
-        starters: [pitcher],
-        startingPitcher: pitcher,
-      };
+      return null;
+    } catch {
+      return null;
     }
+  })();
+
+  // ── MLB StatsAPI: rich quality data ──
+  const mlbPromise: Promise<MLBPitcherQuality | null> = fetchMLBDailyProbables(isoDate)
+    .then((map) => map.get(teamIdNum) ?? null)
+    .catch(() => null);
+
+  // Run both in parallel
+  const [espnPitcher, mlbPitcher] = await Promise.all([espnPromise, mlbPromise]);
+
+  // Neither source returned anything → no usable lineup
+  if (!espnPitcher && !mlbPitcher) {
+    return null;
   }
 
-  return null; // Game not found on scoreboard for this date
+  // Merge: MLB StatsAPI provides stats (richer + more reliable), ESPN provides
+  // name and W-L record (better-formatted display strings).
+  const pitcher: LineupPlayer = {
+    name: espnPitcher?.name ?? mlbPitcher?.name ?? "Unknown",
+    position: espnPitcher?.position ?? "SP",
+    isConfirmed: true,
+    era: mlbPitcher?.seasonEra ?? espnPitcher?.era,
+    record: espnPitcher?.record,
+    fip: mlbPitcher?.seasonFip,
+    whip: mlbPitcher?.seasonWhip,
+    k9: mlbPitcher?.seasonK9,
+    bb9: mlbPitcher?.seasonBb9,
+    recent5Era: mlbPitcher?.recent5Era,
+    recent5WarningFlag: mlbPitcher?.recent5WarningFlag,
+    mlbPersonId: mlbPitcher?.mlbPersonId,
+    seasonGamesStarted: mlbPitcher?.seasonGamesStarted,
+    seasonInningsPitched: mlbPitcher?.seasonInningsPitched,
+  };
+
+  if (mlbPitcher) {
+    console.log(`[lineup] MLB StatsAPI enriched ${pitcher.name} for team ${teamId}: ERA ${pitcher.era ?? '?'}, FIP ${pitcher.fip ?? '?'}, WHIP ${pitcher.whip ?? '?'}, recent5 ${pitcher.recent5Era ?? '?'}`);
+  }
+
+  return {
+    sport: "MLB",
+    starters: [pitcher],
+    startingPitcher: pitcher,
+  };
 }
 
 /**
