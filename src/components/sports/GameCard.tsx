@@ -17,7 +17,7 @@ import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
-import { Calendar, Clock, Tv, TrendingUp, Star, ChevronRight, Check } from 'lucide-react-native';
+import { Calendar, Clock, Tv, TrendingUp, ChevronRight, Check } from 'lucide-react-native';
 import { useMakePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
@@ -857,14 +857,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   }, []);
 
   // Memoized derived team values
-  const { predictedWinnerTeam, marketFavoriteTeam, isFavoriteAway, isFavoriteHome } = useMemo(() => {
+  const { predictedWinnerTeam, hasPrediction } = useMemo(() => {
     return {
       predictedWinnerTeam: game.prediction?.predictedWinner === 'home' ? game.homeTeam : game.awayTeam,
-      marketFavoriteTeam: game.marketFavorite === 'home' ? game.homeTeam : game.awayTeam,
-      isFavoriteAway: game.marketFavorite === 'away',
-      isFavoriteHome: game.marketFavorite === 'home',
+      hasPrediction: game.prediction?.predictedWinner != null,
     };
-  }, [game.prediction?.predictedWinner, game.marketFavorite, game.homeTeam, game.awayTeam]);
+  }, [game.prediction?.predictedWinner, game.homeTeam, game.awayTeam]);
 
   // Get pending team for modal
   const pendingTeam = pendingSelection === 'home' ? game.homeTeam : pendingSelection === 'away' ? game.awayTeam : null;
@@ -992,11 +990,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   {displaySport(game.sport)}
                 </Text>
               </View>
-              {/* FAV Badge - maroon with white text */}
-              {(isFavoriteAway || isFavoriteHome) ? (
+              {/* Pick Badge — shows the app's predicted winner so the chip
+                  matches the Strong/Solid/Lock tier and the detail page. */}
+              {hasPrediction ? (
                 <View
                   style={{
-                    backgroundColor: 'rgba(139,10,31,0.25)',
+                    backgroundColor: 'rgba(78,205,196,0.18)',
                     paddingHorizontal: 6,
                     paddingVertical: 3,
                     borderRadius: 5,
@@ -1004,12 +1003,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     flexDirection: 'row',
                     alignItems: 'center',
                     borderWidth: 1,
-                    borderColor: 'rgba(139,10,31,0.4)',
+                    borderColor: 'rgba(78,205,196,0.45)',
                   }}
                 >
-                  <Star size={8} color="#FFFFFF" fill="#8B0A1F" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
-                    {isFavoriteAway ? game.awayTeam.abbreviation : game.homeTeam.abbreviation}
+                  <TrendingUp size={8} color="#4ECDC4" />
+                  <Text style={{ color: '#4ECDC4', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
+                    {predictedWinnerTeam.abbreviation}
                   </Text>
                 </View>
               ) : null}
