@@ -262,6 +262,25 @@ function setCachedLivePrediction(gameId: string, prediction: GamePrediction): vo
   livePredictionCache.set(gameId, { prediction, timestamp: Date.now() });
 }
 
+/**
+ * Single source of truth for reading the freshest cached prediction for a game.
+ * For LIVE games, prefers the live-adjusted cache (which reflects mid-game
+ * win-probability shifts) and falls back to the pregame cache. For non-live
+ * games, only the pregame cache is used.
+ *
+ * Every place that reads cached predictions (transformESPNEvent, the list
+ * endpoint, the detail endpoint, etc.) MUST go through this helper. Any
+ * place that reads the caches directly will create card↔detail-page
+ * inconsistencies (the badge and the detail screen disagreeing on who's
+ * favored), which is exactly the bug this helper exists to prevent.
+ */
+function pickFreshestPrediction(gameId: string, isLive: boolean): GamePrediction | null {
+  if (isLive) {
+    return getCachedLivePrediction(gameId) ?? getCachedPrediction(gameId);
+  }
+  return getCachedPrediction(gameId);
+}
+
 // Clear all prediction caches — forces regeneration with current engine parameters
 export function clearAllPredictionCaches(): void {
   predictionCache.clear();
@@ -811,8 +830,10 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     clock,
   };
 
-  // Attach cached prediction if available, don't block on generating new ones
-  const cachedPrediction = getCachedPrediction(game.id);
+  // Attach freshest cached prediction if available, don't block on generating
+  // new ones. Use the shared helper so live games pick the live-adjusted cache
+  // (matching what the list/detail endpoints will return).
+  const cachedPrediction = pickFreshestPrediction(game.id, gameStatus === "LIVE");
   if (cachedPrediction) {
     return {
       ...game,
@@ -1101,16 +1122,15 @@ gamesRouter.get("/", async (c) => {
         new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
     );
 
-    // Attach cached predictions — never block the response for generation.
-    // For LIVE games, prefer the live-adjusted cache so the list winner matches
-    // the detail page (LiveFlip can change the predicted winner mid-game).
+    // Attach the freshest cached prediction — never block the response for
+    // generation. ALWAYS overwrite any prediction the indexed/transformed game
+    // already had: that earlier value may have been computed against an older
+    // cache snapshot, and only the current cache value is guaranteed to match
+    // what the detail endpoint will return for the same game.
     for (let i = 0; i < filteredGames.length; i++) {
       const game = filteredGames[i]!;
-      const isLive = game.status === "LIVE";
-      const cached = isLive
-        ? (getCachedLivePrediction(game.id) ?? getCachedPrediction(game.id))
-        : getCachedPrediction(game.id);
-      if (cached && !game.prediction) {
+      const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+      if (cached) {
         filteredGames[i] = { ...game, prediction: cached };
       }
     }
@@ -1240,15 +1260,19 @@ gamesRouter.get("/id/:id", async (c) => {
   const gameId = c.req.param("id");
 
   try {
-    // Helper to ensure game has prediction
+    // Helper to ensure game has the freshest prediction.
+    //
+    // We do NOT short-circuit on `game.prediction` even if it's already set:
+    // the indexed game's prediction may have been attached at transform time
+    // when the cache held an older value, and we want this endpoint to return
+    // the same value the list endpoint would return right now (otherwise the
+    // game card badge and the detail page can disagree on who's favored).
     const ensurePrediction = async (game: Game): Promise<Game> => {
-      if (game.prediction) return game;
-      // Check prediction cache
-      const cachedPrediction = getCachedPrediction(game.id);
-      if (cachedPrediction) {
-        return { ...game, prediction: cachedPrediction };
+      const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+      if (cached) {
+        return { ...game, prediction: cached };
       }
-      // Generate prediction on-demand (fast - uses AI cache)
+      // No cache at all — generate on-demand (fast, uses AI cache).
       return addPredictionToGame(game);
     };
 
