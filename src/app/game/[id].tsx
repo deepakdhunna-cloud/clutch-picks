@@ -1296,6 +1296,47 @@ const SilkThread = React.memo(function SilkThread({
   );
 });
 
+// ── Pre-game scoreboard countdown ────────────────────────────────────────────
+// Returns the seconds remaining until tip-off, ticking once per second.
+// Returns +Infinity until we have a parsable time (so callers default to "not
+// in countdown window") and 0 once the game has started or is past start.
+function useSecondsUntil(gameTime: string): number {
+  const target = useMemo(() => {
+    const t = new Date(gameTime).getTime();
+    return Number.isNaN(t) ? null : t;
+  }, [gameTime]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (target == null) return;
+    const tick = () => setNow(Date.now());
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  if (target == null) return Number.POSITIVE_INFINITY;
+  return Math.max(0, Math.floor((target - now) / 1000));
+}
+
+// Scoreboard-style mm:ss formatter (e.g. 9:05, 0:42)
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// Inline LED countdown clock shown above the 0–0 score within 10 minutes of
+// tip-off. Above 10 minutes (or after the game starts) it renders nothing.
+function PreGameCountdown({ secondsLeft }: { secondsLeft: number }) {
+  if (secondsLeft > 600 || secondsLeft <= 0 || !Number.isFinite(secondsLeft)) return null;
+  return (
+    <View style={{ alignItems: 'center', marginBottom: 6 }}>
+      <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.45)', letterSpacing: 2, marginBottom: 2 }}>STARTING IN</Text>
+      <Text style={{ fontSize: 34, color: '#DC2626', fontFamily: 'VT323_400Regular', letterSpacing: 3, textShadowColor: 'rgba(220,38,38,0.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>
+        {formatCountdown(secondsLeft)}
+      </Text>
+    </View>
+  );
+}
+
 export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -1337,6 +1378,9 @@ export default function GameDetailScreen() {
   const { data: userPick } = useGamePick(id ?? '');
   const makePick = useMakePick();
   const { data: game, isLoading, error } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean; error: any };
+  // Tick the pre-game countdown clock — called unconditionally to respect
+  // the rules of hooks. Returns +Infinity until we have a valid gameTime.
+  const secondsUntilStart = useSecondsUntil(game?.gameTime ?? '');
   if (isLoading) return <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#7A9DB8" /></View>;
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -1347,6 +1391,8 @@ export default function GameDetailScreen() {
   const { homeTeam, awayTeam, prediction } = game;
   const isLive = game.status === 'LIVE';
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
+  // Show the LED countdown only for SCHEDULED games inside the 10-minute window
+  const isCountingDown = game.status === 'SCHEDULED' && secondsUntilStart > 0 && secondsUntilStart <= 600;
   const jerseyType = sportEnumToJersey(game.sport);
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
@@ -1406,12 +1452,13 @@ export default function GameDetailScreen() {
               />
               <View style={styles.scorePanelOuter}>
                 <View style={styles.scorePanel}>
+                  <PreGameCountdown secondsLeft={secondsUntilStart} />
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                    <Text style={[styles.scoreNumber, {
+                    <Text style={[styles.scoreNumber, isCountingDown && styles.scoreNumberShrunk, {
                       color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.homeScore ?? ''}</Text>
-                    <Text style={styles.scoreSep}>–</Text>
-                    <Text style={[styles.scoreNumber, {
+                    <Text style={[styles.scoreSep, isCountingDown && styles.scoreSepShrunk]}>–</Text>
+                    <Text style={[styles.scoreNumber, isCountingDown && styles.scoreNumberShrunk, {
                       color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                     }]}>{game.awayScore ?? ''}</Text>
                   </View>
@@ -1566,7 +1613,9 @@ const styles = StyleSheet.create({
   scorePanelOuter: { flex: 1, alignItems: 'center', paddingBottom: 8 },
   scorePanel: { paddingHorizontal: 22, paddingVertical: 14, alignItems: 'center' },
   scoreNumber: { fontSize: 72, fontFamily: 'VT323_400Regular', lineHeight: 78, letterSpacing: 2 },
+  scoreNumberShrunk: { fontSize: 54, lineHeight: 60 },
   scoreSep: { fontSize: 28, color: 'rgba(255,255,255,0.25)', fontWeight: '300', lineHeight: 78 },
+  scoreSepShrunk: { fontSize: 22, lineHeight: 60 },
   scoreClock: { fontSize: 16, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
   scoreClockSub: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 4 },
