@@ -26,11 +26,12 @@ interface Game {
   };
 }
 
+// Colors come from getConfidenceTier in display-confidence.ts — keep in sync.
 const TIERS = [
-  { label: 'Toss-Up', color: '#6B7C94', range: '< 53%', desc: 'The model can\'t separate these teams. Data is too close or too thin to lean either way.' },
-  { label: 'Solid Pick', color: '#7A9DB8', range: '53–59%', desc: 'A clear advantage found across key factors. The model leans one way with moderate certainty.' },
-  { label: 'Strong Pick', color: '#4ECDC4', range: '60–71%', desc: 'Multiple prediction factors align. Elo, form, and matchup context all point the same direction.' },
-  { label: 'Lock', color: '#FFD700', range: '72%+', desc: 'Dominant edge across nearly every factor. All sub-models agree and data coverage is strong.' },
+  { label: 'Toss-Up',     color: '#6B7280', range: '< 53%',   desc: 'The model can\'t separate these teams. Data is too close or too thin to lean either way.' },
+  { label: 'Solid Pick',  color: '#94A3B8', range: '53–59%',  desc: 'A clear advantage found across key factors. The model leans one way with moderate certainty.' },
+  { label: 'Strong Pick', color: '#CBD5E1', range: '60–71%',  desc: 'Multiple prediction factors align. Elo, form, and matchup context all point the same direction.' },
+  { label: 'Lock',        color: '#F1F5F9', range: '72%+',    desc: 'Dominant edge across nearly every factor. All sub-models agree and data coverage is strong.' },
 ];
 
 const FACTORS = [

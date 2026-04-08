@@ -2,6 +2,7 @@ import { View, Text } from 'react-native';
 import { memo } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { cn } from '@/lib/cn';
+import { getConfidenceTier } from '@/lib/display-confidence';
 
 interface PredictionBadgeProps {
   confidence: number;
@@ -11,13 +12,6 @@ interface PredictionBadgeProps {
   isTossUp?: boolean;
 }
 
-function getTier(confidence: number, isTossUp?: boolean) {
-  if (isTossUp || confidence < 53) return { label: 'Toss-Up', color: '#6B7C94' };
-  if (confidence < 60) return { label: 'Solid Pick', color: '#7A9DB8' };
-  if (confidence < 72) return { label: 'Strong Pick', color: '#4ECDC4' };
-  return { label: 'Lock', color: '#FFD700' };
-}
-
 export const PredictionBadge = memo(function PredictionBadge({
   confidence,
   predictedWinner,
@@ -25,7 +19,7 @@ export const PredictionBadge = memo(function PredictionBadge({
   showBar = true,
   isTossUp = false,
 }: PredictionBadgeProps) {
-  const tier = getTier(confidence, isTossUp);
+  const tier = getConfidenceTier(confidence, isTossUp);
   const pickLabel = isTossUp ? 'Toss-Up' : predictedWinner;
 
   const sizeStyles = {

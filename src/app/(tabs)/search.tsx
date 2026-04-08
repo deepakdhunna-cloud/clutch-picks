@@ -23,7 +23,7 @@ import { useTeamFollows } from '@/hooks/useTeamFollows';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
-import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport, formatGameTime } from '@/lib/display-confidence';
+import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 
 // ─── COLORS ───
 const MAROON = '#8B0A1F';
@@ -330,7 +330,7 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
             </View>
             {(() => {
               const c = game.prediction?.confidence ?? 50;
-              const t = game.prediction?.isTossUp || c < 53 ? { label: 'Toss-Up', color: '#6B7C94' } : c < 60 ? { label: 'Solid Pick', color: '#7A9DB8' } : c < 72 ? { label: 'Strong Pick', color: '#4ECDC4' } : { label: 'Lock', color: '#FFD700' };
+              const t = getConfidenceTier(c, game.prediction?.isTossUp);
               return (
                 <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
                   <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>PICK STRENGTH</Text>

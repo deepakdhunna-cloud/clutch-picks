@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '@/hooks/useGames';
-import { displayConfidence, displayWinProbability, displayEdgeRating, getConfidenceTierLabel, displaySport, formatGameTime } from '@/lib/display-confidence';
+import { displayConfidence, displayWinProbability, displayEdgeRating, getConfidenceTierLabel, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -860,12 +860,9 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId }: { pr
   const conf = prediction.confidence;
   const filledSegs = Math.round((conf / 100) * SEGS);
 
-  // Tier mapping
+  // Tier mapping (canonical — single source of truth in display-confidence.ts)
   const isTossUp = prediction.isTossUp || conf < 53;
-  const tier = isTossUp ? { label: 'Toss-Up', color: '#6B7C94' }
-    : conf < 60 ? { label: 'Solid Pick', color: '#7A9DB8' }
-    : conf < 72 ? { label: 'Strong Pick', color: '#4ECDC4' }
-    : { label: 'Lock', color: '#FFD700' };
+  const tier = getConfidenceTier(conf, isTossUp);
 
   const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
   const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
