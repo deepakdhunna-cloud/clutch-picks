@@ -16,7 +16,7 @@ import { useTopPicks } from '@/hooks/useGames';
 import GridBackground from '@/components/GridBackground';
 import { useSubscription } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { displayConfidence, displayWinProbability, getConfidenceTierLabel, displaySport } from '@/lib/display-confidence';
+import { displayWinProbability, displaySport, getConfidenceTier } from '@/lib/display-confidence';
 
 // Expandable analysis text — tap to show full, tap again to collapse
 const ExpandableText = memo(function ExpandableText({ text }: { text: string }) {
@@ -155,7 +155,7 @@ const TopPickCard = memo(function TopPickCard({
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport);
   const chartColors = getDistinctColors(awayColors.primary, homeColors.primary);
   const conf = game.prediction?.confidence ?? 70;
-  const dConf = displayConfidence(conf);
+  const tier = getConfidenceTier(conf, game.prediction?.isTossUp);
   // Use real model probabilities — same data as game detail and analysis pages
   const realHome = game.prediction?.homeWinProbability ?? 50;
   const realAway = game.prediction?.awayWinProbability ?? 50;
@@ -342,28 +342,19 @@ const TopPickCard = memo(function TopPickCard({
                 </View>
               </View>
 
-              {/* ── Confidence + Win Probability ── */}
+              {/* ── Pick Strength + Win Probability ── */}
               <View style={{ marginHorizontal: 18, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 14, padding: 14, marginBottom: 14 }}>
-                {/* Confidence row */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>CONFIDENCE</Text>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFFFFF' }}>{dConf}%</Text>
-                    <Pressable onPress={(e) => { e.stopPropagation(); router.push('/confidence-tiers'); }} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 }}>
-                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#7A9DB8', opacity: 0.8 }} />
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#7A9DB8', opacity: 0.8, letterSpacing: 1 }}>{getConfidenceTierLabel(conf)}</Text>
-                      <Text style={{ fontSize: 10, color: 'rgba(122,157,184,0.4)' }}>›</Text>
-                    </Pressable>
-                  </View>
-                </View>
-                {/* Confidence bar */}
-                <View style={{ height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 14 }}>
-                  <LinearGradient
-                    colors={conf >= 80 ? ['#8B0A1F', '#5A0614'] : [PREMIUM_BLUE, '#5A7A8A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={{ height: '100%', width: `${dConf}%`, borderRadius: 2.5 }}
-                  />
+                {/* Pick strength row — tier label only, no raw % (matches the rest of the app) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>PICK STRENGTH</Text>
+                  <Pressable
+                    onPress={(e) => { e.stopPropagation(); router.push('/confidence-tiers'); }}
+                    hitSlop={8}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 }}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: tier.color, letterSpacing: 0.3 }}>{tier.label}</Text>
+                    <Text style={{ fontSize: 12, color: `${tier.color}99` }}>›</Text>
+                  </Pressable>
                 </View>
 
                 {/* Win probability */}
