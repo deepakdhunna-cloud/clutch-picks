@@ -1,0 +1,9 @@
+.env
+.env.*
+node_modules
+prisma/dev.db
+prisma/dev.db-journal
+*.log
+.git
+.gitignore
+.DS_Store
