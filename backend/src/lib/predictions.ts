@@ -5,6 +5,7 @@
 
 import type { Game, Prediction, PredictionFactor, Team } from "../types/sports";
 import { fetchTeamRecentForm, fetchTeamExtendedStats, fetchTeamInjuries, fetchTeamSeasonResults, fetchAdvancedMetrics, fetchStartingLineup, fetchGameWeather, getSRSRatings, srsToBlendfactor, type TeamRecentForm, type TeamExtendedStats, type TeamInjuryReport, type TeamAdvancedMetrics, type StartingLineup, type WeatherData, type GameResultForSRS } from "./espnStats";
+import { computePitcherQualityScore } from "./mlbStatsApi";
 import { getEloRating, getEloPrediction, initializeEloFromSchedule, DEFAULT_RATING } from "./elo";
 import { env } from "../env";
 import { prisma } from "../prisma";
@@ -696,7 +697,7 @@ const SPORT_FACTOR_WEIGHTS: Record<string, SportFactorWeights> = {
     winPct: 0.04, recentForm: 0.06, homeAwaySplit: 0.04, pointDiff: 0.07,
     streak: 0.01, restDays: 0.01, scoringTrend: 0.00, defenseTrend: 0.00,
     headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.12, injuries: 0.13,
-    advancedMetrics: 0.18, startingPitcher: 0.12, weather: 0.03,
+    advancedMetrics: 0.18, startingPitcher: 0.18, weather: 0.03,
     situational: 0.02, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.04,
   },
   NHL: {
@@ -1479,10 +1480,12 @@ export async function generatePrediction(
   };
 
   // ── Factor 12b: Starting Pitcher (MLB only) ────────────────────────────
-  // The starting pitcher is the single most important variable in baseball.
-  // When ESPN provides confirmed probable starters, compare their ERAs directly.
-  // ERA scale: < 3.00 elite, 3.00–4.00 good, 4.00–5.00 average, > 5.00 poor.
-  // Score = clamp((awayERA - homeERA) / 2, -1, 1) — home pitcher advantage is positive.
+  // The starting pitcher is the single most important variable in baseball —
+  // research suggests SP accounts for 30-50% of single-game outcome variance.
+  // We score using a composite quality metric that blends ERA, FIP, WHIP, K/9,
+  // BB/9, and recent 5-start form (data sourced from MLB StatsAPI when available,
+  // falling back to ESPN-only ERA when not). The composite is on a 0-10 scale
+  // where 5.0 = league average, 6.5+ = above average, 8.0+ = elite.
   let startingPitcherHomeScore = 0;
   let startingPitcherAwayScore = 0;
   let startingPitcherDesc = "No starting pitcher data available";
@@ -1491,20 +1494,70 @@ export async function generatePrediction(
     const homePitcher = homeLineup?.startingPitcher;
     const awayPitcher = awayLineup?.startingPitcher;
 
-    if (homePitcher && awayPitcher && homePitcher.era !== undefined && awayPitcher.era !== undefined) {
-      // Lower ERA is better → positive score for team with better (lower) ERA
-      startingPitcherHomeScore = clamp((awayPitcher.era - homePitcher.era) / 2, -1, 1);
+    // Build a label string for ONE pitcher, surfacing every metric we have.
+    const labelFor = (p: typeof homePitcher): string => {
+      if (!p) return "TBD";
+      const parts: string[] = [];
+      if (p.era !== undefined) parts.push(`ERA ${p.era.toFixed(2)}`);
+      if (p.fip !== undefined) parts.push(`FIP ${p.fip.toFixed(2)}`);
+      if (p.whip !== undefined) parts.push(`WHIP ${p.whip.toFixed(2)}`);
+      if (p.k9 !== undefined) parts.push(`K/9 ${p.k9.toFixed(1)}`);
+      if (p.bb9 !== undefined) parts.push(`BB/9 ${p.bb9.toFixed(1)}`);
+      if (p.record) parts.push(p.record);
+      if (p.recent5Era !== undefined) {
+        const flag = p.recent5WarningFlag ? " ⚠ struggling" : "";
+        parts.push(`recent 5: ${p.recent5Era.toFixed(2)}${flag}`);
+      }
+      return parts.length > 0 ? `${p.name} (${parts.join(", ")})` : p.name;
+    };
+
+    if (homePitcher && awayPitcher) {
+      // Compute composite quality scores (0-10, 5 = average) for each side
+      const homeQuality = computePitcherQualityScore({
+        mlbPersonId: homePitcher.mlbPersonId ?? 0,
+        name: homePitcher.name,
+        seasonEra: homePitcher.era,
+        seasonFip: homePitcher.fip,
+        seasonWhip: homePitcher.whip,
+        seasonK9: homePitcher.k9,
+        seasonBb9: homePitcher.bb9,
+        recent5Era: homePitcher.recent5Era,
+      });
+      const awayQuality = computePitcherQualityScore({
+        mlbPersonId: awayPitcher.mlbPersonId ?? 0,
+        name: awayPitcher.name,
+        seasonEra: awayPitcher.era,
+        seasonFip: awayPitcher.fip,
+        seasonWhip: awayPitcher.whip,
+        seasonK9: awayPitcher.k9,
+        seasonBb9: awayPitcher.bb9,
+        recent5Era: awayPitcher.recent5Era,
+      });
+
+      // Map quality delta to factor score. A 2-point quality gap is meaningful;
+      // a 4-point gap is dominant. Divide by 3.5 so realistic gaps stay in [-1, 1].
+      const qualityDelta = homeQuality - awayQuality;
+      startingPitcherHomeScore = clamp(qualityDelta / 3.5, -1, 1);
       startingPitcherAwayScore = -startingPitcherHomeScore;
-      const homeLabel = `${homePitcher.name} (ERA ${homePitcher.era.toFixed(2)}${homePitcher.record ? ", " + homePitcher.record : ""})`;
-      const awayLabel = `${awayPitcher.name} (ERA ${awayPitcher.era.toFixed(2)}${awayPitcher.record ? ", " + awayPitcher.record : ""})`;
-      startingPitcherDesc = `Home SP: ${homeLabel} | Away SP: ${awayLabel}`;
+
+      // Human-readable edge description
+      const absDelta = Math.abs(qualityDelta);
+      const edgeStrength = absDelta >= 2.5 ? "decisive" : absDelta >= 1.5 ? "clear" : absDelta >= 0.7 ? "modest" : "minimal";
+      const edgeSide = qualityDelta > 0.2 ? "Home" : qualityDelta < -0.2 ? "Away" : "Neither";
+      const edgeNote = edgeSide === "Neither"
+        ? "Pitching matchup is essentially a wash"
+        : `${edgeSide} holds a ${edgeStrength} pitching edge (${homeQuality.toFixed(1)} vs ${awayQuality.toFixed(1)} composite quality)`;
+
+      startingPitcherDesc = `Home SP ${labelFor(homePitcher)} vs Away SP ${labelFor(awayPitcher)} — ${edgeNote}`;
     } else if (homePitcher && !awayPitcher) {
-      startingPitcherHomeScore = 0.2; // slight edge for having known starter
-      startingPitcherDesc = `Home SP: ${homePitcher.name}${homePitcher.era !== undefined ? " (ERA " + homePitcher.era.toFixed(2) + ")" : ""} | Away SP: TBD`;
+      // One side has confirmed starter, other is TBD — small edge to known side
+      startingPitcherHomeScore = 0.2;
+      startingPitcherAwayScore = -0.2;
+      startingPitcherDesc = `Home SP ${labelFor(homePitcher)} | Away SP TBD — slight edge to home for confirmed starter`;
     } else if (!homePitcher && awayPitcher) {
-      startingPitcherAwayScore = 0.2;
       startingPitcherHomeScore = -0.2;
-      startingPitcherDesc = `Home SP: TBD | Away SP: ${awayPitcher.name}${awayPitcher.era !== undefined ? " (ERA " + awayPitcher.era.toFixed(2) + ")" : ""}`;
+      startingPitcherAwayScore = 0.2;
+      startingPitcherDesc = `Home SP TBD | Away SP ${labelFor(awayPitcher)} — slight edge to away for confirmed starter`;
     } else {
       startingPitcherDesc = "Probable starters not yet announced";
     }
