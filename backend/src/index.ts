@@ -15,6 +15,7 @@ import { teamFollowsRouter } from "./routes/team-follows";
 import { notificationsRouter } from "./routes/notifications";
 import { promoRouter } from "./routes/promo";
 import { backtestRouter } from "./routes/backtest";
+import { historicalBacktestRouter } from "./routes/historical-backtest";
 import { logger } from "hono/logger";
 
 // Type the Hono app with user/session variables
@@ -168,6 +169,7 @@ app.route("/api/team-follows", teamFollowsRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/promo", promoRouter);
 app.route("/api/backtest", backtestRouter);
+app.route("/api/historical-backtest", historicalBacktestRouter);
 
 const port = Number(process.env.PORT) || 3000;
 

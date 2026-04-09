@@ -55,18 +55,18 @@ const MOV_CAPS: Record<string, number> = {
  * sports don't inflate ratings unreasonably.
  * Returns 1.0 (no adjustment) when margin is unknown or a draw.
  */
-function movMultiplier(margin: number | undefined, sport: string): number {
+export function movMultiplier(margin: number | undefined, sport: string): number {
   if (margin === undefined || margin === 0) return 1.0;
   const raw = Math.log(Math.abs(margin) + 1) * 0.8;
   const cap = MOV_CAPS[sport] ?? 2.0;
   return Math.min(raw, cap);
 }
 
-function getK(sport: string): number {
+export function getK(sport: string): number {
   return K_FACTORS[sport] ?? 20;
 }
 
-function getHomeBonus(sport: string): number {
+export function getHomeBonus(sport: string): number {
   return HOME_BONUSES[sport] ?? 50;
 }
 
@@ -116,7 +116,7 @@ export function setEloRating(teamId: string, sport: string, rating: number): voi
  * Standard Elo expected score formula.
  * expectedA = 1 / (1 + 10^((ratingB - ratingA) / 400))
  */
-function expectedScore(ratingA: number, ratingB: number): number {
+export function expectedScore(ratingA: number, ratingB: number): number {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
