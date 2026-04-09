@@ -976,6 +976,28 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
     });
   }, [sched]);
 
+  // Underdog plays: engine's predicted winner disagrees with the market favorite.
+  // We reuse `ranked` so each surfaced game already carries the existing
+  // prediction narrative (`detail`) from genMatchup.
+  const underdogPlays = useMemo(() => {
+    return ranked
+      .filter(r => {
+        const mf = r.game.marketFavorite;
+        const pw = r.game.prediction?.predictedWinner;
+        return !!mf && !!pw && mf !== pw;
+      })
+      .map(r => {
+        const dog = r.game.prediction!.predictedWinner === 'home' ? r.game.homeTeam : r.game.awayTeam;
+        const fav = r.game.prediction!.predictedWinner === 'home' ? r.game.awayTeam : r.game.homeTeam;
+        const conf = Math.round(r.game.prediction!.confidence ?? 50);
+        return {
+          ...r,
+          udHeadline: `Engine fades ${fav.abbreviation} — taking ${dog.abbreviation}`,
+          udTags: ['UNDERDOG PICK', `${conf}% MODEL CONF`],
+        };
+      });
+  }, [ranked]);
+
   return (
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
       <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:24}}>
@@ -988,6 +1010,19 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
         {insight.teams.length>0?<View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:12}}>{insight.teams.map(t=><View key={t} style={{backgroundColor:MAROON_DIM,borderRadius:10,paddingHorizontal:12,paddingVertical:5}}><Text style={{fontSize:10,fontWeight:'700',color:MAROON}}>{t}</Text></View>)}</View>:null}
       </View>
       {ranked.length>0?<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>Matchups Ranked For You</Text>{ranked.map((r,i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} />)}</View>:<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,color:TEXT_MUTED}}>No scheduled games with predictions</Text></View>}
+
+      {/* ─── UNDERDOG PICKS — engine vs market disagreements ─── */}
+      <View style={{paddingHorizontal:20,marginBottom:24}}>
+        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+          <Text style={{fontSize:12,fontWeight:'700',color:WHITE}}>Underdog Picks</Text>
+          {underdogPlays.length>0?<Text style={{fontSize:10,fontWeight:'700',color:MAROON,letterSpacing:0.5}}>{underdogPlays.length} {underdogPlays.length===1?'PLAY':'PLAYS'}</Text>:null}
+        </View>
+        <Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16,marginBottom:12}}>Games where the model's pick disagrees with the market favorite.</Text>
+        {underdogPlays.length>0
+          ? underdogPlays.map((r,i)=><MatchupCard key={`ud-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} />)
+          : <View style={{backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:BORDER,padding:14}}><Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16}}>No underdog plays surfaced today — the engine is siding with the market on every game.</Text></View>}
+      </View>
+
       <AccBySport picks={picks} />
       <StreakCard stats={stats} />
       <Disclaimer />
