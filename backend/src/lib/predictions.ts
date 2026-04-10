@@ -46,7 +46,7 @@ function roundHalf(value: number): number {
 // ─── Sigmoid scaling: transforms composite factor differential → probability.
 // Per-sport values reflect typical signal variance and noise floor.
 const SIGMOID_SCALING: Record<string, number> = {
-  NBA:   4.0,
+  NBA:   4.8,
   NCAAB: 4.5,
   NFL:   3.5,
   NCAAF: 4.0,
