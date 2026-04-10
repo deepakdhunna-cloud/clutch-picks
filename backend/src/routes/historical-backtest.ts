@@ -66,7 +66,7 @@ async function fetchScoreboardForDate(sport: string, dateYYYYMMDD: string): Prom
 
 historicalBacktestRouter.get("/", async (c) => {
   const sport = (c.req.query("sport") ?? "NBA").toUpperCase();
-  const days = Math.min(Math.max(parseInt(c.req.query("days") ?? "45", 10), 7), 120);
+  const days = Math.min(Math.max(parseInt(c.req.query("days") ?? "45", 10), 7), 200);
 
   if (!ESPN_PATHS[sport]) {
     return c.json({ error: { message: `Unsupported sport: ${sport}. Valid: ${Object.keys(ESPN_PATHS).join(", ")}`, code: "BAD_SPORT" } }, 400);
