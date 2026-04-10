@@ -264,41 +264,84 @@ export async function fetchMLBPitcherStats(
  *   - 8.0+ = elite (top 5%)
  *   - 3.5- = well below average
  *
- * Uses only the stats that are available; partial data still produces a score.
+ * CRITICAL: Applies sample-size regression. Pitcher stats below ~30 IP are
+ * heavily regressed toward league average because small-sample noise dominates.
+ * Without this, a pitcher with a 1.21 FIP over 4 innings looks "elite" when
+ * in reality one good start produced a meaningless number.
+ *
+ * Regression formula: effective_stat = (IP / (IP + REGRESSION_IP)) * actual + (REGRESSION_IP / (IP + REGRESSION_IP)) * league_avg
+ * At 0 IP: 100% league avg. At 30 IP: 50% actual. At 90 IP: 75% actual. At 150 IP: 83%.
+ *
  * Returns 5.0 (neutral) if no data at all.
  */
 export function computePitcherQualityScore(p: MLBPitcherQuality): number {
+  const ip = p.seasonInningsPitched ?? 0;
+
+  // Regression constant: how many IP of league-average data to blend in.
+  // 30 IP means at 30 actual IP the stat is 50% real, 50% league average.
+  const REGRESSION_IP = 30;
+  const regWeight = ip / (ip + REGRESSION_IP); // 0.0 at 0 IP → 1.0 at infinity
+
+  // League average baselines (2024-2025 MLB)
+  const LG_ERA = 4.20;
+  const LG_FIP = 4.20;
+  const LG_WHIP = 1.30;
+  const LG_K9 = 8.8;
+  const LG_BB9 = 3.1;
+
+  // Regress each stat toward league average based on innings pitched
+  const regress = (actual: number | undefined, lgAvg: number): number | undefined => {
+    if (actual === undefined) return undefined;
+    return regWeight * actual + (1 - regWeight) * lgAvg;
+  };
+
+  const era = regress(p.seasonEra, LG_ERA);
+  const fip = regress(p.seasonFip, LG_FIP);
+  const whip = regress(p.seasonWhip, LG_WHIP);
+  const k9 = regress(p.seasonK9, LG_K9);
+  const bb9 = regress(p.seasonBb9, LG_BB9);
+
   let score = 5.0;
   let components = 0;
 
-  if (p.seasonEra !== undefined) {
-    score += (4.20 - p.seasonEra) * 1.4;
+  if (era !== undefined) {
+    score += (LG_ERA - era) * 1.4;
     components++;
   }
-  if (p.seasonFip !== undefined) {
-    score += (4.20 - p.seasonFip) * 1.8;
+  if (fip !== undefined) {
+    score += (LG_FIP - fip) * 1.8;
     components++;
   }
-  if (p.seasonWhip !== undefined) {
-    score += (1.30 - p.seasonWhip) * 5;
+  if (whip !== undefined) {
+    score += (LG_WHIP - whip) * 5;
     components++;
   }
-  if (p.seasonK9 !== undefined) {
-    score += (p.seasonK9 - 8.8) * 0.2;
+  if (k9 !== undefined) {
+    score += (k9 - LG_K9) * 0.2;
     components++;
   }
-  if (p.seasonBb9 !== undefined) {
-    score += (3.1 - p.seasonBb9) * 0.4;
+  if (bb9 !== undefined) {
+    score += (LG_BB9 - bb9) * 0.4;
     components++;
   }
 
-  // Recent 5-start form: shift 30% of season-ERA weight onto recent ERA
-  if (p.recent5Era !== undefined && p.seasonEra !== undefined) {
-    const recentSwing = (4.20 - p.recent5Era) * 1.4 * 0.3;
-    const seasonRollback = (4.20 - p.seasonEra) * 1.4 * -0.3;
+  // Recent 5-start form: shift 30% of season-ERA weight onto recent ERA.
+  // Also regress recent ERA — 5 starts ≈ 25-30 IP, so still noisy.
+  if (p.recent5Era !== undefined && era !== undefined) {
+    const regressedRecent = regWeight * p.recent5Era + (1 - regWeight) * LG_ERA;
+    const recentSwing = (LG_ERA - regressedRecent) * 1.4 * 0.3;
+    const seasonRollback = (LG_ERA - era) * 1.4 * -0.3;
     score += recentSwing + seasonRollback;
   }
 
   if (components === 0) return 5.0;
+
+  // Additional dampening when sample is very small (< 10 IP):
+  // Pull the entire composite score 60% toward 5.0 (league average).
+  // This prevents a single dominant start from producing a 9+ or 1- composite.
+  if (ip < 10) {
+    score = score * 0.4 + 5.0 * 0.6;
+  }
+
   return Math.max(0, Math.min(10, score));
 }
