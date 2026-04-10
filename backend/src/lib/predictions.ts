@@ -1907,14 +1907,53 @@ export async function generatePrediction(
   const rawHomeProb = 1 / (1 + Math.exp(-compositeDifferential * sigmoidScale));
   const rawAwayProb = 1 - rawHomeProb;
   // Scale to percentage — no artificial clamp, let the math speak
-  const homeWinProbability = Math.round(rawHomeProb * 100);
-  const awayWinProbability = 100 - homeWinProbability;
+  let homeWinProbability = Math.round(rawHomeProb * 100);
+  let awayWinProbability = 100 - homeWinProbability;
+
+  // ── Soccer draw adjustment ─────────────────────────────────────────────
+  // In EPL/MLS, ~25% of games end in draws. A binary predictor that ignores
+  // draws produces misleadingly high confidence. Estimate draw probability
+  // and redistribute: reduce both home and away win probabilities so the
+  // displayed confidence reflects the real chance of the picked team winning.
+  //
+  // Draw probability model: draws are most likely when teams are closely
+  // matched. baseDrawRate is the league's historical draw frequency.
+  // The closer the binary probabilities are to 50/50, the higher the draw
+  // chance. As one team dominates (70/30, 80/20), draw probability drops.
+  const DRAW_RATES: Record<string, number> = { MLS: 0.28, EPL: 0.25 };
+  const baseDrawRate = DRAW_RATES[sportKey];
+  let drawProbabilityOut: number | undefined;
+  if (baseDrawRate !== undefined) {
+    const rawHP = homeWinProbability / 100;
+    const rawAP = awayWinProbability / 100;
+    const closeness = 1 - Math.abs(rawHP - rawAP); // 1.0 when 50/50, 0.0 when 100/0
+    const drawProb = baseDrawRate * Math.pow(closeness, 0.6); // scale by closeness
+    const clampedDrawProb = Math.min(0.35, Math.max(0.05, drawProb)); // floor 5%, cap 35%
+
+    // Redistribute: subtract draw probability proportionally from both sides
+    const adjustedHome = rawHP * (1 - clampedDrawProb);
+    const adjustedAway = rawAP * (1 - clampedDrawProb);
+
+    homeWinProbability = Math.round(adjustedHome * 100);
+    awayWinProbability = Math.round(adjustedAway * 100);
+    drawProbabilityOut = Math.round(clampedDrawProb * 100);
+  }
 
   const predictedWinner: "home" | "away" = homeWinProbability >= 50 ? "home" : "away";
 
   // ── Toss-up detection ───────────────────────────────────────────────────
   // Only flag as toss-up when the model truly can't separate the teams
-  const isTossUp = Math.abs(homeWinProbability - 50) < 2;
+  let isTossUp = Math.abs(homeWinProbability - 50) < 2;
+
+  // Flag draw-dominant games as toss-ups
+  if (drawProbabilityOut !== undefined && baseDrawRate !== undefined) {
+    const adjHome = homeWinProbability / 100;
+    const adjAway = awayWinProbability / 100;
+    const dp = drawProbabilityOut / 100;
+    if (dp >= adjHome && dp >= adjAway) {
+      isTossUp = true;
+    }
+  }
 
   // ── Confidence ─────────────────────────────────────────────────────────
   const winnerProb = predictedWinner === "home" ? homeWinProbability : awayWinProbability;
@@ -2096,6 +2135,7 @@ export async function generatePrediction(
     homeStreak: homeForm.streak,
     awayStreak: awayForm.streak,
     isTossUp,
+    drawProbability: drawProbabilityOut,
     dataCoverage: Math.round(dataCoverage * 100) / 100,
     lowDataWarning,
     ensembleDivergence: ensemble.divergenceFlag,

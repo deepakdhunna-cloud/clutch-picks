@@ -80,6 +80,7 @@ export interface GamePrediction {
   homeStreak: number;
   awayStreak: number;
   isTossUp?: boolean;
+  drawProbability?: number;
 }
 
 export interface Game {

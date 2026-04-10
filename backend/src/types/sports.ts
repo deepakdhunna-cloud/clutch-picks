@@ -92,6 +92,7 @@ export interface Prediction {
   dataCoverage?: number; // 0.0–1.0: fraction of factors with non-default data
   lowDataWarning?: boolean; // true when dataCoverage < 0.6 — show ⚠️ Limited data UI
   // Ensemble sub-model outputs
+  drawProbability?: number; // 0-100: estimated draw probability for soccer leagues
   ensembleDivergence?: boolean; // true when ≥2 sub-models disagree on the winner
   subModelProbs?: {
     eloOnly: number;       // eloOnlyModel homeWinProb 0–100
