@@ -22,6 +22,7 @@ interface HistoricalGame {
   homeScore: number;
   awayScore: number;
   homeWon: boolean;
+  isDraw: boolean;
 }
 
 async function fetchScoreboardForDate(sport: string, dateYYYYMMDD: string): Promise<HistoricalGame[]> {
@@ -46,7 +47,6 @@ async function fetchScoreboardForDate(sport: string, dateYYYYMMDD: string): Prom
       const homeScore = parseInt(home.score, 10);
       const awayScore = parseInt(away.score, 10);
       if (Number.isNaN(homeScore) || Number.isNaN(awayScore)) continue;
-      if (homeScore === awayScore) continue; // skip ties for now (rare in non-soccer)
       out.push({
         gameId: String(event.id),
         date: comp.date ?? event.date ?? "",
@@ -55,6 +55,7 @@ async function fetchScoreboardForDate(sport: string, dateYYYYMMDD: string): Prom
         homeScore,
         awayScore,
         homeWon: homeScore > awayScore,
+        isDraw: homeScore === awayScore,
       });
     }
     return out;
@@ -134,13 +135,17 @@ historicalBacktestRouter.get("/", async (c) => {
     const homeCount = teamGameCount.get(game.homeId) ?? 0;
     const awayCount = teamGameCount.get(game.awayId) ?? 0;
 
-    // Only count predictions once both teams have past warmup
+    // Only count predictions once both teams have past warmup.
+    // Draws are counted as predictions BUT are always "incorrect" for a binary
+    // predictor — this honestly reflects the engine's ceiling in draw-heavy sports.
     if (homeCount >= WARMUP_GAMES_PER_TEAM && awayCount >= WARMUP_GAMES_PER_TEAM) {
       const homeWinProb = expectedScore(rH + homeBonus, rA);
       const predictedHomeWin = homeWinProb > 0.5;
       const winnerProb = predictedHomeWin ? homeWinProb : 1 - homeWinProb;
       const confidence = Math.round(winnerProb * 100);
-      const correct = predictedHomeWin === game.homeWon;
+
+      // A draw is always wrong for a binary home/away predictor
+      const correct = game.isDraw ? false : predictedHomeWin === game.homeWon;
 
       totalPredicted++;
       if (correct) totalCorrect++;
@@ -154,13 +159,14 @@ historicalBacktestRouter.get("/", async (c) => {
       }
     }
 
-    // Update Elo with the actual outcome (whether or not we counted the prediction)
+    // Update Elo with the actual outcome (whether or not we counted the prediction).
+    // Draws get actualScore = 0.5 for both sides (standard Elo draw handling).
     const margin = Math.abs(game.homeScore - game.awayScore);
-    const k = K * movMultiplier(margin, sport);
+    const k = K * movMultiplier(game.isDraw ? 0 : margin, sport);
     const expectedH = expectedScore(rH + homeBonus, rA);
     const expectedA = 1 - expectedH;
-    const actualH = game.homeWon ? 1 : 0;
-    const actualA = 1 - actualH;
+    const actualH = game.isDraw ? 0.5 : game.homeWon ? 1 : 0;
+    const actualA = game.isDraw ? 0.5 : game.homeWon ? 0 : 1;
     ratings.set(game.homeId, rH + k * (actualH - expectedH));
     ratings.set(game.awayId, rA + k * (actualA - expectedA));
 
@@ -187,6 +193,7 @@ historicalBacktestRouter.get("/", async (c) => {
       homeWinRate: totalPredicted > 0 ? Math.round((homeWinsActual / totalPredicted) * 1000) / 10 : null,
       buckets: bucketsOut,
       note: "Elo-only baseline. Reflects ~60-70% of production engine signal. Does NOT include injuries, rest days, starting pitchers, or advanced metrics — those require point-in-time data ESPN does not expose historically. Use this as a floor: the live engine should beat these numbers because it has more inputs.",
+      drawsNote: "Draws count as incorrect predictions for binary home/away models. In soccer leagues where ~25% of games draw, the theoretical accuracy ceiling is ~75%. Draws are included in Elo updates with actual score 0.5.",
     },
   });
 });
