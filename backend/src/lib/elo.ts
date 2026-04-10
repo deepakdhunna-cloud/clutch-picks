@@ -20,8 +20,8 @@ const K_FACTORS: Record<string, number> = {
   NCAAB: 22,
   MLB:   8,
   NHL:   12,
-  MLS:   25,
-  EPL:   25,
+  MLS:   20,
+  EPL:   20,
 };
 
 // Home advantage bonuses (added to home team's effective rating)
@@ -32,8 +32,8 @@ const HOME_BONUSES: Record<string, number> = {
   NCAAF: 55,
   MLB:   24,
   NHL:   33,
-  MLS:   60,
-  EPL:   60,
+  MLS:   55,
+  EPL:   40,
 };
 
 // Sport-specific caps on the MOV multiplier to prevent over-correction in
@@ -56,7 +56,17 @@ const MOV_CAPS: Record<string, number> = {
  * Returns 1.0 (no adjustment) when margin is unknown or a draw.
  */
 export function movMultiplier(margin: number | undefined, sport: string): number {
-  if (margin === undefined || margin === 0) return 1.0;
+  if (margin === undefined || margin === 0) {
+    // Soccer draws: reduced K so draws don't swing ratings as much
+    return (sport === "MLS" || sport === "EPL") ? 0.5 : 1.0;
+  }
+  // Soccer-specific: gentle scaling because a 3-0 is a blowout but only 3 goals
+  if (sport === "MLS" || sport === "EPL") {
+    const m = Math.abs(margin);
+    if (m === 1) return 1.0;
+    if (m === 2) return 1.2;
+    return 1.4; // 3+ goals
+  }
   const raw = Math.log(Math.abs(margin) + 1) * 0.8;
   const cap = MOV_CAPS[sport] ?? 2.0;
   return Math.min(raw, cap);
