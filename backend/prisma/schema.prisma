@@ -240,6 +240,7 @@ model PredictionResult {
   wasCorrect       Boolean?
   homeElo          Float?
   awayElo          Float?
+  homeWinProb      Float?    // 0..1 — needed for Brier score and calibration
   createdAt        DateTime  @default(now())
   resolvedAt       DateTime?
 
@@ -247,6 +248,20 @@ model PredictionResult {
   @@index([wasCorrect])
   @@index([createdAt])
   @@index([sport, wasCorrect])
+}
+
+model CalibrationSnapshot {
+  id                   String   @id @default(cuid())
+  date                 DateTime @default(now())
+  league               String   // "NBA", "MLB", etc. or "ALL" for overall
+  brierScore           Float
+  logLoss              Float
+  sampleSize           Int
+  reliabilityCurveJson String   // JSON array of { bucket, midpoint, predicted, actual, count }
+
+  @@unique([date, league])
+  @@index([league])
+  @@index([date])
 }
 model PromoCode {
   id          String    @id @default(cuid())
