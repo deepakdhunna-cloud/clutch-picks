@@ -167,6 +167,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
           <Stack.Screen name="privacy-policy" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="terms" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="settings" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="notifications-settings" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="game-analysis" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
           <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
