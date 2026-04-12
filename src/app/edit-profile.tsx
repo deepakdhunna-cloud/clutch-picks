@@ -1,8 +1,8 @@
-import { View, Text, Pressable, ScrollView, TextInput, Image, ActivityIndicator, Alert, ActionSheetIOS, Platform, Switch } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Image, ActivityIndicator, Alert, ActionSheetIOS, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowLeft, User, Camera, Check, Lock } from 'lucide-react-native';
+import { ArrowLeft, User, Camera, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
@@ -27,8 +27,6 @@ interface UserProfile {
   name: string;
   email: string;
   image: string | null;
-  bio: string | null;
-  isPrivate?: boolean;
 }
 
 export default function EditProfileScreen() {
@@ -38,8 +36,6 @@ export default function EditProfileScreen() {
   const invalidateSession = useInvalidateSession();
 
   const [name, setName] = useState('');
-  const [bio, setBio] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -56,15 +52,13 @@ export default function EditProfileScreen() {
   useEffect(() => {
     if (profileData) {
       setName(profileData.name || '');
-      setBio(profileData.bio || '');
-      setIsPrivate(profileData.isPrivate ?? false);
       setProfileImage(profileData.image);
     }
   }, [profileData]);
 
   // Mutation for updating profile
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { name?: string; bio?: string; isPrivate?: boolean }) => {
+    mutationFn: async (data: { name?: string }) => {
       return api.put<UserProfile>('/api/profile', data);
     },
     onSuccess: () => {
@@ -84,8 +78,6 @@ export default function EditProfileScreen() {
     }
     updateProfileMutation.mutate({
       name: name.trim(),
-      bio: bio.trim(),
-      isPrivate,
     });
   };
 
@@ -302,35 +294,6 @@ export default function EditProfileScreen() {
               <Text style={{ color: 'rgba(255,255,255,0.15)', fontSize: 11, marginTop: 8 }}>{name.length}/50 characters</Text>
             </View>
 
-            {/* Bio Input */}
-            <View
-              style={{
-                padding: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: BORDER,
-              }}
-            >
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Bio</Text>
-              <TextInput
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell us about yourself..."
-                placeholderTextColor={TEXT_MUTED}
-                keyboardAppearance="dark"
-                style={{
-                  color: '#FFFFFF',
-                  fontSize: 16,
-                  paddingVertical: 8,
-                  minHeight: 80,
-                  textAlignVertical: 'top',
-                }}
-                multiline
-                maxLength={150}
-                numberOfLines={4}
-              />
-              <Text style={{ color: 'rgba(255,255,255,0.15)', fontSize: 11, marginTop: 8 }}>{bio.length}/150 characters</Text>
-            </View>
-
             {/* Email (Read-only) */}
             <View style={{ padding: 16 }}>
               <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Email</Text>
@@ -344,77 +307,6 @@ export default function EditProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* Privacy Section */}
-        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={{ marginTop: 24 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: '700', letterSpacing: 2, marginBottom: 12 }}>
-            PRIVACY
-          </Text>
-          <View
-            style={{
-              borderRadius: 16,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: BORDER_HI,
-              backgroundColor: GLASS,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                padding: 16,
-              }}
-            >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  borderWidth: 1,
-                  borderColor: BORDER,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Lock size={22} color={TEXT_MUTED} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>Private Account</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 2 }}>
-                  Only followers can see your picks and stats
-                </Text>
-              </View>
-              <Switch
-                value={isPrivate}
-                onValueChange={setIsPrivate}
-                trackColor={{
-                  false: 'rgba(255,255,255,0.12)',
-                  true: MAROON,
-                }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Info Card */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={{ marginTop: 24 }}>
-          <View
-            style={{
-              backgroundColor: MAROON_DIM,
-              borderRadius: 12,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: 'rgba(139,10,31,0.20)',
-            }}
-          >
-            <Text style={{ color: TEXT_SECONDARY, fontSize: 13, lineHeight: 20 }}>
-              Your profile information is visible to other users. When your account is private,
-              only your approved followers can see your picks and stats.
-            </Text>
-          </View>
-        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
