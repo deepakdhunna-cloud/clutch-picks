@@ -175,6 +175,10 @@ app.route("/api/calibration", calibrationRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
+// ─── Shadow log cleanup (delete files older than 14 days) ───────────────────
+import { cleanOldShadowLogs } from "./prediction/shadow";
+cleanOldShadowLogs().catch(e => console.error("[shadow] Startup cleanup failed:", e));
+
 // ─── Background jobs ────────────────────────────────────────────────────────
 
 import { resolvePicks } from "./lib/resolve-picks";
