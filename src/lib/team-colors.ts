@@ -601,15 +601,8 @@ export const NHL_TEAM_COLORS: Record<string, TeamColors> = {
   'VGS': { primary: '#B4975A', secondary: '#333F42' }, // Golden Knights (alias)
 };
 
-// Calculate luminance of a hex color (0-1 scale, 0 = darkest, 1 = brightest)
-function getColorLuminance(hex: string): number {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return 0;
-  // Relative luminance formula (ITU-R BT.709)
-  return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-}
-
-// Convert hex to RGB
+// ─── Color math helpers ──────────────────────────────────────────────────────
+// Convert hex → RGB (0-255)
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result
@@ -621,46 +614,135 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     : null;
 }
 
-// Lighten a hex color by a percentage (0-100)
-function lightenColor(hex: string, percent: number): string {
+// Convert RGB (0-255) → hex
+function rgbToHex(r: number, g: number, b: number): string {
+  const c = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`.toUpperCase();
+}
+
+// Convert RGB (0-255) → HSL (h: 0-1, s: 0-1, l: 0-1)
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h, s, l };
+}
+
+// Convert HSL (h: 0-1, s: 0-1, l: 0-1) → RGB (0-255)
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  if (s === 0) {
+    const v = l * 255;
+    return { r: v, g: v, b: v };
+  }
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return {
+    r: hue2rgb(p, q, h + 1 / 3) * 255,
+    g: hue2rgb(p, q, h) * 255,
+    b: hue2rgb(p, q, h - 1 / 3) * 255,
+  };
+}
+
+// Enhance a single jersey color so it pops on a dark card background:
+// - Lifts pure black & extremely dark colors to a readable charcoal tier
+// - Brightens very dark colors while preserving hue
+// - Pulls back overly bright pastels so they don't wash out
+// - Boosts saturation slightly so muddy team colors look vivid
+// - Leaves true white untouched (used as a neutral secondary)
+function enhanceJerseyColor(hex: string): string {
   const rgb = hexToRgb(hex);
   if (!rgb) return hex;
+  const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
 
-  const factor = percent / 100;
-  const r = Math.min(255, Math.round(rgb.r + (255 - rgb.r) * factor));
-  const g = Math.min(255, Math.round(rgb.g + (255 - rgb.g) * factor));
-  const b = Math.min(255, Math.round(rgb.b + (255 - rgb.b) * factor));
+  // Pure / near white → leave as is so white secondaries stay crisp
+  if (l > 0.96 && s < 0.06) return hex;
 
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
-}
+  let newL = l;
+  let newS = s;
 
-// Enhance dark colors to make them more visible on dark backgrounds
-// This ensures both teams' colors are balanced and visible
-function enhanceDarkColor(color: string): string {
-  const luminance = getColorLuminance(color);
-
-  // If the color is very dark (luminance < 0.15), brighten it
-  // The darker the color, the more we lighten it
-  if (luminance < 0.08) {
-    // Extremely dark (near black) - lighten significantly
-    return lightenColor(color, 45);
-  } else if (luminance < 0.12) {
-    // Very dark - lighten moderately
-    return lightenColor(color, 35);
-  } else if (luminance < 0.18) {
-    // Dark - lighten slightly
-    return lightenColor(color, 25);
+  // Lift very dark / pure-black colors so jersey detail is visible
+  if (l < 0.08) {
+    newL = 0.22;
+  } else if (l < 0.18) {
+    newL = 0.22 + (l - 0.08) * 0.6; // 0.22 → 0.28
+  } else if (l < 0.30) {
+    newL = l + (0.30 - l) * 0.35; // soft brighten mid-darks
   }
 
-  return color;
+  // Pull overly bright (but saturated) colors back a touch
+  if (l > 0.85 && s > 0.12) {
+    newL = 0.82;
+  }
+
+  // Boost saturation slightly — keep grays gray
+  if (s > 0.08) {
+    newS = Math.min(1, s + (1 - s) * 0.22);
+  }
+
+  const out = hslToRgb(h, newS, newL);
+  return rgbToHex(out.r, out.g, out.b);
 }
 
-// Helper function to get team colors by abbreviation and sport
-// Automatically enhances dark colors to ensure visibility
-// espnColor is the color from ESPN API, used as fallback for teams not in our color map
+// Make sure the secondary is visibly distinct from the primary so jersey
+// stripes / collars / numbers actually read. If they're too close in
+// luminance, push the secondary toward the opposite end while preserving its
+// hue. This is what keeps two-tone jerseys (e.g. navy/black) from melting.
+function ensureContrast(primary: string, secondary: string): string {
+  const pRgb = hexToRgb(primary);
+  const sRgb = hexToRgb(secondary);
+  if (!pRgb || !sRgb) return secondary;
+
+  const pHsl = rgbToHsl(pRgb.r, pRgb.g, pRgb.b);
+  const sHsl = rgbToHsl(sRgb.r, sRgb.g, sRgb.b);
+
+  const lDiff = Math.abs(pHsl.l - sHsl.l);
+  if (lDiff >= 0.22) return secondary;
+
+  // Too close — push secondary away from primary in luminance
+  const newL = pHsl.l < 0.5
+    ? Math.min(0.94, pHsl.l + 0.55)   // primary dark → secondary becomes bright
+    : Math.max(0.18, pHsl.l - 0.55);  // primary light → secondary becomes dim
+
+  // If the secondary was effectively gray, prefer pure white/charcoal
+  // for the cleanest jersey contrast.
+  if (sHsl.s < 0.08) {
+    return pHsl.l < 0.5 ? '#FFFFFF' : '#1A1A1A';
+  }
+
+  const out = hslToRgb(sHsl.h, Math.min(1, sHsl.s + 0.1), newL);
+  return rgbToHex(out.r, out.g, out.b);
+}
+
+// Helper function to get team colors by abbreviation and sport.
+// This is the SINGLE source of truth for jersey colors across the app.
+// It looks colors up in the per-sport maps, falls back to ESPN's color, then
+// runs both colors through enhancement + contrast enforcement so jerseys
+// always look vivid and readable on dark card backgrounds.
+// espnColor is the color from ESPN API, used as fallback for teams not in our color map.
 export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: string): TeamColors {
-  // Use more visible default colors instead of dark gray
-  const defaultColors: TeamColors = { primary: '#5A7A8A', secondary: '#FFFFFF' };
+  // Vibrant fallback so unknown teams don't render as flat gray
+  const defaultColors: TeamColors = { primary: '#3B82C4', secondary: '#FFFFFF' };
 
   let colors: TeamColors | undefined;
   switch (sport) {
@@ -695,17 +777,17 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
   // If colors weren't found, use ESPN color if available, otherwise default
   if (!colors) {
     if (espnColor && espnColor.length >= 4) {
-      // Use ESPN color as primary and white as secondary
-      // enhanceDarkColor below will handle black/near-black
-      colors = { primary: espnColor.startsWith('#') ? espnColor : `#${espnColor}`, secondary: '#FFFFFF' };
+      colors = {
+        primary: espnColor.startsWith('#') ? espnColor : `#${espnColor}`,
+        secondary: '#FFFFFF',
+      };
     } else {
       colors = defaultColors;
     }
   }
 
-  // Enhance dark colors so they're visible on dark card backgrounds
-  return {
-    primary: enhanceDarkColor(colors.primary),
-    secondary: enhanceDarkColor(colors.secondary),
-  };
+  const primary = enhanceJerseyColor(colors.primary);
+  const secondary = ensureContrast(primary, enhanceJerseyColor(colors.secondary));
+
+  return { primary, secondary };
 }
