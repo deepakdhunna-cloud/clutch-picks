@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
 import { generatePrediction, bustAIAnalysisCache } from "../lib/predictions";
+import { runShadowPrediction, useNewEngine, cleanOldShadowLogs } from "../prediction/shadow";
 import { Sport as SportEnum, League, GameStatus as SportsGameStatus } from "../types/sports";
 import type { Game as SportsGame } from "../types/sports";
 import { resolvePicksInBackground } from "../lib/resolve-picks";
@@ -627,6 +628,21 @@ async function addPredictionToGame(game: Game): Promise<Game> {
 
   // Cache the pregame prediction (15-min TTL)
   setCachedPrediction(game.id, predictionResult);
+
+  // ── Shadow: run new engine in background (fire-and-forget) ────────────────
+  // When USE_NEW_PREDICTION_ENGINE is false, the old prediction above is served
+  // to users. The new engine runs in parallel for comparison logging only.
+  // A failure here NEVER affects the user-facing response.
+  if (!useNewEngine()) {
+    runShadowPrediction(
+      game,
+      {
+        predictedWinner: prediction.predictedWinner,
+        homeWinProbability: prediction.homeWinProbability,
+        confidence: prediction.confidence,
+      },
+    );
+  }
 
   // ── Live adjustment ────────────────────────────────────────────────────────
   // When the game is in progress and scores are available, blend the pregame
