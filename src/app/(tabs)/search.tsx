@@ -776,24 +776,36 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   return { tags, headline: hl, detail: dt, drawType };
 }
 
-// ─── MATCHUP CARD ───
-const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string }) {
+// ─── MATCHUP CARD (collapsible) ───
+const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, defaultExpanded }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; defaultExpanded?: boolean }) {
   const router = useRouter(); const isFirst = rank === 1;
+  const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   return (
-    <Pressable onPress={() => router.push(`/game/${game.id}`)} style={{ backgroundColor: GLASS, borderRadius: 14, borderWidth: 1, borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: isFirst ? MAROON : TEAL, padding: 14, marginBottom: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-        <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: isFirst ? MAROON_DIM : TEAL_DIM, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-          <Text style={{ fontSize: 10, fontWeight: '800', color: isFirst ? MAROON : TEAL }}>{rank}</Text>
+    <View style={{ backgroundColor: GLASS, borderRadius: 14, borderWidth: 1, borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: isFirst ? MAROON : TEAL, marginBottom: 10, overflow: 'hidden' }}>
+      <Pressable onPress={() => setExpanded(e => !e)} style={{ padding: 14, paddingBottom: expanded ? 6 : 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+          <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: isFirst ? MAROON_DIM : TEAL_DIM, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: isFirst ? MAROON : TEAL }}>{rank}</Text>
+          </View>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE, flex: 1 }}>{game.awayTeam.abbreviation} vs {game.homeTeam.abbreviation}</Text>
+          {tags.length > 0 ? <View style={{ backgroundColor: MAROON_DIM, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginRight: 8 }}><Text style={{ fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 0.3 }}>{tags[0]}</Text></View> : null}
+          <Text style={{ fontSize: 16, color: TEXT_MUTED }}>{expanded ? '−' : '+'}</Text>
         </View>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE, flex: 1 }}>{game.awayTeam.abbreviation} vs {game.homeTeam.abbreviation}</Text>
-        <ChevronRight size={14} color={TEXT_MUTED} />
-      </View>
-      <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE, marginBottom: 6 }}>{headline}</Text>
-      {tags.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-        {tags.map((tg,i) => <View key={tg+i} style={{ backgroundColor: i===0?MAROON_DIM:'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}><Text style={{ fontSize: 9, fontWeight: '700', color: i===0?MAROON:TEXT_MUTED, letterSpacing: 0.3 }}>{tg}</Text></View>)}
-      </View> : null}
-      <Text style={{ fontSize: 11, color: TEXT_SECONDARY, lineHeight: 16.5 }}>{detail}</Text>
-    </Pressable>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: TEXT_SECONDARY, marginLeft: 32 }} numberOfLines={expanded ? undefined : 1}>{headline}</Text>
+      </Pressable>
+      {expanded ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+          {tags.length > 1 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8, marginLeft: 32 }}>
+            {tags.slice(1).map((tg,i) => <View key={tg+i} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}><Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 0.3 }}>{tg}</Text></View>)}
+          </View> : null}
+          <Text style={{ fontSize: 11, color: TEXT_SECONDARY, lineHeight: 16.5, marginLeft: 32 }}>{detail}</Text>
+          <Pressable onPress={() => router.push(`/game/${game.id}`)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: MAROON_DIM, borderRadius: 10, paddingVertical: 10, marginTop: 12 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: MAROON, marginRight: 4 }}>View Game</Text>
+            <ChevronRight size={12} color={MAROON} />
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
   );
 });
 
@@ -959,8 +971,12 @@ const GameDay = memo(function GameDay({ live, sched, picks, followed, sh, onR, i
   );
 });
 
+// ─── PREP SUB-TABS ───
+const PREP_TABS = ['Ranked', 'Underdogs'] as const;
+
 // ─── PREP MODE ───
 const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: GameWithPrediction[]; picks: UserPick[]; stats: UserStats|undefined; sh: any; onR: ()=>void; isR: boolean }) {
+  const [prepTab, setPrepTab] = useState<0|1>(0);
   const insight = useMemo(() => genInsight(sched), [sched]);
   const ranked = useMemo(() => {
     const withPred = sched.filter(g => g.prediction);
@@ -976,9 +992,6 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
     });
   }, [sched]);
 
-  // Underdog plays: engine's predicted winner disagrees with the market favorite.
-  // We reuse `ranked` so each surfaced game already carries the existing
-  // prediction narrative (`detail`) from genMatchup.
   const underdogPlays = useMemo(() => {
     return ranked
       .filter(r => {
@@ -998,30 +1011,84 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
       });
   }, [ranked]);
 
+  const router = useRouter();
+  const top3 = ranked.slice(0, 3);
+
   return (
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
-      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:24}}>
+      {/* Header */}
+      <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:20}}>
         <View><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Your Insights</Text></View>
         <View style={{flexDirection:'row',alignItems:'center',gap:6}}><View style={{width:6,height:6,borderRadius:3,backgroundColor:MAROON}} /><Text style={{fontSize:11,fontWeight:'700',color:MAROON}}>{sched.length} GAMES</Text></View>
       </View>
-      <View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:24}}>
+
+      {/* Arena Insight card */}
+      <View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:20}}>
         <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>ARENA INSIGHT</Text>
         <Text style={{fontSize:15,fontWeight:'700',color:WHITE,lineHeight:23}}>{insight.headline}</Text>
         {insight.teams.length>0?<View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:12}}>{insight.teams.map(t=><View key={t} style={{backgroundColor:MAROON_DIM,borderRadius:10,paddingHorizontal:12,paddingVertical:5}}><Text style={{fontSize:10,fontWeight:'700',color:MAROON}}>{t}</Text></View>)}</View>:null}
       </View>
-      {ranked.length>0?<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>Matchups Ranked For You</Text>{ranked.map((r,i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} />)}</View>:<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,color:TEXT_MUTED}}>No scheduled games with predictions</Text></View>}
 
-      {/* ─── UNDERDOG PICKS — engine vs market disagreements ─── */}
-      <View style={{paddingHorizontal:20,marginBottom:24}}>
-        <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-          <Text style={{fontSize:12,fontWeight:'700',color:WHITE}}>Underdog Picks</Text>
-          {underdogPlays.length>0?<Text style={{fontSize:10,fontWeight:'700',color:MAROON,letterSpacing:0.5}}>{underdogPlays.length} {underdogPlays.length===1?'PLAY':'PLAYS'}</Text>:null}
+      {/* Top 3 quick-glance strip */}
+      {top3.length > 0 ? (
+        <View style={{marginBottom:20}}>
+          <Text style={{fontSize:10,fontWeight:'700',color:TEXT_MUTED,letterSpacing:1.5,paddingHorizontal:20,marginBottom:10}}>TOP PICKS AT A GLANCE</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:10}} style={{flexGrow:0}}>
+            {top3.map((r, i) => {
+              const conf = Math.round(r.game.prediction?.confidence ?? 50);
+              const winner = r.game.prediction?.predictedWinner === 'home' ? r.game.homeTeam : r.game.awayTeam;
+              return (
+                <Pressable key={r.game.id} onPress={() => router.push(`/game/${r.game.id}`)} style={{width:140,backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:i===0?'rgba(139,10,31,0.25)':BORDER,padding:12}}>
+                  <View style={{flexDirection:'row',alignItems:'center',marginBottom:8}}>
+                    <View style={{width:20,height:20,borderRadius:6,backgroundColor:i===0?MAROON_DIM:TEAL_DIM,alignItems:'center',justifyContent:'center',marginRight:6}}>
+                      <Text style={{fontSize:9,fontWeight:'800',color:i===0?MAROON:TEAL}}>#{i+1}</Text>
+                    </View>
+                    <Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED}}>{displaySport(r.game.sport)}</Text>
+                  </View>
+                  <Text style={{fontSize:13,fontWeight:'800',color:WHITE,marginBottom:4}}>{r.game.awayTeam.abbreviation} vs {r.game.homeTeam.abbreviation}</Text>
+                  <Text style={{fontSize:10,fontWeight:'600',color:TEAL,marginBottom:2}}>Pick: {winner.abbreviation}</Text>
+                  <Text style={{fontSize:10,color:TEXT_MUTED}}>{conf}% confidence</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
-        <Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16,marginBottom:12}}>Games where the model's pick disagrees with the market favorite.</Text>
-        {underdogPlays.length>0
-          ? underdogPlays.map((r,i)=><MatchupCard key={`ud-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} />)
-          : <View style={{backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:BORDER,padding:14}}><Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16}}>No underdog plays surfaced today — the engine is siding with the market on every game.</Text></View>}
+      ) : null}
+
+      {/* Sub-tab toggle: Ranked / Underdogs */}
+      <View style={{flexDirection:'row',marginHorizontal:20,marginBottom:16,backgroundColor:'rgba(255,255,255,0.04)',borderRadius:12,padding:3}}>
+        {PREP_TABS.map((label, idx) => {
+          const active = prepTab === idx;
+          const count = idx === 0 ? ranked.length : underdogPlays.length;
+          return (
+            <Pressable key={label} onPress={() => { setPrepTab(idx as 0|1); Haptics.selectionAsync(); }} style={{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center',backgroundColor:active?GLASS:'transparent'}}>
+              <Text style={{fontSize:12,fontWeight:'700',color:active?WHITE:TEXT_MUTED}}>{label}{count > 0 ? ` (${count})` : null}</Text>
+            </Pressable>
+          );
+        })}
       </View>
+
+      {/* Ranked tab content */}
+      {prepTab === 0 ? (
+        ranked.length > 0 ? (
+          <View style={{paddingHorizontal:20,marginBottom:24}}>
+            <Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:1,marginBottom:12}}>Tap any matchup to expand details</Text>
+            {ranked.map((r,i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} defaultExpanded={i === 0} />)}
+          </View>
+        ) : (
+          <View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,color:TEXT_MUTED}}>No scheduled games with predictions</Text></View>
+        )
+      ) : null}
+
+      {/* Underdogs tab content */}
+      {prepTab === 1 ? (
+        <View style={{paddingHorizontal:20,marginBottom:24}}>
+          <Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16,marginBottom:12}}>Games where the engine disagrees with the market favorite.</Text>
+          {underdogPlays.length > 0
+            ? underdogPlays.map((r,i)=><MatchupCard key={`ud-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} defaultExpanded={i === 0} />)
+            : <View style={{backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:BORDER,padding:14}}><Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16}}>No underdog plays surfaced today — the engine is siding with the market on every game.</Text></View>}
+        </View>
+      ) : null}
 
       <AccBySport picks={picks} />
       <StreakCard stats={stats} />
