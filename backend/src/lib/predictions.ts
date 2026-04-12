@@ -1308,40 +1308,44 @@ export async function generatePrediction(
   // ── Get sport-specific weights ──────────────────────────────────────────
   let weights = getWeightsForSport(sportKey);
 
-  // ── Early-season factor dampening (MLB) ──────────────────────────────────
-  // In early April, team-level stats are based on 10-15 games and are mostly
+  // ── Early-season factor dampening (MLB only) ─────────────────────────────
+  // In April MLB, team-level stats are based on 10-15 games and are mostly
   // noise. Elo alone hits 57.4% on MLB; noisy factors were dragging accuracy
-  // to 19%. Scale non-Elo weights toward zero when the season is young, so
-  // Elo dominates until team stats stabilize (~20 games in).
-  // The dampening applies to ALL sports but only has a meaningful effect in
-  // April/early May when games played is low.
-  const homeGP = homeForm.wins + homeForm.losses;
-  const awayGP = awayForm.wins + awayForm.losses;
-  const minGP = Math.min(homeGP, awayGP);
-  const seasonMaturity = Math.min(1.0, minGP / 20); // 0.0 at season start → 1.0 at 20+ games
+  // to 19%. Scale non-Elo weights toward zero when the season is young.
+  //
+  // CRITICAL FIXES from previous version:
+  // 1. Uses TRUE games played from team.record (not the L10 form sample)
+  // 2. ONLY applies to MLB — other sports were getting crippled by this
+  // 3. NBA/NHL/etc. early season would need separate calibration if needed
+  if (sportKey === "MLB") {
+    const homeGP = (game.homeTeam.record?.wins ?? 0) + (game.homeTeam.record?.losses ?? 0);
+    const awayGP = (game.awayTeam.record?.wins ?? 0) + (game.awayTeam.record?.losses ?? 0);
+    const minGP = Math.min(homeGP, awayGP);
+    const seasonMaturity = Math.min(1.0, minGP / 20); // 0.0 at season start → 1.0 at 20+ games
 
-  // Build a mutable copy of weights with non-Elo factors scaled down
-  const adjustedWeights = { ...weights };
-  if (seasonMaturity < 1.0) {
-    const keysToScale: Array<keyof typeof weights> = [
-      "winPct", "recentForm", "homeAwaySplit", "pointDiff", "streak",
-      "restDays", "scoringTrend", "defenseTrend", "headToHead",
-      "strengthOfSchedule", "injuries", "advancedMetrics", "startingPitcher", "weather"
-    ];
-    for (const key of keysToScale) {
-      if (key in adjustedWeights) {
-        (adjustedWeights as any)[key] = (adjustedWeights as any)[key] * seasonMaturity;
+    if (seasonMaturity < 1.0) {
+      const adjustedWeights = { ...weights };
+      const keysToScale: Array<keyof typeof weights> = [
+        "winPct", "recentForm", "homeAwaySplit", "pointDiff", "streak",
+        "restDays", "scoringTrend", "defenseTrend", "headToHead",
+        "strengthOfSchedule", "injuries", "advancedMetrics", "startingPitcher", "weather"
+      ];
+      for (const key of keysToScale) {
+        if (key in adjustedWeights) {
+          (adjustedWeights as any)[key] = (adjustedWeights as any)[key] * seasonMaturity;
+        }
       }
+      // Redistribute the dampened weight to Elo so total still sums to ~1.0
+      const totalDampened = keysToScale.reduce((sum, key) => {
+        const orig = (weights as any)[key] ?? 0;
+        const adj = (adjustedWeights as any)[key] ?? 0;
+        return sum + (orig - adj);
+      }, 0);
+      adjustedWeights.elo = weights.elo + totalDampened;
+      weights = adjustedWeights;
+      console.log(`[dampen] MLB early-season: minGP=${minGP}, maturity=${seasonMaturity.toFixed(2)}, elo weight ${(weights.elo).toFixed(3)}`);
     }
-    // Redistribute the dampened weight to Elo so total still sums to ~1.0
-    const totalDampened = keysToScale.reduce((sum, key) => {
-      const orig = (weights as any)[key] ?? 0;
-      const adj = (adjustedWeights as any)[key] ?? 0;
-      return sum + (orig - adj);
-    }, 0);
-    adjustedWeights.elo = weights.elo + totalDampened;
   }
-  weights = adjustedWeights;
 
   // ── Factor 1: Win % differential ───────────────────────────────────────
   const homeWinPct = getWinPercentage(game.homeTeam);
