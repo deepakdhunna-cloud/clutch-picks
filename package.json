@@ -5,8 +5,8 @@
   "scripts": {
     "postinstall": "node -e \"const fs=require('fs');const fix=(p,from,to)=>{try{const c=fs.readFileSync(p,'utf8');if(c.includes(from)){fs.writeFileSync(p,c.replace(from,to));}}catch(e){}};fix('node_modules/expo-asset/tsconfig.json','expo-module-scripts/tsconfig.base','expo/tsconfig.base.json');fix('node_modules/expo-asset/plugin/tsconfig.json','expo-module-scripts/tsconfig.plugin','expo/tsconfig.base.json');\"",
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "DARK_MODE=class expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"
