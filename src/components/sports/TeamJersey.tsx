@@ -6,58 +6,15 @@ import { MLBJersey } from './MLBJersey';
 import { NHLJersey } from './NHLJersey';
 import { CollegeBBJersey } from './CollegeBBJersey';
 import { SoccerJersey as SoccerJerseyNew } from './SoccerJersey';
-import { NFL_TEAM_COLORS, NBA_TEAM_COLORS, MLB_TEAM_COLORS, NHL_TEAM_COLORS, MLS_TEAM_COLORS, EPL_TEAM_COLORS, NCAAB_TEAM_COLORS, NCAAF_TEAM_COLORS, TeamColors } from '@/lib/team-colors';
-
-const FALLBACK_PRIMARY = '#374151';
-const FALLBACK_SECONDARY = '#6B7280';
+import { getTeamColors } from '@/lib/team-colors';
 
 interface TeamJerseyProps {
   teamAbbreviation: string;
-  primaryColor: string;
-  secondaryColor: string;
+  primaryColor?: string;
+  secondaryColor?: string;
   size?: number;
   isHighlighted?: boolean;
   sport?: Sport;
-}
-
-/**
- * Looks up team colors from the sport-specific TEAM_COLORS constants.
- * Returns the colors from the map if found, otherwise returns the fallback grays.
- */
-function getJerseyColors(teamAbbreviation: string, sport: Sport): TeamColors {
-  let colorMap: Record<string, TeamColors> | undefined;
-
-  switch (sport) {
-    case Sport.NFL:
-      colorMap = NFL_TEAM_COLORS;
-      break;
-    case Sport.NBA:
-      colorMap = NBA_TEAM_COLORS;
-      break;
-    case Sport.MLB:
-      colorMap = MLB_TEAM_COLORS;
-      break;
-    case Sport.NHL:
-      colorMap = NHL_TEAM_COLORS;
-      break;
-    case Sport.MLS:
-      colorMap = MLS_TEAM_COLORS;
-      break;
-    case Sport.EPL:
-      colorMap = EPL_TEAM_COLORS;
-      break;
-    case Sport.NCAAB:
-      colorMap = NCAAB_TEAM_COLORS;
-      break;
-    case Sport.NCAAF:
-      colorMap = NCAAF_TEAM_COLORS;
-      break;
-    default:
-      colorMap = undefined;
-  }
-
-  const found = colorMap?.[teamAbbreviation];
-  return found ?? { primary: FALLBACK_PRIMARY, secondary: FALLBACK_SECONDARY };
 }
 
 /**
@@ -99,8 +56,15 @@ export const TeamJersey = memo(function TeamJersey({
 }: TeamJerseyProps) {
   const sportType = sport || Sport.NFL;
 
-  const primary = primaryColor || FALLBACK_PRIMARY;
-  const secondary = secondaryColor || FALLBACK_SECONDARY;
+  // Always run through the canonical color helper so jerseys are guaranteed
+  // to use the same enforced/enhanced palette regardless of the call site.
+  // If a caller explicitly passes colors we honor them, otherwise we look
+  // them up here.
+  const resolved = (!primaryColor || !secondaryColor)
+    ? getTeamColors(teamAbbreviation, sportType)
+    : null;
+  const primary = primaryColor ?? resolved!.primary;
+  const secondary = secondaryColor ?? resolved!.secondary;
   const accent = isHighlighted ? '#8B0A1F' : '#FFFFFF';
 
   return getSportJersey(sportType, {
