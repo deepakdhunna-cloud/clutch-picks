@@ -1376,9 +1376,12 @@ gamesRouter.get("/id/:id", async (c) => {
       return addPredictionToGame(game);
     };
 
-    // First, check secondary game-ID index — O(1) lookup across all cached data
+    // First, check secondary game-ID index — O(1) lookup across all cached data.
+    // Skip the fast-path for LIVE games: gameById has no TTL, so a stale entry
+    // would freeze score/situation. Fall through to fetchAllGames so the 10s
+    // adaptive list cache (LIVE_CACHE_TTL_MS) governs freshness.
     const indexedGame = gameById.get(gameId);
-    if (indexedGame) {
+    if (indexedGame && indexedGame.status !== "LIVE") {
       const gameWithPrediction = await ensurePrediction(indexedGame);
       return c.json({ data: gameWithPrediction });
     }
