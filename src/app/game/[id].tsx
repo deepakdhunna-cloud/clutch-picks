@@ -204,6 +204,8 @@ interface Game {
   marketFavorite?: 'home' | 'away';
   quarter?: string;
   clock?: string;
+  homeLinescores?: number[];
+  awayLinescores?: number[];
   liveState?: {
     balls: number;
     strikes: number;
@@ -553,41 +555,79 @@ const ScoringFlowChartWatermark = React.memo(function ScoringFlowChartWatermark(
   );
 });
 
+// Sport → period column headers + regulation length. Linescores beyond
+// regulation (extra innings, OT periods) extend the column count dynamically.
+function getPeriodConfig(sport: Game['sport'], periodCount: number): { headers: string[]; totalLabel: string } {
+  if (sport === 'MLB') {
+    const reg = Math.max(9, periodCount);
+    const headers = Array.from({ length: reg }, (_, i) => String(i + 1));
+    return { headers, totalLabel: 'R' };
+  }
+  if (sport === 'NHL') {
+    const reg = Math.max(3, periodCount);
+    const headers: string[] = [];
+    for (let i = 0; i < reg; i++) {
+      headers.push(i < 3 ? String(i + 1) : i === 3 ? 'OT' : `OT${i - 2}`);
+    }
+    return { headers, totalLabel: 'T' };
+  }
+  if (sport === 'NCAAB' || sport === 'MLS' || sport === 'EPL') {
+    const reg = Math.max(2, periodCount);
+    const headers: string[] = [];
+    for (let i = 0; i < reg; i++) {
+      headers.push(i < 2 ? `${i + 1}H` : i === 2 ? 'OT' : `OT${i - 1}`);
+    }
+    return { headers, totalLabel: 'T' };
+  }
+  // NBA / NFL / NCAAF — quarters
+  const reg = Math.max(4, periodCount);
+  const headers: string[] = [];
+  for (let i = 0; i < reg; i++) {
+    headers.push(i < 4 ? `Q${i + 1}` : i === 4 ? 'OT' : `OT${i - 3}`);
+  }
+  return { headers, totalLabel: 'T' };
+}
+
 function QuarterTable({ game }: { game: Game }) {
   const { homeTeam, awayTeam } = game;
-  const isLive = game.status === 'LIVE', isFinal = game.status === 'FINAL';
-  const getQScore = (score: number | undefined) => score === undefined ? '' : (isLive || isFinal) ? String(Math.round(score / 4)) : '';
+  const homeLine = game.homeLinescores ?? [];
+  const awayLine = game.awayLinescores ?? [];
+  const periodCount = Math.max(homeLine.length, awayLine.length);
+  const { headers, totalLabel } = getPeriodConfig(game.sport, periodCount);
 
   const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
 
-  // Determine which team is winning for highlight
   const homeWinning = (game.homeScore ?? 0) > (game.awayScore ?? 0);
   const awayWinning = (game.awayScore ?? 0) > (game.homeScore ?? 0);
   const tied = (game.homeScore ?? 0) === (game.awayScore ?? 0);
+
+  const cellValue = (line: number[], i: number): string => {
+    if (i >= line.length) return '';
+    const v = line[i];
+    return typeof v === 'number' ? String(v) : '';
+  };
 
   return (
     <View style={styles.tableContainer}>
       {/* Header row with subtle background */}
       <View style={[styles.tableRow, { backgroundColor: 'rgba(255,255,255,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }]}>
         <View style={styles.tableTeamCell} />
-        {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
-          <View key={q} style={styles.tableScoreCell}>
-            <Text style={styles.tableHeaderText}>{q}</Text>
+        {headers.map((h, i) => (
+          <View key={`${h}-${i}`} style={styles.tableScoreCell}>
+            <Text style={styles.tableHeaderText}>{h}</Text>
           </View>
         ))}
-        {/* Total column with left divider */}
         <View style={[styles.tableScoreCell, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' }]}>
-          <Text style={[styles.tableHeaderText, { color: 'rgba(255,255,255,0.5)' }]}>T</Text>
+          <Text style={[styles.tableHeaderText, { color: 'rgba(255,255,255,0.5)' }]}>{totalLabel}</Text>
         </View>
       </View>
       {[
-        { team: homeTeam, total: game.homeScore, colors: homeColors, winning: homeWinning },
-        { team: awayTeam, total: game.awayScore, colors: awayColors, winning: awayWinning },
-      ].map(({ team, total, colors, winning }, ri) => (
+        { team: homeTeam, total: game.homeScore, colors: homeColors, winning: homeWinning, line: homeLine },
+        { team: awayTeam, total: game.awayScore, colors: awayColors, winning: awayWinning, line: awayLine },
+      ].map(({ team, total, colors, winning, line }, ri) => (
         <View key={team.id} style={[styles.tableRow, ri === 0 && { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }]}>
           <View style={styles.tableTeamCell}>
-            {/* Team color badge with white text */}
             <View style={{
               backgroundColor: colors.primary,
               borderRadius: 6,
@@ -607,12 +647,11 @@ function QuarterTable({ game }: { game: Game }) {
               </Text>
             </View>
           </View>
-          {[0, 1, 2, 3].map(qi => (
-            <View key={qi} style={styles.tableScoreCell}>
-              <Text style={styles.tableScoreText}>{getQScore(total)}</Text>
+          {headers.map((_, i) => (
+            <View key={i} style={styles.tableScoreCell}>
+              <Text style={styles.tableScoreText}>{cellValue(line, i)}</Text>
             </View>
           ))}
-          {/* Total with left divider + highlight if winning */}
           <View style={[styles.tableScoreCell, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' }]}>
             <Text style={[styles.tableTotalText, winning && !tied && { color: colors.primary }]}>{total ?? ''}</Text>
           </View>
