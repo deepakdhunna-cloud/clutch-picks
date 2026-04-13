@@ -108,6 +108,7 @@ export interface Game {
     onSecond: boolean;
     onThird: boolean;
     inningHalf: "top" | "bottom" | null;
+    inningNumber: number | null;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };
@@ -217,7 +218,8 @@ interface CacheEntry {
   timestamp: number;
 }
 
-const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds — used when no games in entry are live
+const LIVE_CACHE_TTL_MS = 10 * 1000; // 10 seconds — used when ≥1 game in entry is live
 const cache = new LRUCache<string, CacheEntry>({ max: 100 });
 // Secondary index: gameId → Game, for O(1) lookups in /id/:id
 const gameById = new Map<string, Game>();
@@ -229,7 +231,10 @@ function getCachedData(cacheKey: string): Game[] | null {
   const entry = cache.get(cacheKey);
   if (!entry) return null;
   const now = Date.now();
-  if (now - entry.timestamp > CACHE_TTL_MS) {
+  // Adaptive TTL: shorter when entry contains any live game so scores/situation
+  // refresh on a near-real-time cadence. Falls back to the 60s default otherwise.
+  const ttl = entry.data.some((g) => g.status === "LIVE") ? LIVE_CACHE_TTL_MS : CACHE_TTL_MS;
+  if (now - entry.timestamp > ttl) {
     cache.delete(cacheKey);
     return null;
   }
@@ -868,6 +873,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
         onSecond: s.onSecond === true,
         onThird: s.onThird === true,
         inningHalf,
+        inningNumber: typeof competition.status.period === "number" ? competition.status.period : null,
         pitcher: { name: pitcherName, teamAbbr: pitchingAbbr },
         batter: { name: batterName, teamAbbr: battingAbbr },
       };
