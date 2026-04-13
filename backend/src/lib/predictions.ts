@@ -5,7 +5,6 @@
 
 import type { Game, Prediction, PredictionFactor, Team } from "../types/sports";
 import { fetchTeamRecentForm, fetchTeamExtendedStats, fetchTeamInjuries, fetchTeamSeasonResults, fetchAdvancedMetrics, fetchStartingLineup, fetchGameWeather, getSRSRatings, srsToBlendfactor, type TeamRecentForm, type TeamExtendedStats, type TeamInjuryReport, type TeamAdvancedMetrics, type StartingLineup, type WeatherData, type GameResultForSRS } from "./espnStats";
-import { computePitcherQualityScore } from "./mlbStatsApi";
 import { getEloRating, getEloPrediction, initializeEloFromSchedule, DEFAULT_RATING } from "./elo";
 import { env } from "../env";
 import { prisma } from "../prisma";
@@ -14,14 +13,14 @@ import { enqueueWrite } from "./writeQueue";
 // ─── Calibration ───────────────────────────────────────────────────────────
 // Sport-specific calibration: different sports have different predictability
 const SPORT_CALIBRATION: Record<string, { dampener: number; ceiling: number; tossUpCeiling: number }> = {
-  NBA:   { dampener: 0.85, ceiling: 88, tossUpCeiling: 57 },
-  NFL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 56 },
-  NCAAF: { dampener: 0.75, ceiling: 85, tossUpCeiling: 56 },
-  NCAAB: { dampener: 0.80, ceiling: 87, tossUpCeiling: 57 },
-  MLB:   { dampener: 0.78, ceiling: 75, tossUpCeiling: 53 },
-  NHL:   { dampener: 0.70, ceiling: 80, tossUpCeiling: 57 },
-  MLS:   { dampener: 0.75, ceiling: 78, tossUpCeiling: 53 },
-  EPL:   { dampener: 0.70, ceiling: 82, tossUpCeiling: 56 },
+  NBA:   { dampener: 0.70, ceiling: 88, tossUpCeiling: 54 },
+  NFL:   { dampener: 0.55, ceiling: 82, tossUpCeiling: 53 },
+  NCAAF: { dampener: 0.60, ceiling: 85, tossUpCeiling: 53 },
+  NCAAB: { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 },
+  MLB:   { dampener: 0.45, ceiling: 75, tossUpCeiling: 53 },
+  NHL:   { dampener: 0.55, ceiling: 80, tossUpCeiling: 53 },
+  MLS:   { dampener: 0.55, ceiling: 78, tossUpCeiling: 53 },
+  EPL:   { dampener: 0.60, ceiling: 82, tossUpCeiling: 53 },
 };
 function getCalibration(sport: string) {
   return SPORT_CALIBRATION[sport] ?? { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 };
@@ -43,17 +42,10 @@ function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
-// ─── Sigmoid scaling: transforms composite factor differential → probability.
-// Per-sport values reflect typical signal variance and noise floor.
+// ─── Sport-specific sigmoid scaling: NBA is most predictable, MLB least ─────
 const SIGMOID_SCALING: Record<string, number> = {
-  NBA:   4.8,
-  NCAAB: 4.5,
-  NFL:   3.5,
-  NCAAF: 4.0,
-  MLB:   2.8,
-  NHL:   3.0,
-  MLS:   3.0,
-  EPL:   3.2,
+  NBA: 5.5, NFL: 4.0, NCAAF: 4.5, NCAAB: 5.0,
+  MLB: 3.0, NHL: 3.5, MLS: 4.0, EPL: 4.5,
 };
 
 // ─── Over/Under baseline by sport (fallback if ESPN doesn't provide) ────────
@@ -154,15 +146,6 @@ function setCachedAIAnalysis(
   aiAnalysisCache.set(key, { text, timestamp: Date.now() });
 }
 
-/** Bust all AI analysis cache entries for a game (any injury hash). */
-export function bustAIAnalysisCache(gameId: string): void {
-  for (const key of aiAnalysisCache.keys()) {
-    if (key.startsWith(`${gameId}_`)) {
-      aiAnalysisCache.delete(key);
-    }
-  }
-}
-
 // ─── Rest label helper ───────────────────────────────────────────────────────
 
 function restLabel(days: number | null): string {
@@ -222,7 +205,6 @@ function buildTemplateAnalysis(
   const winnerElo = predictedWinner === "home" ? homeElo : awayElo;
   const loserElo = predictedWinner === "home" ? awayElo : homeElo;
   const winnerInjuries = predictedWinner === "home" ? homeInjuries : awayInjuries;
-  const loserInjuries = predictedWinner === "home" ? awayInjuries : homeInjuries;
   const winnerExtended = predictedWinner === "home" ? homeExtended : awayExtended;
   const loserExtended = predictedWinner === "home" ? awayExtended : homeExtended;
 
@@ -230,125 +212,40 @@ function buildTemplateAnalysis(
   const loserRecord = `${loserTeam.record.wins}-${loserTeam.record.losses}`;
   const winnerFormStr = winnerForm.formString || "N/A";
   const loserFormStr = loserForm.formString || "N/A";
-  const eloDiff = Math.abs(winnerElo - loserElo);
-  const isHomeFav = predictedWinner === "home";
-  const winnerWins10 = winnerForm.results.filter(r => r === "W").length;
-  const loserWins10 = loserForm.results.filter(r => r === "W").length;
 
-  // Hash gameId to pick one of 5 opening patterns deterministically
-  const gameIdHash = game.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const openingVariant = gameIdHash % 5;
+  const locationStr = predictedWinner === "home" ? "at home" : "on the road";
+  const confLevel = confidence >= 80 ? "strong" : confidence >= 70 ? "solid" : confidence >= 60 ? "slight" : "marginal";
 
-  const paragraphs: string[] = [];
+  let line = `${winnerTeam.name} (${winnerRecord}, Elo ${Math.round(winnerElo)}, L10: ${winnerFormStr}) hold a ${confLevel} edge over ${loserTeam.name} (${loserRecord}, Elo ${Math.round(loserElo)}, L10: ${loserFormStr}) ${locationStr}.`;
 
-  // ── Paragraph 1 — short, angle-first opening ──
-  if (isTossUp) {
-    paragraphs.push(
-      `Coin flip alert. ${winnerTeam.name} (${winnerRecord}) get the slimmest of nods over ${loserTeam.name} (${loserRecord}) — Elo gap of just ${Math.round(eloDiff)} points. Either side wins and it shouldn't surprise anyone.`
-    );
-  } else {
-    switch (openingVariant) {
-      case 0: {
-        const angle =
-          winnerForm.streak >= 3 ? `${winnerTeam.name} ride a ${winnerForm.streak}-game win streak` :
-          loserForm.streak <= -3 ? `${loserTeam.name} are skidding (${Math.abs(loserForm.streak)} straight losses)` :
-          eloDiff >= 100 ? `a ${Math.round(eloDiff)}-point Elo gulf` :
-          loserInjuries.totalOut >= 2 ? `${loserTeam.name}'s injury report` :
-          `${winnerTeam.name}'s ${winnerRecord} record vs ${loserTeam.name}'s ${loserRecord}`;
-        paragraphs.push(
-          `The story: ${angle}. ${winnerTeam.name} land the call ${isHomeFav ? "at home" : "on the road"}, with their ${Math.round(winnerElo)} Elo sitting ${Math.round(eloDiff)} points clear of ${loserTeam.name}'s ${Math.round(loserElo)}.`
-        );
-        break;
-      }
-      case 1: {
-        paragraphs.push(
-          `Numbers first: ${winnerRecord} vs ${loserRecord}, Elo ${Math.round(winnerElo)} vs ${Math.round(loserElo)}, recent runs of ${winnerFormStr} against ${loserFormStr}. ${winnerTeam.name} are the model's call ${isHomeFav ? "at home" : "on the road"}.`
-        );
-        break;
-      }
-      case 2: {
-        paragraphs.push(
-          `${loserTeam.name} arrive at ${loserRecord} with a ${loserFormStr} L10 — not the obvious pick on paper. ${winnerTeam.name} (${winnerRecord}, Elo ${Math.round(winnerElo)}) get the call ${isHomeFav ? "at home" : "on the road"}, separated by ${Math.round(eloDiff)} Elo points.`
-        );
-        break;
-      }
-      case 3: {
-        const verdict = confidence >= 75 ? "should win this" : confidence >= 65 ? "are the right side" : "get the lean";
-        paragraphs.push(
-          `${winnerTeam.name} ${verdict}. ${winnerRecord} record, ${Math.round(winnerElo)} Elo — ${Math.round(eloDiff)} points clear of ${loserTeam.name}'s ${Math.round(loserElo)}. The recent splits (${winnerFormStr} vs ${loserFormStr}) line up the same direction.`
-        );
-        break;
-      }
-      case 4:
-      default: {
-        const question = isHomeFav
-          ? `Can ${loserTeam.name} steal one on the road?`
-          : `Can ${loserTeam.name} protect home ice tonight?`;
-        paragraphs.push(
-          `${question} The model says probably not. ${winnerTeam.name} bring a ${winnerRecord} record and a ${Math.round(winnerElo)} Elo — ${Math.round(eloDiff)} points clear, with a ${winnerFormStr} L10 to back it up.`
-        );
-        break;
-      }
-    }
-  }
-
-  // ── Paragraph 2 — strongest secondary factor (form, rest, injuries, situational) ──
-  const secondaryParts: string[] = [];
-
-  // Pick the most interesting secondary fact (only one)
+  // Rest sentence — only if there's a meaningful difference
   const homeRest = homeExtended.restDays;
   const awayRest = awayExtended.restDays;
-  const restGap = (homeRest !== null && awayRest !== null) ? Math.abs(homeRest - awayRest) : 0;
-  const hasInjuryStory = loserInjuries.totalOut > 0 || winnerInjuries.totalOut > 0;
-  const hasFormStory = Math.abs(winnerWins10 - loserWins10) >= 3;
-
-  if (loserInjuries.totalOut >= 2) {
-    const outList = injuryList(loserInjuries.out, 2);
-    secondaryParts.push(
-      `Injury report tilts further against ${loserTeam.name} — ${outList} ${loserInjuries.totalOut > 1 ? "are" : "is"} out${loserInjuries.totalOut > 2 ? ` plus ${loserInjuries.totalOut - 2} more` : ""}. That widens the gap beyond what the headline numbers show.`
-    );
-  } else if (restGap >= 2) {
-    const restedTeam = (homeRest ?? 0) > (awayRest ?? 0) ? game.homeTeam.name : game.awayTeam.name;
-    const fatiguedTeam = (homeRest ?? 0) > (awayRest ?? 0) ? game.awayTeam.name : game.homeTeam.name;
-    const restedDays = Math.max(homeRest ?? 0, awayRest ?? 0);
-    const fatiguedDays = Math.min(homeRest ?? 0, awayRest ?? 0);
-    secondaryParts.push(
-      `Rest tilts ${restedTeam}'s way — ${restedDays} days off vs ${fatiguedDays === 0 ? `a back-to-back for ${fatiguedTeam}` : `${fatiguedDays} for ${fatiguedTeam}`}. Two-plus day rest gaps reliably move late-game execution.`
-    );
-  } else if (homeRest === 0 || awayRest === 0) {
+  if (homeRest !== null && awayRest !== null && Math.abs(homeRest - awayRest) >= 2) {
+    const restedTeam = homeRest > awayRest ? game.homeTeam.name : game.awayTeam.name;
+    const fatiguedTeam = homeRest > awayRest ? game.awayTeam.name : game.homeTeam.name;
+    const restedDays = homeRest > awayRest ? homeRest : awayRest;
+    const fatiguedDays = homeRest > awayRest ? awayRest : homeRest;
+    line += ` ${restedTeam} has ${restedDays} days rest while ${fatiguedTeam} plays on ${fatiguedDays === 0 ? "a back-to-back" : "short rest"}.`;
+  } else if ((homeRest === 0 || awayRest === 0) && homeRest !== awayRest) {
     const b2bTeam = homeRest === 0 ? game.homeTeam.name : game.awayTeam.name;
-    secondaryParts.push(
-      `${b2bTeam} are on a back-to-back, which historically drops win probability 4-7 percentage points.`
-    );
-  } else if (hasFormStory) {
-    secondaryParts.push(
-      `Form backs the call: ${winnerTeam.name} are ${winnerWins10}-${10 - winnerWins10} in their last 10, ${loserTeam.name} are ${loserWins10}-${10 - loserWins10}.`
-    );
-  } else if (winnerForm.avgScore > 0 && loserForm.avgScore > 0) {
-    secondaryParts.push(
-      `Recent scoring: ${winnerTeam.name} averaging ${winnerForm.avgScore.toFixed(1)} for and ${winnerForm.avgAllowed.toFixed(1)} against, ${loserTeam.name} at ${loserForm.avgScore.toFixed(1)}/${loserForm.avgAllowed.toFixed(1)}.`
-    );
+    line += ` ${b2bTeam} is on a back-to-back.`;
   }
 
-  if (secondaryParts.length > 0) {
-    paragraphs.push(secondaryParts[0]!);
+  // Injury sentence — only if winner has notable absences
+  if (winnerInjuries.totalOut > 0) {
+    const outList = injuryList(winnerInjuries.out, 2);
+    line += ` Key absence${winnerInjuries.totalOut > 1 ? "s" : ""}: ${outList} (out) may limit ${winnerTeam.name}'s ceiling.`;
+  } else if (winnerInjuries.totalDoubtful > 0) {
+    const doubtList = injuryList(winnerInjuries.doubtful, 1);
+    line += ` Watch ${doubtList} (doubtful) for ${winnerTeam.name}.`;
   }
 
-  // ── Paragraph 3 (optional, short) — biggest risk if any ──
-  const risks: string[] = [];
-  if (winnerWins10 < loserWins10 && Math.abs(winnerWins10 - loserWins10) >= 2) {
-    risks.push(`${loserTeam.name} have actually been the better team over the last 10`);
-  } else if (eloDiff < 30 && !isTossUp) {
-    risks.push(`the Elo gap is narrow enough that normal variance could flip this`);
-  } else if (loserForm.streak >= 3 && !isTossUp) {
-    risks.push(`${loserTeam.name} ride a ${loserForm.streak}-game win streak the model may be discounting`);
+  if (isTossUp) {
+    line += ` This is a toss-up — Elo ratings (${Math.round(homeElo)} vs ${Math.round(awayElo)}) show neither team has a clear edge.`;
   }
 
-  if (risks.length > 0) {
-    paragraphs.push(`Risk: ${risks[0]}.`);
-  }
-
-  return paragraphs.join("\n\n");
+  return line;
 }
 
 // ─── AI agreement helper ─────────────────────────────────────────────────────
@@ -428,7 +325,8 @@ async function generateAIAnalysis(
     .join("\n");
 
   // ── Build Elo section ───────────────────────────────────────────────────
-  const eloSection = `Elo ratings: Home Elo: ${Math.round(homeElo)} | Away Elo: ${Math.round(awayElo)} | Elo gap: ${Math.abs(Math.round(homeElo - awayElo))} pts ${homeElo > awayElo ? 'home advantage' : 'away advantage'}`;
+  const eloPredLocal = getEloPrediction(homeElo, awayElo, game.sport.toString());
+  const eloSection = `Elo ratings: Home Elo: ${Math.round(homeElo)} | Away Elo: ${Math.round(awayElo)} | Elo win prob: ${(eloPredLocal.homeWinProb * 100).toFixed(0)}% home`;
 
   // ── Build rest section ──────────────────────────────────────────────────
   const homeRestStr = homeExtended.restDays !== null
@@ -534,13 +432,14 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           {
             role: "system",
             content:
-              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Write a SHORT, dense breakdown of why the model picked this side. Independently assess the matchup using only the data provided. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. CRITICAL LENGTH RULE: 80 to 130 words total. Two or three short paragraphs MAXIMUM. Users are scanning quickly — every sentence must earn its place. CRITICAL VARIETY RULES: (1) NEVER start with the phrase 'hold a slight edge', 'hold an edge', 'have the edge', or any variant. Banned. (2) NEVER open with '[Team] come in at [record] with an Elo of [number]' — that's a template, not a sentence. (3) DO open with the SINGLE most distinctive fact about this matchup — a streak, a lopsided injury, a pitcher edge, a rest gap, an Elo chasm, an underdog pick, anything that makes a fan stop scrolling. (4) Vary openings, sentence structures, and verbs across games. STRUCTURE: Paragraph 1 (2-3 sentences) — the lead angle and one or two supporting numbers. Paragraph 2 (2-3 sentences) — the strongest contributing factor not yet covered (form, injuries, rest, pitcher quality, Elo gap), with concrete numbers. Optional paragraph 3 (1 sentence) — the single biggest risk or counter-argument. Reference concrete numbers throughout: Elo ratings, win-loss records, L10 streaks, point differentials, rest days, specific player names from the injury report, pitcher names and ERA/FIP/WHIP for MLB. NEVER use empty filler like 'should be a good game' or 'anything can happen'. Do NOT cite win probability percentages — describe the edge using the supporting data instead.",
+              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write exactly 2-3 sentences that are specific, data-driven, and reference concrete numbers: rest days, head-to-head records, scoring trends, Elo ratings, and key injuries when they tell a meaningful story. Never use generic phrases like 'should be a good game' or 'anything can happen'.",
           },
           { role: "user", content: userPrompt },
         ],
-        max_completion_tokens: 600,
+        max_tokens: 150,
+        temperature: 0.15,
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {
@@ -640,9 +539,10 @@ function calcValueRating(
 // ─── Edge rating ──────────────────────────────────────────────────────────────
 
 function calcEdgeRating(confidence: number): number {
-  // Linear edge rating: confidence 50 → 1, 55 → 2, 60 → 3, ... 95 → 10
-  const normalized = clamp((confidence - 50) / 45, 0, 1);
-  return clamp(Math.round(normalized * 9 + 1), 1, 10);
+  // Use a power curve: confidence 50 -> 1, 65 -> 4, 75 -> 6, 85 -> 8, 95 -> 10
+  const normalized = (confidence - 50) / 45; // 0 to 1
+  const curved = Math.pow(normalized, 0.6); // More aggressive curve rewarding higher confidence
+  return clamp(Math.round(curved * 9 + 1), 1, 10);
 }
 
 // ─── Sport factor weights ────────────────────────────────────────────────────
@@ -675,58 +575,58 @@ export interface SportFactorWeights {
 const SPORT_FACTOR_WEIGHTS: Record<string, SportFactorWeights> = {
   NBA: {
     winPct: 0.03, recentForm: 0.09, homeAwaySplit: 0.06, pointDiff: 0.09,
-    streak: 0.01, restDays: 0.06, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.03, strengthOfSchedule: 0.05, elo: 0.16, injuries: 0.13,
-    advancedMetrics: 0.16, startingPitcher: 0.00, weather: 0.00,
+    streak: 0.02, restDays: 0.06, scoringTrend: 0.03, defenseTrend: 0.03,
+    headToHead: 0.03, strengthOfSchedule: 0.05, elo: 0.16, injuries: 0.12,
+    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.00,
     situational: 0.04, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.05,
   },
   NFL: {
     winPct: 0.04, recentForm: 0.07, homeAwaySplit: 0.07, pointDiff: 0.09,
-    streak: 0.01, restDays: 0.05, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.13, injuries: 0.16,
-    advancedMetrics: 0.17, startingPitcher: 0.00, weather: 0.04,
+    streak: 0.02, restDays: 0.05, scoringTrend: 0.03, defenseTrend: 0.04,
+    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.13, injuries: 0.15,
+    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.04,
     situational: 0.02, refereeTendency: 0.00, clutchFactor: 0.03, matchupInteraction: 0.03,
   },
   MLB: {
     winPct: 0.04, recentForm: 0.06, homeAwaySplit: 0.04, pointDiff: 0.07,
-    streak: 0.01, restDays: 0.01, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.12, injuries: 0.13,
-    advancedMetrics: 0.18, startingPitcher: 0.18, weather: 0.03,
+    streak: 0.02, restDays: 0.01, scoringTrend: 0.04, defenseTrend: 0.04,
+    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.12, injuries: 0.12,
+    advancedMetrics: 0.10, startingPitcher: 0.12, weather: 0.03,
     situational: 0.02, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.04,
   },
   NHL: {
     winPct: 0.04, recentForm: 0.10, homeAwaySplit: 0.05, pointDiff: 0.09,
-    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.15, injuries: 0.15,
-    advancedMetrics: 0.17, startingPitcher: 0.00, weather: 0.00,
+    streak: 0.03, restDays: 0.04, scoringTrend: 0.03, defenseTrend: 0.04,
+    headToHead: 0.04, strengthOfSchedule: 0.05, elo: 0.15, injuries: 0.13,
+    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.00,
     situational: 0.04, refereeTendency: 0.00, clutchFactor: 0.03, matchupInteraction: 0.04,
   },
   NCAAB: {
     winPct: 0.04, recentForm: 0.08, homeAwaySplit: 0.11, pointDiff: 0.08,
-    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.20, injuries: 0.09,
-    advancedMetrics: 0.11, startingPitcher: 0.00, weather: 0.00,
+    streak: 0.02, restDays: 0.04, scoringTrend: 0.04, defenseTrend: 0.04,
+    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.20, injuries: 0.08,
+    advancedMetrics: 0.03, startingPitcher: 0.00, weather: 0.00,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
   },
   NCAAF: {
     winPct: 0.04, recentForm: 0.08, homeAwaySplit: 0.08, pointDiff: 0.09,
-    streak: 0.01, restDays: 0.06, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.18, injuries: 0.10,
-    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.04,
+    streak: 0.03, restDays: 0.06, scoringTrend: 0.03, defenseTrend: 0.04,
+    headToHead: 0.04, strengthOfSchedule: 0.10, elo: 0.18, injuries: 0.08,
+    advancedMetrics: 0.03, startingPitcher: 0.00, weather: 0.04,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.04, matchupInteraction: 0.04,
   },
   MLS: {
     winPct: 0.05, recentForm: 0.12, homeAwaySplit: 0.09, pointDiff: 0.08,
-    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.11,
-    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.02,
+    streak: 0.03, restDays: 0.04, scoringTrend: 0.04, defenseTrend: 0.04,
+    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.09,
+    advancedMetrics: 0.02, startingPitcher: 0.00, weather: 0.02,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
   },
   EPL: {
     winPct: 0.05, recentForm: 0.12, homeAwaySplit: 0.09, pointDiff: 0.08,
-    streak: 0.01, restDays: 0.04, scoringTrend: 0.00, defenseTrend: 0.00,
-    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.11,
-    advancedMetrics: 0.10, startingPitcher: 0.00, weather: 0.02,
+    streak: 0.03, restDays: 0.04, scoringTrend: 0.04, defenseTrend: 0.04,
+    headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.09,
+    advancedMetrics: 0.02, startingPitcher: 0.00, weather: 0.02,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
   },
 };
@@ -1031,9 +931,9 @@ export interface EnsembleResult {
  */
 function eloOnlyModel(homeElo: number, awayElo: number, sport: string): SubModelResult {
   const { homeWinProb } = getEloPrediction(homeElo, awayElo, sport);
-  const prob100 = Math.round(homeWinProb * 100);
+  const prob100 = clamp(Math.round(homeWinProb * 100), 8, 92);
   // Confidence = how far from 50, dampened — Elo alone is moderate signal
-  const rawConf = 50 + Math.abs(prob100 - 50) * 0.35;
+  const rawConf = 50 + Math.abs(prob100 - 50) * 0.55;
   return { homeWinProb: prob100, confidence: clamp(Math.round(rawConf), 50, 80) };
 }
 
@@ -1070,10 +970,10 @@ function recentFormModel(
   const rawScore = 0.55 * wrAdv + 0.30 * ptsDiff + 0.15 * streakAdv;
 
   const rawProb = 1 / (1 + Math.exp(-rawScore * 4));
-  const prob100 = Math.round(rawProb * 100);
+  const prob100 = clamp(Math.round(rawProb * 100), 8, 92);
 
   // Recent form is moderate-reliability signal; dampen confidence similarly to composite
-  const rawConf = 50 + Math.abs(prob100 - 50) * 0.30;
+  const rawConf = 50 + Math.abs(prob100 - 50) * 0.50;
   return { homeWinProb: prob100, confidence: clamp(Math.round(rawConf), 50, 80) };
 }
 
@@ -1135,7 +1035,7 @@ function ensemblePrediction(
   const finalConf = clamp(Math.round(rawEnsembleConf) - confidencePenalty, 50, sportCeiling);
 
   return {
-    homeWinProb:   ensembleProb,
+    homeWinProb:   clamp(ensembleProb, 8, 92),
     confidence:    finalConf,
     divergenceFlag,
     subModels: {
@@ -1239,11 +1139,7 @@ export async function generatePrediction(
   const seasonProgress = avgGamesPlayed / seasonTotal;
 
   let seasonDampening: number;
-  if (sportKey === 'MLB' || sportKey === 'NHL' || sportKey === 'MLS' || sportKey === 'EPL') {
-    // Gradual ramp for long-season sports — less punishing for slow data buildup
-    // Floor of 0.7 instead of 0.6, ramps linearly to 1.0 by ~40% of season
-    seasonDampening = Math.min(1.0, 0.7 + seasonProgress * 0.75);
-  } else if (seasonProgress < 0.2) {
+  if (seasonProgress < 0.2) {
     seasonDampening = 0.6;
   } else if (seasonProgress < 0.4) {
     seasonDampening = 0.8;
@@ -1252,46 +1148,7 @@ export async function generatePrediction(
   }
 
   // ── Get sport-specific weights ──────────────────────────────────────────
-  let weights = getWeightsForSport(sportKey);
-
-  // ── Early-season factor dampening (MLB only) ─────────────────────────────
-  // In April MLB, team-level stats are based on 10-15 games and are mostly
-  // noise. Elo alone hits 57.4% on MLB; noisy factors were dragging accuracy
-  // to 19%. Scale non-Elo weights toward zero when the season is young.
-  //
-  // CRITICAL FIXES from previous version:
-  // 1. Uses TRUE games played from team.record (not the L10 form sample)
-  // 2. ONLY applies to MLB — other sports were getting crippled by this
-  // 3. NBA/NHL/etc. early season would need separate calibration if needed
-  if (sportKey === "MLB") {
-    const homeGP = (game.homeTeam.record?.wins ?? 0) + (game.homeTeam.record?.losses ?? 0);
-    const awayGP = (game.awayTeam.record?.wins ?? 0) + (game.awayTeam.record?.losses ?? 0);
-    const minGP = Math.min(homeGP, awayGP);
-    const seasonMaturity = Math.min(1.0, minGP / 20); // 0.0 at season start → 1.0 at 20+ games
-
-    if (seasonMaturity < 1.0) {
-      const adjustedWeights = { ...weights };
-      const keysToScale: Array<keyof typeof weights> = [
-        "winPct", "recentForm", "homeAwaySplit", "pointDiff", "streak",
-        "restDays", "scoringTrend", "defenseTrend", "headToHead",
-        "strengthOfSchedule", "injuries", "advancedMetrics", "startingPitcher", "weather"
-      ];
-      for (const key of keysToScale) {
-        if (key in adjustedWeights) {
-          (adjustedWeights as any)[key] = (adjustedWeights as any)[key] * seasonMaturity;
-        }
-      }
-      // Redistribute the dampened weight to Elo so total still sums to ~1.0
-      const totalDampened = keysToScale.reduce((sum, key) => {
-        const orig = (weights as any)[key] ?? 0;
-        const adj = (adjustedWeights as any)[key] ?? 0;
-        return sum + (orig - adj);
-      }, 0);
-      adjustedWeights.elo = weights.elo + totalDampened;
-      weights = adjustedWeights;
-      console.log(`[dampen] MLB early-season: minGP=${minGP}, maturity=${seasonMaturity.toFixed(2)}, elo weight ${(weights.elo).toFixed(3)}`);
-    }
-  }
+  const weights = getWeightsForSport(sportKey);
 
   // ── Factor 1: Win % differential ───────────────────────────────────────
   const homeWinPct = getWinPercentage(game.homeTeam);
@@ -1513,12 +1370,10 @@ export async function generatePrediction(
   };
 
   // ── Factor 12b: Starting Pitcher (MLB only) ────────────────────────────
-  // The starting pitcher is the single most important variable in baseball —
-  // research suggests SP accounts for 30-50% of single-game outcome variance.
-  // We score using a composite quality metric that blends ERA, FIP, WHIP, K/9,
-  // BB/9, and recent 5-start form (data sourced from MLB StatsAPI when available,
-  // falling back to ESPN-only ERA when not). The composite is on a 0-10 scale
-  // where 5.0 = league average, 6.5+ = above average, 8.0+ = elite.
+  // The starting pitcher is the single most important variable in baseball.
+  // When ESPN provides confirmed probable starters, compare their ERAs directly.
+  // ERA scale: < 3.00 elite, 3.00–4.00 good, 4.00–5.00 average, > 5.00 poor.
+  // Score = clamp((awayERA - homeERA) / 2, -1, 1) — home pitcher advantage is positive.
   let startingPitcherHomeScore = 0;
   let startingPitcherAwayScore = 0;
   let startingPitcherDesc = "No starting pitcher data available";
@@ -1527,70 +1382,20 @@ export async function generatePrediction(
     const homePitcher = homeLineup?.startingPitcher;
     const awayPitcher = awayLineup?.startingPitcher;
 
-    // Build a label string for ONE pitcher, surfacing every metric we have.
-    const labelFor = (p: typeof homePitcher): string => {
-      if (!p) return "TBD";
-      const parts: string[] = [];
-      if (p.era !== undefined) parts.push(`ERA ${p.era.toFixed(2)}`);
-      if (p.fip !== undefined) parts.push(`FIP ${p.fip.toFixed(2)}`);
-      if (p.whip !== undefined) parts.push(`WHIP ${p.whip.toFixed(2)}`);
-      if (p.k9 !== undefined) parts.push(`K/9 ${p.k9.toFixed(1)}`);
-      if (p.bb9 !== undefined) parts.push(`BB/9 ${p.bb9.toFixed(1)}`);
-      if (p.record) parts.push(p.record);
-      if (p.recent5Era !== undefined) {
-        const flag = p.recent5WarningFlag ? " ⚠ struggling" : "";
-        parts.push(`recent 5: ${p.recent5Era.toFixed(2)}${flag}`);
-      }
-      return parts.length > 0 ? `${p.name} (${parts.join(", ")})` : p.name;
-    };
-
-    if (homePitcher && awayPitcher) {
-      // Compute composite quality scores (0-10, 5 = average) for each side
-      const homeQuality = computePitcherQualityScore({
-        mlbPersonId: homePitcher.mlbPersonId ?? 0,
-        name: homePitcher.name,
-        seasonEra: homePitcher.era,
-        seasonFip: homePitcher.fip,
-        seasonWhip: homePitcher.whip,
-        seasonK9: homePitcher.k9,
-        seasonBb9: homePitcher.bb9,
-        recent5Era: homePitcher.recent5Era,
-      });
-      const awayQuality = computePitcherQualityScore({
-        mlbPersonId: awayPitcher.mlbPersonId ?? 0,
-        name: awayPitcher.name,
-        seasonEra: awayPitcher.era,
-        seasonFip: awayPitcher.fip,
-        seasonWhip: awayPitcher.whip,
-        seasonK9: awayPitcher.k9,
-        seasonBb9: awayPitcher.bb9,
-        recent5Era: awayPitcher.recent5Era,
-      });
-
-      // Map quality delta to factor score. A 2-point quality gap is meaningful;
-      // a 4-point gap is dominant. Divide by 3.5 so realistic gaps stay in [-1, 1].
-      const qualityDelta = homeQuality - awayQuality;
-      startingPitcherHomeScore = clamp(qualityDelta / 3.5, -1, 1);
+    if (homePitcher && awayPitcher && homePitcher.era !== undefined && awayPitcher.era !== undefined) {
+      // Lower ERA is better → positive score for team with better (lower) ERA
+      startingPitcherHomeScore = clamp((awayPitcher.era - homePitcher.era) / 2, -1, 1);
       startingPitcherAwayScore = -startingPitcherHomeScore;
-
-      // Human-readable edge description
-      const absDelta = Math.abs(qualityDelta);
-      const edgeStrength = absDelta >= 2.5 ? "decisive" : absDelta >= 1.5 ? "clear" : absDelta >= 0.7 ? "modest" : "minimal";
-      const edgeSide = qualityDelta > 0.2 ? "Home" : qualityDelta < -0.2 ? "Away" : "Neither";
-      const edgeNote = edgeSide === "Neither"
-        ? "Pitching matchup is essentially a wash"
-        : `${edgeSide} holds a ${edgeStrength} pitching edge (${homeQuality.toFixed(1)} vs ${awayQuality.toFixed(1)} composite quality)`;
-
-      startingPitcherDesc = `Home SP ${labelFor(homePitcher)} vs Away SP ${labelFor(awayPitcher)} — ${edgeNote}`;
+      const homeLabel = `${homePitcher.name} (ERA ${homePitcher.era.toFixed(2)}${homePitcher.record ? ", " + homePitcher.record : ""})`;
+      const awayLabel = `${awayPitcher.name} (ERA ${awayPitcher.era.toFixed(2)}${awayPitcher.record ? ", " + awayPitcher.record : ""})`;
+      startingPitcherDesc = `Home SP: ${homeLabel} | Away SP: ${awayLabel}`;
     } else if (homePitcher && !awayPitcher) {
-      // One side has confirmed starter, other is TBD — small edge to known side
-      startingPitcherHomeScore = 0.2;
-      startingPitcherAwayScore = -0.2;
-      startingPitcherDesc = `Home SP ${labelFor(homePitcher)} | Away SP TBD — slight edge to home for confirmed starter`;
+      startingPitcherHomeScore = 0.2; // slight edge for having known starter
+      startingPitcherDesc = `Home SP: ${homePitcher.name}${homePitcher.era !== undefined ? " (ERA " + homePitcher.era.toFixed(2) + ")" : ""} | Away SP: TBD`;
     } else if (!homePitcher && awayPitcher) {
-      startingPitcherHomeScore = -0.2;
       startingPitcherAwayScore = 0.2;
-      startingPitcherDesc = `Home SP TBD | Away SP ${labelFor(awayPitcher)} — slight edge to away for confirmed starter`;
+      startingPitcherHomeScore = -0.2;
+      startingPitcherDesc = `Home SP: TBD | Away SP: ${awayPitcher.name}${awayPitcher.era !== undefined ? " (ERA " + awayPitcher.era.toFixed(2) + ")" : ""}`;
     } else {
       startingPitcherDesc = "Probable starters not yet announced";
     }
@@ -1793,6 +1598,8 @@ export async function generatePrediction(
     streakFactor,
     homeAwaySplitFactor,
     restDaysFactor,
+    scoringTrendFactor,
+    defenseTrendFactor,
     h2hFactor,
     sosFactor,
     eloFactor,
@@ -1816,6 +1623,8 @@ export async function generatePrediction(
     { key: "streak", homeScore: homeStreakScore, awayScore: awayStreakScore },
     { key: "homeAwaySplit", homeScore: homeHomeScore, awayScore: awayAwayScore },
     { key: "restDays", homeScore: homeRestScore, awayScore: awayRestScore },
+    { key: "scoringTrend", homeScore: scoringTrendFactor.homeScore, awayScore: scoringTrendFactor.awayScore },
+    { key: "defenseTrend", homeScore: defenseTrendFactor.homeScore, awayScore: defenseTrendFactor.awayScore },
     { key: "headToHead", homeScore: homeH2HScore, awayScore: awayH2HScore },
     { key: "strengthOfSchedule", homeScore: homeSoSScore, awayScore: awaySoSScore },
     { key: "elo", homeScore: eloFactor.homeScore, awayScore: eloFactor.awayScore },
@@ -1830,14 +1639,12 @@ export async function generatePrediction(
   ];
 
   // Factors that get early season dampening applied
-  // NOTE: Elo excluded — already normalized via in-memory replay, doesn't
-  // need additional early-season compression.
   const dampenedFactors: Set<keyof SportFactorWeights> = new Set([
     "winPct",
     "homeAwaySplit",
     "strengthOfSchedule",
+    "elo",
     "streak",
-    "clutchFactor",
   ]);
 
   let homeWeightedSum = 0;
@@ -1853,57 +1660,16 @@ export async function generatePrediction(
   // homeWeightedSum is in [-1, 1]; use sigmoid for natural probability spread
   // More moderate scaling - prevents clustering at extremes
   const sigmoidScale = SIGMOID_SCALING[sportKey] ?? 4.5;
-  const compositeDifferential = homeWeightedSum - awayWeightedSum;
-  const rawHomeProb = 1 / (1 + Math.exp(-compositeDifferential * sigmoidScale));
+  const rawHomeProb = 1 / (1 + Math.exp(-homeWeightedSum * sigmoidScale));
   const rawAwayProb = 1 - rawHomeProb;
-  // Scale to percentage — no artificial clamp, let the math speak
-  let homeWinProbability = Math.round(rawHomeProb * 100);
-  let awayWinProbability = 100 - homeWinProbability;
-
-  // ── Soccer draw adjustment ─────────────────────────────────────────────
-  // In EPL/MLS, ~25% of games end in draws. A binary predictor that ignores
-  // draws produces misleadingly high confidence. Estimate draw probability
-  // and redistribute: reduce both home and away win probabilities so the
-  // displayed confidence reflects the real chance of the picked team winning.
-  //
-  // Draw probability model: draws are most likely when teams are closely
-  // matched. baseDrawRate is the league's historical draw frequency.
-  // The closer the binary probabilities are to 50/50, the higher the draw
-  // chance. As one team dominates (70/30, 80/20), draw probability drops.
-  const DRAW_RATES: Record<string, number> = { MLS: 0.28, EPL: 0.25 };
-  const baseDrawRate = DRAW_RATES[sportKey];
-  let drawProbabilityOut: number | undefined;
-  if (baseDrawRate !== undefined) {
-    const rawHP = homeWinProbability / 100;
-    const rawAP = awayWinProbability / 100;
-    const closeness = 1 - Math.abs(rawHP - rawAP); // 1.0 when 50/50, 0.0 when 100/0
-    const drawProb = baseDrawRate * Math.pow(closeness, 0.6); // scale by closeness
-    const clampedDrawProb = Math.min(0.35, Math.max(0.05, drawProb)); // floor 5%, cap 35%
-
-    // Redistribute: subtract draw probability proportionally from both sides
-    const adjustedHome = rawHP * (1 - clampedDrawProb);
-    const adjustedAway = rawAP * (1 - clampedDrawProb);
-
-    homeWinProbability = Math.round(adjustedHome * 100);
-    awayWinProbability = Math.round(adjustedAway * 100);
-    drawProbabilityOut = Math.round(clampedDrawProb * 100);
-  }
+  // Scale to percentage
+  const homeWinProbability = clamp(Math.round(rawHomeProb * 100), 8, 92);
+  const awayWinProbability = 100 - homeWinProbability;
 
   const predictedWinner: "home" | "away" = homeWinProbability >= 50 ? "home" : "away";
 
   // ── Toss-up detection ───────────────────────────────────────────────────
-  // Only flag as toss-up when the model truly can't separate the teams
-  let isTossUp = Math.abs(homeWinProbability - 50) < 2;
-
-  // Flag draw-dominant games as toss-ups
-  if (drawProbabilityOut !== undefined && baseDrawRate !== undefined) {
-    const adjHome = homeWinProbability / 100;
-    const adjAway = awayWinProbability / 100;
-    const dp = drawProbabilityOut / 100;
-    if (dp >= adjHome && dp >= adjAway) {
-      isTossUp = true;
-    }
-  }
+  const isTossUp = Math.abs(homeWinProbability - 50) < 5;
 
   // ── Confidence ─────────────────────────────────────────────────────────
   const winnerProb = predictedWinner === "home" ? homeWinProbability : awayWinProbability;
@@ -1929,11 +1695,10 @@ export async function generatePrediction(
     : 1.0;
   const lowDataWarning = dataCoverage < 0.6;
 
-  // Linear coverage penalty — the old 1.5 exponent created a cliff at 60-70%
-  // coverage that destroyed all signal for early-season sports.
-  // Linear (exponent 1.0) with a higher floor of 0.6 preserves differentiation
-  // while still penalizing missing data proportionally.
-  const coverageMultiplier = Math.max(0.75, dataCoverage);
+  // Compress confidence toward 50% proportionally to missing data.
+  // Full data (1.0) → no compression. Half data (0.5) → 50% compression.
+  // Floor of 0.5 ensures we never compress more than 50% even with zero data.
+  const coverageMultiplier = Math.max(0.4, Math.pow(dataCoverage, 1.5));
   const confidence = clamp(
     Math.round(50 + (calibratedConfidence - 50) * coverageMultiplier),
     50,
@@ -1948,37 +1713,18 @@ export async function generatePrediction(
   const formSubModel   = recentFormModel(homeForm, awayForm);
   const ensemble       = ensemblePrediction(compositeSubModel, eloSubModel, formSubModel, sportKey);
 
-  // In early season, sub-models (especially form) have too little data — their
-  // disagreement is noise, not signal. Blend instead of taking minimum.
-  // At 33%+ of season, revert to full Math.min behavior.
-  const ensembleBlendWeight = Math.min(1.0, seasonProgress * 3);
-  // Ensemble correction: sub-models only vote down confidence when they
-  // disagree with the composite on the WINNER. When they agree, composite
-  // confidence stands — sub-models are 1-2 factor models by design and
-  // their lower confidence is structural, not signal.
-  const compositePicksHome = homeWinProbability >= 50;
-  const ensemblePicksHome  = ensemble.homeWinProb >= 50;
-  const modelsDisagree     = compositePicksHome !== ensemblePicksHome;
-  let postEnsembleConf: number;
-  if (modelsDisagree) {
-    const conservativeFloor = Math.min(confidence, ensemble.confidence) + 3;
-    const rawBlend = confidence * (1 - ensembleBlendWeight) + ensemble.confidence * ensembleBlendWeight;
-    postEnsembleConf = Math.round(Math.min(rawBlend, conservativeFloor));
-  } else {
-    postEnsembleConf = confidence;
-  }
-  // Lineup confirmation modifier: unconfirmed lineups compress confidence toward 50%
-  // proportionally instead of flat subtraction. Flat subtraction destroyed all signal
-  // for sports like MLB where lineups aren't posted until game day.
-  // Scale: 1.0 = full confidence, lower = compressed toward 50%.
-  const lineupRetention: Record<string, number> = { MLB: 0.75, NFL: 0.70, NBA: 0.80, NHL: 0.75, NCAAB: 0.85, NCAAF: 0.80, MLS: 0.80, EPL: 0.80 };
-  const fullRetention = lineupRetention[sportKey] ?? 0.80;
-  // Each unconfirmed lineup applies half the penalty
-  let retention = 1.0;
-  if (!homeLineup || homeLineup.starters.length === 0) retention -= (1 - fullRetention) / 2;
-  if (!awayLineup || awayLineup.starters.length === 0) retention -= (1 - fullRetention) / 2;
+  // Apply ensemble divergence penalty on top of the existing confidence
+  const postEnsembleConf = ensemble.divergenceFlag
+    ? clamp(confidence - 10, 50, isTossUp ? cal.tossUpCeiling : cal.ceiling)
+    : confidence;
+  // Lineup confirmation modifier: unconfirmed lineups = uncertainty tax
+  const lineupPenalties: Record<string, number> = { MLB: -8, NFL: -6, NBA: -4, NHL: -5, NCAAB: -3, NCAAF: -4, MLS: -3, EPL: -3 };
+  const maxLineupPenalty = lineupPenalties[sportKey] ?? -4;
+  let lineupPenalty = 0;
+  if (!homeLineup || homeLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
+  if (!awayLineup || awayLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
   const finalConfidence = clamp(
-    Math.round(50 + (postEnsembleConf - 50) * retention),
+    Math.round(postEnsembleConf + lineupPenalty),
     50,
     isTossUp ? cal.tossUpCeiling : cal.ceiling
   );
@@ -2085,7 +1831,6 @@ export async function generatePrediction(
     homeStreak: homeForm.streak,
     awayStreak: awayForm.streak,
     isTossUp,
-    drawProbability: drawProbabilityOut,
     dataCoverage: Math.round(dataCoverage * 100) / 100,
     lowDataWarning,
     ensembleDivergence: ensemble.divergenceFlag,
