@@ -65,6 +65,7 @@ export interface Game {
     onSecond: boolean;
     onThird: boolean;
     inningHalf: "top" | "bottom" | null;
+    inningNumber: number | null;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };

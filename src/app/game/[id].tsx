@@ -41,6 +41,7 @@ import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { MLBLiveState } from '@/components/sports/MLBLiveState';
+import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -211,6 +212,7 @@ interface Game {
     onSecond: boolean;
     onThird: boolean;
     inningHalf: 'top' | 'bottom' | null;
+    inningNumber: number | null;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };
@@ -1320,7 +1322,7 @@ const SilkThread = React.memo(function SilkThread({
 // from the new tip-off. We do NOT show an explicit "DELAYED" label because
 // most "SCHEDULED but past start time" cases are stale upstream data, not
 // actual delays — labeling all of them DELAYED would be misleading.
-const COUNTDOWN_WINDOW_SEC = 10 * 60;
+const COUNTDOWN_WINDOW_SEC = 60 * 60;
 
 function useSecondsUntil(gameTime: string): number {
   const target = useMemo(() => {
@@ -1345,15 +1347,49 @@ function formatCountdown(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// Floating LED clock above the 0–0 score, only inside the 10-minute window.
-function PreGameCountdown({ secondsLeft }: { secondsLeft: number }) {
+// In-flow pre-game countdown. Renders inside the score-panel slot during the
+// pre-game window; sport-aware label, VT323 pixel digits, ticking colon.
+function PreGameCountdown({ secondsLeft, sport }: { secondsLeft: number; sport?: string | null }) {
+  const colonOpacity = useSharedValue(1);
+  useEffect(() => {
+    colonOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.35, { duration: 500 }),
+        withTiming(1.0, { duration: 500 })
+      ),
+      -1,
+      false
+    );
+  }, []);
+  const colonStyle = useAnimatedStyle(() => ({ opacity: colonOpacity.value }));
+
   if (!Number.isFinite(secondsLeft) || secondsLeft <= 0 || secondsLeft > COUNTDOWN_WINDOW_SEC) return null;
+  const m = Math.floor(secondsLeft / 60);
+  const s = secondsLeft % 60;
+  const mm = m.toString().padStart(2, '0');
+  const ss = s.toString().padStart(2, '0');
+
+  const digitStyle = {
+    fontSize: 64,
+    color: '#FFFFFF',
+    fontFamily: 'VT323_400Regular',
+    letterSpacing: 4,
+    lineHeight: 70,
+    textShadowColor: 'rgba(255,255,255,0.25)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  } as const;
+
   return (
-    <View style={{ position: 'absolute', top: -42, left: 0, right: 0, alignItems: 'center' }} pointerEvents="none">
-      <Text style={{ fontSize: 8, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 2, marginBottom: 2 }}>STARTING IN</Text>
-      <Text style={{ fontSize: 22, color: '#FFFFFF', fontFamily: 'Orbitron_700Bold', letterSpacing: 2, textShadowColor: 'rgba(255,255,255,0.3)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>
-        {formatCountdown(secondsLeft)}
+    <View style={{ alignItems: 'center', marginBottom: 12 }}>
+      <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.45)', letterSpacing: 2.5, marginBottom: 4 }}>
+        {getGameStartLabel(sport)}
       </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+        <Text style={digitStyle}>{mm}</Text>
+        <Animated.Text style={[digitStyle, colonStyle]}>:</Animated.Text>
+        <Text style={digitStyle}>{ss}</Text>
+      </View>
     </View>
   );
 }
@@ -1488,16 +1524,19 @@ export default function GameDetailScreen() {
               />
               <View style={styles.scorePanelOuter}>
                 <View style={styles.scorePanel}>
-                  <PreGameCountdown secondsLeft={secondsUntilStart} />
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                    <Text style={[styles.scoreNumber, isCountingDown && styles.scoreNumberShrunk, {
-                      color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
-                    }]}>{game.homeScore ?? ''}</Text>
-                    <Text style={[styles.scoreSep, isCountingDown && styles.scoreSepShrunk]}>–</Text>
-                    <Text style={[styles.scoreNumber, isCountingDown && styles.scoreNumberShrunk, {
-                      color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
-                    }]}>{game.awayScore ?? ''}</Text>
-                  </View>
+                  {isCountingDown ? (
+                    <PreGameCountdown secondsLeft={secondsUntilStart} sport={game.sport} />
+                  ) : (game.status === 'LIVE' || game.status === 'FINAL') ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                      <Text style={[styles.scoreNumber, {
+                        color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                      }]}>{game.homeScore ?? ''}</Text>
+                      <Text style={styles.scoreSep}>–</Text>
+                      <Text style={[styles.scoreNumber, {
+                        color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                      }]}>{game.awayScore ?? ''}</Text>
+                    </View>
+                  ) : null}
                   {(() => {
                     const timeStr = isLive ? formatGameTime(game.sport, game.quarter, game.clock) : null;
                     if (timeStr) {
@@ -1534,16 +1573,6 @@ export default function GameDetailScreen() {
               />
             </View>
           </View>
-          {/* Subtle dim overlay — only while awaiting tip-off. Sits above the
-              team headers + jerseys + score (zIndex 5) but pointer-events
-              none so jersey taps still work. Stops short of the WinProbBar
-              because that's outside this wrapper. */}
-          {isCountingDown ? (
-            <View
-              pointerEvents="none"
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.22)', zIndex: 5 }}
-            />
-          ) : null}
           </View>
           {prediction ? <View style={{ paddingTop: 20 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}
         </View>
