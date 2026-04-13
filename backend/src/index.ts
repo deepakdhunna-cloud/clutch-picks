@@ -9,7 +9,7 @@ import { profileRouter } from "./routes/profile";
 import { socialRouter } from "./routes/social";
 import { newsRouter } from "./routes/news";
 import { messagesRouter } from "./routes/messages";
-import { gamesRouter } from "./routes/games";
+import { gamesRouter, clearAllPredictionCaches } from "./routes/games";
 import { accuracyRouter } from "./routes/accuracy";
 import { teamFollowsRouter } from "./routes/team-follows";
 import { notificationsRouter } from "./routes/notifications";
@@ -18,6 +18,11 @@ import { backtestRouter } from "./routes/backtest";
 import { historicalBacktestRouter } from "./routes/historical-backtest";
 import { calibrationRouter } from "./routes/calibration";
 import { logger } from "hono/logger";
+
+// Clear any stale prediction caches on startup so deploys with calibration
+// changes take effect immediately instead of waiting up to 15 minutes for
+// cached predictions to expire.
+clearAllPredictionCaches();
 
 // Type the Hono app with user/session variables
 const app = new Hono<{

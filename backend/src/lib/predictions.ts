@@ -13,14 +13,14 @@ import { enqueueWrite } from "./writeQueue";
 // ─── Calibration ───────────────────────────────────────────────────────────
 // Sport-specific calibration: different sports have different predictability
 const SPORT_CALIBRATION: Record<string, { dampener: number; ceiling: number; tossUpCeiling: number }> = {
-  NBA:   { dampener: 0.70, ceiling: 88, tossUpCeiling: 54 },
-  NFL:   { dampener: 0.55, ceiling: 82, tossUpCeiling: 53 },
-  NCAAF: { dampener: 0.60, ceiling: 85, tossUpCeiling: 53 },
-  NCAAB: { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 },
-  MLB:   { dampener: 0.45, ceiling: 75, tossUpCeiling: 53 },
-  NHL:   { dampener: 0.55, ceiling: 80, tossUpCeiling: 53 },
-  MLS:   { dampener: 0.55, ceiling: 78, tossUpCeiling: 53 },
-  EPL:   { dampener: 0.60, ceiling: 82, tossUpCeiling: 53 },
+  NBA:   { dampener: 0.85, ceiling: 88, tossUpCeiling: 54 },
+  NFL:   { dampener: 0.85, ceiling: 82, tossUpCeiling: 53 },
+  NCAAF: { dampener: 0.82, ceiling: 85, tossUpCeiling: 53 },
+  NCAAB: { dampener: 0.82, ceiling: 87, tossUpCeiling: 54 },
+  MLB:   { dampener: 0.80, ceiling: 75, tossUpCeiling: 53 },
+  NHL:   { dampener: 0.80, ceiling: 80, tossUpCeiling: 53 },
+  MLS:   { dampener: 0.75, ceiling: 78, tossUpCeiling: 53 },
+  EPL:   { dampener: 0.75, ceiling: 82, tossUpCeiling: 53 },
 };
 function getCalibration(sport: string) {
   return SPORT_CALIBRATION[sport] ?? { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 };
@@ -1696,9 +1696,10 @@ export async function generatePrediction(
   const lowDataWarning = dataCoverage < 0.6;
 
   // Compress confidence toward 50% proportionally to missing data.
-  // Full data (1.0) → no compression. Half data (0.5) → 50% compression.
-  // Floor of 0.5 ensures we never compress more than 50% even with zero data.
-  const coverageMultiplier = Math.max(0.4, Math.pow(dataCoverage, 1.5));
+  // Full data (1.0) → no compression. Half data (0.5) → ~35% compression.
+  // Floor of 0.7 ensures we never compress more than 30% even with zero data —
+  // the model's signal shows through honestly when it's confident.
+  const coverageMultiplier = Math.max(0.7, Math.pow(dataCoverage, 1.5));
   const confidence = clamp(
     Math.round(50 + (calibratedConfidence - 50) * coverageMultiplier),
     50,
