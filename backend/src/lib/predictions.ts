@@ -1841,3 +1841,7 @@ export async function generatePrediction(
     },
   };
 }
+
+// Shim: bustAIAnalysisCache was added after release-day in a later commit.
+// Restored release-day engine does not implement it. AI cache still expires via TTL.
+export function bustAIAnalysisCache(_gameId?: string) {}
