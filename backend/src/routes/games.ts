@@ -100,6 +100,8 @@ export interface Game {
   marketFavorite?: "home" | "away";
   quarter?: string;
   clock?: string;
+  homeLinescores?: number[];
+  awayLinescores?: number[];
   liveState?: {
     balls: number;
     strikes: number;
@@ -134,6 +136,7 @@ interface ESPNCompetitor {
   team: ESPNTeam;
   score?: string;
   records?: Array<{ summary: string; type: string }>;
+  linescores?: Array<{ value?: number; displayValue?: string; period?: number }>;
 }
 
 interface ESPNOdds {
@@ -848,6 +851,13 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   const homeScore = homeCompetitor.score ? parseInt(homeCompetitor.score, 10) : undefined;
   const awayScore = awayCompetitor.score ? parseInt(awayCompetitor.score, 10) : undefined;
 
+  const extractLinescores = (c: ESPNCompetitor): number[] | undefined => {
+    if (!c.linescores || c.linescores.length === 0) return undefined;
+    return c.linescores.map((ls) => (typeof ls.value === "number" ? ls.value : 0));
+  };
+  const homeLinescores = extractLinescores(homeCompetitor);
+  const awayLinescores = extractLinescores(awayCompetitor);
+
   // MLB live state: parse competition.situation when game is live.
   // Wrapped in try/catch so a malformed payload never breaks the response.
   let liveState: Game["liveState"] | undefined;
@@ -915,6 +925,8 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     marketFavorite,
     quarter,
     clock,
+    homeLinescores,
+    awayLinescores,
     liveState,
   };
 
