@@ -40,6 +40,7 @@ import { Sport } from '@/types/sports';
 import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
+import { MLBLiveState } from '@/components/sports/MLBLiveState';
 import { useSubscription } from '@/lib/subscription-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -202,6 +203,17 @@ interface Game {
   marketFavorite?: 'home' | 'away';
   quarter?: string;
   clock?: string;
+  liveState?: {
+    balls: number;
+    strikes: number;
+    outs: number;
+    onFirst: boolean;
+    onSecond: boolean;
+    onThird: boolean;
+    inningHalf: 'top' | 'bottom' | null;
+    pitcher: { name: string | null; teamAbbr: string } | null;
+    batter: { name: string | null; teamAbbr: string } | null;
+  };
   prediction?: GamePrediction;
 }
 
@@ -1446,6 +1458,13 @@ export default function GameDetailScreen() {
               team headers + jersey/score area (but stops above the win-prob
               bar) to focus attention on the LED countdown. */}
           <View style={{ position: 'relative' }}>
+          {game.sport === 'MLB' && game.status === 'LIVE' && game.liveState ? (
+            <MLBLiveState
+              liveState={game.liveState}
+              homeTeamAbbr={homeTeam.abbreviation}
+              awayTeamAbbr={awayTeam.abbreviation}
+            />
+          ) : null}
           <View style={styles.teamNamesRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.teamName} numberOfLines={1}>{homeTeam.name}</Text>

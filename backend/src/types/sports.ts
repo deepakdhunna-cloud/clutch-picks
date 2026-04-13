@@ -57,6 +57,17 @@ export interface Game {
   status: GameStatus;
   homeScore?: number;
   awayScore?: number;
+  liveState?: {
+    balls: number;
+    strikes: number;
+    outs: number;
+    onFirst: boolean;
+    onSecond: boolean;
+    onThird: boolean;
+    inningHalf: "top" | "bottom" | null;
+    pitcher: { name: string | null; teamAbbr: string } | null;
+    batter: { name: string | null; teamAbbr: string } | null;
+  };
 }
 
 // Individual prediction factor

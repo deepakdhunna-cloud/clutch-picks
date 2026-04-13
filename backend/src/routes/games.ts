@@ -100,6 +100,17 @@ export interface Game {
   marketFavorite?: "home" | "away";
   quarter?: string;
   clock?: string;
+  liveState?: {
+    balls: number;
+    strikes: number;
+    outs: number;
+    onFirst: boolean;
+    onSecond: boolean;
+    onThird: boolean;
+    inningHalf: "top" | "bottom" | null;
+    pitcher: { name: string | null; teamAbbr: string } | null;
+    batter: { name: string | null; teamAbbr: string } | null;
+  };
   prediction?: GamePrediction;
 }
 
@@ -155,6 +166,24 @@ interface ESPNStatus {
   displayClock?: string;
 }
 
+interface ESPNSituationAthlete {
+  athlete?: {
+    displayName?: string;
+    fullName?: string;
+  };
+}
+
+interface ESPNSituation {
+  balls?: number;
+  strikes?: number;
+  outs?: number;
+  onFirst?: boolean;
+  onSecond?: boolean;
+  onThird?: boolean;
+  pitcher?: ESPNSituationAthlete;
+  batter?: ESPNSituationAthlete;
+}
+
 interface ESPNCompetition {
   id: string;
   date: string;
@@ -167,6 +196,7 @@ interface ESPNCompetition {
   odds?: ESPNOdds[];
   broadcasts?: ESPNBroadcast[];
   status: ESPNStatus;
+  situation?: ESPNSituation;
 }
 
 interface ESPNEvent {
@@ -813,6 +843,40 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   const homeScore = homeCompetitor.score ? parseInt(homeCompetitor.score, 10) : undefined;
   const awayScore = awayCompetitor.score ? parseInt(awayCompetitor.score, 10) : undefined;
 
+  // MLB live state: parse competition.situation when game is live.
+  // Wrapped in try/catch so a malformed payload never breaks the response.
+  let liveState: Game["liveState"] | undefined;
+  if (sport === "MLB" && gameStatus === "LIVE" && competition.situation) {
+    try {
+      const s = competition.situation;
+      const detail = (competition.status.type.detail || competition.status.type.shortDetail || "").toLowerCase();
+      const inningHalf: "top" | "bottom" | null =
+        detail.startsWith("top") ? "top" : detail.startsWith("bot") ? "bottom" : null;
+      const battingAbbr =
+        inningHalf === "bottom" ? homeTeam.abbreviation : awayTeam.abbreviation;
+      const pitchingAbbr =
+        inningHalf === "bottom" ? awayTeam.abbreviation : homeTeam.abbreviation;
+      const pitcherName =
+        s.pitcher?.athlete?.displayName ?? s.pitcher?.athlete?.fullName ?? null;
+      const batterName =
+        s.batter?.athlete?.displayName ?? s.batter?.athlete?.fullName ?? null;
+      liveState = {
+        balls: s.balls ?? 0,
+        strikes: s.strikes ?? 0,
+        outs: s.outs ?? 0,
+        onFirst: s.onFirst === true,
+        onSecond: s.onSecond === true,
+        onThird: s.onThird === true,
+        inningHalf,
+        pitcher: { name: pitcherName, teamAbbr: pitchingAbbr },
+        batter: { name: batterName, teamAbbr: battingAbbr },
+      };
+    } catch (err) {
+      console.warn(`[mlb-livestate] failed to parse situation for game ${event.id}:`, err);
+      liveState = undefined;
+    }
+  }
+
   const game: Game = {
     id: event.id,
     sport,
@@ -845,6 +909,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     marketFavorite,
     quarter,
     clock,
+    liveState,
   };
 
   // Attach freshest cached prediction if available, don't block on generating
