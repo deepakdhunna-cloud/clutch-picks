@@ -82,7 +82,7 @@ export interface ConfidenceTier {
 }
 
 export function getConfidenceTier(confidence: number, isTossUp?: boolean): ConfidenceTier {
-  if (isTossUp || confidence < 53) return { label: 'Toss-Up',     color: '#6B7280' };
+  if (isTossUp || confidence < 51) return { label: 'Toss-Up',     color: '#6B7280' };
   if (confidence < 60)             return { label: 'Solid Pick',  color: '#94A3B8' };
   if (confidence < 72)             return { label: 'Strong Pick', color: '#CBD5E1' };
   return                                  { label: 'Lock',        color: '#F1F5F9' };
