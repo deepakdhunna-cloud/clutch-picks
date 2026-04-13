@@ -40,7 +40,7 @@ import { Sport } from '@/types/sports';
 import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
-import { MLBLiveState } from '@/components/sports/MLBLiveState';
+import { MLBTeamRoleBlock, MLBLiveCenterStack } from '@/components/sports/MLBLiveState';
 import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -215,6 +215,7 @@ interface Game {
     onThird: boolean;
     inningHalf: 'top' | 'bottom' | null;
     inningNumber: number | null;
+    betweenInnings: boolean;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };
@@ -1487,6 +1488,7 @@ export default function GameDetailScreen() {
   );
   const { homeTeam, awayTeam, prediction } = game;
   const isLive = game.status === 'LIVE';
+  const isLiveMLB = isLive && game.sport === 'MLB' && !!game.liveState;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
   // Pre-game countdown state — only true while the game is SCHEDULED and
   // tip-off is within the next 10 minutes. Drives both the LED countdown
@@ -1533,25 +1535,63 @@ export default function GameDetailScreen() {
               team headers + jersey/score area (but stops above the win-prob
               bar) to focus attention on the LED countdown. */}
           <View style={{ position: 'relative' }}>
-          {game.sport === 'MLB' && game.status === 'LIVE' && game.liveState ? (
-            <MLBLiveState
-              liveState={game.liveState}
-              homeTeamAbbr={homeTeam.abbreviation}
-              awayTeamAbbr={awayTeam.abbreviation}
-            />
-          ) : null}
           <View style={styles.teamNamesRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.teamName} numberOfLines={1}>{homeTeam.name}</Text>
               <Text style={styles.teamRecord}>{homeTeam.record}</Text>
+              {isLiveMLB && game.liveState ? (
+                <MLBTeamRoleBlock
+                  liveState={game.liveState}
+                  teamAbbr={homeTeam.abbreviation}
+                  isHome={true}
+                  align="left"
+                />
+              ) : null}
             </View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
               <Text style={[styles.teamName, { color: '#fff' }]} numberOfLines={1}>{awayTeam.name}</Text>
               <Text style={[styles.teamRecord, { color: '#ffffff' }]}>{awayTeam.record}</Text>
+              {isLiveMLB && game.liveState ? (
+                <MLBTeamRoleBlock
+                  liveState={game.liveState}
+                  teamAbbr={awayTeam.abbreviation}
+                  isHome={false}
+                  align="right"
+                />
+              ) : null}
             </View>
           </View>
           <View style={{ position: 'relative' }}>
 
+            {isLiveMLB && game.liveState ? (
+              <MLBLiveCenterStack
+                liveState={game.liveState}
+                homeTeamAbbr={homeTeam.abbreviation}
+                awayTeamAbbr={awayTeam.abbreviation}
+                homeScore={game.homeScore ?? 0}
+                awayScore={game.awayScore ?? 0}
+                homeJersey={
+                  <TappableJerseyHero
+                    team={homeTeam}
+                    isSelected={userPick?.pickedTeam === 'home'}
+                    onSelect={() => {}}
+                    isDisabled={true}
+                    jerseyType={jerseyType}
+                    sport={game.sport}
+                  />
+                }
+                awayJersey={
+                  <TappableJerseyHero
+                    team={awayTeam}
+                    isSelected={userPick?.pickedTeam === 'away'}
+                    onSelect={() => {}}
+                    isDisabled={true}
+                    jerseyType={jerseyType}
+                    sport={game.sport}
+                  />
+                }
+              />
+            ) : (
             <View style={[styles.jerseyRow, { zIndex: 1 }]}>
               <TappableJerseyHero
                 team={homeTeam}
@@ -1611,6 +1651,7 @@ export default function GameDetailScreen() {
                 sport={game.sport}
               />
             </View>
+            )}
           </View>
           </View>
           {prediction ? <View style={{ paddingTop: 20 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}

@@ -111,6 +111,7 @@ export interface Game {
     onThird: boolean;
     inningHalf: "top" | "bottom" | null;
     inningNumber: number | null;
+    betweenInnings: boolean;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };
@@ -858,34 +859,40 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   const homeLinescores = extractLinescores(homeCompetitor);
   const awayLinescores = extractLinescores(awayCompetitor);
 
-  // MLB live state: parse competition.situation when game is live.
+  // MLB live state: emit whenever the game is LIVE — even between innings,
+  // when ESPN drops competition.situation entirely. The component then shows
+  // an "END OF Nth" placeholder until the next half-inning begins.
   // Wrapped in try/catch so a malformed payload never breaks the response.
   let liveState: Game["liveState"] | undefined;
-  if (sport === "MLB" && gameStatus === "LIVE" && competition.situation) {
+  if (sport === "MLB" && gameStatus === "LIVE") {
     try {
       const s = competition.situation;
       const detail = (competition.status.type.detail || competition.status.type.shortDetail || "").toLowerCase();
       const inningHalf: "top" | "bottom" | null =
         detail.startsWith("top") ? "top" : detail.startsWith("bot") ? "bottom" : null;
+      // ESPN uses "Mid X" between top→bottom and "End X" between bottom→top
+      // of next inning. Both mean we're between half-innings.
+      const betweenInnings = detail.startsWith("mid") || detail.startsWith("end");
       const battingAbbr =
         inningHalf === "bottom" ? homeTeam.abbreviation : awayTeam.abbreviation;
       const pitchingAbbr =
         inningHalf === "bottom" ? awayTeam.abbreviation : homeTeam.abbreviation;
       const pitcherName =
-        s.pitcher?.athlete?.displayName ?? s.pitcher?.athlete?.fullName ?? null;
+        s?.pitcher?.athlete?.displayName ?? s?.pitcher?.athlete?.fullName ?? null;
       const batterName =
-        s.batter?.athlete?.displayName ?? s.batter?.athlete?.fullName ?? null;
+        s?.batter?.athlete?.displayName ?? s?.batter?.athlete?.fullName ?? null;
       liveState = {
-        balls: s.balls ?? 0,
-        strikes: s.strikes ?? 0,
-        outs: s.outs ?? 0,
-        onFirst: s.onFirst === true,
-        onSecond: s.onSecond === true,
-        onThird: s.onThird === true,
+        balls: s?.balls ?? 0,
+        strikes: s?.strikes ?? 0,
+        outs: s?.outs ?? 0,
+        onFirst: s?.onFirst === true,
+        onSecond: s?.onSecond === true,
+        onThird: s?.onThird === true,
         inningHalf,
         inningNumber: typeof competition.status.period === "number" ? competition.status.period : null,
-        pitcher: { name: pitcherName, teamAbbr: pitchingAbbr },
-        batter: { name: batterName, teamAbbr: battingAbbr },
+        betweenInnings,
+        pitcher: s?.pitcher ? { name: pitcherName, teamAbbr: pitchingAbbr } : null,
+        batter: s?.batter ? { name: batterName, teamAbbr: battingAbbr } : null,
       };
     } catch (err) {
       console.warn(`[mlb-livestate] failed to parse situation for game ${event.id}:`, err);
