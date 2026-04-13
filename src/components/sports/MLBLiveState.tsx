@@ -1,10 +1,74 @@
+/**
+ * MLBLiveState.tsx
+ *
+ * Components for rendering live MLB game state in the jersey hero area.
+ *
+ * Exports two pieces because the live state spans two different parts of
+ * the existing layout:
+ *
+ *   1. <MLBTeamRoleBlock />  — nests UNDER each team name in the team info
+ *      columns. Shows "PITCHING" or "AT BAT" + the player name. The team
+ *      name itself stays locked in position; only this block's contents
+ *      swap based on which team is currently batting.
+ *
+ *   2. <MLBLiveCenterStack /> — replaces the existing score row for live
+ *      MLB games. Shows the B/S/O dot count, then the jersey + score +
+ *      diamond row, then the inning ordinal caption under the diamond.
+ *
+ * INTEGRATION (in src/app/game/[id].tsx, inside TappableJerseyHero):
+ *
+ *   // In each team info column, beneath the team name + record:
+ *   {isLiveMLB && game.liveState && (
+ *     <MLBTeamRoleBlock
+ *       liveState={game.liveState}
+ *       teamAbbr={game.homeTeam.abbreviation}
+ *       isHome={true}
+ *       align="left"
+ *     />
+ *   )}
+ *
+ *   // Replace the existing score row for live MLB games:
+ *   {isLiveMLB && game.liveState ? (
+ *     <MLBLiveCenterStack
+ *       liveState={game.liveState}
+ *       homeTeamAbbr={game.homeTeam.abbreviation}
+ *       awayTeamAbbr={game.awayTeam.abbreviation}
+ *       homeScore={game.homeScore}
+ *       awayScore={game.awayScore}
+ *       homeJersey={<TeamJersey team={game.homeTeam} size={60} />}
+ *       awayJersey={<TeamJersey team={game.awayTeam} size={60} />}
+ *     />
+ *   ) : (
+ *     <ExistingScoreRow ... />
+ *   )}
+ *
+ * The home team always renders on the LEFT and the away team always
+ * renders on the RIGHT (or whatever the existing convention is). Team
+ * positions are LOCKED. Only the role labels (PITCHING / AT BAT) and
+ * the player names swap based on liveState.inningHalf.
+ */
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Polygon, Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, {
+  Defs,
+  LinearGradient,
+  Stop,
+  Polygon,
+  Polyline,
+  G,
+  Filter,
+  FeGaussianBlur,
+  FeMerge,
+  FeMergeNode,
+} from 'react-native-svg';
 import { getTeamColors } from '../../lib/team-colors';
-import { Sport } from '@/types/sports';
 
-interface LiveState {
+// ============================================================================
+// Types
+// ============================================================================
+
+export type MLBLiveState = {
   balls: number;
   strikes: number;
   outs: number;
@@ -12,255 +76,460 @@ interface LiveState {
   onSecond: boolean;
   onThird: boolean;
   inningHalf: 'top' | 'bottom' | null;
-  inningNumber: number | null;
+  inning?: number;
+  inningNumber?: number | null;
+  betweenInnings?: boolean;
   pitcher: { name: string | null; teamAbbr: string } | null;
   batter: { name: string | null; teamAbbr: string } | null;
-}
+};
 
-interface Props {
-  liveState: LiveState;
-  homeTeamAbbr: string;
-  awayTeamAbbr: string;
-}
+// ============================================================================
+// Helpers
+// ============================================================================
 
+/**
+ * Brighten or darken a hex color. amount > 0 brightens, < 0 darkens.
+ * Used to derive the gradient stops from a team's primary color.
+ */
 function shiftColor(hex: string, amount: number): string {
   const clean = hex.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  const clamp = (n: number) => Math.max(0, Math.min(255, n));
-  const nr = clamp(r + amount).toString(16).padStart(2, '0');
-  const ng = clamp(g + amount).toString(16).padStart(2, '0');
-  const nb = clamp(b + amount).toString(16).padStart(2, '0');
-  return `#${nr}${ng}${nb}`;
-}
-
-function ordinal(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '';
-  if (n === 1) return '1ST';
-  if (n === 2) return '2ND';
-  if (n === 3) return '3RD';
-  return `${n}TH`;
-}
-
-function Dot({ lit }: { lit: boolean }) {
+  const num = parseInt(clean, 16);
+  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + amount));
+  const b = Math.max(0, Math.min(255, (num & 0xff) + amount));
   return (
-    <View
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: lit ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.16)',
-      }}
-    />
+    '#' +
+    [r, g, b]
+      .map((c) => c.toString(16).padStart(2, '0'))
+      .join('')
   );
 }
 
-function CountGroup({ label, lit, total }: { label: string; lit: number; total: number }) {
-  const dots: boolean[] = [];
-  for (let i = 0; i < total; i++) dots.push(i < lit);
+/** 1 → "1ST", 2 → "2ND", 3 → "3RD", 4-9 → "4TH"…"9TH", 10+ → "10TH" etc. */
+function ordinal(n: number): string {
+  if (n >= 11 && n <= 13) return `${n}TH`;
+  switch (n % 10) {
+    case 1:
+      return `${n}ST`;
+    case 2:
+      return `${n}ND`;
+    case 3:
+      return `${n}RD`;
+    default:
+      return `${n}TH`;
+  }
+}
+
+/** Resolve a team's primary color, with a safe fallback. */
+function teamPrimary(abbr: string): string {
+  try {
+    return getTeamColors(abbr, 'MLB' as any).primary;
+  } catch {
+    return '#888888';
+  }
+}
+
+/** Determines whether a given team (home or away) is currently batting. */
+function teamIsBatting(inningHalf: MLBLiveState['inningHalf'], isHome: boolean): boolean {
+  // Top of inning = away batting; bottom = home batting
+  const homeBatting = inningHalf === 'bottom';
+  return isHome ? homeBatting : !homeBatting;
+}
+
+// ============================================================================
+// MLBTeamRoleBlock
+// ----------------------------------------------------------------------------
+// Renders the role label + player name pair that nests under each team name.
+// The team name stays locked in its column; this block's contents swap
+// based on which team is currently batting.
+// ============================================================================
+
+type MLBTeamRoleBlockProps = {
+  liveState: MLBLiveState;
+  teamAbbr: string;
+  isHome: boolean;
+  align: 'left' | 'right';
+};
+
+export function MLBTeamRoleBlock({
+  liveState,
+  teamAbbr,
+  isHome,
+  align,
+}: MLBTeamRoleBlockProps) {
+  // Between innings: no current pitcher/batter — show a neutral placeholder
+  // instead of mis-labeling roles based on the previous half-inning.
+  if (liveState.betweenInnings) {
+    return (
+      <View style={[styles.roleBlock, align === 'right' && styles.alignRight]}>
+        <Text style={[styles.roleLabel, align === 'right' && styles.textRight]}>
+          ON DECK
+        </Text>
+        <Text style={[styles.playerName, align === 'right' && styles.textRight]}>
+          —
+        </Text>
+      </View>
+    );
+  }
+
+  const isBatting = teamIsBatting(liveState.inningHalf, isHome);
+  const role = isBatting ? 'AT BAT' : 'PITCHING';
+  const player = isBatting ? liveState.batter : liveState.pitcher;
+  const playerName = player?.name ?? teamAbbr;
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Text style={styles.countLabel}>{label}</Text>
-      {dots.map((isLit, i) => (
-        <Dot key={i} lit={isLit} />
+    <View style={[styles.roleBlock, align === 'right' && styles.alignRight]}>
+      <Text style={[styles.roleLabel, align === 'right' && styles.textRight]}>
+        {role}
+      </Text>
+      <Text style={[styles.playerName, align === 'right' && styles.textRight]}>
+        {playerName}
+      </Text>
+    </View>
+  );
+}
+
+// ============================================================================
+// MLBLiveCenterStack
+// ----------------------------------------------------------------------------
+// Replaces the score row for live MLB games. Renders:
+//   1. B/S/O dot count row (above)
+//   2. Jersey + score + diamond + score + jersey row
+//   3. Inning ordinal caption directly under the diamond
+// ============================================================================
+
+type MLBLiveCenterStackProps = {
+  liveState: MLBLiveState;
+  homeTeamAbbr: string;
+  awayTeamAbbr: string;
+  homeScore: number;
+  awayScore: number;
+  homeJersey: React.ReactNode;
+  awayJersey: React.ReactNode;
+};
+
+export function MLBLiveCenterStack({
+  liveState,
+  homeTeamAbbr,
+  awayTeamAbbr,
+  homeScore,
+  awayScore,
+  homeJersey,
+  awayJersey,
+}: MLBLiveCenterStackProps) {
+  const homeBatting = liveState.inningHalf === 'bottom';
+  const battingTeamAbbr = homeBatting ? homeTeamAbbr : awayTeamAbbr;
+
+  const battingColor = teamPrimary(battingTeamAbbr);
+  const battingBright = shiftColor(battingColor, 60);
+  const battingDark = shiftColor(battingColor, -90);
+  const battingStroke = shiftColor(battingColor, 30);
+
+  // Clamp counts to baseball maxes (defensive — ESPN can briefly emit
+  // transient values during the moment between events)
+  const balls = Math.min(Math.max(liveState.balls ?? 0, 0), 4);
+  const strikes = Math.min(Math.max(liveState.strikes ?? 0, 0), 3);
+  const outs = Math.min(Math.max(liveState.outs ?? 0, 0), 3);
+
+  const inningNum = liveState.inning ?? liveState.inningNumber ?? null;
+  const halfLabel =
+    liveState.inningHalf === 'top'
+      ? '▲ TOP'
+      : liveState.inningHalf === 'bottom'
+      ? '▼ BOT'
+      : '';
+  const inningText = liveState.betweenInnings
+    ? inningNum
+      ? `END OF ${ordinal(inningNum)}`
+      : 'BETWEEN INNINGS'
+    : halfLabel
+    ? inningNum
+      ? `${halfLabel} ${ordinal(inningNum)}`
+      : halfLabel
+    : '';
+
+  return (
+    <View>
+      {/* B/S/O dot count row */}
+      <View style={styles.dotRow}>
+        <DotGroup label="B" total={4} lit={balls} type="b" />
+        <DotGroup label="S" total={3} lit={strikes} type="s" />
+        <DotGroup label="O" total={3} lit={outs} type="o" />
+      </View>
+
+      {/* Jersey + score + diamond + score + jersey */}
+      <View style={styles.jerseyRow}>
+        {homeJersey}
+
+        <Text style={styles.score}>{homeScore}</Text>
+
+        <View style={styles.diamondColumn}>
+          <Diamond
+            onFirst={liveState.onFirst}
+            onSecond={liveState.onSecond}
+            onThird={liveState.onThird}
+            battingBright={battingBright}
+            battingMid={battingColor}
+            battingDark={battingDark}
+            battingStroke={battingStroke}
+          />
+          {inningText !== '' && (
+            <Text style={styles.inningCaption}>{inningText}</Text>
+          )}
+        </View>
+
+        <Text style={styles.score}>{awayScore}</Text>
+
+        {awayJersey}
+      </View>
+    </View>
+  );
+}
+
+// ============================================================================
+// DotGroup
+// ----------------------------------------------------------------------------
+// Renders a single labeled group of count dots (B / S / O). Lit dots are
+// color-coded with a soft glow; unlit dots are dim white.
+// ============================================================================
+
+type DotGroupProps = {
+  label: string;
+  total: number;
+  lit: number;
+  type: 'b' | 's' | 'o';
+};
+
+function DotGroup({ label, total, lit, type }: DotGroupProps) {
+  const litStyle =
+    type === 'b' ? styles.dotB : type === 's' ? styles.dotS : styles.dotO;
+
+  return (
+    <View style={styles.dotGroup}>
+      <Text style={styles.dotLabel}>{label}</Text>
+      {Array.from({ length: total }).map((_, i) => (
+        <View
+          key={i}
+          style={[styles.dot, i < lit ? litStyle : styles.dotOff]}
+        />
       ))}
     </View>
   );
 }
 
-export const MLBLiveState = React.memo(function MLBLiveState({
-  liveState,
-  homeTeamAbbr,
-  awayTeamAbbr,
-}: Props) {
-  const battingAbbr =
-    liveState.inningHalf === 'bottom' ? homeTeamAbbr : awayTeamAbbr;
-  const battingColor = getTeamColors(battingAbbr, Sport.MLB).primary;
-  const battingBright = shiftColor(battingColor, 60);
-  const battingDark = shiftColor(battingColor, -90);
-  const occupiedStroke = shiftColor(battingColor, 30);
+// ============================================================================
+// Diamond
+// ----------------------------------------------------------------------------
+// Three bases in a flat perspective layout (3rd left, 2nd top center,
+// 1st right). Each base has a vertical gradient + bevel highlight on the
+// upper edges. Occupied bases fill with the batting team's primary color.
+// All three bases share a soft Gaussian blur filter for the glow.
+// ============================================================================
 
-  const balls = Math.max(0, Math.min(3, liveState.balls));
-  const strikes = Math.max(0, Math.min(2, liveState.strikes));
-  const outs = Math.max(0, Math.min(2, liveState.outs));
+type DiamondProps = {
+  onFirst: boolean;
+  onSecond: boolean;
+  onThird: boolean;
+  battingBright: string;
+  battingMid: string;
+  battingDark: string;
+  battingStroke: string;
+};
 
-  const inningOrd = liveState.inningNumber ? ordinal(liveState.inningNumber) : '';
-  const halfPrefix =
-    liveState.inningHalf === 'top' ? 'TOP' : liveState.inningHalf === 'bottom' ? 'BOT' : '';
-  const inningLabel = halfPrefix && inningOrd ? `${halfPrefix} ${inningOrd}` : halfPrefix || inningOrd;
-
-  const pitcherTeamColor = liveState.pitcher
-    ? getTeamColors(liveState.pitcher.teamAbbr, Sport.MLB).primary
-    : 'rgba(255,255,255,0.5)';
-  const batterTeamColor = liveState.batter
-    ? getTeamColors(liveState.batter.teamAbbr, Sport.MLB).primary
-    : 'rgba(255,255,255,0.5)';
-
-  const pitcherDisplay = liveState.pitcher
-    ? liveState.pitcher.name ?? liveState.pitcher.teamAbbr
-    : '—';
-  const batterDisplay = liveState.batter
-    ? liveState.batter.name ?? liveState.batter.teamAbbr
-    : '—';
-
+function Diamond({
+  onFirst,
+  onSecond,
+  onThird,
+  battingBright,
+  battingMid,
+  battingDark,
+  battingStroke,
+}: DiamondProps) {
   return (
-    <View style={styles.container}>
-      {/* Diamond */}
-      <View style={{ alignItems: 'center' }}>
-        <Svg width={180} height={56} viewBox="0 0 180 56">
-          <Defs>
-            <LinearGradient id="emptyBase" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.28} />
-              <Stop offset="55%" stopColor="#FFFFFF" stopOpacity={0.10} />
-              <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.02} />
-            </LinearGradient>
-            <LinearGradient id="battingTeamBase" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={battingBright} stopOpacity={1} />
-              <Stop offset="55%" stopColor={battingColor} stopOpacity={1} />
-              <Stop offset="100%" stopColor={battingDark} stopOpacity={1} />
-            </LinearGradient>
-          </Defs>
+    <Svg width={110} height={42} viewBox="0 0 84 32">
+      <Defs>
+        <LinearGradient id="emptyBaseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <Stop offset="0%" stopColor="white" stopOpacity={0.3} />
+          <Stop offset="55%" stopColor="white" stopOpacity={0.12} />
+          <Stop offset="100%" stopColor="white" stopOpacity={0.02} />
+        </LinearGradient>
+        <LinearGradient id="battingBaseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <Stop offset="0%" stopColor={battingBright} />
+          <Stop offset="55%" stopColor={battingMid} />
+          <Stop offset="100%" stopColor={battingDark} />
+        </LinearGradient>
+        <Filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <FeGaussianBlur stdDeviation="1.4" result="blur" />
+          <FeMerge>
+            <FeMergeNode in="blur" />
+            <FeMergeNode in="SourceGraphic" />
+          </FeMerge>
+        </Filter>
+      </Defs>
 
-          {/* 3rd base (left) */}
-          <Polygon
-            points="28,28 50,40 28,52 6,40"
-            fill={liveState.onThird ? 'url(#battingTeamBase)' : 'url(#emptyBase)'}
-            stroke={liveState.onThird ? occupiedStroke : 'rgba(255,255,255,0.55)'}
-            strokeWidth={1.2}
-          />
-          <Polyline
-            points="6,40 28,28 50,40"
-            fill="none"
-            stroke={liveState.onThird ? 'rgba(255,200,210,0.75)' : 'rgba(255,255,255,0.5)'}
-            strokeWidth={liveState.onThird ? 1.4 : 1.2}
-            strokeLinejoin="round"
-          />
-
-          {/* 2nd base (top center) */}
-          <Polygon
-            points="90,4 112,16 90,28 68,16"
-            fill={liveState.onSecond ? 'url(#battingTeamBase)' : 'url(#emptyBase)'}
-            stroke={liveState.onSecond ? occupiedStroke : 'rgba(255,255,255,0.55)'}
-            strokeWidth={1.2}
-          />
-          <Polyline
-            points="68,16 90,4 112,16"
-            fill="none"
-            stroke={liveState.onSecond ? 'rgba(255,200,210,0.75)' : 'rgba(255,255,255,0.5)'}
-            strokeWidth={liveState.onSecond ? 1.4 : 1.2}
-            strokeLinejoin="round"
-          />
-
-          {/* 1st base (right) */}
-          <Polygon
-            points="152,28 174,40 152,52 130,40"
-            fill={liveState.onFirst ? 'url(#battingTeamBase)' : 'url(#emptyBase)'}
-            stroke={liveState.onFirst ? occupiedStroke : 'rgba(255,255,255,0.55)'}
-            strokeWidth={1.2}
-          />
-          <Polyline
-            points="130,40 152,28 174,40"
-            fill="none"
-            stroke={liveState.onFirst ? 'rgba(255,200,210,0.75)' : 'rgba(255,255,255,0.5)'}
-            strokeWidth={liveState.onFirst ? 1.4 : 1.2}
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </View>
-
-      {/* Count row */}
-      <View style={styles.countRow}>
-        <CountGroup label="B" lit={balls} total={3} />
-        <CountGroup label="S" lit={strikes} total={2} />
-        <CountGroup label="O" lit={outs} total={2} />
-      </View>
-
-      {/* Inning indicator */}
-      {inningLabel ? (
-        <Text style={styles.inning}>{inningLabel}</Text>
-      ) : null}
-
-      {/* Pitcher / Batter row */}
-      <View style={styles.matchupRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.matchupLabel}>PITCHING</Text>
-          <Text style={styles.matchupName} numberOfLines={1}>
-            {pitcherDisplay}
-          </Text>
-          {liveState.pitcher ? (
-            <Text style={[styles.matchupTeam, { color: pitcherTeamColor }]}>
-              {liveState.pitcher.teamAbbr}
-            </Text>
-          ) : null}
-        </View>
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <Text style={[styles.matchupLabel, { textAlign: 'right' }]}>AT BAT</Text>
-          <Text style={[styles.matchupName, { textAlign: 'right' }]} numberOfLines={1}>
-            {batterDisplay}
-          </Text>
-          {liveState.batter ? (
-            <Text style={[styles.matchupTeam, { color: batterTeamColor, textAlign: 'right' }]}>
-              {liveState.batter.teamAbbr}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-    </View>
+      <G filter="url(#softGlow)">
+        <Base
+          points="16,16 28,22 16,28 4,22"
+          highlightPoints="4,22 16,16 28,22"
+          occupied={onThird}
+          battingStroke={battingStroke}
+        />
+        <Base
+          points="42,2 54,8 42,14 30,8"
+          highlightPoints="30,8 42,2 54,8"
+          occupied={onSecond}
+          battingStroke={battingStroke}
+        />
+        <Base
+          points="68,16 80,22 68,28 56,22"
+          highlightPoints="56,22 68,16 80,22"
+          occupied={onFirst}
+          battingStroke={battingStroke}
+        />
+      </G>
+    </Svg>
   );
-});
+}
+
+// ============================================================================
+// Base (single base inside the diamond)
+// ============================================================================
+
+type BaseProps = {
+  points: string;
+  highlightPoints: string;
+  occupied: boolean;
+  battingStroke: string;
+};
+
+function Base({ points, highlightPoints, occupied, battingStroke }: BaseProps) {
+  return (
+    <>
+      <Polygon
+        points={points}
+        fill={occupied ? 'url(#battingBaseGrad)' : 'url(#emptyBaseGrad)'}
+        stroke={occupied ? battingStroke : 'rgba(255,255,255,0.6)'}
+        strokeWidth={1}
+        strokeLinejoin="round"
+      />
+      <Polyline
+        points={highlightPoints}
+        fill="none"
+        stroke={occupied ? 'rgba(255,200,210,0.8)' : 'rgba(255,255,255,0.55)'}
+        strokeWidth={occupied ? 1.2 : 1}
+        strokeLinejoin="round"
+      />
+    </>
+  );
+}
+
+// ============================================================================
+// Styles
+// ============================================================================
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 14,
-    paddingTop: 28,
-    paddingBottom: 10,
+  // ---- Role block (used in team columns) ----
+  roleBlock: {
+    marginTop: 14,
   },
-  countRow: {
+  alignRight: {
+    alignItems: 'flex-end',
+  },
+  roleLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.42)',
+    letterSpacing: 1.5,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  playerName: {
+    fontSize: 13,
+    color: 'white',
+    fontWeight: '600',
+    lineHeight: 15,
+  },
+  textRight: {
+    textAlign: 'right',
+  },
+
+  // ---- Dot row ----
+  dotRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 22,
-    marginTop: 16,
+    marginTop: 24,
+    marginBottom: 8,
+    gap: 18,
   },
-  countLabel: {
+  dotGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dotLabel: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 1,
     fontWeight: '700',
   },
-  inning: {
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dotOff: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  dotB: {
+    backgroundColor: '#4A90E2',
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dotS: {
+    backgroundColor: '#FF3B30',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dotO: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
+  // ---- Jersey + score + diamond row ----
+  jerseyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  score: {
+    fontFamily: 'VT323_400Regular',
+    fontSize: 44,
+    color: 'white',
+    lineHeight: 44,
+    textShadowColor: 'rgba(255,255,255,0.2)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  diamondColumn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  inningCaption: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 2,
     fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 22,
-  },
-  matchupRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-  },
-  matchupLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.42)',
-    letterSpacing: 1.5,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  matchupName: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    lineHeight: 15,
-  },
-  matchupTeam: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
-    letterSpacing: 0.5,
+    marginTop: 6,
   },
 });
-
