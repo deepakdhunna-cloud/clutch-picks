@@ -8,7 +8,6 @@ import { picksRouter } from "./routes/picks";
 import { profileRouter } from "./routes/profile";
 import { socialRouter } from "./routes/social";
 import { newsRouter } from "./routes/news";
-import { messagesRouter } from "./routes/messages";
 import { gamesRouter, clearAllPredictionCaches } from "./routes/games";
 import { accuracyRouter } from "./routes/accuracy";
 import { teamFollowsRouter } from "./routes/team-follows";
@@ -79,11 +78,6 @@ function ipKey(c: Context): string {
     ?? "unknown";
 }
 
-function userKey(c: Context): string {
-  const user = c.get("user") as { id: string } | null;
-  return user?.id ?? ipKey(c);
-}
-
 // Auth endpoints: 10 req/min per IP
 app.use("/api/auth/*", rateLimiter({ windowMs: 60_000, limit: 10, keyGenerator: ipKey, message: rateLimitMessage }));
 
@@ -93,9 +87,6 @@ app.use("/api/games/live-stream", async (_c, next) => { await next(); });
 // Prediction-heavy endpoints: 30 req/min per IP
 app.use("/api/games/top-picks", rateLimiter({ windowMs: 60_000, limit: 30, keyGenerator: ipKey, message: rateLimitMessage }));
 app.use("/api/sports/predictions/*", rateLimiter({ windowMs: 60_000, limit: 30, keyGenerator: ipKey, message: rateLimitMessage }));
-
-// Messages: 30 messages/min per user
-app.use("/api/messages/*", rateLimiter({ windowMs: 60_000, limit: 30, keyGenerator: userKey, message: rateLimitMessage }));
 
 // General catch-all: 100 req/min per IP
 app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 100, keyGenerator: ipKey, message: rateLimitMessage }));
@@ -169,7 +160,6 @@ app.route("/api/profile", profileRouter);
 app.route("/api/social", socialRouter);
 app.route("/api/news", newsRouter);
 app.route("/api/games", gamesRouter);
-app.route("/api/messages", messagesRouter);
 app.route("/api/predictions", accuracyRouter);
 app.route("/api/team-follows", teamFollowsRouter);
 app.route("/api/notifications", notificationsRouter);
