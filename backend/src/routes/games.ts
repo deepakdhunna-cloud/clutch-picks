@@ -1184,14 +1184,21 @@ gamesRouter.get("/", async (c) => {
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
 
-    // Fetch today + tomorrow in parallel (tomorrow needed for western timezone coverage)
+    // Fetch today + tomorrow + day-after-tomorrow in parallel. The third day is
+    // needed because Railway runs in UTC and a US-PST user's "tomorrow night"
+    // games (e.g. 7pm PST) have a gameTime in the UTC day-after-tomorrow.
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
-    const [todayGames, tomorrowGames] = await Promise.all([
+    const dayAfter = new Date(now);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+    const dayAfterStr = dayAfter.toISOString().split("T")[0];
+
+    const [todayGames, tomorrowGames, dayAfterGames] = await Promise.all([
       fetchAllGames(todayStr),
       fetchAllGames(tomorrowStr),
+      fetchAllGames(dayAfterStr),
     ]);
 
     // Check if we need yesterday's live games (only if any might still be running)
@@ -1207,16 +1214,18 @@ gamesRouter.get("/", async (c) => {
       extraGames = yesterdayGames.filter((g) => g.status === "LIVE");
     }
 
-    const allGames = [...extraGames, ...todayGames, ...tomorrowGames];
+    const allGames = [...extraGames, ...todayGames, ...tomorrowGames, ...dayAfterGames];
 
     // Deduplicate by game ID
     const uniqueGames = Array.from(
       new Map(allGames.map((game) => [game.id, game])).values()
     );
 
-    // Filter: keep games within today's window (with tomorrow included)
+    // Keep games whose gameTime is at most ~2 calendar days out in UTC. This
+    // covers a US-PST user's "tomorrow night" slate (which spills into the UTC
+    // day-after-tomorrow) without leaking far-future games into the response.
     const endOfToday = new Date(now);
-    endOfToday.setDate(endOfToday.getDate() + 1);
+    endOfToday.setDate(endOfToday.getDate() + 2);
     endOfToday.setUTCHours(23, 59, 59, 999);
 
     const filteredGames = uniqueGames.filter((game) => {
