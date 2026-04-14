@@ -392,7 +392,7 @@ const HomeHeader = React.memo(function HomeHeader({
             {/* View All button — only show when there are more than 5 and not yet expanded */}
             {!showAllLive && filteredLiveGames.length > 5 ? (
             <Pressable
-              onPress={() => router.push('/live-games' as any)}
+              onPressIn={() => router.push('/live-games' as any)}
               className="active:opacity-75"
               style={{
                 height: 56,

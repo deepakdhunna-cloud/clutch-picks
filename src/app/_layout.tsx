@@ -61,18 +61,74 @@ const queryClient = new QueryClient({
   },
 });
 
-// Prefetch games immediately on app load — don't wait for auth or splash
-// This runs at module level so it fires before any component renders
+// Prefetch games immediately on app load — don't wait for auth or splash.
+// This runs at module level so it fires before any component renders.
+// Must mirror the per-date fetch in useGames.ts (the /api/games aggregator
+// drops today's non-LIVE games + EPL; date endpoints return the full slate).
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
+const GAMES_CACHE_KEY = 'rq_cache_games_v1';
+const GAMES_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+const fmtDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Hydrate games cache from disk synchronously-ish so cold opens show last-known
+// games instantly while the network fetch runs in the background.
+AsyncStorage.getItem(GAMES_CACHE_KEY)
+  .then((raw) => {
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { data: unknown; timestamp: number };
+      if (!Array.isArray(parsed.data) || parsed.data.length === 0) return;
+      if (Date.now() - parsed.timestamp > GAMES_CACHE_MAX_AGE_MS) return;
+      // Only seed if a network fetch hasn't already populated the cache
+      if (!queryClient.getQueryData(['games'])) {
+        queryClient.setQueryData(['games'], parsed.data);
+      }
+    } catch {
+      // Ignore corrupt cache
+    }
+  })
+  .catch(() => {});
+
+// Persist games cache to disk whenever it updates
+queryClient.getQueryCache().subscribe((event) => {
+  if (event.type !== 'updated') return;
+  const key = event.query.queryKey;
+  if (!Array.isArray(key) || key[0] !== 'games') return;
+  const data = event.query.state.data;
+  if (!Array.isArray(data) || data.length === 0) return;
+  AsyncStorage.setItem(
+    GAMES_CACHE_KEY,
+    JSON.stringify({ data, timestamp: Date.now() })
+  ).catch(() => {});
+});
+
 queryClient.prefetchQuery({
   queryKey: ['games'],
   queryFn: async () => {
-    const response = await fetch(`${BACKEND_URL}/api/games`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) return [];
-    const json = await response.json();
-    return json.data ?? [];
+    const today = new Date();
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
+    const dates = [fmtDate(today), fmtDate(tomorrow), fmtDate(dayAfter)];
+    const results = await Promise.all(
+      dates.map(async (d) => {
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/games/date/${d}`, {
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (!response.ok) return [];
+          const json = await response.json();
+          return json.data ?? [];
+        } catch {
+          return [];
+        }
+      })
+    );
+    const merged = results.flat();
+    const byId = new Map<string, any>();
+    for (const g of merged) byId.set(g.id, g);
+    return Array.from(byId.values());
   },
   staleTime: 30000,
 });
@@ -176,6 +232,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
           <Stack.Screen name="search-explore" options={{ freezeOnBlur: true, animation: 'fade' }} />
           <Stack.Screen name="picks-history" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="confidence-tiers" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="live-games" options={{ freezeOnBlur: true, animation: 'slide_from_right', animationDuration: 200 }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', freezeOnBlur: true, animation: 'slide_from_bottom', animationDuration: 250 }} />
         </Stack>
       </ThemeProvider>
