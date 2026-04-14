@@ -279,7 +279,7 @@ export default function ProfileScreen() {
     if (!picks || picks.length === 0) return [];
     if (__DEV__) console.log('[Profile] picks count:', picks.length, 'games count:', allGames?.length ?? 0);
     const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
-    const tiles = [...picks].reverse().slice(0, 5).map((p) => {
+    const tiles = picks.slice(0, 5).map((p) => {
       const game = gameMap.get(p.gameId);
       // Use game data if available, fall back to pick's own fields
       const pickedAbbr = p.pickedTeam === 'home'
