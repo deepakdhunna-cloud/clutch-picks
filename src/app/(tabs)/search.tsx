@@ -115,10 +115,15 @@ const SearchBar = memo(function SearchBar() {
 });
 
 // ─── SPORT PILLS ───
-const SportPills = memo(function SportPills({ selected, onSelect }: { selected: string; onSelect: (s: string) => void }) {
+const SportPills = memo(function SportPills({ selected, onSelect, available }: { selected: string; onSelect: (s: string) => void; available?: Set<string> }) {
+  // Hide chips for sports with zero games on the current slate so users
+  // don't dead-end into empty filters (e.g. CFB during the off-season).
+  // 'All' always stays. When `available` is undefined (loading or no data),
+  // show the full set rather than blanking out.
+  const visible = available ? SPORTS.filter(s => s === 'All' || available.has(s)) : SPORTS;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 18 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
-      {SPORTS.map((s) => {
+      {visible.map((s) => {
         const on = selected === s;
         return (
           <Pressable key={s} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(s); }}
@@ -1022,7 +1027,7 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
     <Animated.ScrollView onScroll={sh} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}} refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}>
       {/* Header */}
       <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',paddingHorizontal:20,marginTop:4,marginBottom:20}}>
-        <View><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Your Insights</Text></View>
+        <View><Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED,letterSpacing:2.5,marginBottom:4}}>MY ARENA</Text><Text style={{fontSize:24,fontWeight:'800',color:WHITE}}>Your Game Plan</Text></View>
         <View style={{flexDirection:'row',alignItems:'center',gap:6}}><View style={{width:6,height:6,borderRadius:3,backgroundColor:MAROON}} /><Text style={{fontSize:11,fontWeight:'700',color:MAROON}}>{sched.length} GAMES</Text></View>
       </View>
 
@@ -1036,7 +1041,7 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
       {/* Top 3 quick-glance strip */}
       {top3.length > 0 ? (
         <View style={{marginBottom:20}}>
-          <Text style={{fontSize:10,fontWeight:'700',color:TEXT_MUTED,letterSpacing:1.5,paddingHorizontal:20,marginBottom:10}}>TOP PICKS AT A GLANCE</Text>
+          <Text style={{fontSize:10,fontWeight:'700',color:TEXT_MUTED,letterSpacing:1.5,paddingHorizontal:20,marginBottom:10}}>HIGHEST CONVICTION TONIGHT</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:10}} style={{flexGrow:0}}>
             {top3.map((r, i) => {
               const conf = Math.round(r.game.prediction?.confidence ?? 50);
@@ -1044,13 +1049,10 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
               return (
                 <Pressable key={r.game.id} onPress={() => router.push(`/game/${r.game.id}`)} style={{width:140,backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:i===0?'rgba(139,10,31,0.25)':BORDER,padding:12}}>
                   <View style={{flexDirection:'row',alignItems:'center',marginBottom:8}}>
-                    <View style={{width:20,height:20,borderRadius:6,backgroundColor:i===0?MAROON_DIM:TEAL_DIM,alignItems:'center',justifyContent:'center',marginRight:6}}>
-                      <Text style={{fontSize:9,fontWeight:'800',color:i===0?MAROON:TEAL}}>#{i+1}</Text>
-                    </View>
                     <Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED}}>{displaySport(r.game.sport)}</Text>
                   </View>
                   <Text style={{fontSize:13,fontWeight:'800',color:WHITE,marginBottom:4}}>{r.game.awayTeam.abbreviation} vs {r.game.homeTeam.abbreviation}</Text>
-                  <Text style={{fontSize:10,fontWeight:'600',color:TEAL,marginBottom:2}}>Pick: {winner.abbreviation}</Text>
+                  <Text style={{fontSize:10,fontWeight:'600',color:TEAL,marginBottom:2}}>Model: {winner.abbreviation}</Text>
                   <Text style={{fontSize:10,color:TEXT_MUTED}}>{conf}% confidence</Text>
                 </Pressable>
               );
@@ -1355,6 +1357,7 @@ export default function MyArenaScreen() {
   useFocusEffect(useCallback(()=>{(async()=>{const r=await AsyncStorage.getItem('clutch_followed_games');setFgi(new Set(r?JSON.parse(r):[]));})();},[]));
 
   const games = useMemo(() => { if (!allGames) return []; return sf==='All'?allGames:allGames.filter(g=>g.sport===sf); }, [allGames,sf]);
+  const availableSports = useMemo(() => new Set((allGames ?? []).map(g => g.sport)), [allGames]);
   const followed = useMemo(() => { if (!allGames) return []; const ta = new Set((teamFollows??[]).map(t=>t.teamAbbreviation.toUpperCase())); return allGames.filter(g=>fgi.has(g.id)||ta.has(g.homeTeam.abbreviation.toUpperCase())||ta.has(g.awayTeam.abbreviation.toUpperCase())); }, [allGames,fgi,teamFollows]);
   const live = useMemo(() => games.filter(g=>g.status===GameStatus.LIVE), [games]);
   const sched = useMemo(() => games.filter(g=>g.status===GameStatus.SCHEDULED), [games]);
@@ -1382,7 +1385,7 @@ export default function MyArenaScreen() {
       <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>
         <ErrorBoundary>
         <SearchBar />
-        <SportPills selected={sf} onSelect={setSf} />
+        <SportPills selected={sf} onSelect={setSf} available={availableSports} />
         <FreeArena games={allGames ?? []} sportFilter={sf} router={router} sh={sh} onR={onR} isR={isR} followed={followed} />
         </ErrorBoundary>
       </SafeAreaView>
@@ -1393,7 +1396,7 @@ export default function MyArenaScreen() {
     <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:BG}}>
       <ErrorBoundary>
       <SearchBar />
-      <SportPills selected={sf} onSelect={setSf} />
+      <SportPills selected={sf} onSelect={setSf} available={availableSports} />
       <SegPill active={am} onChange={hmc} hasLive={live.length>0} tx={mtx} />
       <GestureDetector gesture={pg}>
         <Animated.View style={[{flexDirection:'row',width:SW*3,flex:1},cs]}>
