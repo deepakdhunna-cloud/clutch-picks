@@ -1714,10 +1714,12 @@ export async function generatePrediction(
   const formSubModel   = recentFormModel(homeForm, awayForm);
   const ensemble       = ensemblePrediction(compositeSubModel, eloSubModel, formSubModel, sportKey);
 
-  // Apply ensemble divergence penalty on top of the existing confidence
-  const postEnsembleConf = ensemble.divergenceFlag
-    ? clamp(confidence - 10, 50, isTossUp ? cal.tossUpCeiling : cal.ceiling)
-    : confidence;
+  // Ensemble divergence is already captured in the composite probability
+  // through the weighted blend — no need to double-penalize at this stage.
+  // The ensemblePrediction function's own internal confidence (line 1031-1035)
+  // retains its divergence handling for its independent ensemble.confidence
+  // field, which is exposed via the return value but not used here.
+  const postEnsembleConf = confidence;
   // Lineup confirmation modifier: unconfirmed lineups = uncertainty tax.
   // Gate the lineup penalty on game start time. Lineups aren't released
   // until ~2 hours before first pitch, so firing this penalty on cron-
