@@ -236,12 +236,7 @@ profileRouter.delete('/delete-account', async (c) => {
   try {
     // Delete all user-related data in order (respecting foreign keys)
     await prisma.userPick.deleteMany({ where: { odId: user.id } });
-    await prisma.discussionLike.deleteMany({ where: { userId: user.id } });
-    await prisma.discussionComment.deleteMany({ where: { userId: user.id } });
-    await prisma.discussionPost.deleteMany({ where: { userId: user.id } });
     await prisma.follow.deleteMany({ where: { OR: [{ followerId: user.id }, { followingId: user.id }] } });
-    await prisma.message.deleteMany({ where: { senderId: user.id } });
-    await prisma.conversation.deleteMany({ where: { OR: [{ participant1Id: user.id }, { participant2Id: user.id }] } });
     await prisma.session.deleteMany({ where: { userId: user.id } });
     await prisma.account.deleteMany({ where: { userId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });

@@ -23,12 +23,6 @@ model User {
   picks         UserPick[]
   followers     Follow[]   @relation("UserFollowing")
   following     Follow[]   @relation("UserFollowers")
-  discussionPosts    DiscussionPost[]
-  discussionLikes    DiscussionLike[]
-  discussionComments DiscussionComment[]
-  conversationsAsParticipant1 Conversation[] @relation("ConversationParticipant1")
-  conversationsAsParticipant2 Conversation[] @relation("ConversationParticipant2")
-  sentMessages Message[] @relation("MessageSender")
   pushTokens   PushToken[]
 }
 
@@ -113,49 +107,6 @@ model Follow {
   @@index([followingId])
 }
 
-// Discussion posts
-model DiscussionPost {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String
-  imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes     DiscussionLike[]
-  comments  DiscussionComment[]
-
-  @@index([userId])
-  @@index([createdAt])
-}
-
-model DiscussionLike {
-  id        String   @id @default(cuid())
-  userId    String
-  postId    String
-  createdAt DateTime @default(now())
-
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      DiscussionPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, postId])
-  @@index([postId])
-}
-
-model DiscussionComment {
-  id        String   @id @default(cuid())
-  userId    String
-  postId    String
-  content   String
-  createdAt DateTime @default(now())
-
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      DiscussionPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@index([postId])
-}
-
 // Player News for confidence fluctuation
 model PlayerNews {
   id         String   @id @default(cuid())
@@ -172,32 +123,6 @@ model PlayerNews {
   @@index([teamId])
   @@index([sport])
   @@index([createdAt])
-}
-
-model Conversation {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  participant1 User      @relation("ConversationParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
-  participant1Id String
-  participant2 User      @relation("ConversationParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
-  participant2Id String
-  messages     Message[]
-  @@unique([participant1Id, participant2Id])
-}
-
-model Message {
-  id             String       @id @default(cuid())
-  createdAt      DateTime     @default(now())
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  conversationId String
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  senderId       String
-  content        String
-  readAt         DateTime?
-
-  @@index([conversationId, createdAt])
-  @@index([conversationId, senderId, readAt])
 }
 
 // Team follows (user follows a specific team)

@@ -11,7 +11,6 @@ An AI-powered sports prediction app that helps you make informed decisions on ga
 ## Authentication
 
 - **Sign in with Apple** - Quick and secure Apple ID login
-- **Sign in with Google** - Coming soon
 - **Email Sign In** - Passwordless OTP verification
 
 ## Features
@@ -74,13 +73,6 @@ Every game prediction is powered by real-time ESPN data + OpenAI GPT-4o-mini ana
 - AI analysis explaining the prediction
 - **News-based confidence fluctuations** - Confidence adjusts based on player news (injuries, trades, etc.)
 
-### Community Features
-- **Group Chat Interface**: Real-time chat-style discussion board
-- **@ Mentions**: Tag other users by typing @ to mention followers/following
-- **Text & Image Posts**: Share thoughts with optional image uploads
-- **Likes & Comments**: Engage with community content
-- **Sport-Specific Badges**: NFL, NBA, MLB themed discussions
-
 ### Social Features
 - **Follow System**: Follow other users to keep up with their picks
 - **User Profiles**: View other users' stats and recent picks
@@ -89,10 +81,6 @@ Every game prediction is powered by real-time ESPN data + OpenAI GPT-4o-mini ana
 - **Win Rate & Streak Tracking**: Show off your prediction success
 - **User Badges**: Hot Streak, Expert Picker, Veteran badges
 - **Share Profile**: Copy profile link to share
-- **Direct Messaging**: Send private messages to other users
-- **DM Inbox**: View all conversations, teal-accented messaging UI
-- **Message from Profile**: Tap Message on any user's profile to start a DM
-- **Challenge**: Challenge other users (coming soon)
 
 ### Team Colors & Branding
 - **Real Team Colors**: All NFL, NBA, MLB, NHL teams with official colors
@@ -127,14 +115,11 @@ Every game prediction is powered by real-time ESPN data + OpenAI GPT-4o-mini ana
 ### Mobile App (`/mobile`)
 - **Home Tab**: Today's games and featured predictions
 - **Sports Tab**: Browse all sports categories
-- **Community Tab**: Discussion board for all users
 - **Profile Tab**: Your stats, settings, and social connections
 - **Sport Detail**: View all games for a specific sport
 - **Game Detail**: Full prediction breakdown with news feed
 - **User Profiles**: View other users' profiles and follow them
 - **Followers/Following**: See your connections
-- **Messages**: DM inbox with conversation list
-- **Conversation**: Real-time chat thread with message bubbles
 
 ### Backend API (`/backend`)
 
@@ -176,7 +161,6 @@ All game data is **real-time from ESPN** with **AI predictions** automatically a
 - **Prediction Cache**: 5-minute server cache (predictions don't change mid-game)
 - **Team Form Cache**: 10-minute cache for recent form data
 - **News & Analysis**: Updates every 2 minutes
-- **Posts & Comments**: Refresh every 30-60 seconds
 - **App Focus**: Automatic data refresh when app returns to foreground
 - **Network Reconnect**: Automatic refresh when internet connection is restored
 - **Pull-to-Refresh**: Manual refresh available on all screens
@@ -187,27 +171,12 @@ Games automatically refresh to show:
 - Betting odds (spread, over/under)
 - TV channel information
 
-#### Discussion Board
-- `GET /api/discussion/posts` - Get all posts (paginated)
-- `POST /api/discussion/posts` - Create a post
-- `DELETE /api/discussion/posts/:id` - Delete own post
-- `POST /api/discussion/posts/:id/like` - Like a post
-- `DELETE /api/discussion/posts/:id/like` - Unlike a post
-- `GET /api/discussion/posts/:id/comments` - Get comments
-- `POST /api/discussion/posts/:id/comments` - Add comment
-
 #### Social Features
 - `POST /api/social/follow/:userId` - Follow a user
 - `DELETE /api/social/unfollow/:userId` - Unfollow a user
 - `GET /api/social/followers/:userId` - Get followers list
 - `GET /api/social/following/:userId` - Get following list
 - `GET /api/social/stats/:userId` - Get follower/following counts
-
-#### Direct Messages
-- `GET /api/messages/conversations` - List all conversations
-- `POST /api/messages/conversations/:userId` - Get or create a conversation
-- `GET /api/messages/conversations/:id/messages` - Get messages in a conversation
-- `POST /api/messages/conversations/:id/messages` - Send a message
 
 #### Picks
 - `GET /api/picks/user/:userId` - Get a user's recent public picks
@@ -220,10 +189,9 @@ Games automatically refresh to show:
 ### Data Sources
 - **Games & Scores**: Real-time ESPN API (30-second cache, 10-second polling for live games, 5-minute prediction cache)
 - **AI Predictions**: Generated server-side using team records, home field advantage, and seeded randomness for consistency
-- **Discussion Posts & Comments**: Real database (Prisma/SQLite) - user-generated content
 - **News**: Real database - affects AI confidence adjustments
 - **Picks**: Real database - tracked per user per game
-- **Social Features**: Real database - follows, profiles, DMs
+- **Social Features**: Real database - follows, profiles
 
 ## Theme
 
