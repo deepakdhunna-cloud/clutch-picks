@@ -18,7 +18,7 @@ const ESPN_ENDPOINTS: Record<string, string> = {
   EPL: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
 };
 
-interface FinalGameResult {
+export interface FinalGameResult {
   gameId: string;
   homeScore: number;
   awayScore: number;
@@ -26,7 +26,7 @@ interface FinalGameResult {
 }
 
 // Fetch a specific game by ID from ESPN. Searches across all sports and ±3 days.
-async function fetchGameResult(gameId: string): Promise<FinalGameResult | null> {
+export async function fetchGameResult(gameId: string): Promise<FinalGameResult | null> {
   const today = new Date();
   const datesToSearch: string[] = [];
 
@@ -111,6 +111,37 @@ export function determineResult(
   return null;
 }
 
+// Convert a stored PredictionResult row into the 3 model fields we denormalize
+// onto UserPick at settlement. PredictionResult.homeWinProb is 0..1 and may be
+// null on older rows — fall back to deriving from confidence + predictedWinner
+// (which are always populated). Returns null when even those are missing.
+export interface PredictionEnrichment {
+  modelPredictedWinner: string;
+  modelConfidence: number;
+  modelHomeWinProb: number;
+}
+
+export function buildPredictionEnrichment(pred: {
+  predictedWinner: string | null;
+  confidence: number | null;
+  homeWinProb: number | null;
+} | null): PredictionEnrichment | null {
+  if (!pred || pred.predictedWinner == null || pred.confidence == null) return null;
+  const conf = Math.round(pred.confidence);
+  const winner = pred.predictedWinner;
+  const homeWinProb =
+    pred.homeWinProb != null
+      ? Math.round(pred.homeWinProb * 100)
+      : winner === "home"
+        ? conf
+        : 100 - conf;
+  return {
+    modelPredictedWinner: winner,
+    modelConfidence: conf,
+    modelHomeWinProb: homeWinProb,
+  };
+}
+
 // Main resolution function — resolves all pending picks
 export async function resolvePicks(): Promise<{ resolved: number; skipped: number }> {
   let resolved = 0;
@@ -152,6 +183,23 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
       }
     }
 
+    // Batch-fetch persisted predictions for every game we're about to resolve
+    // a pick on. Used to denormalize the model's call onto the pick row so the
+    // Profile UI can render Signature Calls without joining against allGames.
+    const pickGameIds = unresolvedPicks.map((p) => p.gameId);
+    let predictionMap = new Map<string, { predictedWinner: string; confidence: number; homeWinProb: number | null }>();
+    if (pickGameIds.length > 0) {
+      try {
+        const predRows = await prisma.predictionResult.findMany({
+          where: { gameId: { in: pickGameIds } },
+          select: { gameId: true, predictedWinner: true, confidence: true, homeWinProb: true },
+        });
+        predictionMap = new Map(predRows.map((p) => [p.gameId, p]));
+      } catch (err) {
+        console.error(`[resolve-picks] Error batch-fetching predictions:`, err);
+      }
+    }
+
     // Now resolve each pick
     for (const pick of unresolvedPicks) {
       const gameResult = gameResultMap.get(pick.gameId);
@@ -166,12 +214,26 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
         continue;
       }
 
+      // Build enrichment payload — settlement always writes scores; model
+      // fields only when a PredictionResult row exists for the game.
+      const enrichment = buildPredictionEnrichment(predictionMap.get(pick.gameId) ?? null);
+      const enriched = enrichment !== null;
+      if (!enriched) {
+        console.warn(`[resolve-picks] No prediction found for game ${pick.gameId} — settling pick ${pick.id} without model enrichment`);
+      }
+
       try {
         await prisma.userPick.update({
           where: { id: pick.id },
-          data: { result },
+          data: {
+            result,
+            finalHomeScore: gameResult.homeScore,
+            finalAwayScore: gameResult.awayScore,
+            ...(enrichment ?? {}),
+          },
         });
         resolved++;
+        console.log(`[resolve-picks] Resolved pick ${pick.id}: ${result}, enriched: ${enriched}`);
 
         // Notify user of resolved pick (in-app + push)
         const homeAbbr = pick.homeTeam ?? 'HOME';
