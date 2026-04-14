@@ -54,8 +54,26 @@ export function useGames() {
   const query = useQuery({
     queryKey: ['games'],
     queryFn: async () => {
-      const result = await api.get<GameWithPrediction[]>('/api/games');
-      return result ?? [];
+      // Workaround: /api/games aggregator was silently dropping today's
+      // non-LIVE games + EPL. Fetch today + tomorrow + day-after via the
+      // date-specific endpoint (which returns full slates) and merge here
+      // until the aggregator bug is root-caused.
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const today = new Date();
+      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+      const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
+      const dates = [fmt(today), fmt(tomorrow), fmt(dayAfter)];
+      const results = await Promise.all(
+        dates.map((d) =>
+          api.get<GameWithPrediction[]>(`/api/games/date/${d}`).catch(() => [] as GameWithPrediction[])
+        )
+      );
+      const merged = results.flat();
+      // Dedupe by id (last write wins, matches backend dedupe semantics)
+      const byId = new Map<string, GameWithPrediction>();
+      for (const g of merged) byId.set(g.id, g);
+      return Array.from(byId.values());
     },
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
