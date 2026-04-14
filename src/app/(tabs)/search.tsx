@@ -637,7 +637,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     if (uForm.wins >= 4 && uForm.total >= 5) {
       hl = `${underdog.abbreviation} could shock everyone`;
       tags.push('UPSET ALERT', `${underdog.abbreviation} ${uForm.wins}-${uForm.total - uForm.wins} RECENT`);
-      dt = `Don't look at the records — look at the trajectory. ${underdog.abbreviation} has won ${uForm.wins} of their last ${uForm.total} and they're playing with house money tonight. ${winner.abbreviation} is favored, but this is the kind of game where the "better team" loses. Popcorn game.`;
+      dt = `Don't look at the records — look at the trajectory. ${underdog.abbreviation} has won ${uForm.wins} of their last ${uForm.total} and they're playing with nothing to lose tonight. ${winner.abbreviation} is favored, but this is the kind of game where the "better team" loses. Popcorn game.`;
     } else { hl = ''; drawType = 'default'; }
   }
 
@@ -667,9 +667,9 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
 
   // 7. HIGH VALUE — the sharpest edge on the board
   if (!hl && edge >= 7 && trySet('high_value')) {
-    hl = 'Best edge on the board';
-    tags.push('SHARP', `EDGE ${edge}/10`);
-    dt = `If you only watch one game tonight, make it this one. ${winner.abbreviation} grades out at ${edge}/10 on edge rating — that means the model found a real statistical gap that the average fan won't see. ${loser.abbreviation} has a blind spot and ${winner.abbreviation} is built to exploit it.`;
+    hl = 'Strongest signal on tonight\'s slate';
+    tags.push('STANDOUT', `EDGE ${edge}/10`);
+    dt = `If you only watch one game tonight, make it this one. ${winner.abbreviation} grades out at ${edge}/10 on edge rating — meaning the model is seeing a real statistical gap between these teams that the average fan won't see. ${loser.abbreviation} has a blind spot and ${winner.abbreviation} is built to exploit it.`;
   }
 
   // 8. COLD TEAM — fading fast
@@ -679,7 +679,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     const cW = cold === home ? hf.wins : af.wins;
     const cT = cold === home ? hf.total : af.total;
     hl = `${cold.abbreviation} is spiraling`;
-    tags.push(`${cold.abbreviation} ${cW}-${cT - cW} L${cT}`, 'FADE ALERT');
+    tags.push(`${cold.abbreviation} ${cW}-${cT - cW} L${cT}`, 'COLD STREAK');
     dt = `${cold.abbreviation} has won just ${cW} of their last ${cT}. The slide is real — confidence is low, the locker room energy is off. ${hot.abbreviation} smells blood. This is a dangerous spot for ${cold.abbreviation} and the AI knows it.`;
   }
 
@@ -707,13 +707,13 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
       tags.push('ALL SYSTEMS GO');
       dt = `Form, fundamentals, and matchup advantages all point to ${winner.abbreviation}. The AI found edge in ${edge >= 6 ? 'multiple categories' : 'the key areas'}. ${loser.abbreviation} is decent but they're walking into a bad stylistic matchup tonight.`;
     } else if (spread !== undefined && Math.abs(spread) >= 7) {
-      hl = `Vegas and the AI agree`;
-      tags.push(`SPREAD ${spread > 0 ? home.abbreviation : away.abbreviation} -${Math.abs(spread)}`);
-      dt = `The line says ${Math.abs(spread)} points, and our model doesn't disagree. ${winner.abbreviation} should control this one from wire to wire. The question isn't who wins — it's by how much.`;
+      hl = `The model is calling for a comfortable win`;
+      tags.push('PROJECTED MARGIN');
+      dt = `Our model projects ${winner.abbreviation} winning by around ${Math.abs(spread)} points. The numbers back it up across multiple factors.`;
     } else if (overUnder && overUnder >= (sport === 'NBA' ? 230 : sport === 'NFL' ? 50 : sport === 'MLB' ? 9 : sport === 'NHL' ? 6.5 : 3.5)) {
       hl = 'Fireworks incoming';
-      tags.push(`O/U ${overUnder}`, 'HIGH SCORING');
-      dt = `The over/under is set at ${overUnder} — this has shootout written all over it. Both teams push pace and neither defense inspires confidence. Grab a seat and enjoy the show.`;
+      tags.push('HIGH-SCORING PROJECTION');
+      dt = `Our model projects a combined ${overUnder}-point total — this has shootout written all over it. Bring snacks.`;
     } else if (winnerIsHome && hPct > 0.55 && isNightGame) {
       hl = `${home.abbreviation}'s house, ${home.abbreviation}'s rules`;
       tags.push('HOME ADVANTAGE');
@@ -733,11 +733,11 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     } else if (isMatinee) {
       hl = `Early tip, big opportunity`;
       tags.push(displaySport(sport));
-      dt = `Matinee matchup — ${away.abbreviation} at ${home.abbreviation}. The model leans ${winner.abbreviation} and gives them a ${Math.max(homeWP,awayWP)}% win probability. Early games fly under the radar — that's where smart pickers find value.`;
+      dt = `Matinee matchup — ${away.abbreviation} at ${home.abbreviation}. The model leans ${winner.abbreviation} and gives them a ${Math.max(homeWP,awayWP)}% win probability. Early games fly under the radar — that's where the model's looking for the real separation.`;
     } else {
       hl = `${away.abbreviation} invades ${home.abbreviation}`;
       tags.push(displaySport(sport), `${Math.max(homeWP,awayWP)}% WIN PROB`);
-      dt = `${away.abbreviation} (${away.record}) travels to face ${home.abbreviation} (${home.record}) tonight. The AI sees a ${conf >= 60 ? 'clear' : 'slight'} edge for ${winner.abbreviation}. ${conf < 58 ? 'Tight matchup — trust the process but stay nimble.' : 'The data is leaning one direction. Make your move.'}`;
+      dt = `${away.abbreviation} (${away.record}) travels to face ${home.abbreviation} (${home.record}) tonight. The AI sees a ${conf >= 60 ? 'clear' : 'slight'} edge for ${winner.abbreviation}. ${conf < 58 ? 'Tight matchup — trust the numbers but keep an eye on late-breaking news.' : 'The data is leaning one direction. Keep it in mind.'}`;
     }
   }
 

@@ -147,7 +147,7 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
               </View>
             ) : (
               <View style={[s.resultBadge, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }]}>
-                <Text style={[s.resultText, { color: C.MUTED, fontSize: 9 }]}>TBD</Text>
+                <Text style={[s.resultText, { color: C.MUTED, fontSize: 9 }]}>Pending</Text>
               </View>
             )}
           </View>
