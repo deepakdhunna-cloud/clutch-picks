@@ -11,6 +11,7 @@
 
 import { prisma } from "../prisma";
 import { sendPushToUser, sendPushToAll } from "../routes/notifications";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const ESPN_ENDPOINTS: Record<string, string> = {
   NFL: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
@@ -109,7 +110,7 @@ export async function checkLiveGamesAndNotify() {
         if (sport === "NCAAB") { params.set("groups", "50"); params.set("limit", "300"); }
         if (sport === "NCAAF") { params.set("groups", "80"); params.set("limit", "300"); }
 
-        const res = await fetch(`${url}?${params.toString()}`);
+        const res = await fetchWithTimeout(`${url}?${params.toString()}`, { timeoutMs: 20000 });
         if (!res.ok) continue;
 
         const data = await res.json() as { events?: Array<{
@@ -179,7 +180,7 @@ export async function checkBigGameAlerts() {
         if (sport === "NCAAB") { params.set("groups", "50"); params.set("limit", "300"); }
         if (sport === "NCAAF") { params.set("groups", "80"); params.set("limit", "300"); }
 
-        const res = await fetch(`${url}?${params.toString()}`);
+        const res = await fetchWithTimeout(`${url}?${params.toString()}`, { timeoutMs: 20000 });
         if (!res.ok) continue;
 
         const data = await res.json() as { events?: Array<{

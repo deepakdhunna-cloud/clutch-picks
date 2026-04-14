@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { fetchWithTimeout } from "../lib/fetch-with-timeout";
 
 const notificationsRouter = new Hono<{
   Variables: {
@@ -87,7 +88,9 @@ notificationsRouter.post("/unregister", zValidator("json", z.object({ token: z.s
   const { token } = c.req.valid("json");
   try {
     await prisma.pushToken.deleteMany({ where: { token } });
-  } catch {}
+  } catch (error) {
+    console.error("[notifications] Failed to unregister push token:", error);
+  }
   return c.json({ data: { success: true } });
 });
 
@@ -114,10 +117,11 @@ async function sendPushNotifications(messages: PushMessage[]) {
   }
   for (const chunk of chunks) {
     try {
-      await fetch('https://exp.host/--/api/v2/push/send', {
+      await fetchWithTimeout('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chunk),
+        timeoutMs: 15000,
       });
     } catch (err) {
       console.error('[Push] Send error:', err);

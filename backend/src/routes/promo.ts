@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { fetchWithTimeout } from "../lib/fetch-with-timeout";
 
 const promoRouter = new Hono<{
   Variables: {
@@ -66,7 +67,7 @@ promoRouter.post("/redeem", zValidator("json", redeemSchema), async (c) => {
   }
 
   try {
-    const rcResponse = await fetch(
+    const rcResponse = await fetchWithTimeout(
       `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(subscriberId)}/entitlements/${encodeURIComponent('Clutch Picks Pro')}/promotional`,
       {
         method: "POST",
@@ -75,6 +76,7 @@ promoRouter.post("/redeem", zValidator("json", redeemSchema), async (c) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ duration: promo.type }),
+        timeoutMs: 15000,
       }
     );
 

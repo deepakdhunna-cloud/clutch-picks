@@ -199,10 +199,24 @@ async function resolvePicksInBackground() {
   }
 }
 
+let resolverRunning = false;
+async function resolvePicksGuarded() {
+  if (resolverRunning) {
+    console.log("[resolve-picks] Previous run still in progress, skipping");
+    return;
+  }
+  resolverRunning = true;
+  try {
+    await resolvePicksInBackground();
+  } finally {
+    resolverRunning = false;
+  }
+}
+
 // Resolve picks every 5 minutes
-setInterval(resolvePicksInBackground, 5 * 60 * 1000);
+setInterval(resolvePicksGuarded, 5 * 60 * 1000);
 // Also resolve once on startup after a 30-second delay
-setTimeout(resolvePicksInBackground, 30_000);
+setTimeout(resolvePicksGuarded, 30_000);
 
 // Pre-warm prediction cache and refresh live games
 async function warmPredictions() {
@@ -219,24 +233,52 @@ async function warmPredictions() {
       try {
         const detailRes = await fetch(`http://localhost:${port}/api/games/id/${g.id}`);
         if (detailRes.ok) warmed++;
-      } catch { /* ignore single failures */ }
+      } catch (error) {
+        console.warn("[warm] Single prediction warm failed:", error);
+      }
     }
     console.log(`[prediction-warmer] Warmed ${games.length} games (${warmed}/${liveGames.length} live refreshed)`);
   } catch (err) {
     console.error("[prediction-warmer] Failed:", err);
   }
 }
+let warmerRunning = false;
+async function warmPredictionsGuarded() {
+  if (warmerRunning) {
+    console.log("[prediction-warmer] Previous run still in progress, skipping");
+    return;
+  }
+  warmerRunning = true;
+  try {
+    await warmPredictions();
+  } finally {
+    warmerRunning = false;
+  }
+}
+
 // Run more frequently so live caches don't go stale (was 4 min)
-setInterval(warmPredictions, 90 * 1000);
-setTimeout(warmPredictions, 10_000);
+setInterval(warmPredictionsGuarded, 90 * 1000);
+setTimeout(warmPredictionsGuarded, 10_000);
+
+let liveCheckRunning = false;
+async function liveCheckGuarded() {
+  if (liveCheckRunning) {
+    console.log("[notify] Previous live game check still in progress, skipping");
+    return;
+  }
+  liveCheckRunning = true;
+  try {
+    await checkLiveGamesAndNotify();
+  } catch (err) {
+    console.error("[notify] Live game check failed:", err);
+  } finally {
+    liveCheckRunning = false;
+  }
+}
 
 // Check for live games and notify users who picked them — every 2 minutes
-setInterval(() => {
-  checkLiveGamesAndNotify().catch(err => console.error("[notify] Live game check failed:", err));
-}, 2 * 60 * 1000);
-setTimeout(() => {
-  checkLiveGamesAndNotify().catch(err => console.error("[notify] Live game check failed:", err));
-}, 45_000);
+setInterval(liveCheckGuarded, 2 * 60 * 1000);
+setTimeout(liveCheckGuarded, 45_000);
 
 // Check for big upcoming games — every 30 minutes
 setInterval(() => {
