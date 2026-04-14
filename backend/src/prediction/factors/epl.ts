@@ -1,3 +1,7 @@
+// TODO (Batch 5): Implement sport-specific factors for EPL.
+// Currently returns an empty array, meaning EPL predictions run
+// on generic base factors only. See audit report for context.
+
 /**
  * EPL-specific factors — STUB.
  *

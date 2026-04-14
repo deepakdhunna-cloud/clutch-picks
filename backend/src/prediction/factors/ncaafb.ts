@@ -1,3 +1,7 @@
+// TODO (Batch 5): Implement sport-specific factors for NCAAF.
+// Currently returns an empty array, meaning NCAAF predictions run
+// on generic base factors only. See audit report for context.
+
 /**
  * College Football (NCAAF) specific factors — STUB.
  *

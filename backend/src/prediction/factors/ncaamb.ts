@@ -1,3 +1,7 @@
+// TODO (Batch 5): Implement sport-specific factors for NCAAB.
+// Currently returns an empty array, meaning NCAAB predictions run
+// on generic base factors only. See audit report for context.
+
 /**
  * College Basketball (NCAAB) specific factors — STUB.
  *

@@ -95,7 +95,47 @@ export async function fetchGameResult(gameId: string): Promise<FinalGameResult |
     }
   }
 
-  console.log(`[resolve-diag] gameId=${gameId}: NOT FOUND in any sport across ±3 day window`);
+  // Fallback: ESPN's per-game summary endpoint works for historical games
+  // outside the ±3 day scoreboard window. Try every sport's summary path
+  // until one returns a final result.
+  for (const sport of Object.keys(ESPN_ENDPOINTS)) {
+    const summaryUrl = ESPN_ENDPOINTS[sport]!.replace("/scoreboard", "/summary");
+    try {
+      const res = await fetchWithTimeout(`${summaryUrl}?event=${encodeURIComponent(gameId)}`, { timeoutMs: 25000 });
+      if (!res.ok) continue;
+
+      const data = await res.json() as {
+        header?: {
+          competitions?: Array<{
+            competitors: Array<{ homeAway: string; score?: string | number }>;
+            status?: { type?: { state?: string; completed?: boolean } };
+          }>;
+        };
+      };
+
+      const competition = data.header?.competitions?.[0];
+      if (!competition) continue;
+
+      const status = competition.status?.type;
+      const isFinal = status?.state?.toLowerCase() === "post" || !!status?.completed;
+      if (!isFinal) continue;
+
+      const home = competition.competitors.find((c) => c.homeAway === "home");
+      const away = competition.competitors.find((c) => c.homeAway === "away");
+      if (!home || !away) continue;
+
+      const homeScore = parseInt(String(home.score ?? "0"), 10);
+      const awayScore = parseInt(String(away.score ?? "0"), 10);
+      if (isNaN(homeScore) || isNaN(awayScore)) continue;
+
+      console.log(`[resolve-diag] gameId=${gameId}: resolved via summary fallback (sport=${sport})`);
+      return { gameId, homeScore, awayScore, isFinal: true };
+    } catch {
+      // Try next sport
+    }
+  }
+
+  console.log(`[resolve-diag] gameId=${gameId}: NOT FOUND via scoreboard window or summary fallback`);
   return null;
 }
 
