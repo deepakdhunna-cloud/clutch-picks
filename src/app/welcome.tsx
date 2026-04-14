@@ -17,12 +17,9 @@ import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { AuthBackground } from '@/components/AuthBackground';
 
+import { BG, TEAL, TEAL_DARK, MAROON } from '@/lib/theme';
+
 const { width: W, height: H } = Dimensions.get('window');
-const BG = '#040608';
-const TEAL = '#7A9DB8';
-const TEAL_DARK = '#5A7A8A'; // used in other screens too
-const CORAL = '#8B0A1F';
-const BADGE_BLUE = '#5A7A8A'; // Same blue as PicksBadge background
 
 // ─── Apple Logo ─────────────────────────────────────────────────
 function AppleLogo({ size = 18, color = '#000' }: { size?: number; color?: string }) {
@@ -153,7 +150,7 @@ export default function WelcomeScreen() {
               style={[s.emailBtn, { opacity: isLoading ? 0.5 : 1 }]}
             >
               <LinearGradient
-                colors={[`${CORAL}45`, `${CORAL}28`, `${CORAL}38`]}
+                colors={[`${MAROON}45`, `${MAROON}28`, `${MAROON}38`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={s.btnGradient}
@@ -179,7 +176,7 @@ export default function WelcomeScreen() {
               disabled={isLoading}
               style={[s.appleBtn, { opacity: isLoading ? 0.5 : 1 }]}
             >
-              <AppleLogo size={20} color={BADGE_BLUE} />
+              <AppleLogo size={20} color={TEAL_DARK} />
               <Text style={s.appleBtnText}>Continue with Apple</Text>
             </Pressable>
           </Animated.View>
@@ -264,13 +261,13 @@ const s = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 10, elevation: 8,
   },
   appleBtnText: {
-    fontSize: 16, fontWeight: '700', color: BADGE_BLUE,
+    fontSize: 16, fontWeight: '700', color: TEAL_DARK,
   },
   emailBtn: {
     height: 54, borderRadius: 14, overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.10)',
-    borderWidth: 1.5, borderColor: `${CORAL}CC`,
-    shadowColor: CORAL, shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1.5, borderColor: `${MAROON}CC`,
+    shadowColor: MAROON, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2, shadowRadius: 12, elevation: 8,
   },
   emailBtnText: {

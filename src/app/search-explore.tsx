@@ -10,17 +10,10 @@ import { useGames } from '@/hooks/useGames';
 import { GameWithPrediction, GameStatus, Sport, SPORT_META } from '@/types/sports';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { getTeamColors } from '@/lib/team-colors';
-
-const MAROON = '#8B0A1F';
-const MAROON_DIM = 'rgba(139,10,31,0.15)';
-const TEAL = '#7A9DB8';
-const LIVE_RED = '#DC2626';
-const BG = '#040608';
-const GLASS = 'rgba(8,8,12,0.95)';
-const BORDER = 'rgba(255,255,255,0.08)';
-const WHITE = '#FFFFFF';
-const TEXT_SECONDARY = '#A1B3C9';
-const TEXT_MUTED = '#6B7C94';
+import {
+  MAROON, MAROON_DIM, TEAL, LIVE_RED, BG, PANEL_DARK, BORDER_MED,
+  WHITE, TEXT_SECONDARY, TEXT_MUTED,
+} from '@/lib/theme';
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -195,7 +188,7 @@ export default function SearchExploreScreen() {
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
         <Pressable onPress={goBack} hitSlop={12}><ArrowLeft size={22} color={WHITE} strokeWidth={2} /></Pressable>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: GLASS, borderRadius: 14, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, paddingVertical: 10 }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: PANEL_DARK, borderRadius: 14, borderWidth: 1, borderColor: BORDER_MED, paddingHorizontal: 14, paddingVertical: 10 }}>
           <Search size={16} color={TEXT_MUTED} strokeWidth={2} style={{ marginRight: 10 }} />
           <TextInput ref={inputRef} style={{ flex: 1, fontSize: 15, fontWeight: '500', color: WHITE }} placeholder="Search games, teams, sports..." placeholderTextColor={TEXT_MUTED} autoFocus keyboardAppearance="dark" selectionColor={MAROON_DIM} returnKeyType="done" value={query} onChangeText={onChangeText} onSubmitEditing={() => Keyboard.dismiss()} />
           {query.length > 0 ? <Pressable onPress={() => { setQuery(''); setDebouncedQuery(''); setSportFilter(null); }} hitSlop={8}><X size={16} color={TEXT_MUTED} /></Pressable> : null}

@@ -29,9 +29,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
-
-const MAROON = '#8B0A1F';
-const TEAL = '#7A9DB8';
+import { MAROON, TEAL } from '@/lib/theme';
 
 
 // Field goal post to replace "U" - with football going through - memoized

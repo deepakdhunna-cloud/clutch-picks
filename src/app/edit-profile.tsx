@@ -12,15 +12,10 @@ import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 
 // Match profile card palette
-const BG = '#040608';
-const GLASS = 'rgba(8,8,12,0.95)';
-const MAROON = '#8B0A1F';
-const MAROON_DIM = 'rgba(139,10,31,0.15)';
-const TEAL = '#7A9DB8';
-const BORDER = 'rgba(255,255,255,0.08)';
-const BORDER_HI = 'rgba(255,255,255,0.14)';
-const TEXT_MUTED = '#6B7C94';
-const TEXT_SECONDARY = '#A1B3C9';
+import {
+  BG, PANEL_DARK, MAROON, MAROON_DIM, TEAL, BORDER_MED, BORDER_BOLD,
+  TEXT_MUTED, TEXT_SECONDARY,
+} from '@/lib/theme';
 
 interface UserProfile {
   id: string;
@@ -168,7 +163,7 @@ export default function EditProfileScreen() {
             borderRadius: 20,
             backgroundColor: 'rgba(255,255,255,0.05)',
             borderWidth: 1,
-            borderColor: BORDER,
+            borderColor: BORDER_MED,
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -264,8 +259,8 @@ export default function EditProfileScreen() {
               borderRadius: 16,
               overflow: 'hidden',
               borderWidth: 1,
-              borderColor: BORDER_HI,
-              backgroundColor: GLASS,
+              borderColor: BORDER_BOLD,
+              backgroundColor: PANEL_DARK,
             }}
           >
             {/* Name Input */}
@@ -273,7 +268,7 @@ export default function EditProfileScreen() {
               style={{
                 padding: 16,
                 borderBottomWidth: 1,
-                borderBottomColor: BORDER,
+                borderBottomColor: BORDER_MED,
               }}
             >
               <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Name</Text>

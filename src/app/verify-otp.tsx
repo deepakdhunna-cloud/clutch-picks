@@ -11,11 +11,8 @@ import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { setUserId } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
+import { BG, TEAL, TEAL_DARK, MAROON } from '@/lib/theme';
 
-const BG = '#040608';
-const TEAL = '#7A9DB8';
-const TEAL_DARK = '#5A7A8A';
-const CORAL = '#8B0A1F';
 const CODE_LENGTH = 6;
 
 function BackArrow({ size = 20 }: { size?: number }) {
@@ -31,12 +28,12 @@ function ShieldCheckIcon({ size = 36 }: { size?: number }) {
     <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
       <Defs>
         <SvgGrad id="otp-shield" x1="0.5" y1="0" x2="0.5" y2="1">
-          <Stop offset="0" stopColor={CORAL} stopOpacity={0.2} />
+          <Stop offset="0" stopColor={MAROON} stopOpacity={0.2} />
           <Stop offset="1" stopColor={TEAL} stopOpacity={0.05} />
         </SvgGrad>
       </Defs>
       <Path d="M16 3 L4 8 L4 16 C4 23 9 28 16 30 C23 28 28 23 28 16 L28 8 Z" fill="url(#otp-shield)" stroke={TEAL} strokeWidth={1.5} />
-      <Path d="M11 16 L14.5 19.5 L21 12" stroke={CORAL} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M11 16 L14.5 19.5 L21 12" stroke={MAROON} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </Svg>
   );
 }
@@ -274,7 +271,7 @@ const s = StyleSheet.create({
   hintText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   errorText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
   resendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  resendText: { fontSize: 13, fontWeight: '700', color: CORAL },
+  resendText: { fontSize: 13, fontWeight: '700', color: MAROON },
   timerText: { fontSize: 12, color: 'rgba(255,255,255,0.3)' },
   submitBtn: {
     backgroundColor: `${TEAL}20`, borderRadius: 14, height: 54,

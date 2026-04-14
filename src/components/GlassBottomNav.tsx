@@ -18,8 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
+import { MAROON } from '@/lib/theme';
 
-const MAROON = '#8B0A1F';
 
 export function GlassBottomNav({
   state,

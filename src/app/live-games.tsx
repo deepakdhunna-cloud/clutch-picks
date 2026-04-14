@@ -19,8 +19,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, GameWithPrediction } from '@/types/sports';
 import { useGames } from '@/hooks/useGames';
+import { TEAL } from '@/lib/theme';
 
-const TEAL = '#7A9DB8';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.22;
 const VELOCITY_THRESHOLD = 500;
