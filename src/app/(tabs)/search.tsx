@@ -24,6 +24,7 @@ import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
+import { generateTonightNarrative } from '@/lib/tonight-narrative';
 
 // ─── COLORS ───
 const MAROON = '#8B0A1F';
@@ -572,49 +573,7 @@ const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
   );
 });
 
-// ─── INSIGHT FUNCTIONS ───
-// Order-preserving dedupe so a team with multiple qualifying games (e.g. MLB
-// doubleheader) only appears once in the Arena Insight pill list.
-const uniq = (arr: string[]): string[] => Array.from(new Set(arr));
-
-function genInsight(games: GameWithPrediction[]): { headline: string; teams: string[] } {
-  const s = games.filter(g => g.status === GameStatus.SCHEDULED && g.prediction);
-  if (s.length === 0) return { headline: 'No games on the board yet — check back closer to game time.', teams: [] };
-
-  const locks = s.filter(g => g.prediction!.confidence >= 72);
-  const strong = s.filter(g => g.prediction!.confidence >= 60 && g.prediction!.confidence < 72);
-  const tossups = s.filter(g => g.prediction!.isTossUp);
-  const streakers = s.filter(g => (g.prediction!.homeStreak??0) >= 4 || (g.prediction!.awayStreak??0) >= 4);
-  const upsets = s.filter(g => {
-    const p = g.prediction!;
-    const loser = p.predictedWinner === 'home' ? g.awayTeam : g.homeTeam;
-    const loserRec = loser.record.split('-').map(Number);
-    const loserPct = loserRec[0] / Math.max(loserRec[0] + (loserRec[1] ?? 0), 1);
-    return p.confidence >= 55 && p.confidence <= 65 && loserPct > 0.5;
-  });
-  const sports = new Set(s.map(g => g.sport));
-
-  if (locks.length >= 2) {
-    return { headline: `${locks.length} games tonight hit Lock status — that's rare. The model sees dominant edges. Don't sleep on these.`, teams: uniq(locks.map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name)).slice(0,3) };
-  }
-  if (upsets.length >= 2) {
-    return { headline: `${upsets.length} upset candidates are lurking tonight. The underdogs have the recent form to pull it off — high-risk, high-reward slate.`, teams: uniq(upsets.map(g => { const p = g.prediction!; return p.predictedWinner === 'home' ? g.awayTeam.name : g.homeTeam.name; })).slice(0,3) };
-  }
-  if (streakers.length >= 2) {
-    return { headline: `${streakers.length} teams riding hot streaks collide tonight. History says streaks break in spots like this — watch closely.`, teams: uniq(streakers.map(g => (g.prediction!.homeStreak??0) >= 4 ? g.homeTeam.name : g.awayTeam.name)).slice(0,3) };
-  }
-  if (strong.length >= 3) {
-    return { headline: `Loaded slate — ${strong.length} Strong Picks across ${sports.size} sports. The model found real separation in multiple matchups tonight.`, teams: uniq(strong.map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name)).slice(0,3) };
-  }
-  if (tossups.length >= 3) {
-    return { headline: `Chaos night. ${tossups.length} games are dead even — the model can barely separate them. Gut-check picks only.`, teams: uniq(tossups.map(g => `${g.awayTeam.abbreviation}/${g.homeTeam.abbreviation}`)).slice(0,3) };
-  }
-  if (s.length >= 8) {
-    return { headline: `Massive slate tonight — ${s.length} games across ${sports.size} sports. The model has scanned every angle. Your edge is here.`, teams: [] };
-  }
-  return { headline: `${s.length} games tonight. The AI has broken down every matchup — here's where the value is.`, teams: [] };
-}
-
+// ─── MATCHUP GENERATION ───
 type DrawType = 'streak_clash'|'dominant_favorite'|'upset_brewing'|'toss_up'|'high_value'|'model_conflict'|'hot_team'|'cold_team'|'record_mismatch'|'default';
 
 function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags: string[]; headline: string; detail: string; drawType: DrawType } {
@@ -986,7 +945,7 @@ const PREP_TABS = ['Ranked', 'Underdogs'] as const;
 // ─── PREP MODE ───
 const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: GameWithPrediction[]; picks: UserPick[]; stats: UserStats|undefined; sh: any; onR: ()=>void; isR: boolean }) {
   const [prepTab, setPrepTab] = useState<0|1>(0);
-  const insight = useMemo(() => genInsight(sched), [sched]);
+  const tonightNarrative = useMemo(() => generateTonightNarrative(sched), [sched]);
   const ranked = useMemo(() => {
     const withPred = sched.filter(g => g.prediction);
     const sorted = withPred.sort((a,b) => {
@@ -1031,11 +990,10 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
         <View style={{flexDirection:'row',alignItems:'center',gap:6}}><View style={{width:6,height:6,borderRadius:3,backgroundColor:MAROON}} /><Text style={{fontSize:11,fontWeight:'700',color:MAROON}}>{sched.length} GAMES</Text></View>
       </View>
 
-      {/* Arena Insight card */}
+      {/* Tonight's Narrative card */}
       <View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:20}}>
-        <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>ARENA INSIGHT</Text>
-        <Text style={{fontSize:15,fontWeight:'700',color:WHITE,lineHeight:23}}>{insight.headline}</Text>
-        {insight.teams.length>0?<View style={{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:12}}>{insight.teams.map(t=><View key={t} style={{backgroundColor:MAROON_DIM,borderRadius:10,paddingHorizontal:12,paddingVertical:5}}><Text style={{fontSize:10,fontWeight:'700',color:MAROON}}>{t}</Text></View>)}</View>:null}
+        <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>TONIGHT'S NARRATIVE</Text>
+        <Text style={{fontSize:15,fontWeight:'600',color:WHITE,lineHeight:23}}>{tonightNarrative}</Text>
       </View>
 
       {/* Top 3 quick-glance strip */}
