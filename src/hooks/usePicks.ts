@@ -13,6 +13,13 @@ export interface Pick {
   awayTeam?: string | null;
   sport?: string | null;
   createdAt: string;
+  // Enriched at settlement time on the backend. All optional because
+  // pre-migration picks have null until the backfill script populates them.
+  modelPredictedWinner?: 'home' | 'away' | null;
+  modelConfidence?: number | null;
+  modelHomeWinProb?: number | null;
+  finalHomeScore?: number | null;
+  finalAwayScore?: number | null;
 }
 
 export interface UserStats {
