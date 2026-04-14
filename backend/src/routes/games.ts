@@ -1376,7 +1376,21 @@ gamesRouter.get("/date/:date", async (c) => {
 
   try {
     const games = await fetchAllGames(dateParam);
-    return c.json({ data: games });
+
+    // Attach any cached predictions inline so first paint shows them when warm.
+    const gamesWithCached = games.map((g) => {
+      if (g.prediction) return g;
+      const cached = getCachedPrediction(g.id);
+      return cached ? { ...g, prediction: cached } : g;
+    });
+
+    // Kick off background generation for the rest so the next poll returns them.
+    const missing = gamesWithCached.filter((g) => !g.prediction);
+    if (missing.length > 0) {
+      generatePredictionsInBackground(missing);
+    }
+
+    return c.json({ data: gamesWithCached });
   } catch (error) {
     console.error(`Error fetching games for date ${dateParam}:`, error);
     return c.json(
