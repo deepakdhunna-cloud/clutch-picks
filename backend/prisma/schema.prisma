@@ -38,6 +38,15 @@ model UserPick {
   gameId     String
   pickedTeam String    // "home" or "away"
   result     String?   // "win", "loss", or null if game not finished
+  // Enriched at settlement time so the UI can render Signature Calls without
+  // having to cross-reference a separate games list. All nullable: existing
+  // picks stay null until the backfill script populates them; new picks get
+  // populated when the resolver settles them.
+  modelPredictedWinner String?  // "home" | "away" — what the model picked
+  modelConfidence      Int?     // 50-95
+  modelHomeWinProb     Int?     // 0-100, raw home win probability
+  finalHomeScore       Int?
+  finalAwayScore       Int?
   homeTeam   String?   // home team abbreviation (e.g. "LAL")
   awayTeam   String?   // away team abbreviation (e.g. "BOS")
   sport      String?   // sport/league (e.g. "NBA")
