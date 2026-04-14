@@ -568,6 +568,10 @@ const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
 });
 
 // ─── INSIGHT FUNCTIONS ───
+// Order-preserving dedupe so a team with multiple qualifying games (e.g. MLB
+// doubleheader) only appears once in the Arena Insight pill list.
+const uniq = (arr: string[]): string[] => Array.from(new Set(arr));
+
 function genInsight(games: GameWithPrediction[]): { headline: string; teams: string[] } {
   const s = games.filter(g => g.status === GameStatus.SCHEDULED && g.prediction);
   if (s.length === 0) return { headline: 'No games on the board yet — check back closer to game time.', teams: [] };
@@ -586,19 +590,19 @@ function genInsight(games: GameWithPrediction[]): { headline: string; teams: str
   const sports = new Set(s.map(g => g.sport));
 
   if (locks.length >= 2) {
-    return { headline: `${locks.length} games tonight hit Lock status — that's rare. The model sees dominant edges. Don't sleep on these.`, teams: locks.slice(0,3).map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name) };
+    return { headline: `${locks.length} games tonight hit Lock status — that's rare. The model sees dominant edges. Don't sleep on these.`, teams: uniq(locks.map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name)).slice(0,3) };
   }
   if (upsets.length >= 2) {
-    return { headline: `${upsets.length} upset candidates are lurking tonight. The underdogs have the recent form to pull it off — high-risk, high-reward slate.`, teams: upsets.slice(0,3).map(g => { const p = g.prediction!; return p.predictedWinner === 'home' ? g.awayTeam.name : g.homeTeam.name; }) };
+    return { headline: `${upsets.length} upset candidates are lurking tonight. The underdogs have the recent form to pull it off — high-risk, high-reward slate.`, teams: uniq(upsets.map(g => { const p = g.prediction!; return p.predictedWinner === 'home' ? g.awayTeam.name : g.homeTeam.name; })).slice(0,3) };
   }
   if (streakers.length >= 2) {
-    return { headline: `${streakers.length} teams riding hot streaks collide tonight. History says streaks break in spots like this — watch closely.`, teams: streakers.slice(0,3).map(g => (g.prediction!.homeStreak??0) >= 4 ? g.homeTeam.name : g.awayTeam.name) };
+    return { headline: `${streakers.length} teams riding hot streaks collide tonight. History says streaks break in spots like this — watch closely.`, teams: uniq(streakers.map(g => (g.prediction!.homeStreak??0) >= 4 ? g.homeTeam.name : g.awayTeam.name)).slice(0,3) };
   }
   if (strong.length >= 3) {
-    return { headline: `Loaded slate — ${strong.length} Strong Picks across ${sports.size} sports. The model found real separation in multiple matchups tonight.`, teams: strong.slice(0,3).map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name) };
+    return { headline: `Loaded slate — ${strong.length} Strong Picks across ${sports.size} sports. The model found real separation in multiple matchups tonight.`, teams: uniq(strong.map(g => g.prediction!.predictedWinner==='home' ? g.homeTeam.name : g.awayTeam.name)).slice(0,3) };
   }
   if (tossups.length >= 3) {
-    return { headline: `Chaos night. ${tossups.length} games are dead even — the model can barely separate them. Gut-check picks only.`, teams: tossups.slice(0,3).map(g => `${g.awayTeam.abbreviation}/${g.homeTeam.abbreviation}`) };
+    return { headline: `Chaos night. ${tossups.length} games are dead even — the model can barely separate them. Gut-check picks only.`, teams: uniq(tossups.map(g => `${g.awayTeam.abbreviation}/${g.homeTeam.abbreviation}`)).slice(0,3) };
   }
   if (s.length >= 8) {
     return { headline: `Massive slate tonight — ${s.length} games across ${sports.size} sports. The model has scanned every angle. Your edge is here.`, teams: [] };
