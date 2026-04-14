@@ -741,7 +741,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
                   <Text style={{ fontSize: 8, fontWeight: '900', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
                 </View>
                 <View>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock Full Analysis</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock with Clutch Pro</Text>
                   <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Pick strength, analysis, and detailed breakdown</Text>
                 </View>
               </View>

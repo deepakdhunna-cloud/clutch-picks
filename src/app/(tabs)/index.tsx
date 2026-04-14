@@ -1139,8 +1139,11 @@ export default function HomeScreen() {
                 Today's Games
               </Text>
               <View className="bg-zinc-800 rounded-2xl p-8 items-center">
-                <Text className="text-zinc-400 text-center">
-                  No games scheduled for today
+                <Text className="text-zinc-200 text-center font-semibold mb-1">
+                  No games today
+                </Text>
+                <Text className="text-zinc-400 text-center text-sm">
+                  Tomorrow's slate will appear here when games are scheduled.
                 </Text>
               </View>
             </Animated.View>
@@ -1283,10 +1286,10 @@ export default function HomeScreen() {
                 /* No results */
                 <View style={{ alignItems: 'center', paddingTop: 60 }}>
                   <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 15, fontWeight: '500', marginBottom: 6 }}>
-                    No games found
+                    No matches
                   </Text>
                   <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13 }}>
-                    Try a different search term
+                    Try a different filter or search term.
                   </Text>
                 </View>
               )
