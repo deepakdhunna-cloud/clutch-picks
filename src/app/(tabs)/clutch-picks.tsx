@@ -17,6 +17,7 @@ import GridBackground from '@/components/GridBackground';
 import { useSubscription } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { displayWinProbability, displaySport, getConfidenceTier } from '@/lib/display-confidence';
+import { MAROON, TEAL } from '@/lib/theme';
 
 // Expandable analysis text — tap to show full, tap again to collapse
 const ExpandableText = memo(function ExpandableText({ text }: { text: string }) {
@@ -136,9 +137,7 @@ function formatGameTime(dateString: string): { date: string; time: string } {
   return { date: dateStr, time: timeStr };
 }
 
-// Premium accent color
-const ACCENT_ORANGE = '#8B0A1F';
-const PREMIUM_BLUE = '#7A9DB8';
+// Premium accent color imported from theme
 
 // Top Pick Card Component — Premium luxury redesign
 const TopPickCard = memo(function TopPickCard({
@@ -266,14 +265,14 @@ const TopPickCard = memo(function TopPickCard({
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   {/* Rank badge */}
-                  <View style={{ backgroundColor: ACCENT_ORANGE, width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ backgroundColor: MAROON, width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900' }}>#{index + 1}</Text>
                   </View>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5 }}>CLUTCH PICK</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ backgroundColor: `${PREMIUM_BLUE}18`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: `${PREMIUM_BLUE}20` }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: PREMIUM_BLUE, letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
+                  <View style={{ backgroundColor: `${TEAL}18`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: `${TEAL}20` }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: TEAL, letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
                   </View>
                   {game.gameTime ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
@@ -392,7 +391,7 @@ const TopPickCard = memo(function TopPickCard({
               {/* ── Analysis ── */}
               <View style={{ paddingHorizontal: 18, paddingBottom: 18 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <View style={{ width: 3, height: 12, borderRadius: 1.5, backgroundColor: ACCENT_ORANGE }} />
+                  <View style={{ width: 3, height: 12, borderRadius: 1.5, backgroundColor: MAROON }} />
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>WHY THIS PICK</Text>
                 </View>
                 <ExpandableText text={game.prediction?.analysis ?? ''} />
@@ -400,9 +399,9 @@ const TopPickCard = memo(function TopPickCard({
                 {/* View details CTA */}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(122,157,184,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(122,157,184,0.25)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: PREMIUM_BLUE }}>Full breakdown</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Full breakdown</Text>
                     <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
-                      <Path d="M9 18l6-6-6-6" stroke={PREMIUM_BLUE} strokeWidth={2.5} strokeLinecap="round" />
+                      <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" />
                     </Svg>
                   </View>
                 </View>
@@ -627,9 +626,9 @@ export default function ClutchPicksScreen() {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             {headerComponent}
             <View style={{ position: 'relative', marginBottom: 20 }}>
-              <View style={{ position: 'absolute', top: -8, left: -8, right: -8, bottom: -8, borderRadius: 48, backgroundColor: ACCENT_ORANGE, opacity: 0.15 }} />
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: `${ACCENT_ORANGE}30` }}>
-                <FieldGoalU size={44} color={`${ACCENT_ORANGE}60`} />
+              <View style={{ position: 'absolute', top: -8, left: -8, right: -8, bottom: -8, borderRadius: 48, backgroundColor: MAROON, opacity: 0.15 }} />
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: `${MAROON}30` }}>
+                <FieldGoalU size={44} color={`${MAROON}60`} />
               </View>
             </View>
             <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>No top picks yet</Text>

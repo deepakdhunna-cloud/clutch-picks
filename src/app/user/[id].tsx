@@ -10,13 +10,10 @@ import { useUserProfile, useIsFollowing, useFollowUser, useUnfollowUser, useUser
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import * as Haptics from 'expo-haptics';
+import { MAROON, TEAL, WIN, LOSS } from '@/lib/theme';
 
 const GLASS_BG = 'rgba(4,5,10,0.97)';
 const GLASS_BORDER = 'rgba(255,255,255,0.13)';
-const AMBER = '#8B0A1F';
-const TEAL = '#7A9DB8';
-const WIN_COLOR = '#7A9DB8';
-const LOSS_COLOR = '#EF4444';
 
 interface Pick {
   id: string;
@@ -31,7 +28,7 @@ function PublicPickItem({ pick, index }: { pick: Pick; index: number }) {
   const isWin = pick.result === 'win';
   const isLoss = pick.result === 'loss';
   const isPending = !pick.result || pick.result === 'pending';
-  const resultColor = isWin ? WIN_COLOR : isLoss ? LOSS_COLOR : '#6B7280';
+  const resultColor = isWin ? WIN : isLoss ? LOSS : '#6B7280';
 
   return (
     <Animated.View entering={FadeInDown.delay(400 + index * 50).duration(400)}>
@@ -79,7 +76,7 @@ function PublicPickItem({ pick, index }: { pick: Pick; index: number }) {
               alignItems: 'center', justifyContent: 'center',
             }}
           >
-            {isPending ? <Activity size={13} color="#6B7280" /> : isWin ? <CheckCircle2 size={15} color={WIN_COLOR} /> : <XCircle size={15} color={LOSS_COLOR} />}
+            {isPending ? <Activity size={13} color="#6B7280" /> : isWin ? <CheckCircle2 size={15} color={WIN} /> : <XCircle size={15} color={LOSS} />}
           </View>
         </View>
       </View>
@@ -260,7 +257,7 @@ export default function UserProfileScreen() {
                       justifyContent: 'center',
                       paddingVertical: 10,
                       borderRadius: 11,
-                      backgroundColor: isFollowing ? 'rgba(255,255,255,0.06)' : AMBER,
+                      backgroundColor: isFollowing ? 'rgba(255,255,255,0.06)' : MAROON,
                       borderWidth: 1,
                       borderColor: isFollowing ? 'rgba(255,255,255,0.14)' : 'rgba(139,10,31,0.5)',
                       gap: 6,
@@ -322,7 +319,7 @@ export default function UserProfileScreen() {
                   {/* Win Rate */}
                   <View style={{ flex: 1, alignItems: 'center' }}>
                     <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(34,197,94,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                      <Trophy size={20} color={WIN_COLOR} />
+                      <Trophy size={20} color={WIN} />
                     </View>
                     <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{Math.round(pickStats?.winRate ?? 0)}%</Text>
                     <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 }}>Win Rate</Text>
@@ -330,7 +327,7 @@ export default function UserProfileScreen() {
                   {/* Streak */}
                   <View style={{ flex: 1, alignItems: 'center' }}>
                     <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(139,10,31,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                      <Flame size={20} color={AMBER} />
+                      <Flame size={20} color={MAROON} />
                     </View>
                     <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{pickStats?.currentStreak ?? 0}</Text>
                     <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 }}>Streak</Text>
@@ -339,13 +336,13 @@ export default function UserProfileScreen() {
                 {/* W-L record */}
                 <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)', paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: WIN_COLOR }} />
-                    <Text style={{ color: WIN_COLOR, fontSize: 18, fontWeight: '800' }}>{pickStats?.wins ?? 0}</Text>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: WIN }} />
+                    <Text style={{ color: WIN, fontSize: 18, fontWeight: '800' }}>{pickStats?.wins ?? 0}</Text>
                     <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>Wins</Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: LOSS_COLOR }} />
-                    <Text style={{ color: LOSS_COLOR, fontSize: 18, fontWeight: '800' }}>{pickStats?.losses ?? 0}</Text>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: LOSS }} />
+                    <Text style={{ color: LOSS, fontSize: 18, fontWeight: '800' }}>{pickStats?.losses ?? 0}</Text>
                     <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>Losses</Text>
                   </View>
                 </View>

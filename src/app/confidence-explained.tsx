@@ -7,11 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSubscription } from '@/lib/subscription-context';
+import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
 
-const BG = '#040608';
-const MAROON = '#8B0A1F';
-const TEAL = '#7A9DB8';
-const MUTED = '#6B7C94';
 
 interface Game {
   id: string;
@@ -94,7 +91,7 @@ export default function ConfidenceExplainedScreen() {
           </Pressable>
           <View>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: -0.5 }}>Pick Confidence</Text>
-            <Text style={{ fontSize: 11, color: MUTED }}>{game.awayTeam.abbreviation} vs {game.homeTeam.abbreviation}</Text>
+            <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{game.awayTeam.abbreviation} vs {game.homeTeam.abbreviation}</Text>
           </View>
         </View>
 
@@ -103,7 +100,7 @@ export default function ConfidenceExplainedScreen() {
           <Animated.View entering={FadeInDown.duration(400)} style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 24 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <View>
-                <Text style={{ fontSize: 9, fontWeight: '700', color: MUTED, letterSpacing: 1.5 }}>CLUTCH PICK</Text>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5 }}>CLUTCH PICK</Text>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFF', marginTop: 2 }}>{winner.name}</Text>
               </View>
               <View style={{ backgroundColor: `${tier.color}20`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: `${tier.color}40` }}>
@@ -132,7 +129,7 @@ export default function ConfidenceExplainedScreen() {
 
           {/* Tier legend */}
           <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ marginBottom: 24 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: MUTED, letterSpacing: 1.5, marginBottom: 12 }}>TIER LEGEND</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5, marginBottom: 12 }}>TIER LEGEND</Text>
             {TIERS.map((t, i) => {
               const isActive = i === currentTierIdx;
               return (
@@ -158,7 +155,7 @@ export default function ConfidenceExplainedScreen() {
 
           {/* What goes into confidence */}
           <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ marginBottom: 24 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: MUTED, letterSpacing: 1.5, marginBottom: 12 }}>WHAT GOES INTO CONFIDENCE</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5, marginBottom: 12 }}>WHAT GOES INTO CONFIDENCE</Text>
             {FACTORS.map((f, i) => (
               <View key={i} style={{ flexDirection: 'row', marginBottom: 12, gap: 12 }}>
                 <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: 'rgba(122,157,184,0.1)', alignItems: 'center', justifyContent: 'center' }}>

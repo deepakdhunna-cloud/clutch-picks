@@ -6,9 +6,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { TEAL, MAROON } from '@/lib/theme';
+
 const { width: W, height: H } = Dimensions.get('window');
-const TEAL = '#7A9DB8';
-const CORAL = '#8B0A1F';
 
 // ─── Neon Streak ────────────────────────────────────────────────
 // Static props go in a regular style, only opacity/translate are animated
@@ -100,17 +100,17 @@ export function AuthBackground({ faint = false }: { faint?: boolean }) {
   const starOpacity = faint ? 0.25 : 0.5;
 
   const streaks = useMemo(() => [
-    { x: W * 0.05, y: H * 0.12, length: 45, angle: -25, color: CORAL, delay: 0, duration: 3500 },
-    { x: W * 0.75, y: H * 0.08, length: 35, angle: 15, color: CORAL, delay: 1200, duration: 4000 },
-    { x: W * 0.55, y: H * 0.28, length: 30, angle: -40, color: CORAL, delay: 2800, duration: 3800 },
-    { x: W * 0.15, y: H * 0.52, length: 40, angle: 20, color: CORAL, delay: 800, duration: 4200 },
-    { x: W * 0.85, y: H * 0.62, length: 28, angle: -15, color: CORAL, delay: 3500, duration: 3600 },
+    { x: W * 0.05, y: H * 0.12, length: 45, angle: -25, color: MAROON, delay: 0, duration: 3500 },
+    { x: W * 0.75, y: H * 0.08, length: 35, angle: 15, color: MAROON, delay: 1200, duration: 4000 },
+    { x: W * 0.55, y: H * 0.28, length: 30, angle: -40, color: MAROON, delay: 2800, duration: 3800 },
+    { x: W * 0.15, y: H * 0.52, length: 40, angle: 20, color: MAROON, delay: 800, duration: 4200 },
+    { x: W * 0.85, y: H * 0.62, length: 28, angle: -15, color: MAROON, delay: 3500, duration: 3600 },
     { x: W * 0.35, y: H * 0.06, length: 38, angle: 30, color: TEAL, delay: 600, duration: 4500 },
     { x: W * 0.88, y: H * 0.22, length: 32, angle: -35, color: TEAL, delay: 2000, duration: 3700 },
     { x: W * 0.02, y: H * 0.38, length: 42, angle: 10, color: TEAL, delay: 1500, duration: 4100 },
     { x: W * 0.65, y: H * 0.48, length: 25, angle: -20, color: TEAL, delay: 3200, duration: 3900 },
     { x: W * 0.25, y: H * 0.68, length: 35, angle: 35, color: TEAL, delay: 400, duration: 4300 },
-    { x: W * 0.45, y: H * 0.78, length: 22, angle: -10, color: CORAL, delay: 2400, duration: 3400 },
+    { x: W * 0.45, y: H * 0.78, length: 22, angle: -10, color: MAROON, delay: 2400, duration: 3400 },
     { x: W * 0.10, y: H * 0.85, length: 30, angle: 25, color: TEAL, delay: 1800, duration: 4000 },
   ], []);
 

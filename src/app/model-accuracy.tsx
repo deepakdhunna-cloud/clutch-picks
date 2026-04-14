@@ -6,12 +6,8 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { api } from '@/lib/api/api';
+import { MAROON, TEAL, GREEN_UP, LOSS, BG } from '@/lib/theme';
 
-const CORAL = '#8B0A1F';
-const TEAL = '#7A9DB8';
-const GREEN = '#4ADE80';
-const RED = '#EF4444';
-const BG = '#040608';
 
 interface AccuracyBucket {
   bucket: string;
@@ -82,7 +78,7 @@ export default function ModelAccuracyScreen() {
               <Text style={s.cardTitle}>Overall Accuracy</Text>
               {hasEnoughData ? (
                 <View style={{ alignItems: 'center', marginTop: 8 }}>
-                  <Text style={[s.bigNumber, { color: (accuracy?.overall.overallAccuracy ?? 0) >= 55 ? GREEN : RED }]}>
+                  <Text style={[s.bigNumber, { color: (accuracy?.overall.overallAccuracy ?? 0) >= 55 ? GREEN_UP : LOSS }]}>
                     {accuracy?.overall.overallAccuracy ?? 0}%
                   </Text>
                   <Text style={s.subtitle}>
@@ -104,9 +100,9 @@ export default function ModelAccuracyScreen() {
               <Text style={s.cardTitle}>Drift Detection</Text>
               {drift ? (
                 <View style={{ marginTop: 8 }}>
-                  <View style={[s.statusBadge, { backgroundColor: drift.isDrifting ? `${RED}20` : `${GREEN}20` }]}>
-                    <View style={[s.statusDot, { backgroundColor: drift.isDrifting ? RED : GREEN }]} />
-                    <Text style={[s.statusText, { color: drift.isDrifting ? RED : GREEN }]}>
+                  <View style={[s.statusBadge, { backgroundColor: drift.isDrifting ? `${LOSS}20` : `${GREEN_UP}20` }]}>
+                    <View style={[s.statusDot, { backgroundColor: drift.isDrifting ? LOSS : GREEN_UP }]} />
+                    <Text style={[s.statusText, { color: drift.isDrifting ? LOSS : GREEN_UP }]}>
                       {drift.isDrifting ? 'Performance declining' : 'Stable'}
                     </Text>
                   </View>
@@ -131,7 +127,7 @@ export default function ModelAccuracyScreen() {
                       style={[s.bucketBarFill, {
                         width: `${Math.min(bucket.accuracy ?? 0, 100)}%`,
                         backgroundColor: bucket.accuracy != null
-                          ? Math.abs(bucket.accuracy - parseInt(bucket.bucket)) <= 10 ? GREEN : CORAL
+                          ? Math.abs(bucket.accuracy - parseInt(bucket.bucket)) <= 10 ? GREEN_UP : MAROON
                           : 'rgba(255,255,255,0.1)',
                       }]}
                     />
@@ -153,7 +149,7 @@ export default function ModelAccuracyScreen() {
               {accuracy?.perSport.map((sport) => (
                 <View key={sport.sport} style={s.sportRow}>
                   <Text style={s.sportName}>{sport.sport}</Text>
-                  <Text style={[s.sportAccuracy, { color: (sport.accuracy ?? 0) >= 55 ? GREEN : (sport.accuracy ?? 0) >= 50 ? TEAL : RED }]}>
+                  <Text style={[s.sportAccuracy, { color: (sport.accuracy ?? 0) >= 55 ? GREEN_UP : (sport.accuracy ?? 0) >= 50 ? TEAL : LOSS }]}>
                     {sport.accuracy != null ? `${sport.accuracy}%` : '--'}
                   </Text>
                   <Text style={s.sportCount}>{sport.total} games</Text>

@@ -5,11 +5,8 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
 
-const BG = '#040608';
-const MAROON = '#8B0A1F';
-const TEAL = '#7A9DB8';
-const TEXT_MUTED = '#6B7C94';
 
 const TIERS = [
   {

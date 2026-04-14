@@ -20,12 +20,10 @@ import { useGames } from '@/hooks/useGames';
 import { GameStatus } from '@/types/sports';
 import type { PurchasesPackage } from 'react-native-purchases';
 
+import { BG, MAROON, MAROON_GLOW, TEAL } from '@/lib/theme';
+
 const { width: SCREEN_W } = Dimensions.get('window');
-const BG = '#040608';
-const MAROON = '#8B0A1F';
 const MAROON_DIM = 'rgba(139,10,31,0.12)';
-const MAROON_GLOW = 'rgba(139,10,31,0.25)';
-const TEAL = '#7A9DB8';
 const TEAL_DIM = 'rgba(122,157,184,0.10)';
 
 // ─── Feature Icon Components ────────────────────────────────────

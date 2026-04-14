@@ -8,10 +8,8 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { AuthBackground } from '@/components/AuthBackground';
+import { BG, TEAL, MAROON } from '@/lib/theme';
 
-const BG = '#040608';
-const TEAL = '#7A9DB8';
-const CORAL = '#8B0A1F';
 
 function BackArrow({ size = 20 }: { size?: number }) {
   return (
@@ -158,10 +156,10 @@ const s = StyleSheet.create({
   input: { flex: 1, color: '#FFFFFF', fontSize: 15, padding: 0 },
   error: { color: '#EF4444', fontSize: 13, marginTop: 10 },
   submitBtn: {
-    backgroundColor: CORAL, borderRadius: 14, height: 54,
+    backgroundColor: MAROON, borderRadius: 14, height: 54,
     alignItems: 'center', justifyContent: 'center',
   },
   submitBtnText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   switchText: { fontSize: 13, color: 'rgba(255,255,255,0.4)' },
-  switchLink: { color: CORAL, fontWeight: '600' },
+  switchLink: { color: MAROON, fontWeight: '600' },
 });

@@ -25,25 +25,14 @@ import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displayConfidence, displayEdgeRating, displayWinProbability, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import { generateTonightNarrative } from '@/lib/tonight-narrative';
+import {
+  MAROON, MAROON_DIM, TEAL, TEAL_DIM, TEAL_DARK, LIVE_RED, LOSS, SILVER,
+  BG, PANEL_DARK, PANEL_DARKER, BORDER_MED, BORDER_BOLD, WHITE,
+  TEXT_SECONDARY, TEXT_MUTED,
+} from '@/lib/theme';
 
 // ─── COLORS ───
-const MAROON = '#8B0A1F';
-const MAROON_DIM = 'rgba(139,10,31,0.15)';
-const TEAL = '#7A9DB8';
-const TEAL_DIM = 'rgba(122,157,184,0.12)';
-const TEAL_DARK = '#5A7A8A';
-const LIVE_RED = '#DC2626';
-const ERROR = '#EF4444';
 const ERROR_DIM = 'rgba(239,68,68,0.10)';
-const SILVER = '#C9CED6';
-const BG = '#040608';
-const GLASS = 'rgba(8,8,12,0.95)';
-const GLASS_INNER = 'rgba(2,3,8,0.92)';
-const BORDER = 'rgba(255,255,255,0.08)';
-const BORDER_HI = 'rgba(255,255,255,0.14)';
-const WHITE = '#FFFFFF';
-const TEXT_SECONDARY = '#A1B3C9';
-const TEXT_MUTED = '#6B7C94';
 
 const { width: SW } = Dimensions.get('window');
 const SPORTS = ['All','NBA','NFL','MLB','NHL','NCAAF','NCAAB','MLS','EPL'] as const;
@@ -143,7 +132,7 @@ const SegPill = memo(function SegPill({ active, onChange, hasLive, tx }: { activ
   const ss = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value * sw }] }));
   return (
     <View style={{ paddingHorizontal: 20, marginBottom: 22 }}>
-      <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 3, borderWidth: 1, borderColor: BORDER, flexDirection: 'row', position: 'relative' }}>
+      <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 3, borderWidth: 1, borderColor: BORDER_MED, flexDirection: 'row', position: 'relative' }}>
         <Animated.View style={[{ position: 'absolute', top: 3, left: 3, width: sw, height: '100%', backgroundColor: MAROON, borderRadius: 10 }, ss]} />
         {MODES.map((l, i) => (
           <Pressable key={l} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onChange(i); }}
@@ -229,7 +218,7 @@ const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction
   if (games.length === 0) return (
     <View style={{ marginHorizontal: 20, marginBottom: 28 }}>
       <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, marginBottom: 8 }}>Your Games</Text>
-      <View style={{ backgroundColor: GLASS, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 20, alignItems: 'center' }}>
+      <View style={{ backgroundColor: PANEL_DARK, borderRadius: 16, borderWidth: 1, borderColor: BORDER_MED, padding: 20, alignItems: 'center' }}>
         <Text style={{ fontSize: 12, color: TEXT_MUTED, textAlign: 'center', marginBottom: 12 }}>Follow games or teams to track them here</Text>
         <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)'); }}
           style={{ backgroundColor: MAROON_DIM, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 }}>
@@ -249,7 +238,7 @@ const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10, paddingVertical: 8 }}>
         {games.map((g) => <FollowedCard key={g.id} game={g} />)}
         <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)'); }}
-          style={{ width: 65, borderRadius: 16, borderWidth: 1, borderColor: BORDER, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}>
+          style={{ width: 65, borderRadius: 16, borderWidth: 1, borderColor: BORDER_MED, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: MAROON_DIM, alignItems: 'center', justifyContent: 'center' }}>
             <Plus size={14} color={MAROON} />
           </View>
@@ -274,7 +263,7 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/game/[id]', params: { id: game.id } }); }}
       style={{ opacity: 1, width: cardWidth }}
     >
-      <View style={{ borderRadius: 22, borderWidth: 1.5, borderColor: BORDER_HI, overflow: 'hidden' }}>
+      <View style={{ borderRadius: 22, borderWidth: 1.5, borderColor: BORDER_BOLD, overflow: 'hidden' }}>
         {/* Dark base */}
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#06080A' }} />
         {/* Team color washes */}
@@ -323,11 +312,11 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
           </View>
           {/* Stat boxes */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
+            <View style={{ flex: 1, backgroundColor: PANEL_DARKER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_MED }}>
               <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>YOUR PICK</Text>
-              {pick ? (<><Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>{pt?.abbreviation}</Text><Text style={{ fontSize: 9, fontWeight: '600', color: lead ? TEAL : d === 0 ? TEXT_MUTED : ERROR, marginTop: 2 }}>{lead ? 'Leading' : d === 0 ? 'Tied' : 'Trailing'}</Text></>) : <Text style={{ fontSize: 10, color: TEXT_MUTED }}>No pick</Text>}
+              {pick ? (<><Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>{pt?.abbreviation}</Text><Text style={{ fontSize: 9, fontWeight: '600', color: lead ? TEAL : d === 0 ? TEXT_MUTED : LOSS, marginTop: 2 }}>{lead ? 'Leading' : d === 0 ? 'Tied' : 'Trailing'}</Text></>) : <Text style={{ fontSize: 10, color: TEXT_MUTED }}>No pick</Text>}
             </View>
-            <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
+            <View style={{ flex: 1, backgroundColor: PANEL_DARKER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_MED }}>
               <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>MOMENTUM</Text>
               <View style={{ flexDirection: 'row', gap: 3, alignItems: 'flex-end', height: 20, marginBottom: 2 }}>
                 {[0.4,0.7,0.5,0.9,0.6].map((h,i) => <View key={i} style={{ width: 4, height: 8+h*12, borderRadius: 2, backgroundColor: h > 0.5 ? TEAL : TEXT_MUTED, opacity: 0.5+h*0.5 }} />)}
@@ -338,7 +327,7 @@ const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameW
               const c = game.prediction?.confidence ?? 50;
               const t = getConfidenceTier(c, game.prediction?.isTossUp);
               return (
-                <View style={{ flex: 1, backgroundColor: GLASS_INNER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}>
+                <View style={{ flex: 1, backgroundColor: PANEL_DARKER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_MED }}>
                   <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>PICK STRENGTH</Text>
                   <Text style={{ fontSize: 13, fontWeight: '800', color: t.color }}>{t.label}</Text>
                 </View>
@@ -456,7 +445,7 @@ const IntelCard = memo(function IntelCard({ type, title, body }: { type: 'alert'
   const bc = type === 'pulse' ? '#8B0A1F' : type === 'alert' ? LIVE_RED : type === 'shift' ? TEAL_DARK : SILVER;
   const bl = type === 'pulse' ? 'PULSE' : type === 'alert' ? 'ALERT' : type === 'shift' ? 'SHIFT' : 'TREND';
   return (
-    <Pressable onPress={() => { if (isLong) setExpanded(!expanded); }} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 13, paddingLeft: 18, borderWidth: 1, borderColor: BORDER, marginBottom: 8, position: 'relative' }}>
+    <Pressable onPress={() => { if (isLong) setExpanded(!expanded); }} style={{ backgroundColor: PANEL_DARK, borderRadius: 14, padding: 13, paddingLeft: 18, borderWidth: 1, borderColor: BORDER_MED, marginBottom: 8, position: 'relative' }}>
       <View style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, backgroundColor: bc, borderRadius: 2 }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}><View style={{ backgroundColor: `${bc}22`, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}><Text style={{ fontSize: 8, fontWeight: '700', color: bc, letterSpacing: 0.5 }}>{bl}</Text></View></View>
       <Text style={{ fontSize: 12, fontWeight: '600', color: WHITE, marginBottom: 4 }}>{title}</Text>
@@ -474,7 +463,7 @@ const HorizonCard = memo(function HorizonCard({ game, index }: { game: GameWithP
   const ts = `${dh}:${m.toString().padStart(2,'0')}`;
   const ic = game.prediction ? [game.prediction.isTossUp, (game.prediction.edgeRating??0) >= 7, (game.prediction.homeStreak??0) >= 3||(game.prediction.awayStreak??0) >= 3, game.prediction.ensembleDivergence].filter(Boolean).length : 0;
   return (
-    <Pressable onPress={() => router.push(`/game/${game.id}`)} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+    <Pressable onPress={() => router.push(`/game/${game.id}`)} style={{ backgroundColor: PANEL_DARK, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER_MED, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
       <View style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: TC[index%3], alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
         <Text style={{ fontSize: 13, fontWeight: '800', color: WHITE }}>{ts}</Text>
         <Text style={{ fontSize: 9, fontWeight: '600', color: WHITE }}>{ap}</Text>
@@ -502,7 +491,7 @@ const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
   // Show oldest first in the chart (left = oldest, right = newest)
   const chartPicks = [...l10].reverse();
   return (
-    <View style={{ backgroundColor: GLASS, borderWidth: 1, borderColor: 'rgba(139,10,31,0.14)', borderRadius: 18, padding: 18, marginHorizontal: 20, marginBottom: 24 }}>
+    <View style={{ backgroundColor: PANEL_DARK, borderWidth: 1, borderColor: 'rgba(139,10,31,0.14)', borderRadius: 18, padding: 18, marginHorizontal: 20, marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>Your predictions</Text>
         <Text style={{ fontSize: 12, fontWeight: '700', color: a >= 50 ? TEAL : MAROON }}>{a}%</Text>
@@ -513,7 +502,7 @@ const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
             flex: 1,
             height: p.result === 'win' ? 24 : 8,
             borderRadius: 2,
-            backgroundColor: p.result === 'win' ? TEAL : ERROR,
+            backgroundColor: p.result === 'win' ? TEAL : LOSS,
             opacity: p.result === 'win' ? 0.9 : 0.5,
           }} />
         ))}
@@ -704,7 +693,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
   const router = useRouter(); const isFirst = rank === 1;
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
   return (
-    <View style={{ backgroundColor: GLASS, borderRadius: 14, borderWidth: 1, borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: isFirst ? MAROON : TEAL, marginBottom: 10, overflow: 'hidden' }}>
+    <View style={{ backgroundColor: PANEL_DARK, borderRadius: 14, borderWidth: 1, borderColor: BORDER_MED, borderLeftWidth: 3, borderLeftColor: isFirst ? MAROON : TEAL, marginBottom: 10, overflow: 'hidden' }}>
       <Pressable onPress={() => setExpanded(e => !e)} style={{ padding: 14, paddingBottom: expanded ? 6 : 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
           <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: isFirst ? MAROON_DIM : TEAL_DIM, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
@@ -755,17 +744,17 @@ const AccBySport = memo(function AccBySport({ picks }: { picks: UserPick[] }) {
 
 // ─── STREAK CARD ───
 const StreakCard = memo(function StreakCard({ stats }: { stats: UserStats|undefined }) {
-  return <View style={{backgroundColor:GLASS,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:16}}><Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:6}}>STREAK</Text><Text style={{fontSize:26,fontWeight:'800',color:WHITE}}>{stats?.currentStreak??0} correct in a row</Text><Text style={{fontSize:11,color:TEXT_MUTED,marginTop:4}}>Keep it going — every correct pick extends your streak</Text></View>;
+  return <View style={{backgroundColor:PANEL_DARK,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:16}}><Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:6}}>STREAK</Text><Text style={{fontSize:26,fontWeight:'800',color:WHITE}}>{stats?.currentStreak??0} correct in a row</Text><Text style={{fontSize:11,color:TEXT_MUTED,marginTop:4}}>Keep it going — every correct pick extends your streak</Text></View>;
 });
 
 // ─── RESULT CARD ───
 const ResultCard = memo(function ResultCard({ game, pick }: { game: GameWithPrediction; pick?: UserPick }) {
   const w = pick?.result === 'win'; const hs = game.homeScore??0; const as2 = game.awayScore??0;
   return (
-    <View style={{backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:BORDER,padding:14,marginBottom:8}}>
+    <View style={{backgroundColor:PANEL_DARK,borderRadius:14,borderWidth:1,borderColor:BORDER_MED,padding:14,marginBottom:8}}>
       <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
         <Text style={{fontSize:14,fontWeight:'700',color:WHITE}}>{game.awayTeam.abbreviation} {as2} - {hs} {game.homeTeam.abbreviation}</Text>
-        {pick?<View style={{backgroundColor:w?TEAL_DIM:ERROR_DIM,borderRadius:8,paddingHorizontal:8,paddingVertical:3}}><Text style={{fontSize:9,fontWeight:'700',color:w?TEAL:ERROR}}>{w?'CORRECT':'MISSED'}</Text></View>:null}
+        {pick?<View style={{backgroundColor:w?TEAL_DIM:ERROR_DIM,borderRadius:8,paddingHorizontal:8,paddingVertical:3}}><Text style={{fontSize:9,fontWeight:'700',color:w?TEAL:LOSS}}>{w?'CORRECT':'MISSED'}</Text></View>:null}
       </View>
       {pick?<Text style={{fontSize:11,color:TEXT_SECONDARY,marginTop:6}}>{w?`You called ${pick.pickedTeam==='home'?game.homeTeam.abbreviation:game.awayTeam.abbreviation} · Won by ${Math.abs(hs-as2)}`:`Picked ${pick.pickedTeam==='home'?game.homeTeam.abbreviation:game.awayTeam.abbreviation} — didn't go as planned`}</Text>:null}
     </View>
@@ -946,7 +935,7 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
       </View>
 
       {/* Tonight's Narrative card */}
-      <View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:20}}>
+      <View style={{backgroundColor:PANEL_DARK,borderRadius:18,borderWidth:1,borderColor:BORDER_MED,padding:18,marginHorizontal:20,marginBottom:20}}>
         <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>TONIGHT'S NARRATIVE</Text>
         <Text style={{fontSize:15,fontWeight:'600',color:WHITE,lineHeight:23}}>{tonightNarrative}</Text>
       </View>
@@ -960,7 +949,7 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
               const conf = Math.round(r.game.prediction?.confidence ?? 50);
               const winner = r.game.prediction?.predictedWinner === 'home' ? r.game.homeTeam : r.game.awayTeam;
               return (
-                <Pressable key={r.game.id} onPress={() => router.push(`/game/${r.game.id}`)} style={{width:140,backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:i===0?'rgba(139,10,31,0.25)':BORDER,padding:12}}>
+                <Pressable key={r.game.id} onPress={() => router.push(`/game/${r.game.id}`)} style={{width:140,backgroundColor:PANEL_DARK,borderRadius:14,borderWidth:1,borderColor:i===0?'rgba(139,10,31,0.25)':BORDER_MED,padding:12}}>
                   <View style={{flexDirection:'row',alignItems:'center',marginBottom:8}}>
                     <Text style={{fontSize:10,fontWeight:'600',color:TEXT_MUTED}}>{displaySport(r.game.sport)}</Text>
                   </View>
@@ -980,7 +969,7 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
           const active = prepTab === idx;
           const count = idx === 0 ? ranked.length : underdogPlays.length;
           return (
-            <Pressable key={label} onPress={() => { setPrepTab(idx as 0|1); Haptics.selectionAsync(); }} style={{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center',backgroundColor:active?GLASS:'transparent'}}>
+            <Pressable key={label} onPress={() => { setPrepTab(idx as 0|1); Haptics.selectionAsync(); }} style={{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center',backgroundColor:active?PANEL_DARK:'transparent'}}>
               <Text style={{fontSize:12,fontWeight:'700',color:active?WHITE:TEXT_MUTED}}>{label}{count > 0 ? ` (${count})` : null}</Text>
             </Pressable>
           );
@@ -1005,7 +994,7 @@ const Prep = memo(function Prep({ sched, picks, stats, sh, onR, isR }: { sched: 
           <Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16,marginBottom:12}}>Games where the engine disagrees with the market favorite.</Text>
           {underdogPlays.length > 0
             ? underdogPlays.map((r,i)=><MatchupCard key={`ud-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} defaultExpanded={i === 0} />)
-            : <View style={{backgroundColor:GLASS,borderRadius:14,borderWidth:1,borderColor:BORDER,padding:14}}><Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16}}>No underdog plays surfaced today — the engine is siding with the market on every game.</Text></View>}
+            : <View style={{backgroundColor:PANEL_DARK,borderRadius:14,borderWidth:1,borderColor:BORDER_MED,padding:14}}><Text style={{fontSize:11,color:TEXT_MUTED,lineHeight:16}}>No underdog plays surfaced today — the engine is siding with the market on every game.</Text></View>}
         </View>
       ) : null}
 
@@ -1031,19 +1020,19 @@ const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR }: {
         <Text style={{fontSize:11,color:TEXT_MUTED}}>{ds}</Text>
       </View>
       {t>0?(
-        <View style={{backgroundColor:GLASS,borderRadius:22,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',padding:26,marginHorizontal:20,marginBottom:24,alignItems:'center'}}>
+        <View style={{backgroundColor:PANEL_DARK,borderRadius:22,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',padding:26,marginHorizontal:20,marginBottom:24,alignItems:'center'}}>
           <Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:8}}>YOUR NIGHT</Text>
           <Text style={{fontSize:56,fontWeight:'800',color:WHITE}}>{w}-{l}</Text>
           <Text style={{fontSize:14,fontWeight:'700',color:MAROON,marginTop:4}}>{a}% accuracy</Text>
-          <View style={{flexDirection:'row',gap:3,marginTop:14}}>{pfg.map(g=><View key={g.id} style={{width:48,height:5,borderRadius:2.5,backgroundColor:pm.get(g.id)?.result==='win'?TEAL:ERROR,opacity:pm.get(g.id)?.result==='win'?0.9:0.4}} />)}</View>
+          <View style={{flexDirection:'row',gap:3,marginTop:14}}>{pfg.map(g=><View key={g.id} style={{width:48,height:5,borderRadius:2.5,backgroundColor:pm.get(g.id)?.result==='win'?TEAL:LOSS,opacity:pm.get(g.id)?.result==='win'?0.9:0.4}} />)}</View>
         </View>
       ):<View style={{alignItems:'center',paddingVertical:36}}><Text style={{fontSize:13,color:TEXT_MUTED}}>Make some picks to see your results here</Text></View>}
       {pfg.length>0?<View style={{paddingHorizontal:20,marginBottom:24}}><Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>Results</Text>{pfg.map(g=><ResultCard key={g.id} game={g} pick={pm.get(g.id)} />)}</View>:null}
-      {fg.length>0?<View style={{backgroundColor:GLASS,borderRadius:18,borderWidth:1,borderColor:BORDER,padding:18,marginHorizontal:20,marginBottom:24}}>
+      {fg.length>0?<View style={{backgroundColor:PANEL_DARK,borderRadius:18,borderWidth:1,borderColor:BORDER_MED,padding:18,marginHorizontal:20,marginBottom:24}}>
         <Text style={{fontSize:12,fontWeight:'700',color:WHITE,marginBottom:14}}>What The Data Caught</Text>
-        {fg.slice(0,3).map(g=>{const p=g.prediction;if(!p) return null;const ok=(p.predictedWinner==='home'&&(g.homeScore??0)>(g.awayScore??0))||(p.predictedWinner==='away'&&(g.awayScore??0)>(g.homeScore??0));return <View key={g.id} style={{marginBottom:10,paddingLeft:12,borderLeftWidth:3,borderLeftColor:ok?TEAL:ERROR}}><Text style={{fontSize:11,fontWeight:'600',color:WHITE,marginBottom:2}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11,color:TEXT_SECONDARY,lineHeight:16.5}}>{(() => { const tl = p.isTossUp || p.confidence < 53 ? 'a Toss-Up' : p.confidence < 60 ? 'a Solid Pick' : p.confidence < 72 ? 'a Strong Pick' : 'a Lock'; const tm = p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation; return ok ? `Model correctly predicted ${tm} as ${tl}.` : `Model missed — rated ${tm} as ${tl} but the upset came through.`; })()}</Text></View>;})}
+        {fg.slice(0,3).map(g=>{const p=g.prediction;if(!p) return null;const ok=(p.predictedWinner==='home'&&(g.homeScore??0)>(g.awayScore??0))||(p.predictedWinner==='away'&&(g.awayScore??0)>(g.homeScore??0));return <View key={g.id} style={{marginBottom:10,paddingLeft:12,borderLeftWidth:3,borderLeftColor:ok?TEAL:LOSS}}><Text style={{fontSize:11,fontWeight:'600',color:WHITE,marginBottom:2}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11,color:TEXT_SECONDARY,lineHeight:16.5}}>{(() => { const tl = p.isTossUp || p.confidence < 53 ? 'a Toss-Up' : p.confidence < 60 ? 'a Solid Pick' : p.confidence < 72 ? 'a Strong Pick' : 'a Lock'; const tm = p.predictedWinner==='home'?g.homeTeam.abbreviation:g.awayTeam.abbreviation; return ok ? `Model correctly predicted ${tm} as ${tl}.` : `Model missed — rated ${tm} as ${tl} but the upset came through.`; })()}</Text></View>;})}
       </View>:null}
-      <View style={{backgroundColor:GLASS,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:24,flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}>
+      <View style={{backgroundColor:PANEL_DARK,borderWidth:1,borderColor:'rgba(139,10,31,0.12)',borderRadius:18,padding:18,marginHorizontal:20,marginBottom:24,flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}>
         <View><Text style={{fontSize:9,fontWeight:'700',color:MAROON,letterSpacing:1.5,marginBottom:4}}>SEASON RECORD</Text><Text style={{fontSize:28,fontWeight:'800',color:WHITE}}>{stats?.wins??0}-{stats?.losses??0}</Text></View>
         <Text style={{fontSize:32,fontWeight:'800',color:MAROON}}>{stats?.winRate?`${Math.round(stats.winRate)}%`:'—'}</Text>
       </View>
@@ -1113,7 +1102,7 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed }: { gam
         <View style={{ marginBottom: 24 }}>
           <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, paddingHorizontal: 20, marginBottom: 12 }}>Upcoming</Text>
           {sched.slice(0, 8).map((g, i) => (
-            <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+            <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, backgroundColor: PANEL_DARK, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER_MED, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: TC[i % 3], alignItems: 'center', justifyContent: 'center', marginRight: 14, opacity: 0.9 }}>
                 <Text style={{ fontSize: 12, fontWeight: '800', color: WHITE }}>{fmtTime(g.gameTime).replace(/\s*(AM|PM)/, '')}</Text>
                 <Text style={{ fontSize: 8, fontWeight: '600', color: WHITE }}>{fmtTime(g.gameTime).includes('PM') ? 'PM' : 'AM'}</Text>
@@ -1133,7 +1122,7 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed }: { gam
         <View style={{ marginBottom: 24 }}>
           <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, paddingHorizontal: 20, marginBottom: 12 }}>Final</Text>
           {final.map(g => (
-            <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+            <Pressable key={g.id} onPress={() => router.push(`/game/${g.id}` as any)} style={{ marginHorizontal: 20, backgroundColor: PANEL_DARK, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER_MED, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE }}>{g.awayTeam.abbreviation} <Text style={{ color: TEXT_MUTED }}>{g.awayScore ?? '-'}</Text></Text>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: WHITE, marginTop: 2 }}>{g.homeTeam.abbreviation} <Text style={{ color: TEXT_MUTED }}>{g.homeScore ?? '-'}</Text></Text>
