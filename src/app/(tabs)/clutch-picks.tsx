@@ -555,7 +555,7 @@ export default function ClutchPicksScreen() {
                   </Svg>
                 </View>
 
-                <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>Unlock Clutch Picks</Text>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>Unlock with Clutch Pro</Text>
                 <Text style={{ fontSize: 13, color: '#7A9DB8', textAlign: 'center', lineHeight: 20, marginBottom: 24, opacity: 0.8 }}>AI-powered picks ranked by confidence, updated daily across every sport.</Text>
 
                 {/* Feature bullets */}
@@ -632,9 +632,9 @@ export default function ClutchPicksScreen() {
                 <FieldGoalU size={44} color={`${ACCENT_ORANGE}60`} />
               </View>
             </View>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>No Picks Available</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>No top picks yet</Text>
             <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', paddingHorizontal: 32 }}>
-              Check back later for today's top picks across all sports
+              New predictions populate throughout the day. Pull to refresh or check back soon.
             </Text>
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, position: 'absolute', bottom: 100 }}>
               <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
