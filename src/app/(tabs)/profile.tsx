@@ -605,7 +605,7 @@ export default function ProfileScreen() {
               const isWin = p.result === 'win';
               const isLoss = p.result === 'loss';
               const ribbonColor = isWin ? C.TEAL : isLoss ? C.MAROON : undefined;
-              const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'TBD';
+              const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'Pending';
               return (
                 <View key={p.id} style={{
                   width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 10, borderWidth: 1,
