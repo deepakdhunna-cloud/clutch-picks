@@ -1162,7 +1162,11 @@ async function fetchGamesBySport(sport: SportKey, date?: string, fullList = fals
   }
 }
 
-const gamesRouter = new Hono();
+const gamesRouter = new Hono<{
+  Variables: {
+    user: any;
+  };
+}>();
 
 // Force-refresh all predictions (clears cache so new engine params take effect)
 // Admin-only: requires authenticated user whose ID matches ADMIN_USER_ID env var
