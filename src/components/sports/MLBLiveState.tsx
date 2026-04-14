@@ -63,6 +63,7 @@ import Svg, {
   FeMergeNode,
 } from 'react-native-svg';
 import { getTeamColors } from '../../lib/team-colors';
+import { ScorePop } from './ScorePop';
 
 // ============================================================================
 // Types
@@ -261,7 +262,7 @@ export function MLBLiveCenterStack({
       <View style={styles.jerseyRow}>
         {homeJersey}
 
-        <Text style={styles.score}>{homeScore}</Text>
+        <ScorePop value={homeScore} textStyle={styles.score} badgeAlign="right" />
 
         <View style={styles.diamondColumn}>
           <Diamond
@@ -278,7 +279,7 @@ export function MLBLiveCenterStack({
           )}
         </View>
 
-        <Text style={styles.score}>{awayScore}</Text>
+        <ScorePop value={awayScore} textStyle={styles.score} badgeAlign="left" />
 
         {awayJersey}
       </View>

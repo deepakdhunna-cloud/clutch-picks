@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +42,7 @@ import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { MLBTeamRoleBlock, MLBLiveCenterStack } from '@/components/sports/MLBLiveState';
+import { ScorePop } from '@/components/sports/ScorePop';
 import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1474,7 +1476,23 @@ export default function GameDetailScreen() {
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
   const { data: userPick } = useGamePick(id ?? '');
   const makePick = useMakePick();
-  const { data: game, isLoading, error } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean; error: any };
+  const { data: game, isLoading, error, refetch } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Enforce a minimum spinner window so the animation is always visible,
+    // even when the backend responds instantly from its in-memory cache.
+    const MIN_SPINNER_MS = 700;
+    try {
+      await Promise.all([
+        refetch(),
+        new Promise((resolve) => setTimeout(resolve, MIN_SPINNER_MS)),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
   // Tick the pre-game countdown clock — called unconditionally to respect
   // the rules of hooks. Returns +Infinity until we have a valid gameTime
   // and 0 once tip-off has passed.
@@ -1498,37 +1516,36 @@ export default function GameDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
       <SilkThreads />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} removeClippedSubviews={true} bounces={true} overScrollMode="never" decelerationRate="normal">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} removeClippedSubviews={true} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressViewOffset={insets.top + 40} />}>
         <View style={{ overflow: 'hidden' }}>
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
           <LinearGradient colors={[hexToRgba(homeTeam.color, 0.5), hexToRgba(homeTeam.color, 0.28), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['transparent', hexToRgba(awayTeam.color, 0.22), hexToRgba(awayTeam.color, 0.45)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
           <View style={{ height: insets.top + 10 }} />
-          {/* Top bar — back + sport badge + follow */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10 }}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
-            {/* Sport + status pill — centered between back and follow */}
+          {/* Top bar — back (absolute left) + centered combined pill */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginBottom: 10, position: 'relative' }}>
+            <Pressable onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
+            {/* Combined pill: LIVE indicator (if live) | sport badge | follow toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
               {isLive ? (<><LivePulseDot /><Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>LIVE</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
               <View style={{ backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' }}>
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
               </View>
+              <View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
+              <Pressable
+                onPress={() => { Haptics.impactAsync(followed ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium); toggleFollow(); }}
+                hitSlop={8}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ alignItems: 'center', marginRight: 6 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF', letterSpacing: 0.3, lineHeight: 10 }}>{followed ? 'FOLLOWING' : 'FOLLOW'}</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF', letterSpacing: 0.3, lineHeight: 10 }}>GAME</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: followed ? '#7A9DB8' : '#FFFFFF', lineHeight: 18 }}>{followed ? '✓' : '+'}</Text>
+                </View>
+              </Pressable>
             </View>
-            {/* Follow button */}
-            <Pressable
-              onPress={() => { Haptics.impactAsync(followed ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium); toggleFollow(); }}
-              style={({ pressed }) => ({
-                height: 38, borderRadius: 19, paddingHorizontal: 18, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6,
-                backgroundColor: followed ? 'rgba(122,157,184,0.2)' : 'rgba(255,255,255,0.15)',
-                borderWidth: 1.5,
-                borderColor: followed ? '#7A9DB8' : 'rgba(255,255,255,0.3)',
-                transform: [{ scale: pressed ? 0.92 : 1 }],
-              })}
-            >
-              <Text style={{ fontSize: 14, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? '✓' : '+'}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF' }}>{followed ? 'Following' : 'Follow'}</Text>
-            </Pressable>
           </View>
           {/* Pre-game wrapper — when the game is in the 10-min countdown
               window OR delayed past tip-off, a subtle dim overlay covers the
@@ -1607,13 +1624,21 @@ export default function GameDetailScreen() {
                     <PreGameCountdown secondsLeft={secondsUntilStart} sport={game.sport} />
                   ) : (game.status === 'LIVE' || game.status === 'FINAL') ? (
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                      <Text style={[styles.scoreNumber, {
-                        color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
-                      }]}>{game.homeScore ?? ''}</Text>
+                      <ScorePop
+                        value={game.homeScore ?? 0}
+                        badgeAlign="left"
+                        textStyle={[styles.scoreNumber, {
+                          color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                        }]}
+                      />
                       <Text style={styles.scoreSep}>–</Text>
-                      <Text style={[styles.scoreNumber, {
-                        color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
-                      }]}>{game.awayScore ?? ''}</Text>
+                      <ScorePop
+                        value={game.awayScore ?? 0}
+                        badgeAlign="right"
+                        textStyle={[styles.scoreNumber, {
+                          color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                        }]}
+                      />
                     </View>
                   ) : null}
                   {(() => {
