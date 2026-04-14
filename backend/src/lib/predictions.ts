@@ -1718,12 +1718,22 @@ export async function generatePrediction(
   const postEnsembleConf = ensemble.divergenceFlag
     ? clamp(confidence - 10, 50, isTossUp ? cal.tossUpCeiling : cal.ceiling)
     : confidence;
-  // Lineup confirmation modifier: unconfirmed lineups = uncertainty tax
+  // Lineup confirmation modifier: unconfirmed lineups = uncertainty tax.
+  // Gate the lineup penalty on game start time. Lineups aren't released
+  // until ~2 hours before first pitch, so firing this penalty on cron-
+  // generated predictions several hours out would penalize the model
+  // for data that doesn't exist yet. Only apply when lineups should
+  // realistically be available (within 3 hours of first pitch through
+  // 6 hours after, covering in-progress and just-finished games).
   const lineupPenalties: Record<string, number> = { MLB: -8, NFL: -6, NBA: -4, NHL: -5, NCAAB: -3, NCAAF: -4, MLS: -3, EPL: -3 };
   const maxLineupPenalty = lineupPenalties[sportKey] ?? -4;
+  const hoursUntilStart = (new Date(game.dateTime).getTime() - Date.now()) / (1000 * 60 * 60);
+  const lineupDataExpected = hoursUntilStart < 3 && hoursUntilStart > -6;
   let lineupPenalty = 0;
-  if (!homeLineup || homeLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
-  if (!awayLineup || awayLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
+  if (lineupDataExpected) {
+    if (!homeLineup || homeLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
+    if (!awayLineup || awayLineup.starters.length === 0) lineupPenalty += maxLineupPenalty / 2;
+  }
   const finalConfidence = clamp(
     Math.round(postEnsembleConf + lineupPenalty),
     50,
