@@ -13,11 +13,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
 import { useUserStats, useUserPicks } from '@/hooks/usePicks';
 import { useGames } from '@/hooks/useGames';
+import { getSignatureCalls, type SignatureCall, type SignatureCallReason } from '@/lib/signature-calls';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { api } from '@/lib/api/api';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
-import { displayConfidence, displaySport } from '@/lib/display-confidence';
+import { displaySport } from '@/lib/display-confidence';
 import { authClient } from '@/lib/auth/auth-client';
 import { GameWithPrediction, GameStatus } from '@/types/sports';
 import { isRevenueCatEnabled, logoutUser } from '@/lib/revenuecatClient';
@@ -185,37 +186,35 @@ const AchievementBadge = memo(function AchievementBadge({ name, desc, earned, ic
 });
 
 // ─── SIGNATURE CALL CARD ───
-const SignatureCallCard = memo(function SignatureCallCard({ type, data }: {
-  type: 'best' | 'boldest';
-  data: { away: string; home: string; awayScore: number; homeScore: number; sport: string; date: string; detail: string };
-}) {
-  const isBest = type === 'best';
-  const accentColor = isBest ? C.TEAL : C.MAROON;
+const REASON_LABELS: Record<SignatureCallReason, string> = {
+  high_confidence: 'HIGH CONVICTION CALL',
+  underdog: 'UNDERDOG CALL',
+  bold: 'AGAINST THE MODEL',
+  underdog_and_bold: 'SIGNATURE CALL OF THE WEEK',
+};
+
+const SignatureCallCard = memo(function SignatureCallCard({ call }: { call: SignatureCall }) {
+  const isHighConfidence = call.primaryReason === 'high_confidence';
+  const accentColor = isHighConfidence ? C.TEAL : C.MAROON;
+  const Icon = isHighConfidence ? StarIcon : BoltIcon;
+  const label = REASON_LABELS[call.primaryReason];
+
+  const pick = call.pick;
+  const homeAbbr = pick.homeTeam ?? 'HOME';
+  const awayAbbr = pick.awayTeam ?? 'AWAY';
+  const sport = pick.sport ?? '';
+  const dateStr = new Date(pick.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const matchupLine = `${awayAbbr} vs ${homeAbbr}${sport ? ` · ${sport}` : ''} · ${dateStr}`;
 
   return (
     <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', marginBottom: 8, position: 'relative', overflow: 'hidden' }}>
       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: accentColor }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-        {isBest ? <StarIcon size={12} color={C.TEAL} /> : <BoltIcon size={12} color={C.MAROON} />}
-        <Text style={{ fontSize: 8, fontWeight: '700', color: accentColor, letterSpacing: 1.5 }}>
-          {isBest ? 'BEST CALL THIS MONTH' : 'BOLDEST CALL THIS MONTH'}
-        </Text>
+        <Icon size={12} color={accentColor} />
+        <Text style={{ fontSize: 8, fontWeight: '700', color: accentColor, letterSpacing: 1.5 }}>{label}</Text>
       </View>
-      <Text style={{ fontSize: 14, fontWeight: '700', color: C.TEXT_PRIMARY, marginBottom: 6 }}>
-        {data.away} {data.awayScore} - {data.home} {data.homeScore}
-      </Text>
-      <Text style={{ fontSize: 11, color: C.TEXT_SECONDARY, lineHeight: 16 }}>{data.detail}</Text>
-      <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
-        <View style={{ backgroundColor: C.TEAL_DIM, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-          <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEAL }}>Correct</Text>
-        </View>
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-          <Text style={{ fontSize: 9, fontWeight: '600', color: C.TEXT_MUTED }}>{data.sport}</Text>
-        </View>
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-          <Text style={{ fontSize: 9, fontWeight: '600', color: C.TEXT_MUTED }}>{data.date}</Text>
-        </View>
-      </View>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 0.4, marginBottom: 8 }}>{matchupLine}</Text>
+      <Text style={{ fontSize: 13, color: C.TEXT_SECONDARY, lineHeight: 19 }}>{call.narrative}</Text>
     </View>
   );
 });
@@ -368,55 +367,10 @@ export default function ProfileScreen() {
       .sort((a, b) => b.total - a.total);
   }, [picks, allGames]);
 
-  // Signature calls
-  const signatureCalls = useMemo(() => {
-    if (!picks || !allGames) return { bestCall: null, boldestCall: null };
-    const gameMap = new Map(allGames.map((g) => [g.id, g]));
-    const wonPicks = picks.filter((p) => p.result === 'win');
-    type CallData = { away: string; home: string; awayScore: number; homeScore: number; sport: string; date: string; detail: string };
-
-    let bestCall: CallData | null = null;
-    let bestConf = 0;
-    for (const p of wonPicks) {
-      const game = gameMap.get(p.gameId);
-      if (!game?.prediction) continue;
-      const conf = game.prediction.confidence ?? 50;
-      if (conf > bestConf) {
-        bestConf = conf;
-        bestCall = {
-          away: game.awayTeam.abbreviation, home: game.homeTeam.abbreviation,
-          awayScore: game.awayScore ?? 0, homeScore: game.homeScore ?? 0,
-          sport: game.sport, date: new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          detail: `Called at ${displayConfidence(conf)}% confidence. The model's top-rated pick that day.`,
-        };
-      }
-    }
-
-    let boldestCall: CallData | null = null;
-    let lowestConf = 100;
-    for (const p of wonPicks) {
-      const game = gameMap.get(p.gameId);
-      if (!game?.prediction) continue;
-      const conf = game.prediction.confidence ?? 50;
-      const pickedHome = p.pickedTeam === 'home';
-      const modelPickedHome = game.prediction.predictedWinner === 'home';
-      const wentAgainstModel = pickedHome !== modelPickedHome;
-      if (wentAgainstModel || conf < lowestConf) {
-        if (wentAgainstModel || conf < 55) {
-          lowestConf = wentAgainstModel ? 0 : conf;
-          boldestCall = {
-            away: game.awayTeam.abbreviation, home: game.homeTeam.abbreviation,
-            awayScore: game.awayScore ?? 0, homeScore: game.homeScore ?? 0,
-            sport: game.sport, date: new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            detail: wentAgainstModel
-              ? `Went against the model and won. ${displayConfidence(conf)}% said the other side.`
-              : `Picked at just ${displayConfidence(conf)}% confidence. Saw value others missed.`,
-          };
-        }
-      }
-    }
-    return { bestCall, boldestCall };
-  }, [picks, allGames]);
+  // Signature calls — eligibility + narrative live in src/lib/signature-calls.ts.
+  // Reads enriched fields directly off the pick row, so it works for any
+  // settled win regardless of whether the game is still in `allGames`.
+  const signatureCalls = useMemo(() => getSignatureCalls(picks), [picks]);
 
   // Weekly rhythm
   const weeklyRhythm = useMemo(() => {
@@ -741,11 +695,11 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 2 }}>SIGNATURE CALLS</Text>
           </View>
-          {signatureCalls.bestCall ? <SignatureCallCard type="best" data={signatureCalls.bestCall} /> : null}
-          {signatureCalls.boldestCall ? <SignatureCallCard type="boldest" data={signatureCalls.boldestCall} /> : null}
-          {!signatureCalls.bestCall && !signatureCalls.boldestCall ? (
-            <Text style={{ fontSize: 12, color: C.TEXT_MUTED, textAlign: 'center', paddingVertical: 24 }}>Make winning picks to see your signature calls here</Text>
-          ) : null}
+          {signatureCalls.length > 0
+            ? signatureCalls.map((call) => <SignatureCallCard key={call.pick.id} call={call} />)
+            : (
+              <Text style={{ fontSize: 12, color: C.TEXT_MUTED, textAlign: 'center', paddingVertical: 24 }}>Make winning picks to see your signature calls here</Text>
+            )}
         </Animated.View>
 
         {/* ── 5. WEEKLY RHYTHM ── */}
