@@ -364,9 +364,6 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
   const trailer = homeScore > awayScore ? away : homeScore < awayScore ? home : null;
   const quarter = game.quarter ?? '';
   const clock = game.clock ?? '';
-  const situation = game.situation ?? '';
-  const lastPlay = game.lastPlay ?? '';
-  const leaders = game.leaders ?? [];
   const isEarly = quarter.includes('1') || quarter.includes('Top 1') || quarter.includes('Bot 1') || quarter.includes('Top 2');
   const isMid = quarter.includes('2') || quarter.includes('3') || quarter.includes('Half');
   const isLate = quarter.includes('4') || quarter.includes('OT') || quarter.includes('9') || quarter.includes('3rd Period') || quarter.includes('2nd Half');
@@ -379,38 +376,7 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
   const isUpset = leader && predictedWinner && leader.abbreviation !== predictedWinner.abbreviation;
 
   // ═══ PULSE — PLAY-BY-PLAY FEED ═══
-  // Pure action — what just happened on the field/court/ice. No scores, no model talk.
-  if (lastPlay && lastPlay.length > 10) {
-    const lp = lastPlay.toLowerCase();
-    const playTitle = lp.includes('touchdown') ? 'TOUCHDOWN' :
-      (lp.includes('goal') && (sport === 'NHL' || sport === 'MLS' || sport === 'EPL')) ? 'GOAL' :
-      lp.includes('home run') ? 'HOME RUN' :
-      (lp.includes('three pointer') || lp.includes('3-pointer')) ? 'DEEP THREE' :
-      lp.includes('dunk') ? 'SLAM' :
-      lp.includes('interception') ? 'PICKED OFF' :
-      lp.includes('fumble') ? 'LOOSE BALL' :
-      lp.includes('steal') ? 'STOLEN' :
-      lp.includes('block') ? 'REJECTED' :
-      lp.includes('strikeout') ? 'PUNCHOUT' :
-      lp.includes('sack') ? 'SACKED' :
-      lp.includes('field goal') ? 'THROUGH THE UPRIGHTS' :
-      (lp.includes('injury') || lp.includes('hurt') || lp.includes('down on')) ? 'INJURY REPORT' :
-      lp.includes('penalty') ? 'FLAG DOWN' :
-      lp.includes('foul') ? 'WHISTLE' :
-      lp.includes('double') || lp.includes('triple') ? 'EXTRA BASES' :
-      lp.includes('save') ? 'BIG SAVE' :
-      'LIVE ACTION';
-    intel.push({ type: 'pulse', title: playTitle, body: lastPlay });
-  } else if (situation) {
-    // No last play available — show live game situation instead
-    if (sport === 'NFL' || sport === 'NCAAF') {
-      intel.push({ type: 'pulse', title: 'ON THE FIELD', body: situation });
-    } else if (sport === 'MLB') {
-      const isTopHalf = quarter.toLowerCase().includes('top');
-      const battingTeam = isTopHalf ? away : home;
-      intel.push({ type: 'pulse', title: `${battingTeam.abbreviation} BATTING`, body: `${quarter} — ${situation}` });
-    }
-  } else if (isLate && scoreDiff <= 3 && leader && trailer) {
+  if (isLate && scoreDiff <= 3 && leader && trailer) {
     const clockNote = clock ? `${clock} left.` : '';
     intel.push({ type: 'pulse', title: 'CRUNCH TIME', body: `${
       sport === 'NBA' || sport === 'NCAAB' ? `${scoreDiff <= 1 ? 'One bucket changes everything.' : 'Fouling game starting.'} ${clockNote}` :
@@ -429,19 +395,8 @@ function generateLiveIntel(game: GameWithPrediction | null): Array<{ type: 'aler
     }` });
   }
 
-  // ═══ ALERT — PERFORMERS & IMPACT PLAYERS ═══
-  // Who's making plays. No game state, no model — just the players doing damage.
-  const homeLeaders = leaders.filter(l => l.team === 'home');
-  const awayLeaders = leaders.filter(l => l.team === 'away');
-  if (homeLeaders.length > 0 || awayLeaders.length > 0) {
-    const lines: string[] = [];
-    if (homeLeaders[0]) lines.push(`${homeLeaders[0].name} — ${homeLeaders[0].stat}`);
-    if (awayLeaders[0]) lines.push(`${awayLeaders[0].name} — ${awayLeaders[0].stat}`);
-    // Add second performers if available for depth
-    if (homeLeaders[1]) lines.push(`${homeLeaders[1].name} — ${homeLeaders[1].stat}`);
-    if (awayLeaders[1]) lines.push(`${awayLeaders[1].name} — ${awayLeaders[1].stat}`);
-    intel.push({ type: 'alert', title: 'Impact Players', body: lines.join('\n') });
-  } else if (pred?.analysis) {
+  // ═══ ALERT — SCOUTING REPORT ═══
+  if (pred?.analysis) {
     intel.push({ type: 'alert', title: 'Scouting Report', body: pred.analysis });
   }
 

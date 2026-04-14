@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 import {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -28,18 +28,6 @@ export function useTabBarVisible(): SharedValue<number> {
     throw new Error('useTabBarVisible must be used within ScrollProvider');
   }
   return ctx.tabBarVisible;
-}
-
-/** Call this on screens that don't track scroll to keep the tab bar visible */
-export function useShowTabBar() {
-  const ctx = useContext(ScrollContext);
-  if (!ctx) {
-    throw new Error('useShowTabBar must be used within ScrollProvider');
-  }
-  const { tabBarVisible } = ctx;
-  React.useEffect(() => {
-    tabBarVisible.value = withTiming(1, { duration: 200 });
-  }, [tabBarVisible]);
 }
 
 export function useHideOnScroll() {
