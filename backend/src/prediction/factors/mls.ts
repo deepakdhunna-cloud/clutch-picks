@@ -1,3 +1,7 @@
+// TODO (Batch 5): Implement sport-specific factors for MLS.
+// Currently returns an empty array, meaning MLS predictions run
+// on generic base factors only. See audit report for context.
+
 /**
  * MLS-specific factors — STUB.
  *
