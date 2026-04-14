@@ -6,6 +6,7 @@
 import { prisma } from "../prisma";
 import { createNotification } from "../routes/notifications";
 import { notifyPickResult, checkStreakMilestone, calculateWinStreak } from "./notification-jobs";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const ESPN_ENDPOINTS: Record<string, string> = {
   NFL: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
@@ -44,7 +45,7 @@ export async function fetchGameResult(gameId: string): Promise<FinalGameResult |
         if (sport === "NCAAB") { params.set("groups", "50"); params.set("limit", "300"); }
         if (sport === "NCAAF") { params.set("groups", "80"); params.set("limit", "300"); }
 
-        const res = await fetch(`${baseUrl}?${params.toString()}`);
+        const res = await fetchWithTimeout(`${baseUrl}?${params.toString()}`, { timeoutMs: 25000 });
         if (!res.ok) continue;
 
         const data = await res.json() as { events?: Array<{

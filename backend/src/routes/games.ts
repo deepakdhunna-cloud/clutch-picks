@@ -1201,17 +1201,6 @@ gamesRouter.get("/", async (c) => {
       fetchAllGames(dayAfterStr),
     ]);
 
-    // DEBUG: trace where today's non-LIVE games are vanishing in the
-    // aggregator (mobile homepage was missing today's FINAL/SCHEDULED + EPL).
-    const todayPrefix = todayStr ?? "";
-    const dbgCount = (arr: Game[], label: string) => {
-      const todayMlb = arr.filter((g) => g.sport === "MLB" && g.gameTime?.startsWith(todayPrefix));
-      const todayEpl = arr.filter((g) => g.sport === "EPL" && g.gameTime?.startsWith(todayPrefix));
-      console.log(`[/api/games dbg] ${label}: total=${arr.length} todayMLB=${todayMlb.length} (${todayMlb.map((g) => `${g.id}/${g.status}`).join(",")}) todayEPL=${todayEpl.length}`);
-    };
-    dbgCount(todayGames, "afterFetch:today");
-    dbgCount(tomorrowGames, "afterFetch:tomorrow");
-
     // Check if we need yesterday's live games (only if any might still be running)
     const hour = now.getUTCHours();
     let extraGames: Game[] = [];
@@ -1226,13 +1215,11 @@ gamesRouter.get("/", async (c) => {
     }
 
     const allGames = [...extraGames, ...todayGames, ...tomorrowGames, ...dayAfterGames];
-    dbgCount(allGames, "afterCombine");
 
     // Deduplicate by game ID
     const uniqueGames = Array.from(
       new Map(allGames.map((game) => [game.id, game])).values()
     );
-    dbgCount(uniqueGames, "afterDedupe");
 
     // Keep games whose gameTime is at most ~2 calendar days out in UTC. This
     // covers a US-PST user's "tomorrow night" slate (which spills into the UTC
@@ -1245,8 +1232,6 @@ gamesRouter.get("/", async (c) => {
       if (game.status === "LIVE" || game.status === "FINAL") return true;
       return new Date(game.gameTime) <= endOfToday;
     });
-    dbgCount(filteredGames, "afterFilter");
-
     filteredGames.sort(
       (a, b) =>
         new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
