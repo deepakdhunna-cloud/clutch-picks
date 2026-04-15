@@ -1673,7 +1673,7 @@ export default function GameDetailScreen() {
                         value={game.homeScore ?? 0}
                         badgeAlign="left"
                         textStyle={[styles.scoreNumber, {
-                          color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                          color: (game.homeScore ?? 0) > (game.awayScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.55)',
                         }]}
                       />
                       <Text style={styles.scoreSep}>–</Text>
@@ -1681,7 +1681,7 @@ export default function GameDetailScreen() {
                         value={game.awayScore ?? 0}
                         badgeAlign="right"
                         textStyle={[styles.scoreNumber, {
-                          color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                          color: (game.awayScore ?? 0) > (game.homeScore ?? 0) ? '#FFFFFF' : (game.homeScore ?? 0) === (game.awayScore ?? 0) ? '#FFFFFF' : 'rgba(255,255,255,0.55)',
                         }]}
                       />
                     </View>
