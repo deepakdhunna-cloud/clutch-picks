@@ -203,9 +203,11 @@ export function useGame(gameId: string) {
       // hard so it appears the moment background generation finishes.
       if (game && !game.prediction) return PREDICTION_BURST_INTERVAL;
       if (game?.status === GameStatus.LIVE) {
-        // SSE already writes live scores to ['game', id] cache.
-        // Poll as fast fallback in case SSE drops.
-        return LIVE_POLLING_INTERVAL;
+        // SSE writes live scores directly to the ['game', id] cache. Polling
+        // hits a backend cache that lags SSE by a few seconds, which can
+        // overwrite the freshest SSE-pushed score with stale HTTP data.
+        // Defer to SSE when it's connected; only burst-poll as fallback.
+        return sseConnectedRef.current ? DEFAULT_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;
       }
       return DEFAULT_POLLING_INTERVAL;
     },
