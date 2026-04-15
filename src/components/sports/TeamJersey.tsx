@@ -6,6 +6,7 @@ import { MLBJersey } from './MLBJersey';
 import { NHLJersey } from './NHLJersey';
 import { CollegeBBJersey } from './CollegeBBJersey';
 import { SoccerJersey as SoccerJerseyNew } from './SoccerJersey';
+import { UCLJersey } from './UCLJersey';
 import { getTeamColors } from '@/lib/team-colors';
 
 interface TeamJerseyProps {
@@ -42,7 +43,7 @@ function getSportJersey(
     case Sport.EPL:
       return <SoccerJerseyNew {...props} />;
     case Sport.UCL:
-      return <SoccerJerseyNew {...props} />;
+      return <UCLJersey {...props} />;
     default:
       return <NFLJersey {...props} />;
   }
