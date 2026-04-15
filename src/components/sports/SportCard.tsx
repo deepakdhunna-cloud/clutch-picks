@@ -81,6 +81,7 @@ const SPORT_PIXEL_ICONS: Record<string, number[][]> = {
   NCAAF: [[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,0,0,1,1],[1,0,0,1,1,0,0,0,1],[1,1,0,0,0,0,0,1,1],[0,1,1,1,1,1,1,1,0],[0,0,0,1,1,1,0,0,0]],
 };
 SPORT_PIXEL_ICONS.MLS = SPORT_PIXEL_ICONS.EPL;
+SPORT_PIXEL_ICONS.UCL = SPORT_PIXEL_ICONS.EPL;
 SPORT_PIXEL_ICONS.NCAAB = SPORT_PIXEL_ICONS.NBA;
 
 // ─── DOT MATRIX TEXT RENDERER ─────────────────────────────────
@@ -188,6 +189,13 @@ const JBIcons: Record<string, React.FC<JBIconProps>> = {
     </Svg>
   )),
   EPL: memo(({ color, size = 16 }: JBIconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
+      <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
+      <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
+    </Svg>
+  )),
+  UCL: memo(({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
       <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
@@ -478,6 +486,7 @@ export function getSportIcon(sport: Sport, size: number, color: string) {
     case Sport.NHL: return <HockeyStickIcon size={size} color={color} />;
     case Sport.MLS: return <SoccerCleatIcon size={size} color={color} />;
     case Sport.EPL: return <PremierLeagueIcon size={size} color={color} />;
+    case Sport.UCL: return <PremierLeagueIcon size={size} color={color} />;
     case Sport.NCAAF: return <CollegeFootballIcon size={size} color={color} />;
     case Sport.NCAAB: return <CollegeBasketballIcon size={size} color={color} />;
     default: return <SoccerCleatIcon size={size} color={color} />;
@@ -673,7 +682,7 @@ export const SportCard = memo(function SportCard({
 // Ticket color helper — used by index.tsx for Today's Games bar
 export const TICKET_COLORS = ['#8B0A1F', '#8B0A1F', '#8B0A1F'];
 export const TICKET_COLOR_MAP: Record<string, number> = {
-  NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, NCAAF: 0, NCAAB: 1,
+  NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, UCL: 0, NCAAF: 0, NCAAB: 1,
 };
 export function getTicketColor(sport: string): string {
   return TICKET_COLORS[TICKET_COLOR_MAP[sport] ?? 0];

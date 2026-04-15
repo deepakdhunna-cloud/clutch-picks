@@ -22,6 +22,7 @@ const K_FACTORS: Record<string, number> = {
   NHL:   12,
   MLS:   20,
   EPL:   20,
+  UCL:  20,
 };
 
 // Home advantage bonuses (added to home team's effective rating)
@@ -34,6 +35,7 @@ const HOME_BONUSES: Record<string, number> = {
   NHL:   33,
   MLS:   55,
   EPL:   40,
+  UCL:  40,
 };
 
 // Sport-specific caps on the MOV multiplier to prevent over-correction in
@@ -47,6 +49,7 @@ const MOV_CAPS: Record<string, number> = {
   NHL:   1.8,
   MLS:   2.0,
   EPL:   2.0,
+  UCL:  2.0,
 };
 
 /**
@@ -58,10 +61,10 @@ const MOV_CAPS: Record<string, number> = {
 export function movMultiplier(margin: number | undefined, sport: string): number {
   if (margin === undefined || margin === 0) {
     // Soccer draws: reduced K so draws don't swing ratings as much
-    return (sport === "MLS" || sport === "EPL") ? 0.5 : 1.0;
+    return (sport === "MLS" || sport === "EPL" || sport === "UCL") ? 0.5 : 1.0;
   }
   // Soccer-specific: gentle scaling because a 3-0 is a blowout but only 3 goals
-  if (sport === "MLS" || sport === "EPL") {
+  if (sport === "MLS" || sport === "EPL" || sport === "UCL") {
     const m = Math.abs(margin);
     if (m === 1) return 1.0;
     if (m === 2) return 1.2;

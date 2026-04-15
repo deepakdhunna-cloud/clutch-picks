@@ -16,6 +16,7 @@ const ESPN_SPORT_PATHS: Record<string, string> = {
   NCAAF: "football/college-football",
   NCAAB: "basketball/mens-college-basketball",
   EPL: "soccer/eng.1",
+  UCL: "soccer/uefa.champions",
 };
 
 export interface TeamRecentForm {
@@ -1223,7 +1224,7 @@ const WEATHER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 const weatherCache = new LRUCache<string, { data: WeatherData | null; timestamp: number }>({ max: 100 });
 
 // Outdoor sports that benefit from weather data
-const OUTDOOR_SPORTS = new Set(["NFL", "NCAAF", "MLB", "MLS", "EPL"]);
+const OUTDOOR_SPORTS = new Set(["NFL", "NCAAF", "MLB", "MLS", "EPL", "UCL"]);
 
 // Indoor sports — always return isDomed: true
 const INDOOR_SPORTS = new Set(["NBA", "NHL", "NCAAB"]);

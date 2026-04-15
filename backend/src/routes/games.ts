@@ -24,6 +24,7 @@ const ESPN_ENDPOINTS = {
   NCAAF: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
   NCAAB: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
   EPL: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+  UCL: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
 } as const;
 
 type SportKey = keyof typeof ESPN_ENDPOINTS;
@@ -86,7 +87,7 @@ export interface GamePrediction {
 
 export interface Game {
   id: string;
-  sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL";
+  sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL" | "UCL";
   homeTeam: GameTeam;
   awayTeam: GameTeam;
   gameTime: string;
@@ -345,6 +346,7 @@ const SPORT_REGULATION_SECONDS: Record<string, number> = {
   MLB:   9 * 3 * 60,    // proxy: 9 innings × ~3 min each side
   MLS:   90 * 60,
   EPL:   90 * 60,
+  UCL:  90 * 60,
 };
 
 /**
@@ -383,6 +385,7 @@ function computeLiveScoreImpliedProb(
     MLB: 0.06,   // ~5 runs/9 innings; per-inning is small
     MLS: 0.033,  // ~2.5 goals/90 min
     EPL: 0.033,
+    UCL: 0.033,
   };
   const pace = paceScale[sport] ?? 1.0;
   const remainingTime = (1 - gameProgress);
@@ -509,18 +512,20 @@ function parseRecord(record: string): { wins: number; losses: number; ties?: num
 const sportEnumMap: Record<string, SportEnum> = {
   NFL: SportEnum.NFL, NBA: SportEnum.NBA, MLB: SportEnum.MLB, NHL: SportEnum.NHL,
   MLS: SportEnum.MLS, NCAAF: SportEnum.NCAAF, NCAAB: SportEnum.NCAAB, EPL: SportEnum.EPL,
+  UCL: SportEnum.UCL,
 };
 
 const leagueMap: Record<string, League> = {
   NFL: League.Pro, NBA: League.Pro, MLB: League.Pro, NHL: League.Pro,
   MLS: League.Pro, NCAAF: League.College, NCAAB: League.College, EPL: League.Pro,
+  UCL: League.Pro,
 };
 
 // ─── Live helper utilities ────────────────────────────────────────────────────
 
 /** Total regulation periods by sport. */
 const SPORT_TOTAL_PERIODS: Record<string, number> = {
-  NBA: 4, NFL: 4, NCAAF: 4, NCAAB: 2, NHL: 3, MLB: 9, MLS: 2, EPL: 2,
+  NBA: 4, NFL: 4, NCAAF: 4, NCAAB: 2, NHL: 3, MLB: 9, MLS: 2, EPL: 2, UCL: 2,
 };
 
 /**
@@ -799,7 +804,7 @@ function getPeriodDisplay(status: ESPNStatus, sport: SportKey): string | undefin
     const detail = status.type.shortDetail || "";
     return detail;
   }
-  if (sport === "MLS" || sport === "EPL") {
+  if (sport === "MLS" || sport === "EPL" || sport === "UCL") {
     const detail = status.type.shortDetail || "";
     return detail;
   }
@@ -1090,7 +1095,7 @@ async function fetchAllGames(date?: string): Promise<Game[]> {
   if (existing) return existing;
 
   const promise = (async () => {
-    const sports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL"];
+    const sports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL"];
 
     const allGamesPromises: Promise<Game[]>[] = [];
     for (const sport of sports) {
@@ -1475,7 +1480,7 @@ gamesRouter.get("/:sport", async (c) => {
     return c.json(
       {
         error: {
-          message: `Invalid sport: ${sportParam}. Valid options: NFL, NBA, MLB, NHL, MLS, NCAAF, NCAAB, EPL`,
+          message: `Invalid sport: ${sportParam}. Valid options: NFL, NBA, MLB, NHL, MLS, NCAAF, NCAAB, EPL, UCL`,
           code: "INVALID_SPORT",
         },
       },
@@ -1533,7 +1538,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
     return liveGamesCache.data;
   }
 
-  const allSports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL"];
+  const allSports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL"];
 
   // Fix 3: only poll sports known to have live games; do a full scan periodically to rediscover
   const doFullScan = activeSports.size === 0 || (now - lastFullScanTime > FULL_SCAN_INTERVAL_MS);

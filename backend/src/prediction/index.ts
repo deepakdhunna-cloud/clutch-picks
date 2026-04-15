@@ -43,11 +43,12 @@ const SPORT_FACTORS: Record<string, (ctx: GameContext) => FactorContribution[]> 
   NHL: computeNHLFactors,
   MLS: computeMLSFactors,
   EPL: computeEPLFactors,
+  UCL: computeEPLFactors,
   NCAAF: computeNCAAFBFactors,
   NCAAB: computeNCAAMBFactors,
 };
 
-const SOCCER_LEAGUES = new Set(["MLS", "EPL"]);
+const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
 
 /**
  * Redistribute weight from unavailable factors proportionally to available ones.

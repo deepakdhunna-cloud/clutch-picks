@@ -70,6 +70,7 @@ export type LeagueKey =
   | "NHL"
   | "MLS"
   | "EPL"
+  | "UCL"
   | "NCAAF"
   | "NCAAB";
 

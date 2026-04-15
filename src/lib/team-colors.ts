@@ -770,6 +770,9 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
     case Sport.EPL:
       colors = EPL_TEAM_COLORS[abbreviation];
       break;
+    case Sport.UCL:
+      colors = undefined;
+      break;
     default:
       colors = undefined;
   }

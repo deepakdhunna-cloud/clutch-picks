@@ -44,6 +44,7 @@ export function formatGameTime(sport: string, quarter?: string, clock?: string):
       return quarter || null;
     case 'EPL':
     case 'MLS':
+    case 'UCL':
       // Soccer: show clock as match minute, no period needed
       if (clock) return clock;
       return quarter || null;
