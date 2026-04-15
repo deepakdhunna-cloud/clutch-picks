@@ -16,12 +16,12 @@ interface CompactLiveCardProps {
 
 export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPress }: CompactLiveCardProps) {
   const awayColors = useMemo(
-    () => getTeamColors(game.awayTeam.abbreviation, game.sport as Sport),
-    [game.awayTeam.abbreviation, game.sport]
+    () => getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, (game.awayTeam as any).color),
+    [game.awayTeam.abbreviation, game.sport, (game.awayTeam as any).color]
   );
   const homeColors = useMemo(
-    () => getTeamColors(game.homeTeam.abbreviation, game.sport as Sport),
-    [game.homeTeam.abbreviation, game.sport]
+    () => getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, (game.homeTeam as any).color),
+    [game.homeTeam.abbreviation, game.sport, (game.homeTeam as any).color]
   );
 
   const awayScore = game.awayScore ?? 0;
