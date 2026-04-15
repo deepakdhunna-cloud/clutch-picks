@@ -41,6 +41,8 @@ function getSportJersey(
       return <SoccerJerseyNew {...props} />;
     case Sport.EPL:
       return <SoccerJerseyNew {...props} />;
+    case Sport.UCL:
+      return <SoccerJerseyNew {...props} />;
     default:
       return <NFLJersey {...props} />;
   }

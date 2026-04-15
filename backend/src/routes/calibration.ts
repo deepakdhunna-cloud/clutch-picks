@@ -28,7 +28,7 @@ calibrationRouter.get("/", async (c) => {
 
     // If no snapshots exist, compute fresh ones
     if (metrics.length === 0) {
-      const LEAGUES = ["NBA", "NFL", "MLB", "NHL", "MLS", "EPL", "NCAAF", "NCAAB", "ALL"];
+      const LEAGUES = ["NBA", "NFL", "MLB", "NHL", "MLS", "EPL", "UCL", "NCAAF", "NCAAB", "ALL"];
       metrics = [];
       for (const league of LEAGUES) {
         try {

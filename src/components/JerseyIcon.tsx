@@ -462,7 +462,7 @@ export function sportEnumToJersey(sport: string | undefined): JerseySport {
     case 'football':   case 'NFL': case 'NCAAF': return 'football';
     case 'baseball':   case 'MLB':               return 'baseball';
     case 'hockey':     case 'NHL':               return 'hockey';
-    case 'soccer':     case 'MLS': case 'EPL':   return 'soccer';
+    case 'soccer':     case 'MLS': case 'EPL': case 'UCL':   return 'soccer';
     default:                                      return 'football';
   }
 }

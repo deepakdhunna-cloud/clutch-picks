@@ -35,7 +35,7 @@ import {
 const ERROR_DIM = 'rgba(239,68,68,0.10)';
 
 const { width: SW } = Dimensions.get('window');
-const SPORTS = ['All','NBA','NFL','MLB','NHL','NCAAF','NCAAB','MLS','EPL'] as const;
+const SPORTS = ['All','NBA','NFL','MLB','NHL','NCAAF','NCAAB','MLS','EPL','UCL'] as const;
 const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB' };
 const SPRING = { stiffness: 300, damping: 22, mass: 1 };
 const MODES = ['Game Day','Prep Mode','Review'] as const;

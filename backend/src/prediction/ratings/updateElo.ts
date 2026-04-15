@@ -16,7 +16,7 @@
 import { initializeEloFromSchedule, getEloRating } from "../../lib/elo";
 import { fetchTeamSeasonResults } from "../../lib/espnStats";
 
-const LEAGUES = ["NFL", "NBA", "MLB", "NHL", "MLS", "EPL", "NCAAF", "NCAAB"] as const;
+const LEAGUES = ["NFL", "NBA", "MLB", "NHL", "MLS", "EPL", "UCL", "NCAAF", "NCAAB"] as const;
 
 /**
  * Run a full Elo recalculation for one league.

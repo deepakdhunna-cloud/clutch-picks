@@ -12,6 +12,7 @@ export enum Sport {
   NCAAB = "NCAAB",
   MLS = "MLS",
   EPL = "EPL",
+  UCL = "UCL",
 }
 
 // League categories

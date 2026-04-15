@@ -9,6 +9,7 @@ export enum Sport {
   NCAAF = 'NCAAF',
   NCAAB = 'NCAAB',
   EPL = 'EPL',
+  UCL = 'UCL',
 }
 
 export enum League {
@@ -19,6 +20,7 @@ export enum League {
   NHL = 'NHL',
   MLS = 'MLS',
   EPL = 'EPL',
+  UCL = 'UCL',
   // College
   NCAAF = 'NCAAF',
   NCAAB = 'NCAAB',
@@ -152,6 +154,14 @@ export const SPORT_META: Record<Sport, SportMeta> = {
     name: 'Premier League',
     icon: 'soccer-ball',
     color: '#6A0818',
+    accentColor: '#FFFFFF',
+    isCollege: false,
+  },
+  [Sport.UCL]: {
+    sport: Sport.UCL,
+    name: 'Champions League',
+    icon: 'soccer-ball',
+    color: '#1A2A6C',
     accentColor: '#FFFFFF',
     isCollege: false,
   },

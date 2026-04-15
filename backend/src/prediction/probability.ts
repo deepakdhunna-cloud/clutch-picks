@@ -53,6 +53,7 @@ export function estimateDrawProbability(
   const BASE_DRAW_RATES: Record<string, number> = {
     MLS: 0.24,
     EPL: 0.25,
+    UCL: 0.25,
   };
 
   const baseRate = BASE_DRAW_RATES[league];
