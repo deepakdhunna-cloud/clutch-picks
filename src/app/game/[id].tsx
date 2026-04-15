@@ -46,6 +46,7 @@ import { ScorePop } from '@/components/sports/ScorePop';
 import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Check } from 'lucide-react-native';
 
 // Tappable Jersey component for hero section - matches GameCard style
 const TappableJerseyHero = React.memo(function TappableJerseyHero({
@@ -1232,30 +1233,74 @@ function PickConfirmModal({
         <Pressable onPress={isConfirming ? undefined : onCancel}>
           <View style={StyleSheet.absoluteFillObject} />
         </Pressable>
-        <Animated.View style={modalStyle}>
-          <View style={styles.pickModal}>
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              <Animated.View style={[jerseyStyle, { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.8, shadowRadius: 16, elevation: 12 }]}>
-                <JerseyIcon teamCode={team.abbreviation} sport={jerseyType} size={80} primaryColor={resolvedColors.primary} secondaryColor={resolvedColors.secondary} />
+        <Animated.View style={[modalStyle]}>
+          <View style={{
+            backgroundColor: '#0C1018',
+            borderRadius: 24, padding: 28, paddingTop: 32,
+            width: 280, alignItems: 'center',
+            borderWidth: 1.5, borderColor: `${resolvedColors.primary}30`,
+            shadowColor: resolvedColors.primary, shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.2, shadowRadius: 30,
+          }}>
+            {/* Team color accent line at top */}
+            <View style={{ position: 'absolute', top: 0, left: 40, right: 40, height: 3, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 }}>
+              <LinearGradient
+                colors={['transparent', resolvedColors.primary, 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ flex: 1 }}
+              />
+            </View>
+
+            {/* Jersey */}
+            <View style={{ position: 'relative', alignItems: 'center', marginBottom: 20 }}>
+              <Animated.View style={[jerseyStyle, isConfirming ? { transform: [{ translateY: -6 }] } : undefined]}>
+                <JerseyIcon
+                  teamCode={team.abbreviation}
+                  primaryColor={resolvedColors.primary}
+                  secondaryColor={resolvedColors.secondary}
+                  size={85}
+                  sport={jerseyType}
+                />
               </Animated.View>
+
+              {/* Confirmed checkmark */}
               {showCheckmark ? (
-                <Animated.View style={[checkmarkStyle, { position: 'absolute', bottom: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#7A9DB8', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#0C1018' }]}>
-                  <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '900' }}>✓</Text>
+                <Animated.View style={[checkmarkStyle, {
+                  position: 'absolute', bottom: -6, right: 0,
+                  width: 22, height: 22, borderRadius: 11,
+                  backgroundColor: '#7A9DB8', alignItems: 'center', justifyContent: 'center',
+                  borderWidth: 2, borderColor: '#0C1018',
+                }]}>
+                  <Check size={10} color="#FFF" strokeWidth={3} />
                 </Animated.View>
               ) : null}
             </View>
-            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 5, textAlign: 'center' }}>{team.city} {team.name}</Text>
-            <Text style={{ color: isConfirming ? '#7A9DB8' : 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600', marginBottom: 24, textAlign: 'center' }}>
+
+            {/* Team name */}
+            <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 4, textAlign: 'center' }}>
+              {team.name}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginBottom: 4 }}>
+              {team.record}
+            </Text>
+            <Text style={{ color: isConfirming ? '#7A9DB8' : 'rgba(255,255,255,0.45)', fontSize: 14, fontWeight: '600', marginBottom: 24 }}>
               {isConfirming ? (isChanging ? 'Pick changed!' : 'Pick locked in') : (isChanging ? 'Switch your pick?' : 'Pick this team to win?')}
             </Text>
+
+            {/* Buttons */}
             {!isConfirming ? (
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Pressable onPress={onCancel}
-                  style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+                <Pressable
+                  onPress={onCancel}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center' }}
+                >
                   <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={handleConfirm}
-                  style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: resolvedColors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                <Pressable
+                  onPress={handleConfirm}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: resolvedColors.primary, alignItems: 'center' }}
+                >
                   <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '700' }}>Lock It In</Text>
                 </Pressable>
               </View>
@@ -1840,5 +1885,4 @@ const styles = StyleSheet.create({
   analysisLinkIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(122,157,184,0.15)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.2)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   analysisLinkTitle: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
   analysisLinkSub: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 3 },
-  pickModal: { backgroundColor: '#0a0a0a', borderRadius: 20, padding: 24, width: 300, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
 });
