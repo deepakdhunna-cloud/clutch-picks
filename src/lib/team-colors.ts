@@ -186,6 +186,53 @@ export const MLS_TEAM_COLORS: Record<string, TeamColors> = {
   'VAN': { primary: '#00245E', secondary: '#9DC2EA' }, // Vancouver Whitecaps
 };
 
+// UCL Teams (Champions League clubs from across Europe).
+// Keys must match ESPN's abbreviation in the UCL scoreboard feed.
+// Note: ESPN returns "MUN" for Bayern Munich (Munich→MUN) — collides with
+// Man United, but this map is only consulted when sport === Sport.UCL.
+export const UCL_TEAM_COLORS: Record<string, TeamColors> = {
+  'ARS': { primary: '#EF0107', secondary: '#FFFFFF' },
+  'CHE': { primary: '#034694', secondary: '#FFFFFF' },
+  'LIV': { primary: '#C8102E', secondary: '#FFFFFF' },
+  'MCI': { primary: '#6CABDD', secondary: '#1C2C5B' },
+  'TOT': { primary: '#132257', secondary: '#FFFFFF' },
+  'NEW': { primary: '#241F20', secondary: '#FFFFFF' },
+  'AVL': { primary: '#670E36', secondary: '#95BFE5' },
+  'RMA': { primary: '#FFFFFF', secondary: '#FEBE10' },
+  'BAR': { primary: '#A50044', secondary: '#004D98' },
+  'ATM': { primary: '#CB3524', secondary: '#FFFFFF' },
+  'MUN': { primary: '#DC052D', secondary: '#FFFFFF' }, // Bayern Munich (ESPN quirk)
+  'BAY': { primary: '#DC052D', secondary: '#FFFFFF' }, // fallback if ESPN fixes it
+  'BVB': { primary: '#FDE100', secondary: '#000000' },
+  'LEV': { primary: '#E32221', secondary: '#000000' },
+  'RBL': { primary: '#DD0741', secondary: '#FFFFFF' },
+  'JUV': { primary: '#000000', secondary: '#FFFFFF' },
+  'INT': { primary: '#010E80', secondary: '#000000' },
+  'MIL': { primary: '#FB090B', secondary: '#000000' },
+  'NAP': { primary: '#12A0D7', secondary: '#FFFFFF' },
+  'ATA': { primary: '#1E71B8', secondary: '#000000' },
+  'BOL': { primary: '#1A2F48', secondary: '#C4161C' },
+  'PSG': { primary: '#004170', secondary: '#DA291C' },
+  'LIL': { primary: '#E01E13', secondary: '#FFFFFF' },
+  'MON': { primary: '#E2001A', secondary: '#FFFFFF' },
+  'BRS': { primary: '#E2001A', secondary: '#1D428A' },
+  'SCP': { primary: '#008127', secondary: '#FFFFFF' }, // Sporting CP (ESPN returns 008127)
+  'SLB': { primary: '#FF0000', secondary: '#FFFFFF' },
+  'FCP': { primary: '#003893', secondary: '#FFFFFF' },
+  'PSV': { primary: '#ED1C24', secondary: '#FFFFFF' },
+  'FEY': { primary: '#ED1C24', secondary: '#FFFFFF' },
+  'CEL': { primary: '#1B458F', secondary: '#D0D0D0' },
+  'RSA': { primary: '#FFFFFF', secondary: '#CF2B36' },
+  'YBB': { primary: '#FFD200', secondary: '#000000' },
+  'GNK': { primary: '#0047AB', secondary: '#FFFFFF' },
+  'CLU': { primary: '#0047AB', secondary: '#000000' },
+  'STU': { primary: '#FFFFFF', secondary: '#E32219' },
+  'SHA': { primary: '#F58220', secondary: '#000000' },
+  'SPA': { primary: '#9D2235', secondary: '#FFFFFF' },
+  'SLO': { primary: '#00A651', secondary: '#FFFFFF' },
+  'GIR': { primary: '#CD1420', secondary: '#FFFFFF' },
+};
+
 // EPL Teams (English Premier League)
 export const EPL_TEAM_COLORS: Record<string, TeamColors> = {
   'ARS': { primary: '#EF0107', secondary: '#FFFFFF' }, // Arsenal
@@ -771,7 +818,7 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
       colors = EPL_TEAM_COLORS[abbreviation];
       break;
     case Sport.UCL:
-      colors = undefined;
+      colors = UCL_TEAM_COLORS[abbreviation];
       break;
     default:
       colors = undefined;
