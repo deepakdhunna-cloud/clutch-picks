@@ -203,11 +203,12 @@ export function useGame(gameId: string) {
       // hard so it appears the moment background generation finishes.
       if (game && !game.prediction) return PREDICTION_BURST_INTERVAL;
       if (game?.status === GameStatus.LIVE) {
-        // SSE writes live scores directly to the ['game', id] cache. Polling
-        // hits a backend cache that lags SSE by a few seconds, which can
-        // overwrite the freshest SSE-pushed score with stale HTTP data.
-        // Defer to SSE when it's connected; only burst-poll as fallback.
-        return sseConnectedRef.current ? DEFAULT_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;
+        // Always poll fast for live games. SSE only fires when the user is on
+        // a tab that mounts useLiveScores (currently the search tab), and
+        // even then the cache-merge guard at useLiveScores.ts can drop the
+        // first update. Polling every 5s is the only reliable update path
+        // for the detail page right now.
+        return LIVE_POLLING_INTERVAL;
       }
       return DEFAULT_POLLING_INTERVAL;
     },
