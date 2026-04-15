@@ -1553,10 +1553,10 @@ export default function GameDetailScreen() {
   const isLive = game.status === 'LIVE';
   const isLiveMLB = isLive && game.sport === 'MLB' && !!game.liveState;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
-  // Pre-game countdown state — only true while the game is SCHEDULED and
-  // tip-off is within the next 10 minutes. Drives both the LED countdown
-  // visibility and the shrunk-score / dim-overlay treatment.
-  const isCountingDown = game.status === 'SCHEDULED' && secondsUntilStart > 0 && secondsUntilStart <= 600;
+  // Pre-game countdown state — true while the game is SCHEDULED and tip-off
+  // is within the COUNTDOWN_WINDOW_SEC window (1 hour). Drives both the LED
+  // countdown visibility and the shrunk-score / dim-overlay treatment.
+  const isCountingDown = game.status === 'SCHEDULED' && secondsUntilStart > 0 && secondsUntilStart <= COUNTDOWN_WINDOW_SEC;
   const jerseyType = sportEnumToJersey(game.sport);
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
