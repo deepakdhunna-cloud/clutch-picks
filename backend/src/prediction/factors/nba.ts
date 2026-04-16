@@ -171,15 +171,77 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
   // Source: Basketball Reference shooting variance studies — team 3P%
   // regresses heavily toward season mean. If a team is shooting significantly
   // above their season average in recent games, expect regression.
-  // We don't have per-game 3P% data from ESPN, so this factor is
-  // currently unavailable and its weight redistributes to available factors.
+  //
+  // Live data: stats.nba.com teamgamelog (see lib/nbaStatsApi.ts) gives us
+  // FG3M/FG3A per game. We compare recent 5-game 3P% to season 3P% and
+  // apply a regression-to-the-mean delta:
+  //   - Home shooting > +3pts hot  → negative home delta (expect cooldown)
+  //   - Home shooting < -3pts cold → positive home delta (expect recovery)
+  //   - Away shooting hot/cold flips sign.
+  // Scale: 1 percentage point of deviation ≈ 8 Elo points. Cap ±25.
+  const homeShooting = ctx.homeShooting ?? null;
+  const awayShooting = ctx.awayShooting ?? null;
+  const shootingAvailable =
+    (homeShooting !== null && homeShooting.gamesUsed >= 3) ||
+    (awayShooting !== null && awayShooting.gamesUsed >= 3);
+
+  let threePtDelta = 0;
+  let threePtEvidence =
+    "Per-game 3P% data unavailable from stats.nba.com — factor inactive, weight redistributed";
+
+  function deviationDelta(s: { recent3P: number; season3P: number }): number {
+    // recent - season, in percentage points (e.g. 0.421 - 0.358 = 0.063 → 6.3)
+    const diffPts = (s.recent3P - s.season3P) * 100;
+    // Only apply when deviation exceeds 3 percentage points
+    if (Math.abs(diffPts) < 3) return 0;
+    // Regression signal: if team is hot (+diff), expect them to cool off
+    // → negative contribution for that team. Scale 8 Elo per pt, cap ±25.
+    const raw = -diffPts * 8;
+    return Math.max(-25, Math.min(25, raw));
+  }
+
+  function fmtEvidence(
+    label: string,
+    s: { recent3P: number; season3P: number; gamesUsed: number },
+  ): string {
+    const recentPct = (s.recent3P * 100).toFixed(1);
+    const seasonPct = (s.season3P * 100).toFixed(1);
+    const diff = (s.recent3P - s.season3P) * 100;
+    const sign = diff >= 0 ? "+" : "";
+    const verdict = diff > 0 ? "expect regression" : "expect rebound";
+    return `${label} shooting ${recentPct}% L${s.gamesUsed} vs season ${seasonPct}% (${sign}${diff.toFixed(1)}pts — ${verdict})`;
+  }
+
+  if (shootingAvailable) {
+    const homeEvidence =
+      homeShooting && homeShooting.gamesUsed >= 3
+        ? fmtEvidence(ctx.game.homeTeam.abbreviation, homeShooting)
+        : null;
+    const awayEvidence =
+      awayShooting && awayShooting.gamesUsed >= 3
+        ? fmtEvidence(ctx.game.awayTeam.abbreviation, awayShooting)
+        : null;
+
+    // Positive = favors home. Home hot → negative home delta.
+    // Away hot → regression hurts away → positive home delta (flip sign).
+    const homeSide = homeShooting && homeShooting.gamesUsed >= 3 ? deviationDelta(homeShooting) : 0;
+    const awaySide = awayShooting && awayShooting.gamesUsed >= 3 ? -deviationDelta(awayShooting) : 0;
+    threePtDelta = Math.max(-25, Math.min(25, homeSide + awaySide));
+
+    const parts = [homeEvidence, awayEvidence].filter((p): p is string => p !== null);
+    threePtEvidence =
+      parts.length > 0
+        ? parts.join("; ")
+        : `${ctx.game.homeTeam.abbreviation} and ${ctx.game.awayTeam.abbreviation} shooting within 3pts of season averages — no regression signal`;
+  }
+
   factors.push({
     key: "three_point_regression",
     label: "Three-point shooting regression",
-    homeDelta: 0,
+    homeDelta: threePtDelta,
     weight: 0.03,
-    available: false,
-    evidence: "Per-game 3P% data not available from ESPN — factor inactive, weight redistributed",
+    available: shootingAvailable,
+    evidence: threePtEvidence,
   });
 
   return factors;

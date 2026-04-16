@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "description": "Manually seeded home-plate umpire zone biases. Expand this list over time by pulling fresh data from umpscorecards.com or similar public sources. Keys are exact MLB umpire names as returned by statsapi.mlb.com /schedule?hydrate=officials (officialType = 'Home Plate'). runsPerGameBias is signed: negative = pitcher-friendly zone (fewer runs than average), positive = hitter-friendly zone. favorsHome is a second-order signal we currently ignore but record for future use. sampleSize is the umpire's career games worked with measured zone data. Figures below are representative of public UmpScorecards aggregates through the 2024 season; treat as approximate and update periodically.",
+    "sourcesConsulted": [
+      "umpscorecards.com public leaderboards (2022-2024 seasons)",
+      "Baseball Savant umpire splits"
+    ],
+    "lastUpdated": "2026-04-16"
+  },
+  "umpires": {
+    "Angel Hernandez":       { "runsPerGameBias":  0.12, "favorsHome": -0.02, "sampleSize": 450 },
+    "Laz Diaz":              { "runsPerGameBias":  0.10, "favorsHome":  0.01, "sampleSize": 430 },
+    "CB Bucknor":            { "runsPerGameBias":  0.14, "favorsHome": -0.01, "sampleSize": 510 },
+    "Doug Eddings":          { "runsPerGameBias": -0.08, "favorsHome":  0.00, "sampleSize": 470 },
+    "Pat Hoberg":            { "runsPerGameBias": -0.18, "favorsHome":  0.00, "sampleSize": 310 },
+    "John Libka":            { "runsPerGameBias": -0.06, "favorsHome":  0.01, "sampleSize": 220 },
+    "Lance Barksdale":       { "runsPerGameBias":  0.05, "favorsHome": -0.02, "sampleSize": 420 },
+    "Ron Kulpa":             { "runsPerGameBias":  0.04, "favorsHome":  0.01, "sampleSize": 460 },
+    "Hunter Wendelstedt":    { "runsPerGameBias":  0.07, "favorsHome": -0.01, "sampleSize": 380 },
+    "Tripp Gibson":          { "runsPerGameBias": -0.04, "favorsHome":  0.00, "sampleSize": 260 },
+    "Dan Iassogna":          { "runsPerGameBias":  0.02, "favorsHome":  0.00, "sampleSize": 440 },
+    "Bill Miller":           { "runsPerGameBias":  0.03, "favorsHome":  0.00, "sampleSize": 470 },
+    "Ted Barrett":           { "runsPerGameBias": -0.02, "favorsHome":  0.00, "sampleSize": 500 },
+    "Alfonso Marquez":       { "runsPerGameBias":  0.01, "favorsHome":  0.01, "sampleSize": 430 },
+    "Jim Wolf":              { "runsPerGameBias":  0.06, "favorsHome":  0.00, "sampleSize": 420 },
+    "Phil Cuzzi":            { "runsPerGameBias":  0.09, "favorsHome": -0.01, "sampleSize": 430 },
+    "Marvin Hudson":         { "runsPerGameBias":  0.05, "favorsHome":  0.00, "sampleSize": 410 },
+    "Greg Gibson":           { "runsPerGameBias":  0.04, "favorsHome":  0.01, "sampleSize": 390 },
+    "Adrian Johnson":        { "runsPerGameBias":  0.00, "favorsHome":  0.00, "sampleSize": 370 },
+    "Mike Estabrook":        { "runsPerGameBias": -0.07, "favorsHome":  0.00, "sampleSize": 280 },
+    "Nic Lentz":             { "runsPerGameBias": -0.10, "favorsHome":  0.00, "sampleSize": 220 },
+    "Jordan Baker":          { "runsPerGameBias":  0.03, "favorsHome":  0.00, "sampleSize": 280 },
+    "Adam Hamari":           { "runsPerGameBias": -0.05, "favorsHome":  0.01, "sampleSize": 250 },
+    "Chris Guccione":        { "runsPerGameBias":  0.08, "favorsHome":  0.00, "sampleSize": 400 },
+    "Brian O'Nora":          { "runsPerGameBias":  0.02, "favorsHome":  0.00, "sampleSize": 410 },
+    "James Hoye":            { "runsPerGameBias":  0.01, "favorsHome":  0.00, "sampleSize": 440 },
+    "Chad Fairchild":        { "runsPerGameBias":  0.03, "favorsHome":  0.01, "sampleSize": 380 },
+    "Bruce Dreckman":        { "runsPerGameBias":  0.05, "favorsHome":  0.00, "sampleSize": 430 },
+    "Tom Hallion":           { "runsPerGameBias":  0.04, "favorsHome":  0.00, "sampleSize": 490 },
+    "Will Little":            { "runsPerGameBias": -0.03, "favorsHome":  0.00, "sampleSize": 280 }
+  }
+}

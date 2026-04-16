@@ -201,14 +201,48 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
   });
 
   // ── 6. Umpire strike zone ─────────────────────────────────────────────
-  // ESPN doesn't expose umpire assignment or strike zone data.
+  // Live data via lib/mlbUmpireApi.ts:
+  //   - MLB Stats API schedule (hydrate=officials) → home-plate umpire name
+  //   - Cross-reference with lib/data/umpireZoneTendencies.json (seeded from
+  //     public UmpScorecards aggregates)
+  // runsPerGameBias is signed: negative = pitcher's zone, positive = hitter's
+  // zone. We translate at 12 Elo pts per run of expected scoring shift,
+  // capped at ±20 Elo. This is the spec from the prediction-engine
+  // improvement plan; `favorsHome` is tracked in the JSON but not yet used.
+  const ump = ctx.homePlateUmpire ?? null;
+  let umpireDelta = 0;
+  let umpireEvidence: string;
+  let umpireAvailable = false;
+
+  if (ump !== null && ump.tendency !== null) {
+    const t = ump.tendency;
+    const raw = t.runsPerGameBias * 12;
+    umpireDelta = Math.max(-20, Math.min(20, raw));
+    const biasPts = t.runsPerGameBias.toFixed(2);
+    const sign = t.runsPerGameBias >= 0 ? "+" : "";
+    const verdict =
+      t.runsPerGameBias > 0.03
+        ? "hitter's zone"
+        : t.runsPerGameBias < -0.03
+          ? "pitcher's zone"
+          : "near league-average zone";
+    umpireEvidence = `HP umpire ${ump.name} (n=${t.sampleSize} games) runs zone ${sign}${biasPts} runs/game bias — ${verdict}`;
+    umpireAvailable = true;
+  } else if (ump !== null) {
+    // Umpire assigned but we have no historical zone data on them.
+    umpireEvidence = `Home plate umpire ${ump.name} — no historical zone data available`;
+  } else {
+    umpireEvidence =
+      "Home plate umpire assignment not yet posted — factor inactive, weight redistributed";
+  }
+
   factors.push({
     key: "umpire",
     label: "Umpire strike zone tendency",
-    homeDelta: 0,
+    homeDelta: umpireDelta,
     weight: 0.02,
-    available: false,
-    evidence: "Umpire data not available from ESPN — factor inactive, weight redistributed",
+    available: umpireAvailable,
+    evidence: umpireEvidence,
   });
 
   // ── 7. Early-season dampening ─────────────────────────────────────────

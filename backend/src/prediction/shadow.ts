@@ -25,6 +25,8 @@ import {
   fetchStartingLineup,
   fetchGameWeather,
 } from "../lib/espnStats";
+import { fetchTeamShootingRecent } from "../lib/nbaStatsApi";
+import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 
 // ─── Paths ──────────────────────────────────────────────────────────────
 
@@ -125,6 +127,8 @@ async function buildGameContext(
     homeAdvanced, awayAdvanced,
     homeLineup, awayLineup,
     weather,
+    homeShooting, awayShooting,
+    homePlateUmpire,
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
@@ -139,6 +143,9 @@ async function buildGameContext(
     fetchStartingLineup(game.homeTeam.id, sport, gameDate),
     fetchStartingLineup(game.awayTeam.id, sport, gameDate),
     fetchGameWeather(game.venue ?? "", gameDate, sport),
+    sport === "NBA" ? fetchTeamShootingRecent(game.homeTeam.id) : Promise.resolve(null),
+    sport === "NBA" ? fetchTeamShootingRecent(game.awayTeam.id) : Promise.resolve(null),
+    sport === "MLB" ? lookupHomePlateUmpireBias(game.homeTeam.id, gameDate) : Promise.resolve(null),
   ]);
 
   const sportsGame: import("../types/sports").Game = {
@@ -195,6 +202,9 @@ async function buildGameContext(
     homeLineup,
     awayLineup,
     weather,
+    homeShooting,
+    awayShooting,
+    homePlateUmpire,
     gameDate: gameDate.toISOString(),
   };
 }

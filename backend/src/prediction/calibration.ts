@@ -6,6 +6,16 @@
  *
  * sampleSize < 100 per league is not statistically meaningful;
  * displayed for transparency only.
+ *
+ * ⚠️ HISTORICAL-ELO DATA LEAK (Gap 5 audit, prompt-a):
+ * computeAndStoreCalibration reads PredictionResult.homeWinProb. That field
+ * is written at prediction time and should reflect the Elo rating a team
+ * held when the game tipped off — NOT the current rating. If any backfill
+ * ever re-predicts past games with today's Elo, the reliability curves
+ * here will be silently biased (predictions will appear better-calibrated
+ * than they were). We do not yet persist Elo history per game, so this
+ * caveat is surfaced via a console warning on every compute call and is
+ * included in the /api/calibration response under `warnings`.
  */
 
 import { prisma } from "../prisma";
@@ -119,6 +129,16 @@ export function computeReliabilityCurve(
 export async function computeAndStoreCalibration(
   league: string
 ): Promise<CalibrationMetrics> {
+  // TODO(historical-elo-leak): see file header. PredictionResult.homeWinProb
+  // is assumed point-in-time; if that ever stops being true (e.g. a replay
+  // backfill is added that recomputes past games using current Elo), these
+  // reliability curves become meaningless. We log once per call so the leak
+  // can be spotted in ops logs.
+  console.warn(
+    `[calibration] ${league}: reading homeWinProb as point-in-time. ` +
+      `If a backfill ever re-predicts past games with current Elo, this curve is biased.`,
+  );
+
   const where = league === "ALL"
     ? { wasCorrect: { not: null }, homeWinProb: { not: null } }
     : { sport: league, wasCorrect: { not: null }, homeWinProb: { not: null } };
