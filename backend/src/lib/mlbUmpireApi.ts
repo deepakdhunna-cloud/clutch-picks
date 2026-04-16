@@ -51,11 +51,34 @@ interface UmpireTendencyFile {
   umpires: Record<string, UmpireTendency>;
 }
 
-const TENDENCY_TABLE: Record<string, UmpireTendency> =
-  (umpireData as unknown as UmpireTendencyFile).umpires ?? {};
+/**
+ * Canonicalize an umpire name so lookups are resilient to diacritics and
+ * whitespace variance between the MLB StatsAPI and our hand-curated JSON.
+ *
+ *   "Ángel   Hernández"  → "Angel Hernandez"
+ *   " cb  bucknor "      → "cb bucknor"  (case preserved; callers compare
+ *                          case-insensitively via the normalized TENDENCY_TABLE)
+ *
+ * Applied at JSON load time (below) AND to every name coming back from
+ * MLB StatsAPI before we hit TENDENCY_TABLE.
+ */
+export function normalizeUmpireName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+const RAW_UMPIRES = (umpireData as unknown as UmpireTendencyFile).umpires ?? {};
+// Build a normalized lookup table once at module load. Keys in the JSON can
+// contain accented characters or inconsistent spacing; this makes us robust.
+const TENDENCY_TABLE: Record<string, UmpireTendency> = Object.fromEntries(
+  Object.entries(RAW_UMPIRES).map(([k, v]) => [normalizeUmpireName(k), v]),
+);
 
 export function getUmpireTendency(name: string): UmpireTendency | null {
-  return TENDENCY_TABLE[name] ?? null;
+  return TENDENCY_TABLE[normalizeUmpireName(name)] ?? null;
 }
 
 // ─── Daily officials lookup ─────────────────────────────────────────────────

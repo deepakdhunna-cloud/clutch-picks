@@ -205,10 +205,18 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
   //   - MLB Stats API schedule (hydrate=officials) → home-plate umpire name
   //   - Cross-reference with lib/data/umpireZoneTendencies.json (seeded from
   //     public UmpScorecards aggregates)
-  // runsPerGameBias is signed: negative = pitcher's zone, positive = hitter's
-  // zone. We translate at 12 Elo pts per run of expected scoring shift,
-  // capped at ±20 Elo. This is the spec from the prediction-engine
-  // improvement plan; `favorsHome` is tracked in the JSON but not yet used.
+  //
+  // Sign semantics (fixed in Prompt-A follow-up):
+  //   - favorsHome is the *directional* signal. Positive = this ump's zone
+  //     historically helps the home side; negative = helps the away side.
+  //     0.01 of favorsHome ≈ 4 Elo points, so base delta = favorsHome × 400,
+  //     capped ±15 on its own.
+  //   - runsPerGameBias is *not* directional. A zone that's very pitcher-
+  //     friendly or very hitter-friendly tends to concentrate outcomes, which
+  //     amplifies whatever home/away edge already exists. Use |bias| as a
+  //     multiplier: (1 + min(0.5, |bias| × 2)). Near-zero bias → ~1.0×;
+  //     extreme zones (|bias| ≥ 0.25) → 1.5× cap.
+  //   - Final homeDelta cap is ±20 Elo.
   const ump = ctx.homePlateUmpire ?? null;
   let umpireDelta = 0;
   let umpireEvidence: string;
@@ -216,17 +224,20 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
 
   if (ump !== null && ump.tendency !== null) {
     const t = ump.tendency;
-    const raw = t.runsPerGameBias * 12;
-    umpireDelta = Math.max(-20, Math.min(20, raw));
+    const baseDelta = Math.max(-15, Math.min(15, t.favorsHome * 400));
+    const amplifier = 1 + Math.min(0.5, Math.abs(t.runsPerGameBias) * 2);
+    umpireDelta = Math.max(-20, Math.min(20, baseDelta * amplifier));
+
+    const favorsHomePts = (t.favorsHome * 100).toFixed(1);
+    const homeAway = t.favorsHome >= 0 ? "home" : "away";
     const biasPts = t.runsPerGameBias.toFixed(2);
-    const sign = t.runsPerGameBias >= 0 ? "+" : "";
-    const verdict =
+    const zoneVerdict =
       t.runsPerGameBias > 0.03
-        ? "hitter's zone"
+        ? "hitter's"
         : t.runsPerGameBias < -0.03
-          ? "pitcher's zone"
-          : "near league-average zone";
-    umpireEvidence = `HP umpire ${ump.name} (n=${t.sampleSize} games) runs zone ${sign}${biasPts} runs/game bias — ${verdict}`;
+          ? "pitcher's"
+          : "neutral";
+    umpireEvidence = `HP umpire ${ump.name} (n=${t.sampleSize} games) favors ${homeAway} (${favorsHomePts} pts) in a ${zoneVerdict} zone (${biasPts} runs/gm)`;
     umpireAvailable = true;
   } else if (ump !== null) {
     // Umpire assigned but we have no historical zone data on them.
