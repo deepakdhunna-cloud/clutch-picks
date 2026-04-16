@@ -182,8 +182,8 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
   const homeShooting = ctx.homeShooting ?? null;
   const awayShooting = ctx.awayShooting ?? null;
   const shootingAvailable =
-    (homeShooting !== null && homeShooting.gamesUsed >= 3) ||
-    (awayShooting !== null && awayShooting.gamesUsed >= 3);
+    (homeShooting !== null && homeShooting.gamesUsed >= 5) ||
+    (awayShooting !== null && awayShooting.gamesUsed >= 5);
 
   let threePtDelta = 0;
   let threePtEvidence =
@@ -213,22 +213,27 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
   }
 
   if (shootingAvailable) {
-    const homeEvidence =
-      homeShooting && homeShooting.gamesUsed >= 3
-        ? fmtEvidence(ctx.game.homeTeam.abbreviation, homeShooting)
-        : null;
-    const awayEvidence =
-      awayShooting && awayShooting.gamesUsed >= 3
-        ? fmtEvidence(ctx.game.awayTeam.abbreviation, awayShooting)
-        : null;
-
     // Positive = favors home. Home hot → negative home delta.
     // Away hot → regression hurts away → positive home delta (flip sign).
-    const homeSide = homeShooting && homeShooting.gamesUsed >= 3 ? deviationDelta(homeShooting) : 0;
-    const awaySide = awayShooting && awayShooting.gamesUsed >= 3 ? -deviationDelta(awayShooting) : 0;
+    const homeSide = homeShooting && homeShooting.gamesUsed >= 5 ? deviationDelta(homeShooting) : 0;
+    const awaySide = awayShooting && awayShooting.gamesUsed >= 5 ? -deviationDelta(awayShooting) : 0;
     threePtDelta = Math.max(-25, Math.min(25, homeSide + awaySide));
 
-    const parts = [homeEvidence, awayEvidence].filter((p): p is string => p !== null);
+    // Only mention a team in the evidence when its deviation actually crossed
+    // the 3-pt threshold — otherwise the copy disagrees with the 0 delta.
+    const homeDeviates =
+      !!homeShooting &&
+      homeShooting.gamesUsed >= 5 &&
+      Math.abs((homeShooting.recent3P - homeShooting.season3P) * 100) >= 3;
+    const awayDeviates =
+      !!awayShooting &&
+      awayShooting.gamesUsed >= 5 &&
+      Math.abs((awayShooting.recent3P - awayShooting.season3P) * 100) >= 3;
+
+    const parts: string[] = [];
+    if (homeDeviates) parts.push(fmtEvidence(ctx.game.homeTeam.abbreviation, homeShooting!));
+    if (awayDeviates) parts.push(fmtEvidence(ctx.game.awayTeam.abbreviation, awayShooting!));
+
     threePtEvidence =
       parts.length > 0
         ? parts.join("; ")

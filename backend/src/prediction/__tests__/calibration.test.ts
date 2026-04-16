@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "bun:test";
 import { computeBrierScore, computeLogLoss, computeReliabilityCurve } from "../calibration";
+import { withCalibrationError } from "../../scripts/runWeeklyCalibration";
 
 describe("computeBrierScore", () => {
   it("returns 0 for perfect predictions", () => {
@@ -145,5 +146,61 @@ describe("computeReliabilityCurve", () => {
     const curve = computeReliabilityCurve(predictions);
     const bucket70 = curve.find((b) => b.bucket === "70-75");
     expect(bucket70?.count).toBe(1);
+  });
+});
+
+describe("withCalibrationError", () => {
+  it("adds a calibrationErrorPts field to every bucket", () => {
+    const curve = computeReliabilityCurve([
+      { predictedProb: 0.72, actualOutcome: 1 as const },
+      { predictedProb: 0.72, actualOutcome: 0 as const },
+    ]);
+    const enhanced = withCalibrationError(curve);
+    for (const b of enhanced) {
+      expect(b).toHaveProperty("calibrationErrorPts");
+    }
+  });
+
+  it("returns null calibrationErrorPts when bucket count = 0", () => {
+    const enhanced = withCalibrationError(computeReliabilityCurve([]));
+    for (const b of enhanced) {
+      expect(b.count).toBe(0);
+      expect(b.calibrationErrorPts).toBeNull();
+    }
+  });
+
+  it("returns a signed calibrationErrorPts (predicted - actual), NOT absolute", () => {
+    // 4 predictions in the 70-75 bucket (winner prob 0.72).
+    // 1 of 4 correct → actual = 25%, predicted midpoint = 72.5% → signed
+    // error = +47.5pts. This MUST be positive (over-confident model), not the
+    // absolute 47.5 that the legacy Section-8 buckets computed.
+    const preds = [
+      { predictedProb: 0.72, actualOutcome: 1 as const },
+      { predictedProb: 0.72, actualOutcome: 0 as const },
+      { predictedProb: 0.72, actualOutcome: 0 as const },
+      { predictedProb: 0.72, actualOutcome: 0 as const },
+    ];
+    const enhanced = withCalibrationError(computeReliabilityCurve(preds));
+    const bucket70 = enhanced.find((b) => b.bucket === "70-75");
+    expect(bucket70?.count).toBe(4);
+    expect(bucket70?.calibrationErrorPts).not.toBeNull();
+    expect(bucket70!.calibrationErrorPts!).toBeGreaterThan(0);
+    expect(bucket70!.calibrationErrorPts!).toBeCloseTo(47.5, 1);
+  });
+
+  it("returns NEGATIVE calibrationErrorPts when model is under-confident", () => {
+    // 4 predictions in 55-60 (winner prob 0.58), 4 of 4 correct → actual 100%,
+    // predicted 57.5% → signed error = -42.5pts.
+    const preds = [
+      { predictedProb: 0.58, actualOutcome: 1 as const },
+      { predictedProb: 0.58, actualOutcome: 1 as const },
+      { predictedProb: 0.58, actualOutcome: 1 as const },
+      { predictedProb: 0.58, actualOutcome: 1 as const },
+    ];
+    const enhanced = withCalibrationError(computeReliabilityCurve(preds));
+    const bucket55 = enhanced.find((b) => b.bucket === "55-60");
+    expect(bucket55?.count).toBe(4);
+    expect(bucket55!.calibrationErrorPts!).toBeLessThan(0);
+    expect(bucket55!.calibrationErrorPts!).toBeCloseTo(-42.5, 1);
   });
 });

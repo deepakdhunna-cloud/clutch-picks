@@ -16,7 +16,11 @@
  *
  * The full snapshot is written to:
  *   backend/backtest-results/calibration-<ISO-date>.json
- *   backend/backtest-results/latest.json    (always overwritten)
+ *   backend/backtest-results/calibration-latest.json   (always overwritten)
+ *
+ * Note: we deliberately do NOT clobber backtest-results/latest.json — that
+ * path belongs to lib/backtesting.ts's runBacktest() snapshot, which has a
+ * different shape and is read by /api/backtest via loadLatestResults().
  */
 
 import * as fs from "node:fs";
@@ -68,7 +72,7 @@ export interface WeeklyCalibrationReport {
 }
 
 /** Enhance a raw reliability curve with signed calibration error per bucket. */
-function withCalibrationError(
+export function withCalibrationError(
   curve: ReliabilityBucket[],
 ): ReliabilityBucketWithError[] {
   return curve.map((b) => {
@@ -122,9 +126,10 @@ function writeSnapshot(report: WeeklyCalibrationReport): void {
     const datePart = report.runAt.slice(0, 10); // YYYY-MM-DD
     const datedPath = path.join(RESULTS_DIR, `calibration-${datePart}.json`);
     fs.writeFileSync(datedPath, JSON.stringify(report, null, 2), "utf8");
-    // latest.json is the canonical pointer consumed by /api/calibration
+    // calibration-latest.json is our canonical pointer. We avoid latest.json
+    // because lib/backtesting.ts owns that filename (different schema).
     fs.writeFileSync(
-      path.join(RESULTS_DIR, "latest.json"),
+      path.join(RESULTS_DIR, "calibration-latest.json"),
       JSON.stringify(report, null, 2),
       "utf8",
     );
