@@ -42,6 +42,7 @@ import {
 import { lookupManagerChange } from "../lib/soccerManagerChanges";
 import { fetchMarketConsensus } from "../lib/sharpApi";
 import type { SoccerStakes } from "./types";
+import { createInitialVersion } from "../lib/ingestion/predictionVersions";
 
 // ─── Paths ──────────────────────────────────────────────────────────────
 
@@ -128,7 +129,12 @@ export async function cleanOldShadowLogs(): Promise<void> {
 
 // ─── Build GameContext from route-level game data ────────────────────────
 
-async function buildGameContext(
+/**
+ * Exported so the ingestion re-predict trigger can rebuild a fresh
+ * GameContext for an affected game without re-implementing the 20+
+ * parallel fetches this function orchestrates.
+ */
+export async function buildGameContext(
   game: { id: string; sport: string; homeTeam: any; awayTeam: any; gameTime: string; venue: string },
 ): Promise<GameContext> {
   const sport = game.sport;
@@ -317,6 +323,11 @@ export function runShadowPrediction(
 
       const ctx = await buildGameContext(game);
       const newPred = predictGame(ctx);
+
+      // Record v1 "initial" prediction-version row for the timeline
+      // audit trail. Idempotent (no-op if a version already exists for
+      // this game), fire-and-forget (never blocks the shadow path).
+      void createInitialVersion(game.id, game.sport, newPred);
 
       const entry: ShadowEntry = {
         timestamp: new Date().toISOString(),

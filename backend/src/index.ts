@@ -16,6 +16,7 @@ import { promoRouter } from "./routes/promo";
 import { backtestRouter } from "./routes/backtest";
 import { historicalBacktestRouter } from "./routes/historical-backtest";
 import { calibrationRouter } from "./routes/calibration";
+import { ingestionRouter } from "./routes/ingestion";
 import { logger } from "hono/logger";
 
 // Clear any stale prediction caches on startup so deploys with calibration
@@ -167,6 +168,7 @@ app.route("/api/promo", promoRouter);
 app.route("/api/backtest", backtestRouter);
 app.route("/api/historical-backtest", historicalBacktestRouter);
 app.route("/api/calibration", calibrationRouter);
+app.route("/api/ingestion", ingestionRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
@@ -301,6 +303,22 @@ if (!process.env.SHARPAPI_KEY) {
   );
 }
 
+// ─── Ingestion gate warnings ────────────────────────────────────────────────
+// The ingestion pipeline has two feature-gated external deps: Apify (for
+// Twitter) and Anthropic (for LLM extraction). Either can be missing and
+// the pipeline still partially works — log a single warning per missing
+// key at boot so the operator knows what's silently off.
+if (!process.env.APIFY_API_KEY) {
+  console.warn(
+    "[ingestion] APIFY_API_KEY not set — Twitter ingestion disabled, RSS will run alone",
+  );
+}
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.warn(
+    "[ingestion] ANTHROPIC_API_KEY not set — LLM extraction disabled, ingestion will collect but not process",
+  );
+}
+
 // ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────────
 import cron from "node-cron";
 import { runWeeklyCalibration } from "./scripts/runWeeklyCalibration";
@@ -345,6 +363,35 @@ async function marketSnapshotGuarded() {
 }
 // "*/30 * * * *" = every 30 minutes
 cron.schedule("*/30 * * * *", marketSnapshotGuarded, { timezone: "UTC" });
+
+// ─── Beat-writer ingestion cron (every 2 minutes) ───────────────────────────
+// Full ingestion cycle — see lib/ingestion/orchestrator.ts. Feature-gated
+// components (Twitter, LLM extraction) no-op when their keys aren't set.
+import { runIngestionCycle, recordCycleResult } from "./lib/ingestion/orchestrator";
+
+let ingestionRunning = false;
+async function ingestionGuarded() {
+  if (ingestionRunning) {
+    console.log("[ingestion] Previous cycle still in progress, skipping");
+    return;
+  }
+  ingestionRunning = true;
+  try {
+    const result = await runIngestionCycle(port);
+    recordCycleResult(result);
+    console.log(
+      `[ingestion] cycle complete — items=${result.itemsProcessed} signals=${result.signalsExtracted}` +
+        ` stored=${result.signalsStored} re-predicts=${result.rePredictionsTriggered}` +
+        ` expired=${result.expiredCleaned} errors=${result.errors.length}`,
+    );
+  } catch (err) {
+    console.error("[ingestion] Cycle failed:", err);
+  } finally {
+    ingestionRunning = false;
+  }
+}
+// "*/2 * * * *" = every 2 minutes
+cron.schedule("*/2 * * * *", ingestionGuarded, { timezone: "UTC" });
 
 export default {
   port,
