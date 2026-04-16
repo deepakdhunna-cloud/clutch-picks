@@ -14,6 +14,8 @@ import type {
   StartingLineup,
   WeatherData,
 } from "../lib/espnStats";
+import type { TeamShootingRecent } from "../lib/nbaStatsApi";
+import type { UmpireZoneBias } from "../lib/mlbUmpireApi";
 
 // ─── Factor Contribution ────────────────────────────────────────────────────
 
@@ -56,6 +58,14 @@ export type GameContext = {
   homeLineup: StartingLineup | null;
   awayLineup: StartingLineup | null;
   weather: WeatherData | null;
+
+  // NBA-only: live 3P% from stats.nba.com. null when sport ≠ NBA or fetch failed.
+  homeShooting?: TeamShootingRecent | null;
+  awayShooting?: TeamShootingRecent | null;
+
+  // MLB-only: home plate umpire + tendency data. null when sport ≠ MLB,
+  // umpire unassigned, or umpire not in our tendency file.
+  homePlateUmpire?: UmpireZoneBias | null;
 
   /** ISO date string of the game */
   gameDate: string;

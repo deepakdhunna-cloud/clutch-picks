@@ -293,6 +293,28 @@ async function cleanupOldData() {
 setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldData, 60_000);
 
+// ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────────
+import cron from "node-cron";
+import { runWeeklyCalibration } from "./scripts/runWeeklyCalibration";
+
+let calibrationRunning = false;
+async function calibrationGuarded() {
+  if (calibrationRunning) {
+    console.log("[calibration] Previous run still in progress, skipping");
+    return;
+  }
+  calibrationRunning = true;
+  try {
+    await runWeeklyCalibration();
+  } catch (err) {
+    console.error("[calibration] Weekly run failed:", err);
+  } finally {
+    calibrationRunning = false;
+  }
+}
+// "0 3 * * 1" = minute 0, hour 3, every day, every month, Monday
+cron.schedule("0 3 * * 1", calibrationGuarded, { timezone: "UTC" });
+
 export default {
   port,
   fetch: app.fetch,

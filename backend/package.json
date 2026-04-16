@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/node-cron": "^3.0.11",
     "prisma": "6",
     "typescript": "5.8.3"
   },
@@ -23,6 +24,7 @@
     "hono": "4.6.0",
     "hono-rate-limiter": "^0.5.3",
     "lru-cache": "^11.2.6",
+    "node-cron": "^4.2.1",
     "zod": "4.1.11"
   }
 }

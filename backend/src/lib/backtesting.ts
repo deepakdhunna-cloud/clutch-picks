@@ -3,6 +3,16 @@
  * Evaluates prediction accuracy against resolved game results.
  * Read-only analysis tool — does NOT modify weights automatically.
  * Weight suggestions are advisory only.
+ *
+ * ⚠️ HISTORICAL-ELO DATA LEAK (Gap 5 audit, prompt-a):
+ * This module reads PredictionResult.confidence / wasCorrect, which are
+ * captured at prediction time — that alone is fine. The leak is in how
+ * PredictionResult rows are generated: if anywhere in the pipeline a past
+ * game is *re-predicted* with today's Elo (e.g. a backfill / replay job),
+ * those rows end up labelled with a probability the model could not have
+ * known at the time. We do not currently have a reliable point-in-time
+ * Elo store, so we are flagging the risk rather than attempting to fix it
+ * in this prompt. See runBacktest() below for the runtime warning log.
  */
 
 import { prisma } from "../prisma";
@@ -101,6 +111,19 @@ function computeLogLoss(
 // ─── Main backtest function ───────────────────────────────────────────────────
 
 export async function runBacktest(): Promise<BacktestResults> {
+  // TODO(historical-elo-leak): PredictionResult rows are trusted as
+  // point-in-time, but any backfill/replay path that re-predicts with
+  // today's Elo rating would silently poison this analysis. Until we
+  // persist Elo history per game, every backtest logs this warning so
+  // consumers of the numbers know the caveat.
+  console.warn(
+    "[backtest] ⚠️  Reading PredictionResult as point-in-time. If any row was " +
+      "re-predicted with current Elo via a backfill job, its confidence does " +
+      "NOT reflect what the model would have known at the time. Treat " +
+      "overall accuracy / calibration numbers as upper bounds until Elo " +
+      "history is persisted. See data-leak audit note above runBacktest().",
+  );
+
   // Fetch all resolved predictions
   const resolved = await prisma.predictionResult.findMany({
     where: { wasCorrect: { not: null } },
