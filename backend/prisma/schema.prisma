@@ -245,6 +245,58 @@ model NotificationLog {
   @@index([type, sentAt])
 }
 
+// Structured player-availability signals extracted from beat-writer news
+// + social. Populated by the 2-min ingestion cron (lib/ingestion/*).
+// Distinct from PlayerNews (which keeps the raw article record); this
+// table stores the LLM-extracted decision object the prediction engine
+// can consume directly. Auto-expires after 48h because injury status
+// changes fast and stale rows poison the re-prediction trigger.
+model PlayerAvailability {
+  id                String   @id @default(cuid())
+  playerName        String
+  teamId            String   // ESPN team id
+  teamAbbreviation  String   // 3-letter NBA code
+  sport             String   // "NBA" for pilot; other sports later
+  status            String   // out / doubtful / questionable / probable / available / minutes_restriction / game_time_decision
+  severity          String   // critical | moderate | minor
+  confidence        Float    // LLM's 0..1 confidence in the extraction
+  sourceCredibility Float    // 0..1 from sourceRegistry
+  gameImpactElo     Int      // estimated Elo swing if the player is OUT
+  source            String   // original headline / tweet text (bounded)
+  sourceUrl         String?
+  reasoning         String   // 1-sentence LLM rationale
+  expiresAt         DateTime // now + 48h; cleaned by orchestrator
+  supersededById    String?  // set when a newer higher-credibility signal replaces this row
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([teamAbbreviation, sport, createdAt])
+  @@index([playerName, sport])
+  @@index([expiresAt])
+}
+
+// Version history per game — lets the UI render a "prediction timeline"
+// showing how Elo / confidence moved as news broke. Every prediction
+// gets a v1 "initial" row via shadow.ts; subsequent rows are written by
+// the re-predict trigger when a material availability signal lands.
+model PredictionVersion {
+  id              String   @id @default(cuid())
+  gameId          String
+  sport           String
+  version         Int      // monotonically increasing per gameId (1, 2, 3...)
+  homeWinProb     Float
+  awayWinProb     Float
+  drawProb        Float?
+  confidence      Float
+  confidenceBand  String
+  triggerReason   String   // "initial" | "injury:LeBron James OUT" | "line_movement" | ...
+  triggerSourceId String?  // PlayerAvailability.id that caused the re-predict (null for v1)
+  factorsJson     String   // JSON.stringify of the factor list at this version
+  createdAt       DateTime @default(now())
+  @@index([gameId, version])
+  @@index([gameId, createdAt])
+  @@index([sport, createdAt])
+}
+
 // Time-series of sportsbook lines for each game. Populated by the 30-min
 // market-snapshot cron in src/index.ts. Also captured at pick resolution
 // with isClosing=true so we can benchmark our pregame picks against the

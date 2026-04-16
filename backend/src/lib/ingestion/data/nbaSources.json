@@ -1,0 +1,276 @@
+{
+  "_meta": {
+    "description": "NBA ingestion source registry. Tier 1 = league-wide insiders (Woj/Shams level, ~0.95 credibility). Tier 2 = team beat writers (~0.75). Tier 3 = aggregators / Reddit (~0.40). Twitter entries use the profile URL; the twitterWorker extracts the handle. RSS URLs should return a valid feed. Expand by copying an entry and flipping enabled=false for temporary disables.",
+    "lastUpdated": "2026-04-16",
+    "pollingNotes": "Tier 1 polls every 2 min (aggressive — breaking news window). Tier 2 every 5 min. Tier 3 every 15 min. Actual poll cadence is ultimately gated by the master cron interval in src/index.ts (2 min), with per-source lastPolledAt used to skip sources that haven't hit their window yet."
+  },
+  "sources": [
+    {
+      "id": "shams-twitter",
+      "name": "Shams Charania",
+      "type": "twitter",
+      "url": "https://twitter.com/ShamsCharania",
+      "sport": "NBA",
+      "credibility": "tier1",
+      "enabled": true,
+      "pollIntervalMs": 120000
+    },
+    {
+      "id": "woj-twitter-archive",
+      "name": "Adrian Wojnarowski (archive — retired from reporting)",
+      "type": "twitter",
+      "url": "https://twitter.com/wojespn",
+      "sport": "NBA",
+      "credibility": "tier1",
+      "enabled": false,
+      "pollIntervalMs": 120000
+    },
+    {
+      "id": "espn-nba-rss",
+      "name": "ESPN NBA",
+      "type": "rss",
+      "url": "https://www.espn.com/espn/rss/nba/news",
+      "sport": "NBA",
+      "credibility": "tier1",
+      "enabled": true,
+      "pollIntervalMs": 120000
+    },
+    {
+      "id": "espn-shams-author-rss",
+      "name": "ESPN — Shams Charania author feed",
+      "type": "rss",
+      "url": "https://www.espn.com/espn/rss/writer/_/id/4254538",
+      "sport": "NBA",
+      "credibility": "tier1",
+      "enabled": true,
+      "pollIntervalMs": 120000
+    },
+    {
+      "id": "dave-mcmenamin-twitter",
+      "name": "Dave McMenamin (ESPN — Lakers)",
+      "type": "twitter",
+      "url": "https://twitter.com/mcten",
+      "sport": "NBA",
+      "teams": ["LAL"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "jovan-buha-twitter",
+      "name": "Jovan Buha (The Athletic — Lakers)",
+      "type": "twitter",
+      "url": "https://twitter.com/jovanbuha",
+      "sport": "NBA",
+      "teams": ["LAL"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "jared-weiss-twitter",
+      "name": "Jared Weiss (The Athletic — Celtics)",
+      "type": "twitter",
+      "url": "https://twitter.com/JaredWeissNBA",
+      "sport": "NBA",
+      "teams": ["BOS"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "tim-bontemps-twitter",
+      "name": "Tim Bontemps (ESPN — Celtics / league)",
+      "type": "twitter",
+      "url": "https://twitter.com/timbontemps",
+      "sport": "NBA",
+      "teams": ["BOS"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "anthony-slater-twitter",
+      "name": "Anthony Slater (The Athletic — Warriors)",
+      "type": "twitter",
+      "url": "https://twitter.com/anthonyVslater",
+      "sport": "NBA",
+      "teams": ["GSW"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "mark-medina-twitter",
+      "name": "Mark Medina (Sportskeeda NBA)",
+      "type": "twitter",
+      "url": "https://twitter.com/MarkG_Medina",
+      "sport": "NBA",
+      "teams": ["GSW", "LAL"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "ian-begley-twitter",
+      "name": "Ian Begley (SNY — Knicks)",
+      "type": "twitter",
+      "url": "https://twitter.com/IanBegley",
+      "sport": "NBA",
+      "teams": ["NYK"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "fred-katz-twitter",
+      "name": "Fred Katz (The Athletic — Knicks)",
+      "type": "twitter",
+      "url": "https://twitter.com/FredKatz",
+      "sport": "NBA",
+      "teams": ["NYK"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "eric-nehm-twitter",
+      "name": "Eric Nehm (The Athletic — Bucks)",
+      "type": "twitter",
+      "url": "https://twitter.com/eric_nehm",
+      "sport": "NBA",
+      "teams": ["MIL"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "mike-singer-twitter",
+      "name": "Mike Singer (Denver Post — Nuggets)",
+      "type": "twitter",
+      "url": "https://twitter.com/MikeSingerNBA",
+      "sport": "NBA",
+      "teams": ["DEN"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "tony-jones-twitter",
+      "name": "Tony Jones (The Athletic — Jazz/League)",
+      "type": "twitter",
+      "url": "https://twitter.com/Tjonesonthenba",
+      "sport": "NBA",
+      "teams": ["UTA"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "keith-pompey-twitter",
+      "name": "Keith Pompey (Philly Inquirer — 76ers)",
+      "type": "twitter",
+      "url": "https://twitter.com/PompeyOnSixers",
+      "sport": "NBA",
+      "teams": ["PHI"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "duane-rankin-twitter",
+      "name": "Duane Rankin (Arizona Republic — Suns)",
+      "type": "twitter",
+      "url": "https://twitter.com/DuaneRankin",
+      "sport": "NBA",
+      "teams": ["PHX"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "jon-krawczynski-twitter",
+      "name": "Jon Krawczynski (The Athletic — Timberwolves)",
+      "type": "twitter",
+      "url": "https://twitter.com/JonKrawczynski",
+      "sport": "NBA",
+      "teams": ["MIN"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "rylan-stiles-twitter",
+      "name": "Rylan Stiles (Locked On Thunder)",
+      "type": "twitter",
+      "url": "https://twitter.com/Rylan_Stiles",
+      "sport": "NBA",
+      "teams": ["OKC"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "brett-dawson-twitter",
+      "name": "Brett Dawson (The Athletic — Thunder)",
+      "type": "twitter",
+      "url": "https://twitter.com/BDawsonWrites",
+      "sport": "NBA",
+      "teams": ["OKC"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "tim-reynolds-twitter",
+      "name": "Tim Reynolds (AP — Heat)",
+      "type": "twitter",
+      "url": "https://twitter.com/ByTimReynolds",
+      "sport": "NBA",
+      "teams": ["MIA"],
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "shams-the-athletic-rss",
+      "name": "The Athletic — NBA",
+      "type": "rss",
+      "url": "https://theathletic.com/rss/nba/",
+      "sport": "NBA",
+      "credibility": "tier2",
+      "enabled": true,
+      "pollIntervalMs": 300000
+    },
+    {
+      "id": "nba-reddit-rss",
+      "name": "r/nba (Reddit)",
+      "type": "rss",
+      "url": "https://www.reddit.com/r/nba/.rss",
+      "sport": "NBA",
+      "credibility": "tier3",
+      "enabled": true,
+      "pollIntervalMs": 900000
+    },
+    {
+      "id": "bleacher-report-nba-rss",
+      "name": "Bleacher Report NBA",
+      "type": "rss",
+      "url": "https://bleacherreport.com/articles/feed?tag_id=19",
+      "sport": "NBA",
+      "credibility": "tier3",
+      "enabled": true,
+      "pollIntervalMs": 900000
+    },
+    {
+      "id": "hoopshype-rss",
+      "name": "HoopsHype",
+      "type": "rss",
+      "url": "https://hoopshype.com/feed/",
+      "sport": "NBA",
+      "credibility": "tier3",
+      "enabled": true,
+      "pollIntervalMs": 900000
+    }
+  ]
+}

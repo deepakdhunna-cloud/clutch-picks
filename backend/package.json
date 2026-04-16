@@ -25,6 +25,7 @@
     "hono-rate-limiter": "^0.5.3",
     "lru-cache": "^11.2.6",
     "node-cron": "^4.2.1",
+    "rss-parser": "^3.13.0",
     "zod": "4.1.11"
   }
 }
