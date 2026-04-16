@@ -245,3 +245,30 @@ model NotificationLog {
   @@index([type, sentAt])
 }
 
+// Time-series of sportsbook lines for each game. Populated by the 30-min
+// market-snapshot cron in src/index.ts. Also captured at pick resolution
+// with isClosing=true so we can benchmark our pregame picks against the
+// closing line (the sharp-accuracy gold standard).
+model MarketSnapshot {
+  id                String   @id @default(cuid())
+  gameId            String
+  sport             String
+  fetchedAt         DateTime @default(now())
+  // Closing-line snapshot taken at game start in resolve-picks.ts.
+  isClosing         Boolean  @default(false)
+  // Pinnacle de-vigged numbers — our sharp reference. Nullable because
+  // Pinnacle isn't always available.
+  pinnacleHomeNoVig Float?
+  pinnacleAwayNoVig Float?
+  pinnacleDrawNoVig Float?
+  // Mean across all books (with vig) — always populated when we saved the row.
+  avgHomeProb       Float
+  avgAwayProb       Float
+  // Full MarketLine[] serialized to JSON. Kept as a string for portability
+  // (some Prisma setups complain about Json columns on postgres proxies).
+  linesJson         String
+  @@index([gameId, fetchedAt])
+  @@index([sport, fetchedAt])
+  @@index([gameId, isClosing])
+}
+

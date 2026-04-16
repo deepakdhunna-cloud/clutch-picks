@@ -37,7 +37,7 @@ import Svg, {
   Circle,
 } from 'react-native-svg';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
-import { Sport } from '@/types/sports';
+import { Sport, type Prediction } from '@/types/sports';
 import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
@@ -1080,10 +1080,78 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId }: { pr
             </Text>
             <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Model vs. market line gap</Text>
           </View>
+
+          {/* Vegas Market — populated only when backend has SHARPAPI_KEY. */}
+          <VegasMarketBlock prediction={prediction} winnerName={winner.name} />
         </View>
       </View>
     </View>
     </Animated.View>
+  );
+}
+
+// Renders the post-hoc SharpAPI market comparison. No-op when marketComparison
+// is absent (feature-flag off). Never linked out to sportsbooks — purely
+// informational, per Prompt B spec ("no betting affiliate flow").
+function VegasMarketBlock({
+  prediction,
+  winnerName,
+}: {
+  prediction: Prediction;
+  winnerName: string;
+}) {
+  const mc = prediction.marketComparison;
+  if (!mc) return null;
+
+  const modelPct = (mc.modelHomeProb * 100).toFixed(1);
+  const marketPct = (mc.marketHomeProb * 100).toFixed(1);
+  const divergencePct = (mc.divergence * 100).toFixed(1);
+  const amber = '#F59E0B';
+
+  const formatAmerican = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+
+  return (
+    <View style={{
+      marginTop: 12,
+      backgroundColor: 'rgba(255,255,255,0.02)',
+      borderRadius: 12, padding: 14,
+      borderWidth: 1, borderColor: mc.isDivergent ? `${amber}40` : 'rgba(255,255,255,0.12)',
+    }}>
+      <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 8 }}>
+        VEGAS MARKET
+      </Text>
+
+      {/* Side-by-side model vs market */}
+      <View style={{ flexDirection: 'row' as const, gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', fontWeight: '700', letterSpacing: 0.8 }}>OUR MODEL</Text>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 2 }}>{modelPct}%</Text>
+          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>home win</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', fontWeight: '700', letterSpacing: 0.8 }}>MARKET (PINNACLE)</Text>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 2 }}>{marketPct}%</Text>
+          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>no-vig</Text>
+        </View>
+      </View>
+
+      {mc.isDivergent ? (
+        <View style={{
+          marginTop: 10, padding: 8, borderRadius: 8,
+          backgroundColor: `${amber}15`, borderWidth: 1, borderColor: `${amber}30`,
+        }}>
+          <Text style={{ fontSize: 11, color: amber, fontWeight: '700' }}>
+            Our model disagrees with Vegas by {divergencePct}%
+          </Text>
+        </View>
+      ) : null}
+
+      {mc.bestBook ? (
+        <Text style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+          Best line on {winnerName}: {formatAmerican(mc.bestBook.american)} at {mc.bestBook.sportsbook}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 

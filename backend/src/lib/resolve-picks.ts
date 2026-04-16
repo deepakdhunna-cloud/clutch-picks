@@ -333,6 +333,12 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
         console.error(`[resolve-picks] Error updating PredictionResult for game ${gameId}:`, err);
         // Non-fatal — pick resolution continues unaffected
       }
+
+      // Promote the most-recent pregame MarketSnapshot as the closing line.
+      // The 30-min snapshot cron stops writing once a game kicks off, so the
+      // latest fetchedAt is effectively the last line we saw before start.
+      // Idempotent: if we already have an isClosing=true row, skip.
+      await captureClosingLine(gameId);
     }
   } catch (err) {
     console.error("[resolve-picks] Fatal error during resolution:", err);
@@ -340,6 +346,45 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
 
   console.log(`[resolve-picks] Done: ${resolved} resolved, ${skipped} skipped`);
   return { resolved, skipped };
+}
+
+// ─── Closing-line helper ────────────────────────────────────────────────────
+// Grabs the latest MarketSnapshot we have for `gameId` (set by the 30-min
+// snapshot cron) and clones its fields into a new row flagged isClosing=true.
+// This is the gold-standard reference for sharp accuracy: "how did our pick
+// compare to the line right before kickoff?" Silently skips when no pregame
+// snapshot exists (SHARPAPI_KEY unset, or cron hadn't run before kickoff).
+async function captureClosingLine(gameId: string): Promise<void> {
+  try {
+    const existing = await prisma.marketSnapshot.findFirst({
+      where: { gameId, isClosing: true },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const latest = await prisma.marketSnapshot.findFirst({
+      where: { gameId, isClosing: false },
+      orderBy: { fetchedAt: "desc" },
+    });
+    if (!latest) return;
+
+    await prisma.marketSnapshot.create({
+      data: {
+        gameId: latest.gameId,
+        sport: latest.sport,
+        isClosing: true,
+        pinnacleHomeNoVig: latest.pinnacleHomeNoVig,
+        pinnacleAwayNoVig: latest.pinnacleAwayNoVig,
+        pinnacleDrawNoVig: latest.pinnacleDrawNoVig,
+        avgHomeProb: latest.avgHomeProb,
+        avgAwayProb: latest.avgAwayProb,
+        linesJson: latest.linesJson,
+      },
+    });
+  } catch (err) {
+    // Non-fatal — pick settlement already succeeded above.
+    console.error(`[resolve-picks] captureClosingLine failed for ${gameId}:`, err);
+  }
 }
 
 // Fire-and-forget wrapper — safe to call without awaiting

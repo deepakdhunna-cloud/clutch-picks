@@ -92,6 +92,15 @@ export interface Prediction {
   isTossUp?: boolean; // true if game is within 45-55% probability range
   lowDataWarning?: boolean; // true when dataCoverage < 0.6
   ensembleDivergence?: boolean; // true when sub-models disagree on winner
+  // Post-hoc comparison to SharpAPI market consensus. Populated only when
+  // the backend has SHARPAPI_KEY set. NOT a prediction input.
+  marketComparison?: {
+    modelHomeProb: number;     // 0..1
+    marketHomeProb: number;    // 0..1 (Pinnacle de-vigged)
+    divergence: number;        // 0..1
+    isDivergent: boolean;      // divergence > 0.10
+    bestBook?: { sportsbook: string; american: number } | null;
+  };
 }
 
 export interface GameWithPrediction extends Game {

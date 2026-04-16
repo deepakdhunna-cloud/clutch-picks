@@ -13,6 +13,7 @@ import type { Game as SportsGame } from "../types/sports";
 import { resolvePicksInBackground } from "../lib/resolve-picks";
 import { notifyWinnerFlip } from "../lib/notification-jobs";
 import { prisma } from "../prisma";
+import { fetchMarketConsensus } from "../lib/sharpApi";
 
 // ESPN API base URLs for each sport
 const ESPN_ENDPOINTS = {
@@ -83,6 +84,15 @@ export interface GamePrediction {
   awayStreak: number;
   isTossUp?: boolean;
   drawProbability?: number;
+  // Post-hoc comparison to SharpAPI market consensus. Populated when
+  // SHARPAPI_KEY is set. NOT a prediction input — purely informational.
+  marketComparison?: {
+    modelHomeProb: number;     // 0..1
+    marketHomeProb: number;    // 0..1 (Pinnacle de-vigged)
+    divergence: number;        // 0..1, absolute
+    isDivergent: boolean;      // divergence > 0.10
+    bestBook?: { sportsbook: string; american: number } | null;
+  };
 }
 
 export interface Game {
@@ -640,6 +650,48 @@ async function addPredictionToGame(game: Game): Promise<Game> {
     awayStreak: prediction.awayStreak,
     isTossUp: prediction.isTossUp ?? false,
   };
+
+  // ── Market comparison (post-hoc annotation; not a prediction input) ──────
+  // Gated on SHARPAPI_KEY — fetchMarketConsensus returns null without it.
+  try {
+    const market = await fetchMarketConsensus(
+      game.sport,
+      game.homeTeam.name,
+      game.awayTeam.name,
+      new Date(game.gameTime),
+    );
+    if (market && Number.isFinite(market.noVigHomeProb)) {
+      const modelHomeProb = (predictionResult.homeWinProbability ?? 50) / 100;
+      const divergence = Math.abs(modelHomeProb - market.noVigHomeProb);
+      const isDivergent = divergence > 0.10;
+
+      // Best moneyline on the model's predicted winner — for display only.
+      const pickedSide: "home" | "away" = predictionResult.predictedWinner;
+      const bestBook = market.lines
+        .slice()
+        .sort((a, b) =>
+          pickedSide === "home"
+            ? b.homeAmerican - a.homeAmerican
+            : b.awayAmerican - a.awayAmerican,
+        )[0];
+
+      predictionResult.marketComparison = {
+        modelHomeProb,
+        marketHomeProb: market.noVigHomeProb,
+        divergence,
+        isDivergent,
+        bestBook: bestBook
+          ? {
+              sportsbook: bestBook.sportsbook,
+              american: pickedSide === "home" ? bestBook.homeAmerican : bestBook.awayAmerican,
+            }
+          : null,
+      };
+    }
+  } catch (err) {
+    // Never break prediction response over a market-fetch hiccup.
+    console.warn("[market] annotation failed:", err instanceof Error ? err.message : err);
+  }
 
   // ── Winner-change detection ─────────────────────────────────────────────────
   // Compare new prediction with previous cached version. If the predicted winner
