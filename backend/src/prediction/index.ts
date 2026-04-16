@@ -29,6 +29,7 @@ import { computeMLBFactors } from "./factors/mlb";
 import { computeNHLFactors } from "./factors/nhl";
 import { computeMLSFactors } from "./factors/mls";
 import { computeEPLFactors } from "./factors/epl";
+import { computeUCLFactors } from "./factors/ucl";
 import { computeNCAAFBFactors } from "./factors/ncaafb";
 import { computeNCAAMBFactors } from "./factors/ncaamb";
 
@@ -43,7 +44,7 @@ const SPORT_FACTORS: Record<string, (ctx: GameContext) => FactorContribution[]> 
   NHL: computeNHLFactors,
   MLS: computeMLSFactors,
   EPL: computeEPLFactors,
-  UCL: computeEPLFactors,
+  UCL: computeUCLFactors,
   NCAAF: computeNCAAFBFactors,
   NCAAB: computeNCAAMBFactors,
 };
@@ -156,6 +157,36 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   if (ctx.weather && !ctx.weather.isDomed) {
     dataSources.push("Open-Meteo weather");
   }
+  if (ctx.homeXG || ctx.awayXG) {
+    dataSources.push("Understat xG");
+  }
+  if (ctx.marketConsensus) {
+    dataSources.push("SharpAPI market consensus");
+  }
+
+  // 9. Post-hoc market comparison (NOT a prediction input).
+  //    We compare the model's home-win probability to Pinnacle's de-vigged
+  //    number and flag divergences > 10 percentage points. The prediction
+  //    itself already decided above; this block just annotates it.
+  let marketComparison: HonestPrediction["marketComparison"];
+  const market = ctx.marketConsensus ?? null;
+  if (market && Number.isFinite(market.noVigHomeProb)) {
+    const divergence = Math.abs(homeWinProb - market.noVigHomeProb);
+    const isDivergent = divergence > 0.10;
+    if (isDivergent) {
+      console.warn(
+        `[divergence] ${ctx.sport} ${ctx.game.homeTeam.abbreviation} vs ${ctx.game.awayTeam.abbreviation}: ` +
+          `model=${(homeWinProb * 100).toFixed(1)}%, market=${(market.noVigHomeProb * 100).toFixed(1)}%, ` +
+          `delta=${(divergence * 100).toFixed(1)}%`,
+      );
+    }
+    marketComparison = {
+      modelHomeProb: homeWinProb,
+      marketHomeProb: market.noVigHomeProb,
+      divergence,
+      isDivergent,
+    };
+  }
 
   return {
     gameId: ctx.game.id,
@@ -172,6 +203,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     modelVersion: MODEL_VERSION,
     generatedAt: new Date().toISOString(),
     dataSources,
+    marketComparison,
   };
 }
 

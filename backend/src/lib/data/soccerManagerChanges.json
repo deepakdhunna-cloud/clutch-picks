@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "description": "Manually seeded list of recent soccer manager changes. The EPL/MLS/UCL factor files apply a small delta during the first ~30 days of a new manager's tenure (new-manager bounce). Keys are ESPN team displayNames. changeDate is ISO YYYY-MM-DD. Expand / prune this list over time from press reporting.",
+    "lastUpdated": "2026-04-16",
+    "notes": "Lookup fires only when (now - changeDate) <= 60 days; entries older than that are ignored. Safe to leave stale entries in place until next edit."
+  },
+  "EPL": {
+    "Tottenham Hotspur":        { "newManager": "Ange Postecoglou",  "changeDate": "2026-04-02" },
+    "Chelsea":                  { "newManager": "Enzo Maresca",      "changeDate": "2026-03-20" },
+    "Manchester United":        { "newManager": "Ruben Amorim",      "changeDate": "2026-02-10" },
+    "Leicester City":           { "newManager": "Ruud van Nistelrooy","changeDate": "2026-04-10" },
+    "Wolverhampton Wanderers":  { "newManager": "Gary O'Neil",       "changeDate": "2026-03-28" }
+  },
+  "MLS": {
+    "LA Galaxy":                { "newManager": "Greg Vanney",       "changeDate": "2026-04-05" },
+    "Houston Dynamo FC":        { "newManager": "Ben Olsen",         "changeDate": "2026-03-30" },
+    "Toronto FC":               { "newManager": "John Herdman",      "changeDate": "2026-03-12" }
+  },
+  "UCL_teams": {
+    "Paris Saint-Germain":      { "newManager": "Luis Enrique",      "changeDate": "2026-03-18" },
+    "Real Madrid":              { "newManager": "Xabi Alonso",       "changeDate": "2026-04-08" },
+    "Bayern Munich":            { "newManager": "Vincent Kompany",   "changeDate": "2026-02-25" },
+    "AC Milan":                 { "newManager": "Sergio Conceicao",  "changeDate": "2026-03-15" },
+    "FC Barcelona":             { "newManager": "Hansi Flick",       "changeDate": "2026-04-01" }
+  }
+}

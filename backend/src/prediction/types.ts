@@ -16,6 +16,9 @@ import type {
 } from "../lib/espnStats";
 import type { TeamShootingRecent } from "../lib/nbaStatsApi";
 import type { UmpireZoneBias } from "../lib/mlbUmpireApi";
+import type { UnderstatTeam } from "../lib/understatApi";
+import type { MarketConsensus } from "../lib/sharpApi";
+import type { LeagueStandingsRow } from "../lib/soccerStandings";
 
 // ─── Factor Contribution ────────────────────────────────────────────────────
 
@@ -67,9 +70,45 @@ export type GameContext = {
   // umpire unassigned, or umpire not in our tendency file.
   homePlateUmpire?: UmpireZoneBias | null;
 
+  // Soccer (EPL/UCL): live Understat xG. null for MLS and for teams Understat
+  // doesn't cover. null on fetch failure.
+  homeXG?: UnderstatTeam | null;
+  awayXG?: UnderstatTeam | null;
+
+  // Soccer: count of matches in the last 7 / 14 days — fixture-congestion
+  // signal. null when we couldn't derive it from the ESPN schedule.
+  homeFixtureCongestion?: { gamesLast7Days: number; gamesLast14Days: number } | null;
+  awayFixtureCongestion?: { gamesLast7Days: number; gamesLast14Days: number } | null;
+
+  // Soccer: new-manager bounce window (<30 days since change). null when no
+  // recent change or team not in our seeded list.
+  homeManagerChange?: { daysSinceChange: number; newManager: string } | null;
+  awayManagerChange?: { daysSinceChange: number; newManager: string } | null;
+
+  // Soccer domestic leagues: stakes flags derived from current table + games
+  // remaining. null when standings unavailable or pre-season.
+  homeStakes?: SoccerStakes | null;
+  awayStakes?: SoccerStakes | null;
+
+  // Soccer: raw standings rows for the league (same data that produced the
+  // stakes flags). Useful for evidence strings that want "vs mid-table".
+  leagueStandings?: LeagueStandingsRow[] | null;
+
+  // Market consensus (SharpAPI). Never used as a prediction input — only as
+  // a post-prediction calibration anchor (see prediction/index.ts divergence
+  // check). null when SHARPAPI_KEY unset or fetch failed.
+  marketConsensus?: MarketConsensus | null;
+
   /** ISO date string of the game */
   gameDate: string;
 };
+
+export interface SoccerStakes {
+  inTitleRace: boolean;
+  inRelegationRace: boolean;
+  inEuropeRace: boolean;
+  gamesRemaining: number;
+}
 
 // ─── Supported Leagues ──────────────────────────────────────────────────────
 
@@ -115,4 +154,13 @@ export type HonestPrediction = {
   modelVersion: string;
   generatedAt: string;          // ISO timestamp
   dataSources: string[];
+  // Post-hoc market comparison. NOT used as a prediction input — populated
+  // after the model already decided. isDivergent === true when model and
+  // market differ by more than 10 percentage points on the home-win prob.
+  marketComparison?: {
+    modelHomeProb: number;
+    marketHomeProb: number;
+    divergence: number;    // absolute delta, 0..1
+    isDivergent: boolean;
+  };
 };

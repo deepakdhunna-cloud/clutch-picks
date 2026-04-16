@@ -24,9 +24,24 @@ import {
   fetchAdvancedMetrics,
   fetchStartingLineup,
   fetchGameWeather,
+  fetchFixtureCongestion,
 } from "../lib/espnStats";
 import { fetchTeamShootingRecent } from "../lib/nbaStatsApi";
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
+import {
+  fetchLeagueXG,
+  lookupInLeague,
+  lookupTeamXG,
+  type UnderstatLeague,
+} from "../lib/understatApi";
+import {
+  fetchLeagueStandings,
+  computeStakes,
+  type SoccerLeague,
+} from "../lib/soccerStandings";
+import { lookupManagerChange } from "../lib/soccerManagerChanges";
+import { fetchMarketConsensus } from "../lib/sharpApi";
+import type { SoccerStakes } from "./types";
 
 // ─── Paths ──────────────────────────────────────────────────────────────
 
@@ -119,6 +134,9 @@ async function buildGameContext(
   const sport = game.sport;
   const gameDate = new Date(game.gameTime);
 
+  const isSoccer = ["EPL", "MLS", "UCL"].includes(sport);
+  const UCL_HINTS: UnderstatLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
+
   const [
     homeElo, awayElo,
     homeForm, awayForm,
@@ -129,6 +147,10 @@ async function buildGameContext(
     weather,
     homeShooting, awayShooting,
     homePlateUmpire,
+    homeXG, awayXG,
+    homeFixtureCongestion, awayFixtureCongestion,
+    leagueStandings,
+    marketConsensus,
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
@@ -146,7 +168,54 @@ async function buildGameContext(
     sport === "NBA" ? fetchTeamShootingRecent(game.homeTeam.id) : Promise.resolve(null),
     sport === "NBA" ? fetchTeamShootingRecent(game.awayTeam.id) : Promise.resolve(null),
     sport === "MLB" ? lookupHomePlateUmpireBias(game.homeTeam.id, gameDate) : Promise.resolve(null),
+    // Soccer xG: EPL hits Understat's EPL endpoint directly; UCL tries each
+    // big-5 league in order; MLS is null (not covered by Understat — will be
+    // flagged unavailable in the MLS factor file).
+    sport === "EPL"
+      ? fetchLeagueXG("EPL").then((m) => lookupInLeague(m, game.homeTeam.name, "EPL"))
+      : sport === "UCL"
+        ? lookupTeamXG(game.homeTeam.name, UCL_HINTS)
+        : Promise.resolve(null),
+    sport === "EPL"
+      ? fetchLeagueXG("EPL").then((m) => lookupInLeague(m, game.awayTeam.name, "EPL"))
+      : sport === "UCL"
+        ? lookupTeamXG(game.awayTeam.name, UCL_HINTS)
+        : Promise.resolve(null),
+    // Fixture congestion — only soccer; other sports ignore.
+    isSoccer ? fetchFixtureCongestion(game.homeTeam.id, sport, gameDate) : Promise.resolve(null),
+    isSoccer ? fetchFixtureCongestion(game.awayTeam.id, sport, gameDate) : Promise.resolve(null),
+    // Standings — EPL and MLS only (UCL has group+knockout, handled in-factor).
+    sport === "EPL" || sport === "MLS"
+      ? fetchLeagueStandings(sport as SoccerLeague)
+      : Promise.resolve(null),
+    // Market consensus — all sports. Feature-flagged; returns null if no key.
+    fetchMarketConsensus(sport, game.homeTeam.name, game.awayTeam.name, gameDate),
   ]);
+
+  // Manager-change lookup is synchronous + cheap; resolve it after the
+  // parallel block so we don't have to branch on sport inside Promise.all.
+  const homeManagerChange = isSoccer
+    ? lookupManagerChange(sport, game.homeTeam.name, gameDate)
+    : null;
+  const awayManagerChange = isSoccer
+    ? lookupManagerChange(sport, game.awayTeam.name, gameDate)
+    : null;
+
+  // Stakes derived from standings (EPL / MLS only; UCL handled separately).
+  let homeStakes: SoccerStakes | null = null;
+  let awayStakes: SoccerStakes | null = null;
+  if (leagueStandings && (sport === "EPL" || sport === "MLS")) {
+    homeStakes = computeStakes({
+      standings: leagueStandings,
+      teamId: game.homeTeam.id,
+      league: sport as SoccerLeague,
+    });
+    awayStakes = computeStakes({
+      standings: leagueStandings,
+      teamId: game.awayTeam.id,
+      league: sport as SoccerLeague,
+    });
+  }
 
   const sportsGame: import("../types/sports").Game = {
     id: game.id,
@@ -205,6 +274,16 @@ async function buildGameContext(
     homeShooting,
     awayShooting,
     homePlateUmpire,
+    homeXG,
+    awayXG,
+    homeFixtureCongestion,
+    awayFixtureCongestion,
+    homeManagerChange,
+    awayManagerChange,
+    homeStakes,
+    awayStakes,
+    leagueStandings,
+    marketConsensus,
     gameDate: gameDate.toISOString(),
   };
 }

@@ -293,9 +293,18 @@ async function cleanupOldData() {
 setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldData, 60_000);
 
+// ─── SharpAPI gate warning ──────────────────────────────────────────────────
+// Single startup-time check so the operator knows whether market data is on.
+if (!process.env.SHARPAPI_KEY) {
+  console.warn(
+    "[market] SHARPAPI_KEY not set — market lines disabled, model will run without market anchor",
+  );
+}
+
 // ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────────
 import cron from "node-cron";
 import { runWeeklyCalibration } from "./scripts/runWeeklyCalibration";
+import { snapshotMarketLines } from "./scripts/snapshotMarketLines";
 
 let calibrationRunning = false;
 async function calibrationGuarded() {
@@ -314,6 +323,28 @@ async function calibrationGuarded() {
 }
 // "0 3 * * 1" = minute 0, hour 3, every day, every month, Monday
 cron.schedule("0 3 * * 1", calibrationGuarded, { timezone: "UTC" });
+
+// ─── Market-line snapshot cron (every 30 minutes) ───────────────────────────
+// Pulls SharpAPI consensus for scheduled games in the next 24h and persists
+// a MarketSnapshot row per game. Gated on SHARPAPI_KEY — no-op without it.
+let marketSnapshotRunning = false;
+async function marketSnapshotGuarded() {
+  if (!process.env.SHARPAPI_KEY) return; // No key, no work
+  if (marketSnapshotRunning) {
+    console.log("[market] Previous snapshot still in progress, skipping");
+    return;
+  }
+  marketSnapshotRunning = true;
+  try {
+    await snapshotMarketLines(port);
+  } catch (err) {
+    console.error("[market] Snapshot run failed:", err);
+  } finally {
+    marketSnapshotRunning = false;
+  }
+}
+// "*/30 * * * *" = every 30 minutes
+cron.schedule("*/30 * * * *", marketSnapshotGuarded, { timezone: "UTC" });
 
 export default {
   port,

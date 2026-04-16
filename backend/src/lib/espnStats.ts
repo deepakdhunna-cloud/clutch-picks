@@ -1584,3 +1584,50 @@ export function srsToBlendfactor(srs: number, sport: string): number {
   return 1 / (1 + Math.exp(-srs / s));
 }
 
+// ─── Fixture congestion (soccer) ─────────────────────────────────────────────
+// Soccer teams can play 2-3 matches in 7 days (league + domestic cup + UCL).
+// Counting completed matches in the last 7 / 14 days before `beforeDate`
+// gives us a fatigue signal the EPL/MLS/UCL factors can weigh.
+
+export interface FixtureCongestion {
+  gamesLast7Days: number;
+  gamesLast14Days: number;
+}
+
+export async function fetchFixtureCongestion(
+  teamId: string,
+  sport: string,
+  beforeDate: Date,
+): Promise<FixtureCongestion | null> {
+  const schedule = await fetchTeamScheduleRaw(teamId, sport);
+  if (!schedule || !Array.isArray(schedule.events)) return null;
+
+  const cutoff = beforeDate.getTime();
+  const day = 24 * 60 * 60 * 1000;
+  const sevenAgo = cutoff - 7 * day;
+  const fourteenAgo = cutoff - 14 * day;
+
+  let g7 = 0;
+  let g14 = 0;
+
+  for (const event of schedule.events) {
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+    const state = comp.status?.type?.state?.toLowerCase();
+    const completed = comp.status?.type?.completed === true || state === "post";
+    if (!completed) continue;
+
+    // ESPN's "date" on the event root is the kickoff ISO timestamp.
+    // ESPNScheduleEvent doesn't surface it in our typed shape, so grab it
+    // off the raw competition.
+    const rawDate = (comp as unknown as { date?: string }).date;
+    if (!rawDate) continue;
+    const ts = new Date(rawDate).getTime();
+    if (Number.isNaN(ts)) continue;
+    if (ts > cutoff) continue; // future / same-day
+    if (ts >= fourteenAgo) g14++;
+    if (ts >= sevenAgo) g7++;
+  }
+
+  return { gamesLast7Days: g7, gamesLast14Days: g14 };
+}
