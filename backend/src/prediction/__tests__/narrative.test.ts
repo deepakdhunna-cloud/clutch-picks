@@ -166,6 +166,210 @@ describe("buildDeterministicNarrative", () => {
   });
 });
 
+// ─── Counterpoint framing (BHA vs CHE bug repro + neutral-context filter) ──
+
+// Extract the sentence rendered in the counterpoint slot, if any. Returns
+// null when the narrative does not include a counterpoint section at all.
+function extractCounterpointSentence(text: string): string | null {
+  const marker = "Working against the pick:";
+  const idx = text.indexOf(marker);
+  if (idx === -1) return null;
+  const after = text.slice(idx);
+  const endIdx = after.indexOf(".");
+  return endIdx === -1 ? after : after.slice(0, endIdx + 1);
+}
+
+describe("buildDeterministicNarrative — counterpoint framing", () => {
+  it("Case A: pick=home, away-favored recent form → counterpoint names AWAY team, not home form number", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 50,
+        weight: 0.40,
+        available: true,
+        hasSignal: true,
+        evidence: "Home BHA Elo 1550 + 65 HFA vs Away CHE Elo 1540 = 75 pt differential",
+      },
+      {
+        key: "recent_form",
+        label: "Recent form (L10)",
+        homeDelta: -200,
+        weight: 0.10,
+        available: true,
+        hasSignal: true,
+        evidence: "Home L10: 3-7 (30%), Away L10: 7-3 (70%)",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors, "slight edge", 55.0, "BHA", "CHE", "BHA", "EPL",
+    );
+    const text = buildDeterministicNarrative(input);
+    const counterpoint = extractCounterpointSentence(text);
+
+    expect(counterpoint).not.toBeNull();
+    expect(counterpoint).toContain("CHE");
+    expect(counterpoint).not.toContain("BHA");
+    // Must NOT copy the verbatim two-sided evidence into the counterpoint slot.
+    expect(counterpoint).not.toContain("Home L10");
+    expect(counterpoint).not.toContain("(30%)");
+  });
+
+  it("Case B: pick=away, home-favored rest → counterpoint names HOME team, not raw evidence", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: -80,
+        weight: 0.40,
+        available: true,
+        hasSignal: true,
+        evidence: "Home BOS Elo 1500 + 90 HFA vs Away LAL Elo 1680 = -90 pt differential",
+      },
+      {
+        key: "rest_diff",
+        label: "Rest differential",
+        homeDelta: 30,
+        weight: 0.05,
+        available: true,
+        hasSignal: true,
+        evidence: "Home 4 days rest vs Away 2 days rest (+2 day advantage home)",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors, "slight edge", 56.0, "BOS", "LAL", "LAL", "NBA",
+    );
+    const text = buildDeterministicNarrative(input);
+    const counterpoint = extractCounterpointSentence(text);
+
+    expect(counterpoint).not.toBeNull();
+    expect(counterpoint).toContain("BOS");
+    expect(counterpoint).not.toContain("LAL");
+    // Must NOT copy the verbatim two-sided evidence into the counterpoint slot.
+    expect(counterpoint).not.toContain("Home 4 days rest");
+    expect(counterpoint).not.toContain("Away 2 days rest");
+  });
+
+  it("Case C: MLB weather factor is never rendered as a counterpoint", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 40,
+        weight: 0.40,
+        available: true,
+        hasSignal: true,
+        evidence: "Home NYY Elo 1560 + 24 HFA vs Away BOS Elo 1550 = 34 pt differential",
+      },
+      {
+        key: "weather_mlb",
+        label: "Weather (wind/conditions)",
+        homeDelta: -20,
+        weight: 0.02,
+        available: true,
+        hasSignal: true,
+        evidence: "Outdoor with 22 mph wind — slight randomness increase",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors, "slight edge", 56.0, "NYY", "BOS", "NYY", "MLB",
+    );
+    const text = buildDeterministicNarrative(input);
+
+    expect(extractCounterpointSentence(text)).toBeNull();
+  });
+
+  it("Case D: MLB ballpark factor is never rendered as a counterpoint", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 40,
+        weight: 0.40,
+        available: true,
+        hasSignal: true,
+        evidence: "Home SF Elo 1540 + 24 HFA vs Away COL Elo 1530 = 34 pt differential",
+      },
+      {
+        key: "ballpark",
+        label: "Ballpark run environment",
+        homeDelta: -8,
+        weight: 0.04,
+        available: true,
+        hasSignal: true,
+        evidence: "SF park (-0.40 runs/game) — pitcher-friendly (-8 Elo home)",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors, "slight edge", 55.0, "SF", "COL", "SF", "MLB",
+    );
+    const text = buildDeterministicNarrative(input);
+
+    expect(extractCounterpointSentence(text)).toBeNull();
+  });
+
+  it("Case D2: umpire and early-season factors are also never counterpoints", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 40,
+        weight: 0.40,
+        available: true,
+        hasSignal: true,
+        evidence: "Home NYY Elo 1560 + 24 HFA vs Away BOS Elo 1550 = 34 pt differential",
+      },
+      {
+        key: "umpire",
+        label: "Umpire strike zone tendency",
+        homeDelta: -15,
+        weight: 0.02,
+        available: true,
+        hasSignal: true,
+        evidence: "HP umpire X favors away (-2.5 pts) in a hitter's zone",
+      },
+      {
+        key: "early_season_mlb",
+        label: "Early-season noise warning",
+        homeDelta: -10,
+        weight: 0.02,
+        available: true,
+        hasSignal: true,
+        evidence: "Only 12 games played — team stats unreliable",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors, "slight edge", 56.0, "NYY", "BOS", "NYY", "MLB",
+    );
+    const text = buildDeterministicNarrative(input);
+
+    expect(extractCounterpointSentence(text)).toBeNull();
+  });
+
+  it("Case E (regression): Elo-only fallback still renders 'no additional contextual signals'", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 220,
+        weight: 1.0,
+        available: true,
+        hasSignal: true,
+        evidence: "Home BOS Elo 1561 + 100 HFA vs Away PHI Elo 1441 = 220 pt differential",
+      },
+      { key: "injuries_nba", label: "Star player availability", homeDelta: 0, weight: 0, available: true, hasSignal: false, evidence: "No significant injuries reported for either team" },
+      { key: "back_to_back", label: "Back-to-back fatigue", homeDelta: 0, weight: 0, available: true, hasSignal: false, evidence: "No back-to-back for either team" },
+      { key: "net_rating", label: "Pace-adjusted net rating", homeDelta: 0, weight: 0, available: true, hasSignal: false, evidence: "Offensive/defensive rating data unavailable from ESPN" },
+    ];
+    const input = buildNarrativeInput(factors, "strong edge", 78.0, "BOS", "PHI", "BOS", "NBA");
+    const text = buildDeterministicNarrative(input);
+
+    expect(text.toLowerCase()).toContain("no additional contextual signals available");
+    expect(text).toContain("Elo");
+    expect(text).toContain("BOS");
+  });
+});
+
 describe("computeFactorHash", () => {
   it("produces consistent hash for same factors", () => {
     const factors = makeFactors();

@@ -28,6 +28,43 @@ const BANNED_WORDS = [
 
 const BANNED_REGEX = new RegExp(BANNED_WORDS.join("|"), "i");
 
+// ─── Neutral-context factor keys ────────────────────────────────────────
+// These factors describe environmental / game-level context that affects
+// BOTH teams equally (weather conditions, umpire zone, ballpark run
+// environment, early-season noise). They have no "opposing side", so they
+// must never be rendered as a counterpoint — citing them makes the
+// narrative read as self-contradictory when the pick is for either team.
+const NEUTRAL_CONTEXT_FACTOR_KEYS = new Set<string>([
+  "ballpark",
+  "weather_mlb",
+  "weather",
+  "weather_ncaaf",
+  "umpire",
+  "early_season_mlb",
+]);
+
+/**
+ * Generic counterpoint renderer.
+ *
+ * Describes a team-directional factor from the perspective of the side
+ * OPPOSING the pick, without copying factor.evidence (which cites both
+ * sides and reads as self-contradictory in the counterpoint slot).
+ *
+ * Factors may eventually expose a typed counterpoint string directly; for
+ * now the generic form is sufficient for every team-directional factor.
+ */
+function renderCounterpoint(
+  factor: FactorContribution,
+  winnerAbbr: string,
+  homeTeamAbbr: string,
+  awayTeamAbbr: string,
+): string {
+  const opposingAbbr =
+    winnerAbbr === homeTeamAbbr ? awayTeamAbbr : homeTeamAbbr;
+  const label = factor.label.toLowerCase();
+  return `Working against the pick: ${label} favors ${opposingAbbr}.`;
+}
+
 // ─── Structured narrative input ─────────────────────────────────────────
 
 export interface NarrativeInput {
@@ -163,8 +200,24 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
   }
 
   // ── Counterpoint ──
-  if (counterpoint) {
-    parts.push(`Working against the pick: ${counterpoint.evidence}.`);
+  // Neutral-context factors (weather, umpire, ballpark, early-season noise)
+  // are skipped entirely — they have no "opposing side" framing. For every
+  // other factor we render a side-aware counterpoint instead of copying
+  // factor.evidence verbatim; evidence typically cites BOTH teams and
+  // reads as self-contradictory in the counterpoint slot.
+  const effectiveCounterpoint =
+    counterpoint && !NEUTRAL_CONTEXT_FACTOR_KEYS.has(counterpoint.key)
+      ? counterpoint
+      : null;
+  if (effectiveCounterpoint && winnerAbbr !== null) {
+    parts.push(
+      renderCounterpoint(
+        effectiveCounterpoint,
+        winnerAbbr,
+        homeTeamAbbr,
+        awayTeamAbbr,
+      ),
+    );
   }
 
   // ── Elo-only note ──
@@ -174,7 +227,7 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
   if (
     leadFactor.key !== "none" &&
     supportingFactors.length === 0 &&
-    counterpoint === null
+    effectiveCounterpoint === null
   ) {
     parts.push(`No additional contextual signals available.`);
   }
