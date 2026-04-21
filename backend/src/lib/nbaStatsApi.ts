@@ -150,6 +150,11 @@ async function fetchNBAWithRetry(url: string): Promise<Response | null> {
  * Fetch recent 3P% (last 5 games) and season 3P% for a team.
  * Returns null if the API call fails, the team has no games yet, or the
  * team ID cannot be mapped to a stats.nba.com ID.
+ *
+ * @deprecated stats.nba.com IP-blocks Railway and most cloud hosts. This
+ * function works from local dev but will always fail in production. The
+ * NBA 3P regression factor has been removed; this is kept only for local
+ * debugging. Do not call from production code paths.
  */
 export async function fetchTeamShootingRecent(
   espnTeamId: number | string,

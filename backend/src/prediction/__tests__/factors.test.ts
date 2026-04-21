@@ -154,10 +154,10 @@ describe("base factors", () => {
 });
 
 describe("NBA factors", () => {
-  it("returns 5 factors", () => {
+  it("returns 4 factors", () => {
     const ctx = makeContext();
     const factors = computeNBAFactors(ctx);
-    expect(factors.length).toBe(5);
+    expect(factors.length).toBe(4);
     validateFactorShape(factors);
   });
 

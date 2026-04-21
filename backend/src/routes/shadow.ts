@@ -21,7 +21,6 @@ import {
   normalizeSoccerTeamName,
   type UnderstatLeague,
 } from "../lib/understatApi";
-import { NBA_STATS_HEADERS } from "../lib/nbaStatsApi";
 
 const shadowRouter = new Hono();
 
@@ -388,8 +387,8 @@ shadowRouter.get("/recent", async (c) => {
 
 /**
  * Raw diagnostic: bypasses the cached fetchLeagueXG and issues direct fetches
- * to Understat for each league, returning HTTP status, headers, body preview,
- * regex match status, and timing. Lets us see exactly WHY fetches fail.
+ * to Understat. For EPL, returns the FULL body (up to 200KB) plus pattern
+ * analysis. Other leagues get lightweight summary only.
  */
 shadowRouter.get("/understat-diag", async (c) => {
   const denied = checkAdminKey(c);
@@ -403,6 +402,31 @@ shadowRouter.get("/understat-diag", async (c) => {
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
   const season = m >= 6 ? y : y - 1;
+
+  // Pattern scan helpers
+  const PATTERNS_TO_CHECK = ["teamsData", "JSON.parse", "datesData", "playersData", "xG", "<script"];
+
+  function scanPatterns(body: string) {
+    const matches: Record<string, { found: boolean; context: string | null }> = {};
+    for (const pat of PATTERNS_TO_CHECK) {
+      const idx = body.indexOf(pat);
+      if (idx >= 0) {
+        const ctxStart = Math.max(0, idx - 50);
+        const ctxEnd = Math.min(body.length, idx + pat.length + 250);
+        matches[pat] = { found: true, context: body.slice(ctxStart, ctxEnd) };
+      } else {
+        matches[pat] = { found: false, context: null };
+      }
+    }
+    return matches;
+  }
+
+  function countScriptTags(body: string): number {
+    const re = /<script/gi;
+    let count = 0;
+    while (re.exec(body)) count++;
+    return count;
+  }
 
   const results: Record<string, any> = {};
 
@@ -437,7 +461,7 @@ shadowRouter.get("/understat-diag", async (c) => {
       const regexMatch = TEAMS_DATA_RE.test(body);
       const isCloudflare = body.includes("Just a moment") || body.includes("Checking your browser");
 
-      results[league] = {
+      const entry: Record<string, any> = {
         url,
         httpStatus: response.status,
         headers: relevantHeaders,
@@ -445,8 +469,17 @@ shadowRouter.get("/understat-diag", async (c) => {
         bodyPreview: body.slice(0, 500),
         teamsDataRegexMatch: regexMatch,
         isCloudflareChallenge: isCloudflare,
+        scriptTagCount: countScriptTags(body),
+        patternScan: scanPatterns(body),
         durationMs,
       };
+
+      // For EPL only: include full body (up to 200KB) for deep inspection
+      if (league === "EPL") {
+        entry.fullBody = body.slice(0, 200_000);
+      }
+
+      results[league] = entry;
     } catch (err: any) {
       const durationMs = Date.now() - start;
       results[league] = {
@@ -482,80 +515,24 @@ shadowRouter.get("/understat-diag", async (c) => {
   });
 });
 
-// ─── GET /api/shadow/nba-stats-diag ───────────────────────────────────
+// ─── GET /api/shadow/nba-stats-diag (vestigial) ──────────────────────
 
 /**
- * Diagnostic for stats.nba.com — performs a raw fetch with current headers
- * and returns detailed status for debugging.
+ * Vestigial diagnostic endpoint. stats.nba.com IP-blocks Railway's ranges,
+ * so the NBA 3P regression factor has been removed. This endpoint is kept
+ * for reference but will always timeout or fail from cloud hosts.
  */
 shadowRouter.get("/nba-stats-diag", async (c) => {
   const denied = checkAdminKey(c);
   if (denied) return denied;
 
-  const teamId = c.req.query("teamId") ?? "1610612747"; // Lakers default
-  const now = new Date();
-  const startYear = now.getUTCMonth() >= 9 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
-  const endShort = String((startYear + 1) % 100).padStart(2, "0");
-  const season = `${startYear}-${endShort}`;
-
-  const url = `https://stats.nba.com/stats/teamgamelog?TeamID=${teamId}&Season=${season}&SeasonType=Regular+Season`;
-
-  const start = Date.now();
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(15_000),
-      headers: NBA_STATS_HEADERS,
-    });
-    const durationMs = Date.now() - start;
-    const body = await response.text();
-
-    const relevantHeaders: Record<string, string> = {};
-    for (const key of ["content-type", "cf-ray", "server", "x-cache", "access-control-allow-origin"]) {
-      const val = response.headers.get(key);
-      if (val) relevantHeaders[key] = val;
-    }
-
-    let parseResult: any = null;
-    try {
-      const json = JSON.parse(body);
-      const set = json.resultSets?.[0];
-      parseResult = {
-        resultSetCount: json.resultSets?.length ?? 0,
-        firstSetName: set?.name ?? null,
-        headerCount: set?.headers?.length ?? 0,
-        rowCount: set?.rowSet?.length ?? 0,
-        sampleHeaders: set?.headers?.slice(0, 10) ?? [],
-      };
-    } catch {
-      parseResult = { error: "JSON parse failed" };
-    }
-
-    return c.json({
-      data: {
-        url,
-        teamId,
-        season,
-        httpStatus: response.status,
-        headers: relevantHeaders,
-        bodyLength: body.length,
-        bodyPreview: body.slice(0, 500),
-        parseResult,
-        durationMs,
-      },
-    });
-  } catch (err: any) {
-    const durationMs = Date.now() - start;
-    return c.json({
-      data: {
-        url,
-        teamId,
-        season,
-        error: err?.message ?? String(err),
-        errorName: err?.name,
-        durationMs,
-      },
-    });
-  }
+  return c.json({
+    data: {
+      note: "stats.nba.com IP-blocks Railway/cloud hosts. The NBA 3P regression factor " +
+        "has been removed. This endpoint is vestigial — use it only from local dev for debugging.",
+      status: "abandoned",
+    },
+  });
 });
 
 export { shadowRouter };

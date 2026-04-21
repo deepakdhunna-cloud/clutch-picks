@@ -27,7 +27,7 @@ import {
   fetchGameWeather,
   fetchFixtureCongestion,
 } from "../lib/espnStats";
-import { fetchTeamShootingRecent } from "../lib/nbaStatsApi";
+// fetchTeamShootingRecent removed — stats.nba.com IP-blocks Railway
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 import {
   fetchLeagueXG,
@@ -152,7 +152,6 @@ export async function buildGameContext(
     homeAdvanced, awayAdvanced,
     homeLineup, awayLineup,
     weather,
-    homeShooting, awayShooting,
     homePlateUmpire,
     homeXG, awayXG,
     homeFixtureCongestion, awayFixtureCongestion,
@@ -172,8 +171,6 @@ export async function buildGameContext(
     fetchStartingLineup(game.homeTeam.id, sport, gameDate),
     fetchStartingLineup(game.awayTeam.id, sport, gameDate),
     fetchGameWeather(game.venue ?? "", gameDate, sport),
-    sport === "NBA" ? fetchTeamShootingRecent(game.homeTeam.id) : Promise.resolve(null),
-    sport === "NBA" ? fetchTeamShootingRecent(game.awayTeam.id) : Promise.resolve(null),
     sport === "MLB" ? lookupHomePlateUmpireBias(game.homeTeam.id, gameDate) : Promise.resolve(null),
     // Soccer xG: EPL hits Understat's EPL endpoint directly; UCL tries each
     // big-5 league in order; MLS is null (not covered by Understat — will be
@@ -278,8 +275,6 @@ export async function buildGameContext(
     homeLineup,
     awayLineup,
     weather,
-    homeShooting,
-    awayShooting,
     homePlateUmpire,
     homeXG,
     awayXG,
