@@ -1,8 +1,11 @@
 /**
- * EPL factor tests — Prompt B Gap 1.
+ * EPL factor tests.
  *
- * Covers the five EPL factors and the hard weight-budget invariant
+ * Covers the four EPL factors and the hard weight-budget invariant
  * (weights must sum to 0.42 exactly).
+ *
+ * xG factor removed — Understat and FBRef are both Cloudflare-blocked
+ * from Railway. Test verifies xg_differential is NOT present.
  */
 
 import { describe, it, expect } from "bun:test";
@@ -15,27 +18,12 @@ function factor(ctx: ReturnType<typeof makeSoccerContext>, key: string) {
   return f;
 }
 
-describe("EPL — xG differential", () => {
-  it("is available when BOTH teams have ≥10 FBRef games", () => {
-    const ctx = makeSoccerContext("EPL", {
-      homeXG: { name: "Home FC", games: 30, xgPerGame: 2.0, xgaPerGame: 0.9, xgDiffPerGame: 1.1 },
-      awayXG: { name: "Away FC", games: 30, xgPerGame: 1.3, xgaPerGame: 1.1, xgDiffPerGame: 0.2 },
-    });
-    const f = factor(ctx, "xg_differential");
-    expect(f.available).toBe(true);
-    // diff = 1.1 - 0.2 = 0.9 → 0.9 * 30 = 27 Elo (under ±60 cap)
-    expect(f.homeDelta).toBeCloseTo(27, 1);
-    expect(f.evidence).toContain("xG diff");
-  });
-
-  it("is unavailable when a team has <10 games of xG sample", () => {
-    const ctx = makeSoccerContext("EPL", {
-      homeXG: { name: "Home FC", games: 6, xgPerGame: 1.7, xgaPerGame: 0.9, xgDiffPerGame: 0.8 },
-      awayXG: { name: "Away FC", games: 30, xgPerGame: 1.2, xgaPerGame: 1.1, xgDiffPerGame: 0.1 },
-    });
-    const f = factor(ctx, "xg_differential");
-    expect(f.available).toBe(false);
-    expect(f.homeDelta).toBe(0);
+describe("EPL — xG factor removed", () => {
+  it("does not include xg_differential factor", () => {
+    const ctx = makeSoccerContext("EPL");
+    const factors = computeEPLFactors(ctx);
+    const xg = factors.find((f) => f.key === "xg_differential");
+    expect(xg).toBeUndefined();
   });
 });
 
@@ -47,7 +35,6 @@ describe("EPL — fixture congestion", () => {
     });
     const f = factor(ctx, "fixture_congestion");
     expect(f.available).toBe(true);
-    // homeExcess=1, awayExcess=0 → delta = 0*20 - 1*20 = -20
     expect(f.homeDelta).toBe(-20);
     expect(f.evidence.toLowerCase()).toContain("hom played 3 matches");
   });
@@ -67,7 +54,6 @@ describe("EPL — key player availability", () => {
     });
     const f = factor(ctx, "key_player_availability");
     expect(f.available).toBe(true);
-    // awayImpact = 25, homeImpact = 0 → delta = 25
     expect(f.homeDelta).toBe(25);
     expect(f.evidence).toContain("Star Striker");
   });
@@ -123,5 +109,11 @@ describe("EPL — weight budget invariant", () => {
     const factors = computeEPLFactors(ctx);
     const total = factors.reduce((s, f) => s + f.weight, 0);
     expect(total).toBeCloseTo(0.42, 6);
+  });
+
+  it("returns exactly 4 factors", () => {
+    const ctx = makeSoccerContext("EPL");
+    const factors = computeEPLFactors(ctx);
+    expect(factors.length).toBe(4);
   });
 });

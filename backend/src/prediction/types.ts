@@ -16,7 +16,6 @@ import type {
 } from "../lib/espnStats";
 import type { TeamShootingRecent } from "../lib/nbaStatsApi";
 import type { UmpireZoneBias } from "../lib/mlbUmpireApi";
-import type { UnderstatTeam } from "../lib/fbrefApi";
 import type { MarketConsensus } from "../lib/sharpApi";
 import type { LeagueStandingsRow } from "../lib/soccerStandings";
 
@@ -69,11 +68,6 @@ export type GameContext = {
   // MLB-only: home plate umpire + tendency data. null when sport ≠ MLB,
   // umpire unassigned, or umpire not in our tendency file.
   homePlateUmpire?: UmpireZoneBias | null;
-
-  // Soccer (EPL/UCL): live FBRef xG. null for MLS and for teams FBRef
-  // doesn't cover. null on fetch failure.
-  homeXG?: UnderstatTeam | null;
-  awayXG?: UnderstatTeam | null;
 
   // Soccer: count of matches in the last 7 / 14 days — fixture-congestion
   // signal. null when we couldn't derive it from the ESPN schedule.

@@ -1,18 +1,16 @@
 /**
  * UCL-specific factors.
  *
- * Weight budget: 0.42. Five factors:
- *   - xG differential (FBRef, cross-league):    0.12
- *   - Fixture congestion (heavier than EPL):        0.10
- *   - Key player availability (slightly lighter):   0.10
- *   - Competition stage / pedigree:                 0.06
- *   - Continental travel burden:                    0.04
+ * Weight budget: 0.42. Four factors:
+ *   - Fixture congestion (heavier — double duty):   0.14
+ *   - Key player availability:                      0.14
+ *   - Competition stage / pedigree:                 0.084
+ *   - Continental travel burden:                    0.056
  *   → 0.42 exactly
  *
- * Note: UCL teams come from multiple domestic leagues, so xG is looked up
- * by trying EPL → La_Liga → Bundesliga → Serie_A → Ligue_1 in order (done
- * upstream in shadow.ts `buildGameContext`). All we see here is the
- * resolved `homeXG` / `awayXG`.
+ * xG factor removed — Understat and FBRef are both Cloudflare-blocked from
+ * Railway. If we add a proxy service or paid xG API later, re-add this
+ * factor and rebalance weights.
  *
  * Pedigree and city coords live in seed JSON files in lib/data/.
  */
@@ -42,56 +40,21 @@ const COORDS = cityCoordsRaw as unknown as CityCoordsFile;
 export function computeUCLFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  // 1. xG — same shape as EPL but with a cross-league evidence note. We
-  //    inline it here (rather than reusing soccerCommon.xGFactor) so the
-  //    evidence string can say "xG via {league}" for each team. When both
-  //    teams have no FBRef data, the factor is unavailable.
-  factors.push(buildUCLxGFactor(ctx));                 // 0.12
+  // 1. Fixture congestion — higher weight because UCL teams pull double
+  //    duty (domestic league + UCL + cup).
+  factors.push(fixtureCongestionFactor(ctx, 0.14));    // 0.14
 
-  // 2. Fixture congestion — slightly higher weight (0.10 vs EPL's 0.08)
-  //    because UCL teams pull double duty (domestic league + UCL + cup).
-  factors.push(fixtureCongestionFactor(ctx, 0.10));    // 0.10
+  // 2. Key-player availability — UCL squads tend to be deeper so missing
+  //    one player hurts a little less than domestic.
+  factors.push(keyPlayerFactor(ctx, 0.14));            // 0.14
 
-  // 3. Key-player availability — 0.10 (vs EPL's 0.12): UCL squads tend to
-  //    be deeper so missing one player hurts a little less.
-  factors.push(keyPlayerFactor(ctx, 0.10));            // 0.10
+  // 3. Pedigree (competition stage) — 0.084
+  factors.push(pedigreeFactor(ctx));                   // 0.084
 
-  // 4. Pedigree (competition stage) — 0.06
-  factors.push(pedigreeFactor(ctx));                   // 0.06
-
-  // 5. Continental travel — 0.04
-  factors.push(travelFactor(ctx));                     // 0.04
+  // 4. Continental travel — 0.056
+  factors.push(travelFactor(ctx));                     // 0.056
 
   return factors;
-}
-
-// ─── xG with cross-league evidence ──────────────────────────────────────────
-
-function buildUCLxGFactor(ctx: GameContext): FactorContribution {
-  const home = ctx.homeXG ?? null;
-  const away = ctx.awayXG ?? null;
-  const enoughSample =
-    home !== null && away !== null && home.games >= 10 && away.games >= 10;
-
-  let delta = 0;
-  let evidence =
-    "FBRef xG unavailable for one or both UCL teams — factor inactive, weight redistributed";
-
-  if (enoughSample) {
-    const diff = home!.xgDiffPerGame - away!.xgDiffPerGame;
-    delta = Math.max(-60, Math.min(60, diff * 30));
-    const sign = diff >= 0 ? "+" : "";
-    evidence = `${ctx.game.homeTeam.abbreviation} xG diff ${home!.xgDiffPerGame >= 0 ? "+" : ""}${home!.xgDiffPerGame.toFixed(2)}/game (FBRef) vs ${ctx.game.awayTeam.abbreviation} ${away!.xgDiffPerGame >= 0 ? "+" : ""}${away!.xgDiffPerGame.toFixed(2)}/game (${sign}${diff.toFixed(2)} advantage, ~${Math.round(delta)} Elo)`;
-  }
-
-  return {
-    key: "xg_differential",
-    label: "FBRef xG differential (cross-league)",
-    homeDelta: delta,
-    weight: 0.12,
-    available: enoughSample,
-    evidence,
-  };
 }
 
 // ─── Pedigree ──────────────────────────────────────────────────────────────
@@ -99,7 +62,7 @@ function buildUCLxGFactor(ctx: GameContext): FactorContribution {
 // experience. Each 100 pts of pedigree difference ≈ 8 Elo, capped ±25.
 
 function pedigreeFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.06;
+  const weight = 0.084;
   const homePed = PEDIGREE[ctx.game.homeTeam.name];
   const awayPed = PEDIGREE[ctx.game.awayTeam.name];
 
@@ -136,7 +99,7 @@ function pedigreeFactor(ctx: GameContext): FactorContribution {
 // entries"), we dock 15 Elo from the away side (which is home-positive).
 
 function travelFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.04;
+  const weight = 0.056;
   const homeCity = COORDS.teamCity[ctx.game.homeTeam.name];
   const awayCity = COORDS.teamCity[ctx.game.awayTeam.name];
   if (!homeCity || !awayCity) {

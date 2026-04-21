@@ -1,8 +1,11 @@
 /**
- * UCL factor tests — Prompt B Gap 1.
+ * UCL factor tests.
  *
- * Covers pedigree-based stage factor, continental travel, cross-league
- * xG lookup miss, and the weight-budget invariant.
+ * Covers pedigree-based stage factor, continental travel, and the
+ * weight-budget invariant.
+ *
+ * xG factor removed — Understat and FBRef are both Cloudflare-blocked
+ * from Railway. Test verifies xg_differential is NOT present.
  */
 
 import { describe, it, expect } from "bun:test";
@@ -15,6 +18,15 @@ function factor(ctx: ReturnType<typeof makeSoccerContext>, key: string) {
   return f;
 }
 
+describe("UCL — xG factor removed", () => {
+  it("does not include xg_differential factor", () => {
+    const ctx = makeSoccerContext("UCL");
+    const factors = computeUCLFactors(ctx);
+    const xg = factors.find((f) => f.key === "xg_differential");
+    expect(xg).toBeUndefined();
+  });
+});
+
 describe("UCL — pedigree", () => {
   it("gives home a positive Elo edge when their UCL pedigree is >= 300pts above the opponent", () => {
     const ctx = makeSoccerContext("UCL", {
@@ -26,7 +38,6 @@ describe("UCL — pedigree", () => {
     });
     const f = factor(ctx, "ucl_pedigree");
     expect(f.available).toBe(true);
-    // Real Madrid 1920 - Aston Villa 1610 = 310 → 310/100 * 8 = 24.8, capped at 25
     expect(f.homeDelta).toBeGreaterThan(20);
     expect(f.homeDelta).toBeLessThanOrEqual(25);
     expect(f.evidence).toContain("Real Madrid");
@@ -49,7 +60,6 @@ describe("UCL — pedigree", () => {
 
 describe("UCL — continental travel", () => {
   it("applies +15 Elo home when away traveled >1500km", () => {
-    // Real Madrid (Madrid) host Galatasaray (Istanbul) — ~2700km
     const ctx = makeSoccerContext("UCL", {
       game: {
         ...makeSoccerContext("UCL").game,
@@ -64,7 +74,6 @@ describe("UCL — continental travel", () => {
   });
 
   it("applies 0 Elo for a short intra-city / short-haul away trip", () => {
-    // Chelsea (London) host Arsenal (London) — same city
     const ctx = makeSoccerContext("UCL", {
       game: {
         ...makeSoccerContext("UCL").game,
@@ -78,24 +87,17 @@ describe("UCL — continental travel", () => {
   });
 });
 
-describe("UCL — xG cross-league miss", () => {
-  it("is unavailable when xG lookup returned null on either side", () => {
-    const ctx = makeSoccerContext("UCL", {
-      homeXG: null,
-      awayXG: { name: "Away FC", games: 25, xgPerGame: 1.8, xgaPerGame: 1.0, xgDiffPerGame: 0.8 },
-    });
-    const f = factor(ctx, "xg_differential");
-    expect(f.available).toBe(false);
-    expect(f.homeDelta).toBe(0);
-    expect(f.evidence.toLowerCase()).toContain("unavailable");
-  });
-});
-
 describe("UCL — weight budget invariant", () => {
   it("factor weights sum to 0.42", () => {
     const ctx = makeSoccerContext("UCL");
     const factors = computeUCLFactors(ctx);
     const total = factors.reduce((s, f) => s + f.weight, 0);
     expect(total).toBeCloseTo(0.42, 6);
+  });
+
+  it("returns exactly 4 factors", () => {
+    const ctx = makeSoccerContext("UCL");
+    const factors = computeUCLFactors(ctx);
+    expect(factors.length).toBe(4);
   });
 });

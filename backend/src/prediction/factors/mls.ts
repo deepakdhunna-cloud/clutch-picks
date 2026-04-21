@@ -1,10 +1,11 @@
 /**
  * MLS-specific factors.
  *
- * Same five factors as EPL, same weights (0.12 / 0.08 / 0.12 / 0.04 / 0.06
- * = 0.42). The only difference is the xG factor: FBRef doesn't cover
- * MLS, so we ship it permanently `available: false` until an ASA or
- * similar source is wired up.
+ * Same four factors as EPL, same redistribution (0.112 / 0.168 / 0.056 / 0.084
+ * = 0.42).
+ *
+ * xG factor removed — no viable xG data source works from Railway.
+ * If we add an ASA integration or paid xG API later, re-add and rebalance.
  *
  * Stakes mapping for MLS:
  *   - "title race" = top-of-conference / Supporters' Shield chase (rank ≤ 3)
@@ -24,21 +25,10 @@ import {
 export function computeMLSFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  // 1. xG — disabled for MLS (FBRef doesn't cover MLS xG)
-  factors.push({
-    key: "xg_differential",
-    label: "FBRef xG differential",
-    homeDelta: 0,
-    weight: 0.12,
-    available: false,
-    evidence:
-      "MLS xG not yet integrated — FBRef does not cover MLS, ASA data source TODO",
-  });
-
-  factors.push(fixtureCongestionFactor(ctx, 0.08));    // 0.08
-  factors.push(keyPlayerFactor(ctx, 0.12));            // 0.12
-  factors.push(managerChangeFactor(ctx, 0.04));        // 0.04
-  factors.push(stakesFactor(ctx));                     // 0.06
+  factors.push(fixtureCongestionFactor(ctx, 0.112));   // 0.112
+  factors.push(keyPlayerFactor(ctx, 0.168));           // 0.168
+  factors.push(managerChangeFactor(ctx, 0.056));       // 0.056
+  factors.push(stakesFactor(ctx));                     // 0.084
 
   return factors;
 }
@@ -48,7 +38,7 @@ export function computeMLSFactors(ctx: GameContext): FactorContribution[] {
 // doesn't mention "relegation" (MLS doesn't relegate).
 
 function stakesFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.06;
+  const weight = 0.084;
   const home = ctx.homeStakes ?? null;
   const away = ctx.awayStakes ?? null;
   const lateSeason =

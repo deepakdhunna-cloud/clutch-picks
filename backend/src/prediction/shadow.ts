@@ -30,12 +30,6 @@ import {
 // fetchTeamShootingRecent removed — stats.nba.com IP-blocks Railway
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 import {
-  fetchLeagueXG,
-  lookupInLeague,
-  lookupTeamXG,
-  type UnderstatLeague,
-} from "../lib/fbrefApi";
-import {
   fetchLeagueStandings,
   computeStakes,
   type SoccerLeague,
@@ -142,7 +136,6 @@ export async function buildGameContext(
   const gameDate = new Date(game.gameTime);
 
   const isSoccer = ["EPL", "MLS", "UCL"].includes(sport);
-  const UCL_HINTS: UnderstatLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
 
   const [
     homeElo, awayElo,
@@ -153,7 +146,6 @@ export async function buildGameContext(
     homeLineup, awayLineup,
     weather,
     homePlateUmpire,
-    homeXG, awayXG,
     homeFixtureCongestion, awayFixtureCongestion,
     leagueStandings,
     marketConsensus,
@@ -172,19 +164,6 @@ export async function buildGameContext(
     fetchStartingLineup(game.awayTeam.id, sport, gameDate),
     fetchGameWeather(game.venue ?? "", gameDate, sport),
     sport === "MLB" ? lookupHomePlateUmpireBias(game.homeTeam.id, gameDate) : Promise.resolve(null),
-    // Soccer xG: EPL hits FBRef's EPL endpoint directly; UCL tries each
-    // big-5 league in order; MLS is null (not covered by FBRef — will be
-    // flagged unavailable in the MLS factor file).
-    sport === "EPL"
-      ? fetchLeagueXG("EPL").then((m) => lookupInLeague(m, game.homeTeam.name, "EPL"))
-      : sport === "UCL"
-        ? lookupTeamXG(game.homeTeam.name, UCL_HINTS)
-        : Promise.resolve(null),
-    sport === "EPL"
-      ? fetchLeagueXG("EPL").then((m) => lookupInLeague(m, game.awayTeam.name, "EPL"))
-      : sport === "UCL"
-        ? lookupTeamXG(game.awayTeam.name, UCL_HINTS)
-        : Promise.resolve(null),
     // Fixture congestion — only soccer; other sports ignore.
     isSoccer ? fetchFixtureCongestion(game.homeTeam.id, sport, gameDate) : Promise.resolve(null),
     isSoccer ? fetchFixtureCongestion(game.awayTeam.id, sport, gameDate) : Promise.resolve(null),
@@ -276,8 +255,6 @@ export async function buildGameContext(
     awayLineup,
     weather,
     homePlateUmpire,
-    homeXG,
-    awayXG,
     homeFixtureCongestion,
     awayFixtureCongestion,
     homeManagerChange,

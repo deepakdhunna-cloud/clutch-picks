@@ -2,10 +2,13 @@
  * Shared soccer factor primitives.
  *
  * EPL, MLS, and UCL all use the same math for:
- *   - xG differential (when FBRef data is available)
  *   - Fixture congestion penalty
  *   - Key-player availability (out + doubtful)
  *   - Manager-bounce window
+ *
+ * xG factor removed — Understat and FBRef are both Cloudflare-blocked from
+ * Railway. If we add a proxy service or paid xG API later, re-add this
+ * factor and rebalance weights.
  *
  * Keeping these in one place means any calibration tweak lands in all
  * three sports at once. The league-specific files compose these with
@@ -14,39 +17,7 @@
 
 import type { GameContext, FactorContribution } from "../types";
 
-// ─── 1. xG differential ─────────────────────────────────────────────────────
-// 30 Elo per goal of xG-diff per game, cap ±60. Available only when both
-// teams have ≥10 games of xG sample.
-
-export function xGFactor(ctx: GameContext): FactorContribution {
-  const home = ctx.homeXG ?? null;
-  const away = ctx.awayXG ?? null;
-
-  const enoughSample =
-    home !== null && away !== null && home.games >= 10 && away.games >= 10;
-
-  let delta = 0;
-  let evidence =
-    "FBRef xG unavailable for one or both teams — factor inactive, weight redistributed";
-
-  if (enoughSample) {
-    const diff = home!.xgDiffPerGame - away!.xgDiffPerGame;
-    delta = Math.max(-60, Math.min(60, diff * 30));
-    const signDiff = diff >= 0 ? "+" : "";
-    evidence = `${ctx.game.homeTeam.abbreviation} xG diff ${home!.xgDiffPerGame >= 0 ? "+" : ""}${home!.xgDiffPerGame.toFixed(2)}/game vs ${ctx.game.awayTeam.abbreviation} ${away!.xgDiffPerGame >= 0 ? "+" : ""}${away!.xgDiffPerGame.toFixed(2)}/game (${signDiff}${diff.toFixed(2)} advantage, ~${Math.round(delta)} Elo)`;
-  }
-
-  return {
-    key: "xg_differential",
-    label: "FBRef xG differential",
-    homeDelta: delta,
-    weight: 0.12,
-    available: enoughSample,
-    evidence,
-  };
-}
-
-// ─── 2. Fixture congestion ──────────────────────────────────────────────────
+// ─── 1. Fixture congestion ──────────────────────────────────────────────────
 // Soccer teams playing 3+ games in 7 days show measurable fatigue. Penalty:
 // -20 Elo per excess game applied to the congested team; max ±40.
 

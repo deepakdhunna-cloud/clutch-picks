@@ -1,16 +1,18 @@
 /**
  * EPL-specific factors.
  *
- * Weight budget: 0.42 (remaining after 0.58 base). Five factors:
- *   - xG differential (FBRef):              0.12
- *   - Fixture congestion (midweek cups / UCL):  0.08
- *   - Key player availability:                  0.12
- *   - Manager-change bounce:                    0.04
- *   - Stakes (title / Europe / relegation):     0.06
+ * Weight budget: 0.42 (remaining after 0.58 base). Four factors:
+ *   - Fixture congestion (midweek cups / UCL):  0.112
+ *   - Key player availability:                  0.168
+ *   - Manager-change bounce:                    0.056
+ *   - Stakes (title / Europe / relegation):     0.084
  *   → 0.42 exactly
  *
+ * xG factor removed — Understat and FBRef are both Cloudflare-blocked from
+ * Railway. If we add a proxy service or paid xG API later, re-add this
+ * factor and rebalance weights.
+ *
  * Data sources:
- *   - fbref.com for xG (6h cache)
  *   - ESPN schedule for fixture congestion
  *   - ./data/soccerManagerChanges.json for new-manager windows
  *   - ESPN standings for stakes flags (6h cache)
@@ -20,7 +22,6 @@
 
 import type { GameContext, FactorContribution, SoccerStakes } from "../types";
 import {
-  xGFactor,
   fixtureCongestionFactor,
   keyPlayerFactor,
   managerChangeFactor,
@@ -29,11 +30,10 @@ import {
 export function computeEPLFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  factors.push(xGFactor(ctx));                         // 0.12
-  factors.push(fixtureCongestionFactor(ctx, 0.08));    // 0.08
-  factors.push(keyPlayerFactor(ctx, 0.12));            // 0.12
-  factors.push(managerChangeFactor(ctx, 0.04));        // 0.04
-  factors.push(stakesFactor(ctx));                     // 0.06
+  factors.push(fixtureCongestionFactor(ctx, 0.112));   // 0.112
+  factors.push(keyPlayerFactor(ctx, 0.168));           // 0.168
+  factors.push(managerChangeFactor(ctx, 0.056));       // 0.056
+  factors.push(stakesFactor(ctx));                     // 0.084
 
   return factors;
 }
@@ -48,7 +48,7 @@ export function computeEPLFactors(ctx: GameContext): FactorContribution[] {
 //   - Both motivated equally → 0 (signal cancels).
 
 function stakesFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.06;
+  const weight = 0.084;
   const home = ctx.homeStakes ?? null;
   const away = ctx.awayStakes ?? null;
   const lateSeason =

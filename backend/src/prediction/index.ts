@@ -164,9 +164,6 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   if (ctx.weather && !ctx.weather.isDomed) {
     dataSources.push("Open-Meteo weather");
   }
-  if (ctx.homeXG || ctx.awayXG) {
-    dataSources.push("FBRef xG");
-  }
   if (ctx.marketConsensus) {
     dataSources.push("SharpAPI market consensus");
   }

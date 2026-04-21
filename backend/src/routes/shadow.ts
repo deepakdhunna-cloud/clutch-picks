@@ -7,7 +7,6 @@
  *   GET /api/shadow/logs                — aggregated stats across all shadow logs
  *   GET /api/shadow/resolved-comparison — head-to-head accuracy on resolved games
  *   GET /api/shadow/recent?limit=50     — last N raw shadow entries
- *   GET /api/shadow/fbref-diag           — diagnostic: FBRef xG source state
  *
  * All endpoints are gated on the CALIBRATION_ADMIN_KEY header.
  * Reads from the ShadowComparison Postgres table (survives Railway redeploys).
@@ -15,12 +14,6 @@
 
 import { Hono } from "hono";
 import { prisma } from "../prisma";
-import {
-  fetchLeagueXG,
-  lookupInLeague,
-  normalizeSoccerTeamName,
-  type FBRefLeague,
-} from "../lib/fbrefApi";
 
 const shadowRouter = new Hono();
 
@@ -381,158 +374,6 @@ shadowRouter.get("/recent", async (c) => {
   }));
 
   return c.json({ data });
-});
-
-// ─── GET /api/shadow/fbref-diag ───────────────────────────────────────
-
-/**
- * Raw diagnostic: bypasses the cached fetchLeagueXG and issues direct fetches
- * to FBRef. For EPL, returns the FULL body (up to 200KB) plus pattern
- * analysis. Other leagues get lightweight summary only.
- */
-shadowRouter.get("/fbref-diag", async (c) => {
-  const denied = checkAdminKey(c);
-  if (denied) return denied;
-
-  const FBREF_URLS: Record<FBRefLeague, string> = {
-    EPL: "https://fbref.com/en/comps/9/Premier-League-Stats",
-    La_Liga: "https://fbref.com/en/comps/12/La-Liga-Stats",
-    Bundesliga: "https://fbref.com/en/comps/20/Bundesliga-Stats",
-    Serie_A: "https://fbref.com/en/comps/11/Serie-A-Stats",
-    Ligue_1: "https://fbref.com/en/comps/13/Ligue-1-Stats",
-  };
-  const leagues: FBRefLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
-
-  // Pattern scan helpers — look for FBRef table structures
-  const PATTERNS_TO_CHECK = ["data-stat=\"xg_for\"", "data-stat=\"team\"", "_overall", "xg_against", "<!--", "<table"];
-
-  function scanPatterns(body: string) {
-    const matches: Record<string, { found: boolean; context: string | null }> = {};
-    for (const pat of PATTERNS_TO_CHECK) {
-      const idx = body.indexOf(pat);
-      if (idx >= 0) {
-        const ctxStart = Math.max(0, idx - 50);
-        const ctxEnd = Math.min(body.length, idx + pat.length + 250);
-        matches[pat] = { found: true, context: body.slice(ctxStart, ctxEnd) };
-      } else {
-        matches[pat] = { found: false, context: null };
-      }
-    }
-    return matches;
-  }
-
-  function countTableTags(body: string): number {
-    const re = /<table/gi;
-    let count = 0;
-    while (re.exec(body)) count++;
-    return count;
-  }
-
-  const results: Record<string, any> = {};
-
-  for (const league of leagues) {
-    const url = FBREF_URLS[league];
-    const start = Date.now();
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(20_000),
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Connection": "keep-alive",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site": "none",
-          "Sec-Fetch-User": "?1",
-        },
-      });
-      const durationMs = Date.now() - start;
-      const body = await response.text();
-
-      const relevantHeaders: Record<string, string> = {};
-      for (const key of ["content-type", "cf-ray", "server", "x-robots-tag"]) {
-        const val = response.headers.get(key);
-        if (val) relevantHeaders[key] = val;
-      }
-
-      const hasOverallTable = body.includes("_overall");
-      const isCloudflare = body.includes("Just a moment") || body.includes("Checking your browser");
-
-      const entry: Record<string, any> = {
-        url,
-        httpStatus: response.status,
-        headers: relevantHeaders,
-        bodyLength: body.length,
-        bodyPreview: body.slice(0, 500),
-        hasOverallTable,
-        isCloudflareChallenge: isCloudflare,
-        tableTagCount: countTableTags(body),
-        patternScan: scanPatterns(body),
-        durationMs,
-      };
-
-      // For EPL only: include full body (up to 200KB) for deep inspection
-      if (league === "EPL") {
-        entry.fullBody = body.slice(0, 200_000);
-      }
-
-      results[league] = entry;
-    } catch (err: any) {
-      const durationMs = Date.now() - start;
-      results[league] = {
-        url,
-        error: err?.message ?? String(err),
-        errorName: err?.name,
-        durationMs,
-      };
-    }
-  }
-
-  // Also run the cached path for comparison
-  const cachedResults: Record<string, any> = {};
-  for (const league of leagues) {
-    try {
-      const map = await fetchLeagueXG(league);
-      if (!map) {
-        cachedResults[league] = { status: "null" };
-      } else {
-        cachedResults[league] = { status: "ok", teamCount: map.size };
-      }
-    } catch (err: any) {
-      cachedResults[league] = { status: "error", message: err?.message };
-    }
-  }
-
-  // Test lookups to verify canonicalization
-  const testLookups = [
-    { espnName: "Chelsea", league: "EPL" as FBRefLeague },
-    { espnName: "Manchester United", league: "EPL" as FBRefLeague },
-    { espnName: "Brighton & Hove Albion", league: "EPL" as FBRefLeague },
-  ];
-  const lookupResults = [];
-  for (const t of testLookups) {
-    const map = await fetchLeagueXG(t.league);
-    const hit = lookupInLeague(map, t.espnName, t.league);
-    lookupResults.push({
-      espnName: t.espnName,
-      league: t.league,
-      normalizedTo: normalizeSoccerTeamName(t.espnName),
-      found: !!hit,
-      fbrefName: hit?.name ?? null,
-    });
-  }
-
-  return c.json({
-    data: {
-      source: "FBRef",
-      rawFetches: results,
-      cachedFetchLeagueXG: cachedResults,
-      testLookups: lookupResults,
-    },
-  });
 });
 
 // ─── GET /api/shadow/nba-stats-diag (vestigial) ──────────────────────
