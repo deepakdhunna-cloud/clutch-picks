@@ -165,7 +165,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     dataSources.push("Open-Meteo weather");
   }
   if (ctx.homeXG || ctx.awayXG) {
-    dataSources.push("Understat xG");
+    dataSources.push("FBRef xG");
   }
   if (ctx.marketConsensus) {
     dataSources.push("SharpAPI market consensus");

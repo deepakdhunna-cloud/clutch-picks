@@ -7,7 +7,7 @@
  *   GET /api/shadow/logs                — aggregated stats across all shadow logs
  *   GET /api/shadow/resolved-comparison — head-to-head accuracy on resolved games
  *   GET /api/shadow/recent?limit=50     — last N raw shadow entries
- *   GET /api/shadow/understat-diag      — diagnostic: Understat cache state
+ *   GET /api/shadow/fbref-diag           — diagnostic: FBRef xG source state
  *
  * All endpoints are gated on the CALIBRATION_ADMIN_KEY header.
  * Reads from the ShadowComparison Postgres table (survives Railway redeploys).
@@ -19,8 +19,8 @@ import {
   fetchLeagueXG,
   lookupInLeague,
   normalizeSoccerTeamName,
-  type UnderstatLeague,
-} from "../lib/understatApi";
+  type FBRefLeague,
+} from "../lib/fbrefApi";
 
 const shadowRouter = new Hono();
 
@@ -383,28 +383,28 @@ shadowRouter.get("/recent", async (c) => {
   return c.json({ data });
 });
 
-// ─── GET /api/shadow/understat-diag ────────────────────────────────────
+// ─── GET /api/shadow/fbref-diag ───────────────────────────────────────
 
 /**
  * Raw diagnostic: bypasses the cached fetchLeagueXG and issues direct fetches
- * to Understat. For EPL, returns the FULL body (up to 200KB) plus pattern
+ * to FBRef. For EPL, returns the FULL body (up to 200KB) plus pattern
  * analysis. Other leagues get lightweight summary only.
  */
-shadowRouter.get("/understat-diag", async (c) => {
+shadowRouter.get("/fbref-diag", async (c) => {
   const denied = checkAdminKey(c);
   if (denied) return denied;
 
-  const leagues: UnderstatLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
-  const TEAMS_DATA_RE = /var\s+teamsData\s*=\s*JSON\.parse\('([^']+)'\)/;
+  const FBREF_URLS: Record<FBRefLeague, string> = {
+    EPL: "https://fbref.com/en/comps/9/Premier-League-Stats",
+    La_Liga: "https://fbref.com/en/comps/12/La-Liga-Stats",
+    Bundesliga: "https://fbref.com/en/comps/20/Bundesliga-Stats",
+    Serie_A: "https://fbref.com/en/comps/11/Serie-A-Stats",
+    Ligue_1: "https://fbref.com/en/comps/13/Ligue-1-Stats",
+  };
+  const leagues: FBRefLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
 
-  // Determine current season
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
-  const season = m >= 6 ? y : y - 1;
-
-  // Pattern scan helpers
-  const PATTERNS_TO_CHECK = ["teamsData", "JSON.parse", "datesData", "playersData", "xG", "<script"];
+  // Pattern scan helpers — look for FBRef table structures
+  const PATTERNS_TO_CHECK = ["data-stat=\"xg_for\"", "data-stat=\"team\"", "_overall", "xg_against", "<!--", "<table"];
 
   function scanPatterns(body: string) {
     const matches: Record<string, { found: boolean; context: string | null }> = {};
@@ -421,8 +421,8 @@ shadowRouter.get("/understat-diag", async (c) => {
     return matches;
   }
 
-  function countScriptTags(body: string): number {
-    const re = /<script/gi;
+  function countTableTags(body: string): number {
+    const re = /<table/gi;
     let count = 0;
     while (re.exec(body)) count++;
     return count;
@@ -431,7 +431,7 @@ shadowRouter.get("/understat-diag", async (c) => {
   const results: Record<string, any> = {};
 
   for (const league of leagues) {
-    const url = `https://understat.com/league/${league}/${season}`;
+    const url = FBREF_URLS[league];
     const start = Date.now();
     try {
       const response = await fetch(url, {
@@ -458,7 +458,7 @@ shadowRouter.get("/understat-diag", async (c) => {
         if (val) relevantHeaders[key] = val;
       }
 
-      const regexMatch = TEAMS_DATA_RE.test(body);
+      const hasOverallTable = body.includes("_overall");
       const isCloudflare = body.includes("Just a moment") || body.includes("Checking your browser");
 
       const entry: Record<string, any> = {
@@ -467,9 +467,9 @@ shadowRouter.get("/understat-diag", async (c) => {
         headers: relevantHeaders,
         bodyLength: body.length,
         bodyPreview: body.slice(0, 500),
-        teamsDataRegexMatch: regexMatch,
+        hasOverallTable,
         isCloudflareChallenge: isCloudflare,
-        scriptTagCount: countScriptTags(body),
+        tableTagCount: countTableTags(body),
         patternScan: scanPatterns(body),
         durationMs,
       };
@@ -506,11 +506,31 @@ shadowRouter.get("/understat-diag", async (c) => {
     }
   }
 
+  // Test lookups to verify canonicalization
+  const testLookups = [
+    { espnName: "Chelsea", league: "EPL" as FBRefLeague },
+    { espnName: "Manchester United", league: "EPL" as FBRefLeague },
+    { espnName: "Brighton & Hove Albion", league: "EPL" as FBRefLeague },
+  ];
+  const lookupResults = [];
+  for (const t of testLookups) {
+    const map = await fetchLeagueXG(t.league);
+    const hit = lookupInLeague(map, t.espnName, t.league);
+    lookupResults.push({
+      espnName: t.espnName,
+      league: t.league,
+      normalizedTo: normalizeSoccerTeamName(t.espnName),
+      found: !!hit,
+      fbrefName: hit?.name ?? null,
+    });
+  }
+
   return c.json({
     data: {
-      season,
+      source: "FBRef",
       rawFetches: results,
       cachedFetchLeagueXG: cachedResults,
+      testLookups: lookupResults,
     },
   });
 });

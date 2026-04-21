@@ -2,7 +2,7 @@
  * EPL-specific factors.
  *
  * Weight budget: 0.42 (remaining after 0.58 base). Five factors:
- *   - xG differential (Understat):              0.12
+ *   - xG differential (FBRef):              0.12
  *   - Fixture congestion (midweek cups / UCL):  0.08
  *   - Key player availability:                  0.12
  *   - Manager-change bounce:                    0.04
@@ -10,7 +10,7 @@
  *   → 0.42 exactly
  *
  * Data sources:
- *   - understat.com for xG (6h cache)
+ *   - fbref.com for xG (6h cache)
  *   - ESPN schedule for fixture congestion
  *   - ./data/soccerManagerChanges.json for new-manager windows
  *   - ESPN standings for stakes flags (6h cache)

@@ -2,7 +2,7 @@
  * MLS-specific factors.
  *
  * Same five factors as EPL, same weights (0.12 / 0.08 / 0.12 / 0.04 / 0.06
- * = 0.42). The only difference is the xG factor: Understat doesn't cover
+ * = 0.42). The only difference is the xG factor: FBRef doesn't cover
  * MLS, so we ship it permanently `available: false` until an ASA or
  * similar source is wired up.
  *
@@ -24,15 +24,15 @@ import {
 export function computeMLSFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  // 1. xG — disabled for MLS (Understat doesn't cover the league)
+  // 1. xG — disabled for MLS (FBRef doesn't cover MLS xG)
   factors.push({
     key: "xg_differential",
-    label: "Understat xG differential",
+    label: "FBRef xG differential",
     homeDelta: 0,
     weight: 0.12,
     available: false,
     evidence:
-      "MLS xG not yet integrated — Understat does not cover MLS, ASA data source TODO",
+      "MLS xG not yet integrated — FBRef does not cover MLS, ASA data source TODO",
   });
 
   factors.push(fixtureCongestionFactor(ctx, 0.08));    // 0.08

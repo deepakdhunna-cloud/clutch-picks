@@ -16,7 +16,7 @@ function factor(ctx: ReturnType<typeof makeSoccerContext>, key: string) {
 }
 
 describe("EPL — xG differential", () => {
-  it("is available when BOTH teams have ≥10 Understat games", () => {
+  it("is available when BOTH teams have ≥10 FBRef games", () => {
     const ctx = makeSoccerContext("EPL", {
       homeXG: { name: "Home FC", games: 30, xgPerGame: 2.0, xgaPerGame: 0.9, xgDiffPerGame: 1.1 },
       awayXG: { name: "Away FC", games: 30, xgPerGame: 1.3, xgaPerGame: 1.1, xgDiffPerGame: 0.2 },

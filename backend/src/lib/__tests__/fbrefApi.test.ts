@@ -1,13 +1,13 @@
 /**
- * EPL team-name normalization test.
+ * EPL team-name normalization test for FBRef.
  *
  * Verifies that every current EPL team's ESPN displayName canonicalizes
- * to a key that Understat actually uses. Catches alias map gaps and
- * normalization regressions without hitting the live Understat API.
+ * to a key that FBRef actually uses. Catches alias map gaps and
+ * normalization regressions without hitting the live FBRef site.
  */
 
 import { describe, it, expect } from "bun:test";
-import { canonicalName } from "../understatApi";
+import { canonicalName } from "../fbrefApi";
 
 /**
  * The 20 EPL teams for the 2024-25 season, as ESPN's scoreboard API
@@ -37,21 +37,21 @@ const ESPN_EPL_TEAM_NAMES = [
 ] as const;
 
 /**
- * The normalized keys that Understat uses for these teams.
- * Sourced from Understat's EPL page — these are the keys our
- * `normalizeSoccerTeamName` produces when given Understat's raw names.
+ * The normalized keys that FBRef uses for these teams.
+ * Sourced from FBRef's EPL page — these are the keys our
+ * `normalizeSoccerTeamName` produces when given FBRef's raw names.
  *
- * ESPN name → expected Understat-side key after canonicalization.
+ * ESPN name → expected FBRef-side key after canonicalization.
  */
 const EXPECTED_CANONICAL_KEYS: Record<string, string> = {
   "Chelsea": "chelsea",
   "Brighton & Hove Albion": "brighton",
-  "Manchester United": "manchester united",
+  "Manchester United": "manchester utd",
   "Manchester City": "manchester city",
-  "Newcastle United": "newcastle united",
-  "Nottingham Forest": "nottingham forest",
+  "Newcastle United": "newcastle utd",
+  "Nottingham Forest": "nottham forest",
   "Tottenham Hotspur": "tottenham",
-  "Wolverhampton Wanderers": "wolverhampton wanderers",
+  "Wolverhampton Wanderers": "wolves",
   "West Ham United": "west ham",
   "AFC Bournemouth": "bournemouth",
   "Liverpool": "liverpool",
@@ -61,13 +61,13 @@ const EXPECTED_CANONICAL_KEYS: Record<string, string> = {
   "Crystal Palace": "crystal palace",
   "Fulham": "fulham",
   "Brentford": "brentford",
-  "Leicester City": "leicester",
-  "Ipswich Town": "ipswich",
+  "Leicester City": "leicester city",
+  "Ipswich Town": "ipswich town",
   "Southampton": "southampton",
 };
 
-describe("EPL team-name canonicalization", () => {
-  it("every ESPN EPL team name canonicalizes to a known Understat key", () => {
+describe("EPL team-name canonicalization (FBRef)", () => {
+  it("every ESPN EPL team name canonicalizes to a known FBRef key", () => {
     const failures: string[] = [];
 
     for (const espnName of ESPN_EPL_TEAM_NAMES) {

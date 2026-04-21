@@ -2,7 +2,7 @@
  * Shared soccer factor primitives.
  *
  * EPL, MLS, and UCL all use the same math for:
- *   - xG differential (when Understat data is available)
+ *   - xG differential (when FBRef data is available)
  *   - Fixture congestion penalty
  *   - Key-player availability (out + doubtful)
  *   - Manager-bounce window
@@ -27,7 +27,7 @@ export function xGFactor(ctx: GameContext): FactorContribution {
 
   let delta = 0;
   let evidence =
-    "Understat xG unavailable for one or both teams — factor inactive, weight redistributed";
+    "FBRef xG unavailable for one or both teams — factor inactive, weight redistributed";
 
   if (enoughSample) {
     const diff = home!.xgDiffPerGame - away!.xgDiffPerGame;
@@ -38,7 +38,7 @@ export function xGFactor(ctx: GameContext): FactorContribution {
 
   return {
     key: "xg_differential",
-    label: "Understat xG differential",
+    label: "FBRef xG differential",
     homeDelta: delta,
     weight: 0.12,
     available: enoughSample,

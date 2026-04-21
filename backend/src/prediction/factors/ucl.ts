@@ -2,7 +2,7 @@
  * UCL-specific factors.
  *
  * Weight budget: 0.42. Five factors:
- *   - xG differential (Understat, cross-league):    0.12
+ *   - xG differential (FBRef, cross-league):    0.12
  *   - Fixture congestion (heavier than EPL):        0.10
  *   - Key player availability (slightly lighter):   0.10
  *   - Competition stage / pedigree:                 0.06
@@ -45,7 +45,7 @@ export function computeUCLFactors(ctx: GameContext): FactorContribution[] {
   // 1. xG — same shape as EPL but with a cross-league evidence note. We
   //    inline it here (rather than reusing soccerCommon.xGFactor) so the
   //    evidence string can say "xG via {league}" for each team. When both
-  //    teams have no Understat data, the factor is unavailable.
+  //    teams have no FBRef data, the factor is unavailable.
   factors.push(buildUCLxGFactor(ctx));                 // 0.12
 
   // 2. Fixture congestion — slightly higher weight (0.10 vs EPL's 0.08)
@@ -75,18 +75,18 @@ function buildUCLxGFactor(ctx: GameContext): FactorContribution {
 
   let delta = 0;
   let evidence =
-    "Understat xG unavailable for one or both UCL teams — factor inactive, weight redistributed";
+    "FBRef xG unavailable for one or both UCL teams — factor inactive, weight redistributed";
 
   if (enoughSample) {
     const diff = home!.xgDiffPerGame - away!.xgDiffPerGame;
     delta = Math.max(-60, Math.min(60, diff * 30));
     const sign = diff >= 0 ? "+" : "";
-    evidence = `${ctx.game.homeTeam.abbreviation} xG diff ${home!.xgDiffPerGame >= 0 ? "+" : ""}${home!.xgDiffPerGame.toFixed(2)}/game (Understat) vs ${ctx.game.awayTeam.abbreviation} ${away!.xgDiffPerGame >= 0 ? "+" : ""}${away!.xgDiffPerGame.toFixed(2)}/game (${sign}${diff.toFixed(2)} advantage, ~${Math.round(delta)} Elo)`;
+    evidence = `${ctx.game.homeTeam.abbreviation} xG diff ${home!.xgDiffPerGame >= 0 ? "+" : ""}${home!.xgDiffPerGame.toFixed(2)}/game (FBRef) vs ${ctx.game.awayTeam.abbreviation} ${away!.xgDiffPerGame >= 0 ? "+" : ""}${away!.xgDiffPerGame.toFixed(2)}/game (${sign}${diff.toFixed(2)} advantage, ~${Math.round(delta)} Elo)`;
   }
 
   return {
     key: "xg_differential",
-    label: "Understat xG differential (cross-league)",
+    label: "FBRef xG differential (cross-league)",
     homeDelta: delta,
     weight: 0.12,
     available: enoughSample,

@@ -16,7 +16,7 @@ import type {
 } from "../lib/espnStats";
 import type { TeamShootingRecent } from "../lib/nbaStatsApi";
 import type { UmpireZoneBias } from "../lib/mlbUmpireApi";
-import type { UnderstatTeam } from "../lib/understatApi";
+import type { UnderstatTeam } from "../lib/fbrefApi";
 import type { MarketConsensus } from "../lib/sharpApi";
 import type { LeagueStandingsRow } from "../lib/soccerStandings";
 
@@ -70,7 +70,7 @@ export type GameContext = {
   // umpire unassigned, or umpire not in our tendency file.
   homePlateUmpire?: UmpireZoneBias | null;
 
-  // Soccer (EPL/UCL): live Understat xG. null for MLS and for teams Understat
+  // Soccer (EPL/UCL): live FBRef xG. null for MLS and for teams FBRef
   // doesn't cover. null on fetch failure.
   homeXG?: UnderstatTeam | null;
   awayXG?: UnderstatTeam | null;

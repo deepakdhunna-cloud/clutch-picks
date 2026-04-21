@@ -34,7 +34,7 @@ import {
   lookupInLeague,
   lookupTeamXG,
   type UnderstatLeague,
-} from "../lib/understatApi";
+} from "../lib/fbrefApi";
 import {
   fetchLeagueStandings,
   computeStakes,
@@ -172,8 +172,8 @@ export async function buildGameContext(
     fetchStartingLineup(game.awayTeam.id, sport, gameDate),
     fetchGameWeather(game.venue ?? "", gameDate, sport),
     sport === "MLB" ? lookupHomePlateUmpireBias(game.homeTeam.id, gameDate) : Promise.resolve(null),
-    // Soccer xG: EPL hits Understat's EPL endpoint directly; UCL tries each
-    // big-5 league in order; MLS is null (not covered by Understat — will be
+    // Soccer xG: EPL hits FBRef's EPL endpoint directly; UCL tries each
+    // big-5 league in order; MLS is null (not covered by FBRef — will be
     // flagged unavailable in the MLS factor file).
     sport === "EPL"
       ? fetchLeagueXG("EPL").then((m) => lookupInLeague(m, game.homeTeam.name, "EPL"))
