@@ -8,6 +8,7 @@ import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
 import { generatePrediction, bustAIAnalysisCache } from "../lib/predictions";
 import { runShadowPrediction, useNewEngine, cleanOldShadowLogs } from "../prediction/shadow";
+import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
 import { Sport as SportEnum, League, GameStatus as SportsGameStatus } from "../types/sports";
 import type { Game as SportsGame } from "../types/sports";
 import { resolvePicksInBackground } from "../lib/resolve-picks";
@@ -595,6 +596,65 @@ async function addPredictionToGame(game: Game): Promise<Game> {
     };
   }
 
+  // ── New engine path (USE_NEW_PREDICTION_ENGINE=true) ─────────────────────
+  // Short-circuit the old prediction pipeline entirely. Shadow logging is
+  // skipped because there's nothing to compare against on this path.
+  if (useNewEngine()) {
+    try {
+      const newPrediction = await runNewEnginePrediction(game);
+
+      // Market comparison annotation (same block as old path, post-hoc only).
+      try {
+        const market = await fetchMarketConsensus(
+          game.sport,
+          game.homeTeam.name,
+          game.awayTeam.name,
+          new Date(game.gameTime),
+        );
+        if (market && Number.isFinite(market.noVigHomeProb)) {
+          const modelHomeProb = (newPrediction.homeWinProbability ?? 50) / 100;
+          const divergence = Math.abs(modelHomeProb - market.noVigHomeProb);
+          const isDivergent = divergence > 0.10;
+          const pickedSide: "home" | "away" = newPrediction.predictedWinner;
+          const bestBook = market.lines
+            .slice()
+            .sort((a, b) =>
+              pickedSide === "home"
+                ? b.homeAmerican - a.homeAmerican
+                : b.awayAmerican - a.awayAmerican,
+            )[0];
+          newPrediction.marketComparison = {
+            modelHomeProb,
+            marketHomeProb: market.noVigHomeProb,
+            divergence,
+            isDivergent,
+            bestBook: bestBook
+              ? {
+                  sportsbook: bestBook.sportsbook,
+                  american: pickedSide === "home" ? bestBook.homeAmerican : bestBook.awayAmerican,
+                }
+              : null,
+          };
+        }
+      } catch (err) {
+        console.warn("[market] annotation failed:", err instanceof Error ? err.message : err);
+      }
+
+      setCachedPrediction(game.id, newPrediction);
+
+      return {
+        ...game,
+        prediction: newPrediction,
+      };
+    } catch (err) {
+      console.error(
+        `[engine] New engine failed for ${game.id} (${game.sport}); falling back to old engine:`,
+        err instanceof Error ? err.message : err,
+      );
+      // Fall through to the old engine path on failure — never break the user response.
+    }
+  }
+
   const homeRecord = parseRecord(game.homeTeam.record);
   const awayRecord = parseRecord(game.awayTeam.record);
 
@@ -627,11 +687,18 @@ async function addPredictionToGame(game: Game): Promise<Game> {
 
   const prediction = await generatePrediction(sportsGame, game.spread, game.overUnder);
 
+  // Confidence = raw winner probability (no capping, no dampener, no band-
+  // derived value). The confidenceBand enum still exists as a separate field
+  // for display tiering.
+  const rawConfidence = Math.round(
+    Math.max(prediction.homeWinProbability, prediction.awayWinProbability),
+  );
+
   const predictionResult: GamePrediction = {
     id: `pred-${game.id}`,
     gameId: game.id,
     predictedWinner: prediction.predictedWinner,
-    confidence: prediction.confidence,
+    confidence: rawConfidence,
     analysis: prediction.aiAnalysis,
     predictedSpread: prediction.spread,
     predictedTotal: prediction.overUnder,

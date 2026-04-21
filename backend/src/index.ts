@@ -25,6 +25,15 @@ import { logger } from "hono/logger";
 // cached predictions to expire.
 clearAllPredictionCaches();
 
+// Log which prediction engine is active so we can verify the flag in Railway.
+{
+  const flagValue = process.env.USE_NEW_PREDICTION_ENGINE;
+  const isNew = flagValue === "true";
+  console.log(
+    `[engine] USE_NEW_PREDICTION_ENGINE=${flagValue ?? "(unset)"}, using ${isNew ? "new" : "old"} engine`,
+  );
+}
+
 // Type the Hono app with user/session variables
 const app = new Hono<{
   Variables: {
