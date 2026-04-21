@@ -55,9 +55,10 @@ const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
  * Redistribute weight from unavailable factors proportionally to available ones.
  *
  * This is the honest way to handle missing data:
- * - Unavailable factors contribute 0 delta
- * - Their weight budget is redistributed so available factors don't get diluted
- * - The total effective weight still sums to the original total
+ * - Unavailable factors contribute 0 delta and their displayed weight drops
+ *   to 0 (they don't count toward the visible factor breakdown).
+ * - Their weight budget is redistributed so available factors don't get diluted.
+ * - The total effective weight still sums to the original total.
  *
  * Example: if base rating_diff (weight 0.40) and rest (weight 0.05) are available
  * but form (weight 0.10) is not, then rating_diff gets 0.40 * (0.55/0.45) = 0.489
@@ -69,18 +70,33 @@ function redistributeWeights(factors: FactorContribution[]): FactorContribution[
     .filter((f) => f.available)
     .reduce((sum, f) => sum + f.weight, 0);
 
-  if (availableWeight === 0 || availableWeight === totalWeight) {
-    return factors; // Nothing to redistribute (or all unavailable)
+  if (availableWeight === 0) {
+    return factors; // All factors unavailable — nothing to redistribute onto.
   }
 
   const scale = totalWeight / availableWeight;
 
   return factors.map((f) => ({
     ...f,
-    // Available factors get scaled up; unavailable stay at their original weight
-    // (for display) but their delta is already 0
-    weight: f.available ? f.weight * scale : f.weight,
+    // Available factors absorb the unavailable budget proportionally.
+    // Unavailable factors' displayed weight drops to 0 — their contribution
+    // was already 0, and we don't want them inflating the visible total.
+    weight: f.available ? f.weight * scale : 0,
   }));
+}
+
+/**
+ * Normalize factor weights so they sum to exactly 1.0. Canonical source
+ * weights can drift from 1.0 over time as factors are added/tuned; this
+ * is the safety net that keeps the visible breakdown coherent.
+ *
+ * Returns the factors unchanged if they already sum within 0.001 of 1.0.
+ */
+function normalizeWeightsToOne(factors: FactorContribution[]): FactorContribution[] {
+  const sum = factors.reduce((acc, f) => acc + f.weight, 0);
+  if (sum <= 0) return factors;
+  if (Math.abs(1 - sum) <= 0.001) return factors;
+  return factors.map((f) => ({ ...f, weight: f.weight / sum }));
 }
 
 /**
@@ -96,8 +112,20 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   const sportFactors = sportFactorFn ? sportFactorFn(ctx) : [];
   const allFactors = [...baseFactors, ...sportFactors];
 
-  // 2. Redistribute weight from unavailable factors
-  const adjustedFactors = redistributeWeights(allFactors);
+  // 2. Redistribute weight from unavailable factors (unavailable → 0,
+  //    available factors scale up proportionally to fill the budget).
+  const redistributedFactors = redistributeWeights(allFactors);
+
+  // 2b. Safety-net normalization. If canonical source weights drift from
+  //     1.0 (e.g. a sport file sums to 1.01 after a factor is added),
+  //     divide through so the visible breakdown always sums to 1.0.
+  const preNormSum = redistributedFactors.reduce((acc, f) => acc + f.weight, 0);
+  if (preNormSum > 0 && Math.abs(1 - preNormSum) > 0.01) {
+    console.warn(
+      `[engine] warning: ${ctx.sport} factor weights sum to ${preNormSum.toFixed(4)}, expected 1.0`,
+    );
+  }
+  const adjustedFactors = normalizeWeightsToOne(redistributedFactors);
 
   // 3. Sum weighted deltas → total rating advantage for home
   // Each factor's contribution = homeDelta * weight (if available)

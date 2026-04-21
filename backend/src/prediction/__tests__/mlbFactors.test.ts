@@ -81,12 +81,97 @@ function makeMLBContext(overrides: Partial<GameContext> = {}): GameContext {
 }
 
 describe("computeMLBFactors", () => {
-  it("factor weights sum to exactly 0.42", () => {
+  it("factor weights sum to exactly 0.43 (0.22 SP + 0.06 bullpen + 0.04 park + 0.02 weather + 0.02 ump + 0.02 early-season + 0.05 injuries)", () => {
     const ctx = makeMLBContext();
     const factors = computeMLBFactors(ctx);
     const sum = factors.reduce((s, f) => s + f.weight, 0);
     // Use toFixed to avoid floating-point precision issues
-    expect(+sum.toFixed(2)).toBe(0.42);
+    expect(+sum.toFixed(2)).toBe(0.43);
+  });
+
+  it("includes the position-player injuries factor at weight 0.05", () => {
+    const ctx = makeMLBContext();
+    const factors = computeMLBFactors(ctx);
+    const injuries = factors.find((f) => f.key === "injuries_mlb");
+    expect(injuries).toBeDefined();
+    expect(injuries!.weight).toBeCloseTo(0.05, 5);
+    expect(injuries!.label).toBe("Position player injuries");
+  });
+
+  it("injuries factor reports zero when no injuries on either side", () => {
+    const ctx = makeMLBContext();
+    const f = computeMLBFactors(ctx).find((x) => x.key === "injuries_mlb")!;
+    expect(f.homeDelta).toBe(0);
+    expect(f.evidence).toBe("No significant position-player injuries reported");
+  });
+
+  it("injuries factor favors home when away has more position-player OUTs", () => {
+    const ctx = makeMLBContext({
+      homeInjuries: {
+        out: [], doubtful: [], questionable: [],
+        totalOut: 0, totalDoubtful: 0, totalQuestionable: 0,
+      },
+      awayInjuries: {
+        out: [
+          { name: "Slugger One", position: "OF", detail: "Hamstring" },
+          { name: "Slugger Two", position: "SS", detail: "Oblique" },
+        ],
+        doubtful: [],
+        questionable: [],
+        totalOut: 2, totalDoubtful: 0, totalQuestionable: 0,
+      },
+    });
+    const f = computeMLBFactors(ctx).find((x) => x.key === "injuries_mlb")!;
+    expect(f.available).toBe(true);
+    expect(f.homeDelta).toBeGreaterThan(0);
+    expect(f.evidence).toContain("Slugger One (OF) OUT");
+    expect(f.evidence).toContain("Slugger Two (SS) OUT");
+  });
+
+  it("injuries factor skips the announced starting pitcher", () => {
+    const basePitcher = {
+      id: "p1",
+      name: "Ace Pitcher",
+      position: "SP",
+    };
+    const ctx = makeMLBContext({
+      homeLineup: { startingPitcher: basePitcher as any, lineup: [] } as any,
+      homeInjuries: {
+        out: [{ name: "Ace Pitcher", position: "SP", detail: "Elbow" }],
+        doubtful: [], questionable: [],
+        totalOut: 1, totalDoubtful: 0, totalQuestionable: 0,
+      },
+      awayInjuries: {
+        out: [], doubtful: [], questionable: [],
+        totalOut: 0, totalDoubtful: 0, totalQuestionable: 0,
+      },
+    });
+    const f = computeMLBFactors(ctx).find((x) => x.key === "injuries_mlb")!;
+    // The announced SP is excluded (handled by SP factor), so no signal.
+    expect(f.homeDelta).toBe(0);
+    expect(f.evidence).toBe("No significant position-player injuries reported");
+  });
+
+  it("injuries factor caps (+N more) beyond 3 listed players", () => {
+    const ctx = makeMLBContext({
+      homeInjuries: {
+        out: [
+          { name: "P1", position: "1B", detail: "" },
+          { name: "P2", position: "2B", detail: "" },
+          { name: "P3", position: "3B", detail: "" },
+          { name: "P4", position: "SS", detail: "" },
+          { name: "P5", position: "OF", detail: "" },
+        ],
+        doubtful: [], questionable: [],
+        totalOut: 5, totalDoubtful: 0, totalQuestionable: 0,
+      },
+      awayInjuries: {
+        out: [], doubtful: [], questionable: [],
+        totalOut: 0, totalDoubtful: 0, totalQuestionable: 0,
+      },
+    });
+    const f = computeMLBFactors(ctx).find((x) => x.key === "injuries_mlb")!;
+    expect(f.evidence).toContain("(+2 more)");
   });
 
   it("does not include a handedness factor", () => {

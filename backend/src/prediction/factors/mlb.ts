@@ -3,22 +3,24 @@
  *
  * MLB IS STARTER-DOMINATED. The weights reflect this.
  *
- * Weight budget: 0.42 (remaining after 0.58 base).
+ * Weight budget: ~0.43 (base is 0.58 — engine normalizes to 1.0 post-redistribution).
  * Breakdown (handedness removed — data too expensive to source reliably):
- *   - Starting pitcher matchup: 0.24
- *   - Bullpen fatigue: 0.07
- *   - Ballpark factor: 0.05  (static data from Baseball Savant 2023-2024)
+ *   - Starting pitcher matchup: 0.22
+ *   - Bullpen fatigue: 0.06
+ *   - Ballpark factor: 0.04  (static data from Baseball Savant 2023-2024)
  *   - Weather (wind for outdoor day games): 0.02
  *   - Umpire strike zone: 0.02
  *   - Early-season dampening adjustment: 0.02
- *   Total: 0.42
+ *   - Position player injuries: 0.05
+ *   Total: 0.43
  *
  * Data source: MLB StatsAPI provides reliable probable pitcher data including
  * ERA, FIP, WHIP, K/9, BB/9, and recent 5-start ERA.
  * Verified against live API response 2026-04-12: hydrate=probablePitcher
  * returns pitcher name + personId, enriched via /people/{id}/stats.
  *
- * All deltas in rating points (positive = favors home).
+ * All deltas in rating points (positive = favors home), except the injuries
+ * factor which produces a clamped [-1, +1] score (see below).
  */
 
 import type { GameContext, FactorContribution } from "../types";
@@ -122,7 +124,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     key: "starting_pitcher",
     label: "Starting pitcher matchup",
     homeDelta: spDelta,
-    weight: 0.24,
+    weight: 0.22,
     available: spAvailable,
     evidence: spEvidence,
   });
@@ -154,7 +156,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     key: "bullpen_fatigue",
     label: "Bullpen fatigue (proxy)",
     homeDelta: bullpenDelta,
-    weight: 0.07,
+    weight: 0.06,
     available: true,
     evidence: bullpenEvidence,
   });
@@ -184,7 +186,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     key: "ballpark",
     label: "Ballpark run environment",
     homeDelta: ballparkDelta,
-    weight: 0.05,
+    weight: 0.04,
     available: ballparkAvailable,
     evidence: ballparkEvidence,
   });
@@ -253,10 +255,10 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     umpireAvailable = true;
   } else if (ump !== null) {
     // Umpire assigned but we have no historical zone data on them.
-    umpireEvidence = `Home plate umpire ${ump.name} — no historical zone data available`;
+    umpireEvidence = `Home plate umpire ${ump.name} — no historical zone data available; weight redistributed to other factors`;
   } else {
     umpireEvidence =
-      "Home plate umpire assignment not yet posted — factor inactive, weight redistributed";
+      "Home plate umpire assignment not yet posted — weight redistributed to other factors";
   }
 
   factors.push({
@@ -291,5 +293,124 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
       : `${minGP}+ games played — team stats have stabilized`,
   });
 
+  // ── 8. Position player injuries ───────────────────────────────────────
+  // Penalty-based score: position-player OUT = 1.0, reliever OUT = 0.3,
+  // Doubtful = 0.5× of OUT value, Day-To-Day/Questionable = 0.2×.
+  // Announced starting pitchers are skipped here — the SP factor handles
+  // them. Final score = clamp((awayPenalty - homePenalty) / 3, -1, +1):
+  // three position-player OUTs on one side ≈ ±1.0 signal.
+  const injuryFactor = buildPositionPlayerInjuriesFactor(ctx);
+  factors.push(injuryFactor);
+
   return factors;
+}
+
+// ─── Position player injuries ────────────────────────────────────────────
+
+const POSITION_PLAYER_CODES = new Set([
+  "IF", "OF", "C", "DH", "1B", "2B", "3B", "SS", "LF", "CF", "RF",
+]);
+
+const PITCHER_CODES = new Set(["SP", "P", "RP"]);
+
+type InjuryEntry = { name: string; position: string; detail: string };
+type InjuryBucketStatus = "Out" | "Doubtful" | "Day-To-Day";
+
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function isAnnouncedStarter(
+  entry: InjuryEntry,
+  startingPitcher: LineupPlayer | null,
+): boolean {
+  const pos = (entry.position ?? "").toUpperCase();
+  if (pos !== "SP" && pos !== "P") return false;
+  if (!startingPitcher?.name) return false;
+  return normalizeName(entry.name) === normalizeName(startingPitcher.name);
+}
+
+function penaltyForEntry(entry: InjuryEntry, status: InjuryBucketStatus): number {
+  const pos = (entry.position ?? "").toUpperCase();
+  const isPositionPlayer = POSITION_PLAYER_CODES.has(pos);
+  const isPitcher = PITCHER_CODES.has(pos);
+  // Position player → 1.0; reliever or unknown pitcher → 0.3; anything else
+  // (unknown position, coach, etc.) → treat as 0.3 since we can't confidently
+  // call it a position-player hit.
+  const baseOut = isPositionPlayer ? 1.0 : isPitcher ? 0.3 : 0.3;
+  if (status === "Out") return baseOut;
+  if (status === "Doubtful") return baseOut * 0.5;
+  return baseOut * 0.2; // Day-To-Day
+}
+
+function accumulateTeamPenalty(
+  report: { out: InjuryEntry[]; doubtful: InjuryEntry[]; questionable: InjuryEntry[] },
+  startingPitcher: LineupPlayer | null,
+): { penalty: number; summary: string[] } {
+  let penalty = 0;
+  const summary: string[] = [];
+
+  const bucketPairs: Array<[InjuryEntry[], InjuryBucketStatus]> = [
+    [report.out, "Out"],
+    [report.doubtful, "Doubtful"],
+    // Day-To-Day entries live in the `questionable` bucket after translation
+    // in toTeamInjuryReport — they're the same shelf.
+    [report.questionable, "Day-To-Day"],
+  ];
+
+  for (const [entries, status] of bucketPairs) {
+    for (const entry of entries) {
+      if (isAnnouncedStarter(entry, startingPitcher)) continue;
+      penalty += penaltyForEntry(entry, status);
+      const pos = entry.position || "—";
+      summary.push(`${entry.name} (${pos}) ${status.toUpperCase()}`);
+    }
+  }
+
+  return { penalty, summary };
+}
+
+function formatTeamList(summary: string[]): string {
+  if (summary.length === 0) return "none";
+  const shown = summary.slice(0, 3).join("; ");
+  if (summary.length <= 3) return shown;
+  return `${shown} (+${summary.length - 3} more)`;
+}
+
+function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution {
+  const homeReport = ctx.homeInjuries;
+  const awayReport = ctx.awayInjuries;
+
+  if (!homeReport || !awayReport) {
+    return {
+      key: "injuries_mlb",
+      label: "Position player injuries",
+      homeDelta: 0,
+      weight: 0.05,
+      available: false,
+      evidence: "Injury data unavailable",
+    };
+  }
+
+  const home = accumulateTeamPenalty(homeReport, ctx.homeLineup?.startingPitcher ?? null);
+  const away = accumulateTeamPenalty(awayReport, ctx.awayLineup?.startingPitcher ?? null);
+
+  const rawScore = (away.penalty - home.penalty) / 3.0;
+  const score = Math.max(-1.0, Math.min(1.0, rawScore));
+
+  let evidence: string;
+  if (home.penalty === 0 && away.penalty === 0) {
+    evidence = "No significant position-player injuries reported";
+  } else {
+    evidence = `Home: ${formatTeamList(home.summary)}; Away: ${formatTeamList(away.summary)}`;
+  }
+
+  return {
+    key: "injuries_mlb",
+    label: "Position player injuries",
+    homeDelta: score,
+    weight: 0.05,
+    available: true,
+    evidence,
+  };
 }

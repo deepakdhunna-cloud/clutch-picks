@@ -209,10 +209,10 @@ describe("NFL factors", () => {
 });
 
 describe("MLB factors", () => {
-  it("returns 6 factors", () => {
+  it("returns 7 factors", () => {
     const ctx = makeContext({ sport: "MLB" });
     const factors = computeMLBFactors(ctx);
-    expect(factors.length).toBe(6);
+    expect(factors.length).toBe(7);
     validateFactorShape(factors);
   });
 
@@ -220,7 +220,7 @@ describe("MLB factors", () => {
     const ctx = makeContext({ sport: "MLB" });
     const factors = computeMLBFactors(ctx);
     const sp = factors.find((f) => f.key === "starting_pitcher")!;
-    expect(sp.weight).toBe(0.24);
+    expect(sp.weight).toBe(0.22);
     // No lineup data → unavailable
     expect(sp.available).toBe(false);
   });
