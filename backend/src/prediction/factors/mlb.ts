@@ -3,16 +3,16 @@
  *
  * MLB IS STARTER-DOMINATED. The weights reflect this.
  *
- * Weight budget: ~0.43 (base is 0.58 — engine normalizes to 1.0 post-redistribution).
+ * Weight budget: 0.42 (base is 0.58 → base + MLB = 1.00 exactly).
  * Breakdown (handedness removed — data too expensive to source reliably):
- *   - Starting pitcher matchup: 0.22
+ *   - Starting pitcher matchup: 0.21
  *   - Bullpen fatigue: 0.06
  *   - Ballpark factor: 0.04  (static data from Baseball Savant 2023-2024)
  *   - Weather (wind for outdoor day games): 0.02
  *   - Umpire strike zone: 0.02
  *   - Early-season dampening adjustment: 0.02
  *   - Position player injuries: 0.05
- *   Total: 0.43
+ *   Total: 0.42
  *
  * Data source: MLB StatsAPI provides reliable probable pitcher data including
  * ERA, FIP, WHIP, K/9, BB/9, and recent 5-start ERA.
@@ -124,7 +124,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     key: "starting_pitcher",
     label: "Starting pitcher matchup",
     homeDelta: spDelta,
-    weight: 0.22,
+    weight: 0.21,
     available: spAvailable,
     hasSignal: spAvailable,
     evidence: spEvidence,

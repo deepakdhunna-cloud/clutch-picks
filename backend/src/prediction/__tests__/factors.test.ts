@@ -220,7 +220,7 @@ describe("MLB factors", () => {
     const ctx = makeContext({ sport: "MLB" });
     const factors = computeMLBFactors(ctx);
     const sp = factors.find((f) => f.key === "starting_pitcher")!;
-    expect(sp.weight).toBe(0.22);
+    expect(sp.weight).toBe(0.21);
     // No lineup data → unavailable
     expect(sp.available).toBe(false);
   });

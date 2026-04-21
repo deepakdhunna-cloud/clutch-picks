@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from "bun:test";
 import { computeMLBFactors, getParkFactor } from "../factors/mlb";
+import { computeBaseFactors } from "../factors/base";
 import type { GameContext } from "../types";
 import type { Game, Team } from "../../types/sports";
 import { Sport, League, GameStatus } from "../../types/sports";
@@ -81,12 +82,19 @@ function makeMLBContext(overrides: Partial<GameContext> = {}): GameContext {
 }
 
 describe("computeMLBFactors", () => {
-  it("factor weights sum to exactly 0.43 (0.22 SP + 0.06 bullpen + 0.04 park + 0.02 weather + 0.02 ump + 0.02 early-season + 0.05 injuries)", () => {
+  it("factor weights sum to exactly 0.42 (0.21 SP + 0.06 bullpen + 0.04 park + 0.02 weather + 0.02 ump + 0.02 early-season + 0.05 injuries)", () => {
     const ctx = makeMLBContext();
     const factors = computeMLBFactors(ctx);
     const sum = factors.reduce((s, f) => s + f.weight, 0);
     // Use toFixed to avoid floating-point precision issues
-    expect(+sum.toFixed(2)).toBe(0.43);
+    expect(+sum.toFixed(2)).toBe(0.42);
+  });
+
+  it("base + MLB canonical factor weights sum to exactly 1.0", () => {
+    const ctx = makeMLBContext();
+    const all = [...computeBaseFactors(ctx), ...computeMLBFactors(ctx)];
+    const sum = all.reduce((s, f) => s + f.weight, 0);
+    expect(Math.abs(sum - 1.0)).toBeLessThan(1e-9);
   });
 
   it("includes the position-player injuries factor at weight 0.05", () => {
