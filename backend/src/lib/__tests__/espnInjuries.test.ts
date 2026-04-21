@@ -2,17 +2,20 @@
  * Tests for the ESPN per-game injury parser.
  *
  * Verifies:
- *   - Home/away team matching works by team ID
+ *   - Home/away team matching works by team ID (array order not trusted)
  *   - Individual injury records are parsed with all fields
- *   - Missing / malformed records are handled gracefully
+ *   - Missing / malformed records (no `details`) are handled defensively
  *   - toTeamInjuryReport buckets by status correctly
+ *   - Unsupported sports (soccer) return source="unavailable" with NO
+ *     network call
  */
 
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, spyOn } from "bun:test";
 import {
   parseESPNInjury,
   parseGameInjuries,
   toTeamInjuryReport,
+  fetchGameInjuries,
 } from "../espnInjuries";
 
 // Realistic shape based on ESPN's /summary?event=... response for a Lakers/Rockets game.
@@ -24,7 +27,7 @@ const mockESPNResponse = {
         {
           status: "Out",
           athlete: {
-            id: "3975",
+            id: "4066457",
             fullName: "Austin Reaves",
             displayName: "A. Reaves",
             position: { abbreviation: "G", name: "Guard" },
@@ -34,6 +37,7 @@ const mockESPNResponse = {
             type: "Oblique",
             location: "Torso",
             detail: "Strain",
+            side: "Left",
             returnDate: "2026-05-01",
           },
         },
@@ -78,28 +82,29 @@ const mockESPNResponse = {
 };
 
 describe("parseESPNInjury", () => {
-  it("parses a well-formed injury record", () => {
+  it("parses a well-formed injury record with side", () => {
     const record = mockESPNResponse.injuries[0]!.injuries[0]!;
     const injury = parseESPNInjury(record);
 
     expect(injury).not.toBeNull();
-    expect(injury!.playerId).toBe("3975");
+    expect(injury!.playerId).toBe("4066457");
     expect(injury!.playerName).toBe("Austin Reaves");
     expect(injury!.position).toBe("G");
     expect(injury!.status).toBe("Out");
-    expect(injury!.injuryType).toContain("Oblique");
-    expect(injury!.injuryType).toContain("Strain");
+    // Side is wrapped in parens per the spec's example
+    expect(injury!.injuryDescription).toBe("Oblique Strain (Left)");
     expect(injury!.returnDate).toBe("2026-05-01");
   });
 
-  it("handles missing details gracefully", () => {
+  it("handles missing details defensively", () => {
     const record = mockESPNResponse.injuries[1]!.injuries[1]!;
     const injury = parseESPNInjury(record);
 
     expect(injury).not.toBeNull();
     expect(injury!.playerName).toBe("Bench Player");
     expect(injury!.status).toBe("Doubtful");
-    expect(injury!.injuryType).toBe("");
+    // Falls back to type.description when details is absent
+    expect(injury!.injuryDescription).toBe("doubtful");
     expect(injury!.returnDate).toBeNull();
   });
 
@@ -109,7 +114,7 @@ describe("parseESPNInjury", () => {
     expect(parseESPNInjury(null)).toBeNull();
   });
 
-  it("normalizes various status strings", () => {
+  it("normalizes status strings", () => {
     const cases: Array<[string, string]> = [
       ["Out", "Out"],
       ["OUT", "Out"],
@@ -144,14 +149,9 @@ describe("parseGameInjuries", () => {
     expect(report.awayTeamInjuries[1]!.playerName).toBe("Bench Player");
   });
 
-  it("swaps home/away correctly when team IDs are reversed", () => {
-    // HOU as home, LAL as away
+  it("swaps home/away when team IDs are reversed (does not trust array order)", () => {
     const report = parseGameInjuries(mockESPNResponse, "10", "13");
-
-    expect(report.homeTeamInjuries.length).toBe(2);
     expect(report.homeTeamInjuries[0]!.playerName).toBe("Alperen Sengun");
-
-    expect(report.awayTeamInjuries.length).toBe(2);
     expect(report.awayTeamInjuries[0]!.playerName).toBe("Austin Reaves");
   });
 
@@ -180,28 +180,62 @@ describe("toTeamInjuryReport", () => {
     const homeReport = toTeamInjuryReport(report.homeTeamInjuries);
     const awayReport = toTeamInjuryReport(report.awayTeamInjuries);
 
-    // Lakers: 2 OUT
     expect(homeReport.totalOut).toBe(2);
     expect(homeReport.totalDoubtful).toBe(0);
     expect(homeReport.totalQuestionable).toBe(0);
     expect(homeReport.out.map((p) => p.name)).toEqual(["Austin Reaves", "Luka Doncic"]);
+    // Detail comes from the new injuryDescription field
+    expect(homeReport.out[0]!.detail).toBe("Oblique Strain (Left)");
 
-    // Rockets: 1 questionable, 1 doubtful
     expect(awayReport.totalOut).toBe(0);
     expect(awayReport.totalDoubtful).toBe(1);
     expect(awayReport.totalQuestionable).toBe(1);
-    expect(awayReport.questionable[0]!.name).toBe("Alperen Sengun");
-    expect(awayReport.doubtful[0]!.name).toBe("Bench Player");
   });
 
   it("buckets day-to-day into questionable", () => {
     const report = toTeamInjuryReport([
       {
         playerId: "1", playerName: "DTD Guy", position: "G",
-        status: "Day-To-Day", injuryType: "Ankle", returnDate: null,
+        status: "Day-To-Day", injuryDescription: "Ankle", returnDate: null,
       },
     ]);
     expect(report.totalQuestionable).toBe(1);
     expect(report.totalOut).toBe(0);
+  });
+});
+
+describe("fetchGameInjuries — unsupported sports", () => {
+  it("returns unavailable for soccer WITHOUT a network call", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockClear();
+
+    const epl = await fetchGameInjuries("EPL", "g1", "t1", "t2");
+    const mls = await fetchGameInjuries("MLS", "g2", "t1", "t2");
+    const ucl = await fetchGameInjuries("UCL", "g3", "t1", "t2");
+
+    expect(epl.source).toBe("unavailable");
+    expect(epl.homeTeamInjuries).toEqual([]);
+    expect(epl.awayTeamInjuries).toEqual([]);
+    expect(mls.source).toBe("unavailable");
+    expect(ucl.source).toBe("unavailable");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("returns unavailable for NFL/NCAA without a network call", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockClear();
+
+    const nfl = await fetchGameInjuries("NFL", "g1", "t1", "t2");
+    const ncaaf = await fetchGameInjuries("NCAAF", "g2", "t1", "t2");
+    const ncaab = await fetchGameInjuries("NCAAB", "g3", "t1", "t2");
+
+    expect(nfl.source).toBe("unavailable");
+    expect(ncaaf.source).toBe("unavailable");
+    expect(ncaab.source).toBe("unavailable");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

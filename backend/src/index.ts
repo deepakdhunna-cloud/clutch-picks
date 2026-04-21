@@ -32,6 +32,9 @@ clearAllPredictionCaches();
   console.log(
     `[engine] USE_NEW_PREDICTION_ENGINE=${flagValue ?? "(unset)"}, using ${isNew ? "new" : "old"} engine`,
   );
+  console.log(
+    "[injuries] source=espn-summary (NBA/MLB/NHL), unavailable (soccer)",
+  );
 }
 
 // Type the Hono app with user/session variables

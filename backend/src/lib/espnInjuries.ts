@@ -6,27 +6,22 @@
  * return populated injury data for both teams in a game — use that.
  *
  * Coverage:
- *   - NBA, NFL, MLB, NHL, NCAAF, NCAAB: verified shape, implemented below.
- *   - EPL/MLS/UCL: soccer summary endpoints don't publish this structure
- *     consistently — callers should fall back to the old per-team path.
+ *   - NBA, MLB, NHL: verified shape, implemented below.
+ *   - Everything else (NFL, NCAA, EPL, MLS, UCL): ESPN does not publish
+ *     per-game injuries here. Callers get an empty GameInjuryReport with
+ *     source="unavailable" so soccer injuries continue to flow through
+ *     the key-player-availability factor + ingestion pipeline.
  */
 
 import { LRUCache } from "lru-cache";
 
-// ─── ESPN sport slug mapping ─────────────────────────────────────────────
+// ─── ESPN sport slug mapping (verified working) ──────────────────────────
 
-const ESPN_SUMMARY_SPORT_PATHS: Record<string, string> = {
+const SPORT_PATHS: Record<string, string> = {
   NBA: "basketball/nba",
-  NFL: "football/nfl",
   MLB: "baseball/mlb",
   NHL: "hockey/nhl",
-  NCAAF: "football/college-football",
-  NCAAB: "basketball/mens-college-basketball",
 };
-
-function isSupportedSport(sport: string): boolean {
-  return sport in ESPN_SUMMARY_SPORT_PATHS;
-}
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -41,20 +36,21 @@ export type InjuryStatus =
 export interface PlayerInjury {
   playerId: string;
   playerName: string;
-  position: string;
+  position: string;              // "G", "F", "P", "C" — may be ""
   status: InjuryStatus;
-  injuryType: string;      // e.g. "Oblique strain"
+  injuryDescription: string;     // e.g. "Oblique strain (Left)"
   returnDate: string | null;
 }
 
 export interface GameInjuryReport {
   homeTeamInjuries: PlayerInjury[];
   awayTeamInjuries: PlayerInjury[];
+  source: "espn-summary" | "unavailable";
 }
 
 // ─── Cache ───────────────────────────────────────────────────────────────
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — injuries change slowly
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface CacheEntry {
   data: GameInjuryReport;
@@ -75,22 +71,37 @@ function normalizeStatus(raw: unknown): InjuryStatus {
   return "Unknown";
 }
 
-function composeInjuryType(details: any): string {
-  if (!details || typeof details !== "object") return "";
-  const type = typeof details.type === "string" ? details.type : "";
-  const location = typeof details.location === "string" ? details.location : "";
-  const detail = typeof details.detail === "string" ? details.detail : "";
-  const parts = [type, detail].filter(Boolean);
-  const base = parts.join(" ").trim();
-  if (!base) return location;
-  return location ? `${base} (${location})` : base;
+/**
+ * Build the human-readable injury description from ESPN's `details` object.
+ * Prefers "{type} {detail}" (e.g. "Oblique strain"), appends side in parens
+ * if present (e.g. "Oblique strain (Left)"), falls back to status description.
+ */
+function composeInjuryDescription(record: any): string {
+  const details = record?.details;
+  if (details && typeof details === "object") {
+    const type = typeof details.type === "string" ? details.type : "";
+    const detail = typeof details.detail === "string" ? details.detail : "";
+    const side = typeof details.side === "string" ? details.side : "";
+    const location = typeof details.location === "string" ? details.location : "";
+
+    const base = [type, detail].filter(Boolean).join(" ").trim();
+    if (base) {
+      return side ? `${base} (${side})` : base;
+    }
+    if (location) return location;
+  }
+
+  const typeDesc = record?.type?.description;
+  if (typeof typeDesc === "string" && typeDesc) return typeDesc;
+
+  return "";
 }
 
 // ─── Parsing ─────────────────────────────────────────────────────────────
 
 /**
  * Parses a single ESPN injury record into a PlayerInjury. Returns null if
- * the record is malformed (missing player name/id).
+ * the record is malformed (missing player name).
  */
 export function parseESPNInjury(record: any): PlayerInjury | null {
   const athlete = record?.athlete ?? {};
@@ -102,10 +113,12 @@ export function parseESPNInjury(record: any): PlayerInjury | null {
   const position =
     athlete.position?.abbreviation ?? athlete.position?.name ?? "";
 
-  const statusRaw = record?.status ?? record?.type?.description ?? record?.type?.name ?? "";
+  const statusRaw =
+    record?.status ?? record?.type?.description ?? record?.type?.name ?? "";
   const status = normalizeStatus(statusRaw);
 
-  const injuryType = composeInjuryType(record?.details);
+  const injuryDescription = composeInjuryDescription(record);
+
   const returnDate =
     typeof record?.details?.returnDate === "string"
       ? record.details.returnDate
@@ -116,7 +129,7 @@ export function parseESPNInjury(record: any): PlayerInjury | null {
     playerName,
     position,
     status,
-    injuryType,
+    injuryDescription,
     returnDate,
   };
 }
@@ -124,90 +137,106 @@ export function parseESPNInjury(record: any): PlayerInjury | null {
 /**
  * Parse the full ESPN summary response into home/away injury arrays by
  * matching the top-level `injuries[].team.id` against the provided IDs.
+ * Array order is NOT trusted — we match explicitly by team ID.
  */
 export function parseGameInjuries(
   data: any,
   homeTeamId: string,
   awayTeamId: string,
-): GameInjuryReport {
-  const result: GameInjuryReport = {
-    homeTeamInjuries: [],
-    awayTeamInjuries: [],
-  };
+): { homeTeamInjuries: PlayerInjury[]; awayTeamInjuries: PlayerInjury[] } {
+  const homeTeamInjuries: PlayerInjury[] = [];
+  const awayTeamInjuries: PlayerInjury[] = [];
 
   const teamBuckets: any[] = Array.isArray(data?.injuries) ? data.injuries : [];
   for (const bucket of teamBuckets) {
     const teamId = String(bucket?.team?.id ?? "");
     const list: any[] = Array.isArray(bucket?.injuries) ? bucket.injuries : [];
-    const parsed: PlayerInjury[] = [];
-    for (const rec of list) {
-      const injury = parseESPNInjury(rec);
-      if (injury) parsed.push(injury);
-    }
-    if (teamId === String(homeTeamId)) {
-      result.homeTeamInjuries = parsed;
-    } else if (teamId === String(awayTeamId)) {
-      result.awayTeamInjuries = parsed;
+
+    const target: PlayerInjury[] =
+      teamId === String(homeTeamId)
+        ? homeTeamInjuries
+        : teamId === String(awayTeamId)
+          ? awayTeamInjuries
+          : [];
+
+    if (target === homeTeamInjuries || target === awayTeamInjuries) {
+      for (const rec of list) {
+        const injury = parseESPNInjury(rec);
+        if (injury) target.push(injury);
+      }
     }
   }
 
-  return result;
+  return { homeTeamInjuries, awayTeamInjuries };
 }
 
 // ─── Public fetcher ──────────────────────────────────────────────────────
 
+const EMPTY_UNAVAILABLE: GameInjuryReport = {
+  homeTeamInjuries: [],
+  awayTeamInjuries: [],
+  source: "unavailable",
+};
+
 /**
- * Fetch the per-game injury report for a supported sport.
+ * Fetch the per-game injury report. For unsupported sports (NFL, NCAA,
+ * soccer) returns immediately with source="unavailable" — no network call.
  *
- * Returns null for soccer leagues (EPL/MLS/UCL) so the caller can fall
- * back to the old per-team path. On any fetch/parse failure, returns an
- * empty report (safe default — never throws).
+ * On any fetch/parse failure for a supported sport, returns an empty
+ * report with source="espn-summary" (safe default — never throws).
  */
 export async function fetchGameInjuries(
   sport: string,
   gameId: string,
   homeTeamId: string,
   awayTeamId: string,
-): Promise<GameInjuryReport | null> {
-  if (!isSupportedSport(sport)) return null;
+): Promise<GameInjuryReport> {
+  const sportPath = SPORT_PATHS[sport];
+  if (!sportPath) {
+    return EMPTY_UNAVAILABLE;
+  }
 
-  const cacheKey = `${sport}-${gameId}`;
+  const cacheKey = `${sport}:${gameId}`;
   const cached = injuryCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
   }
 
-  const sportPath = ESPN_SUMMARY_SPORT_PATHS[sport]!;
   const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/summary?event=${gameId}`;
+
+  const emptyReport: GameInjuryReport = {
+    homeTeamInjuries: [],
+    awayTeamInjuries: [],
+    source: "espn-summary",
+  };
 
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
-      const empty: GameInjuryReport = { homeTeamInjuries: [], awayTeamInjuries: [] };
-      injuryCache.set(cacheKey, { data: empty, timestamp: Date.now() });
-      return empty;
+      injuryCache.set(cacheKey, { data: emptyReport, timestamp: Date.now() });
+      return emptyReport;
     }
 
     const data = await response.json();
     const parsed = parseGameInjuries(data, homeTeamId, awayTeamId);
+    const report: GameInjuryReport = { ...parsed, source: "espn-summary" };
 
-    injuryCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
-    return parsed;
+    injuryCache.set(cacheKey, { data: report, timestamp: Date.now() });
+    return report;
   } catch (err) {
     console.warn(
       `[injuries] summary fetch failed for ${sport} game ${gameId}:`,
       err instanceof Error ? err.message : err,
     );
-    const empty: GameInjuryReport = { homeTeamInjuries: [], awayTeamInjuries: [] };
-    injuryCache.set(cacheKey, { data: empty, timestamp: Date.now() });
-    return empty;
+    injuryCache.set(cacheKey, { data: emptyReport, timestamp: Date.now() });
+    return emptyReport;
   }
 }
 
 // ─── Translation into the existing TeamInjuryReport shape ────────────────
-// The prediction factor code already consumes TeamInjuryReport (name,
-// position, detail + bucketed arrays). Translate here so factor logic
-// doesn't change.
+// The prediction factor code already consumes TeamInjuryReport (buckets
+// by status with name/position/detail). Translate here so factor logic
+// stays unchanged — it now just receives real data.
 
 import type { TeamInjuryReport } from "./espnStats";
 
@@ -222,7 +251,7 @@ export function toTeamInjuryReport(
     const entry = {
       name: inj.playerName,
       position: inj.position,
-      detail: inj.injuryType,
+      detail: inj.injuryDescription,
     };
     if (inj.status === "Out") {
       out.push(entry);

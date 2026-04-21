@@ -21,7 +21,6 @@ import { getEloRating } from "../lib/elo";
 import {
   fetchTeamRecentForm,
   fetchTeamExtendedStats,
-  fetchTeamInjuries,
   fetchAdvancedMetrics,
   fetchStartingLineup,
   fetchGameWeather,
@@ -138,19 +137,11 @@ export async function buildGameContext(
 
   const isSoccer = ["EPL", "MLS", "UCL"].includes(sport);
 
-  // Injuries: non-soccer sports use the per-game summary endpoint (real data).
-  // Soccer falls back to the old per-team path since the summary-endpoint
-  // injury structure isn't verified for soccer.
-  const gameInjuriesPromise = isSoccer
-    ? Promise.resolve(null)
-    : fetchGameInjuries(sport, game.id, game.homeTeam.id, game.awayTeam.id);
-
   const [
     homeElo, awayElo,
     homeForm, awayForm,
     homeExtended, awayExtended,
     gameInjuries,
-    homeInjuriesFallback, awayInjuriesFallback,
     homeAdvanced, awayAdvanced,
     homeLineup, awayLineup,
     weather,
@@ -165,9 +156,9 @@ export async function buildGameContext(
     fetchTeamRecentForm(game.awayTeam.id, sport),
     fetchTeamExtendedStats(game.homeTeam.id, sport, game.awayTeam.id, gameDate),
     fetchTeamExtendedStats(game.awayTeam.id, sport, game.homeTeam.id, gameDate),
-    gameInjuriesPromise,
-    isSoccer ? fetchTeamInjuries(game.homeTeam.id, sport) : Promise.resolve(null),
-    isSoccer ? fetchTeamInjuries(game.awayTeam.id, sport) : Promise.resolve(null),
+    // Per-game injuries via ESPN summary endpoint. Soccer/NFL/NCAA return
+    // source="unavailable" with empty arrays — no network call is made.
+    fetchGameInjuries(sport, game.id, game.homeTeam.id, game.awayTeam.id),
     fetchAdvancedMetrics(game.homeTeam.id, sport),
     fetchAdvancedMetrics(game.awayTeam.id, sport),
     fetchStartingLineup(game.homeTeam.id, sport, gameDate),
@@ -185,19 +176,11 @@ export async function buildGameContext(
     fetchMarketConsensus(sport, game.homeTeam.name, game.awayTeam.name, gameDate),
   ]);
 
-  // Resolve injuries: prefer the new summary-endpoint data for non-soccer
-  // sports; fall back to the per-team response for soccer (and as a safety
-  // net if the summary call unexpectedly returned null).
-  const emptyInjuryReport = {
-    out: [], doubtful: [], questionable: [],
-    totalOut: 0, totalDoubtful: 0, totalQuestionable: 0,
-  };
-  const homeInjuries = gameInjuries
-    ? toTeamInjuryReport(gameInjuries.homeTeamInjuries)
-    : (homeInjuriesFallback ?? emptyInjuryReport);
-  const awayInjuries = gameInjuries
-    ? toTeamInjuryReport(gameInjuries.awayTeamInjuries)
-    : (awayInjuriesFallback ?? emptyInjuryReport);
+  // Translate PlayerInjury[] → TeamInjuryReport so the existing factor
+  // code (which consumes bucketed out/doubtful/questionable arrays) sees
+  // real data with no shape change.
+  const homeInjuries = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
+  const awayInjuries = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
 
   // Manager-change lookup is synchronous + cheap; resolve it after the
   // parallel block so we don't have to branch on sport inside Promise.all.

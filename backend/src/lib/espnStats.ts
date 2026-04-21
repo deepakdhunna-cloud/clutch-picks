@@ -290,11 +290,9 @@ export interface TeamInjuryReport {
   totalQuestionable: number;
 }
 
-// Caches for extended stats and injuries
+// Cache for extended stats. (Injuries cache moved to espnInjuries.ts.)
 const EXTENDED_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const INJURY_CACHE_TTL_MS = 30 * 60 * 1000;   // 30 minutes
 const extendedStatsCache = new LRUCache<string, { data: TeamExtendedStats; timestamp: number }>({ max: 200 });
-const injuryCache = new LRUCache<string, { data: TeamInjuryReport; timestamp: number }>({ max: 200 });
 
 function defaultExtendedStats(): TeamExtendedStats {
   return {
@@ -309,17 +307,6 @@ function defaultExtendedStats(): TeamExtendedStats {
     strengthOfSchedule: 0.5,
     restDays: null,
     consecutiveAwayGames: 0,
-  };
-}
-
-function defaultInjuryReport(): TeamInjuryReport {
-  return {
-    out: [],
-    doubtful: [],
-    questionable: [],
-    totalOut: 0,
-    totalDoubtful: 0,
-    totalQuestionable: 0,
   };
 }
 
@@ -1393,78 +1380,11 @@ export async function fetchGameWeather(
   }
 }
 
-export async function fetchTeamInjuries(
-  teamId: string,
-  sport: string
-): Promise<TeamInjuryReport> {
-  const cacheKey = `injuries-${teamId}-${sport}`;
-  const cached = injuryCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < INJURY_CACHE_TTL_MS) {
-    return cached.data;
-  }
-
-  const sportPath = ESPN_SPORT_PATHS[sport];
-  if (!sportPath) return defaultInjuryReport();
-
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamId}/injuries`;
-
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return defaultInjuryReport();
-
-    const data = (await response.json()) as any;
-
-    // ESPN returns { injuries: [...] } or just an array at root
-    const injuryList: any[] = Array.isArray(data)
-      ? data
-      : Array.isArray(data.injuries)
-      ? data.injuries
-      : Array.isArray(data.items)
-      ? data.items
-      : [];
-
-    const out: TeamInjuryReport["out"] = [];
-    const doubtful: TeamInjuryReport["doubtful"] = [];
-    const questionable: TeamInjuryReport["questionable"] = [];
-
-    for (const item of injuryList) {
-      const status: string = (item.status ?? item.type ?? "").toLowerCase();
-      const name: string =
-        item.athlete?.displayName ?? item.athlete?.fullName ?? item.name ?? "Unknown";
-      const position: string =
-        item.athlete?.position?.abbreviation ??
-        item.athlete?.position?.name ??
-        item.position ??
-        "";
-      const detail: string =
-        item.longComment ?? item.shortComment ?? item.details ?? item.detail ?? "";
-
-      const entry = { name, position, detail };
-
-      if (status.includes("out")) {
-        out.push(entry);
-      } else if (status.includes("doubtful")) {
-        doubtful.push(entry);
-      } else if (status.includes("questionable")) {
-        questionable.push(entry);
-      }
-    }
-
-    const result: TeamInjuryReport = {
-      out,
-      doubtful,
-      questionable,
-      totalOut: out.length,
-      totalDoubtful: doubtful.length,
-      totalQuestionable: questionable.length,
-    };
-
-    injuryCache.set(cacheKey, { data: result, timestamp: Date.now() });
-    return result;
-  } catch {
-    return defaultInjuryReport();
-  }
-}
+// fetchTeamInjuries was removed — ESPN's /teams/{id}/injuries endpoint
+// returns {} and is dead. Per-game injuries now flow through
+// src/lib/espnInjuries.ts (summary endpoint, NBA/MLB/NHL only). Soccer
+// injuries are handled by the key-player-availability factor + ingestion
+// pipeline, not ESPN.
 
 // ─── Simple Rating System (SRS) ──────────────────────────────────────────────
 // SRS = average scoring margin + average opponent SRS (iterative convergence).

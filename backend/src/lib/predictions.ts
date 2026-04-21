@@ -4,7 +4,8 @@
  */
 
 import type { Game, Prediction, PredictionFactor, Team } from "../types/sports";
-import { fetchTeamRecentForm, fetchTeamExtendedStats, fetchTeamInjuries, fetchTeamSeasonResults, fetchAdvancedMetrics, fetchStartingLineup, fetchGameWeather, getSRSRatings, srsToBlendfactor, type TeamRecentForm, type TeamExtendedStats, type TeamInjuryReport, type TeamAdvancedMetrics, type StartingLineup, type WeatherData, type GameResultForSRS } from "./espnStats";
+import { fetchTeamRecentForm, fetchTeamExtendedStats, fetchTeamSeasonResults, fetchAdvancedMetrics, fetchStartingLineup, fetchGameWeather, getSRSRatings, srsToBlendfactor, type TeamRecentForm, type TeamExtendedStats, type TeamInjuryReport, type TeamAdvancedMetrics, type StartingLineup, type WeatherData, type GameResultForSRS } from "./espnStats";
+import { fetchGameInjuries, toTeamInjuryReport } from "./espnInjuries";
 import { getEloRating, getEloPrediction, initializeEloFromSchedule, DEFAULT_RATING } from "./elo";
 import { env } from "../env";
 import { prisma } from "../prisma";
@@ -1056,20 +1057,23 @@ export async function generatePrediction(
   const sportKey = game.sport.toString();
 
   // ── Expanded parallel data fetching ─────────────────────────────────────
-  const [homeForm, awayForm, homeExtended, awayExtended, homeInjuries, awayInjuries, homeAdvanced, awayAdvanced, homeLineup, awayLineup, weatherData] =
+  // Injuries come from the per-game summary endpoint (NBA/MLB/NHL only —
+  // soccer/NFL/NCAA resolve to empty "unavailable" without a network call).
+  const [homeForm, awayForm, homeExtended, awayExtended, gameInjuries, homeAdvanced, awayAdvanced, homeLineup, awayLineup, weatherData] =
     await Promise.all([
       fetchTeamRecentForm(game.homeTeam.id, sportKey),
       fetchTeamRecentForm(game.awayTeam.id, sportKey),
       fetchTeamExtendedStats(game.homeTeam.id, sportKey, game.awayTeam.id, new Date(game.dateTime)),
       fetchTeamExtendedStats(game.awayTeam.id, sportKey, game.homeTeam.id, new Date(game.dateTime)),
-      fetchTeamInjuries(game.homeTeam.id, sportKey),
-      fetchTeamInjuries(game.awayTeam.id, sportKey),
+      fetchGameInjuries(sportKey, game.id, game.homeTeam.id, game.awayTeam.id),
       fetchAdvancedMetrics(game.homeTeam.id, sportKey),
       fetchAdvancedMetrics(game.awayTeam.id, sportKey),
       fetchStartingLineup(game.homeTeam.id, sportKey, new Date(game.dateTime)),
       fetchStartingLineup(game.awayTeam.id, sportKey, new Date(game.dateTime)),
       fetchGameWeather(game.venue, new Date(game.dateTime), sportKey),
     ]);
+  const homeInjuries: TeamInjuryReport = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
+  const awayInjuries: TeamInjuryReport = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
 
   // ── Elo initialization from full season schedule data ───────────────────
   // Fetch full season results for proper Elo building (not just H2H)
