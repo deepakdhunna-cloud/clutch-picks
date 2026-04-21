@@ -61,6 +61,7 @@ function stakesFactor(ctx: GameContext): FactorContribution {
       homeDelta: 0,
       weight,
       available: false,
+      hasSignal: false,
       evidence: !home || !away
         ? "Standings data unavailable — stakes factor inactive, weight redistributed"
         : "Too early in season for stakes signal — factor inactive",
@@ -79,6 +80,7 @@ function stakesFactor(ctx: GameContext): FactorContribution {
     homeDelta: delta,
     weight,
     available: true,
+    hasSignal: delta !== 0,
     evidence,
   };
 }

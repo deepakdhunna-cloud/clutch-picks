@@ -84,6 +84,7 @@ export function computeNCAAMBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: injuryDelta,
     weight: 0.18,
     available: true,
+    hasSignal: injuryDelta !== 0,
     evidence:
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
@@ -120,6 +121,7 @@ export function computeNCAAMBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: b2bDelta,
     weight: 0.07,
     available: homeRest !== null || awayRest !== null,
+    hasSignal: b2bDelta !== 0,
     evidence: b2bEvidence,
   });
 
@@ -161,6 +163,7 @@ export function computeNCAAMBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: netRatingDelta,
     weight: 0.05,
     available: netRatingAvailable,
+    hasSignal: netRatingAvailable && netRatingDelta !== 0,
     evidence: netRatingEvidence,
   });
 
@@ -186,6 +189,7 @@ export function computeNCAAMBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: fatigueDelta,
     weight: 0.04,
     available: true,
+    hasSignal: fatigueDelta !== 0,
     evidence: fatigueEvidence,
   });
 
@@ -215,6 +219,7 @@ export function computeNCAAMBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: trendDelta,
     weight: 0.05,
     available: true,
+    hasSignal: trendDelta !== 0,
     evidence: `Home scoring trend ${homeTrend > 0 ? "+" : ""}${homeTrend.toFixed(2)} vs Away ${awayTrend > 0 ? "+" : ""}${awayTrend.toFixed(2)}`,
   });
 
@@ -228,6 +233,7 @@ export function computeNCAAMBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: 0,
     weight: 0.03,
     available: false,
+    hasSignal: false,
     evidence: "Per-game 3P% data not available from ESPN — factor inactive, weight redistributed",
   });
 

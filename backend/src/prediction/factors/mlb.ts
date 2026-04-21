@@ -126,6 +126,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: spDelta,
     weight: 0.22,
     available: spAvailable,
+    hasSignal: spAvailable,
     evidence: spEvidence,
   });
 
@@ -158,6 +159,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: bullpenDelta,
     weight: 0.06,
     available: true,
+    hasSignal: bullpenDelta !== 0,
     evidence: bullpenEvidence,
   });
 
@@ -188,6 +190,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: ballparkDelta,
     weight: 0.04,
     available: ballparkAvailable,
+    hasSignal: ballparkAvailable && ballparkDelta !== 0,
     evidence: ballparkEvidence,
   });
 
@@ -211,6 +214,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: weatherDelta,
     weight: 0.02,
     available: weatherAvailable || (ctx.weather?.isDomed ?? false),
+    hasSignal: weatherDelta !== 0,
     evidence: weatherEvidence,
   });
 
@@ -267,6 +271,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: umpireDelta,
     weight: 0.02,
     available: umpireAvailable,
+    hasSignal: umpireAvailable,
     evidence: umpireEvidence,
   });
 
@@ -288,6 +293,10 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: 0,
     weight: 0.02,
     available: !earlySeason,
+    // This factor never pushes the delta in either direction — it's a meta
+    // signal to donate weight to Elo when stats are noisy. Always hasSignal=false
+    // so the weight lands on rating_diff via blendFactors.
+    hasSignal: false,
     evidence: earlySeason
       ? `Only ${minGP} games played — team stats unreliable, Elo carries most of the signal`
       : `${minGP}+ games played — team stats have stabilized`,
@@ -388,6 +397,7 @@ function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution
       homeDelta: 0,
       weight: 0.05,
       available: false,
+      hasSignal: false,
       evidence: "Injury data unavailable",
     };
   }
@@ -397,9 +407,10 @@ function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution
 
   const rawScore = (away.penalty - home.penalty) / 3.0;
   const score = Math.max(-1.0, Math.min(1.0, rawScore));
+  const anyInjuries = home.penalty > 0 || away.penalty > 0;
 
   let evidence: string;
-  if (home.penalty === 0 && away.penalty === 0) {
+  if (!anyInjuries) {
     evidence = "No significant position-player injuries reported";
   } else {
     evidence = `Home: ${formatTeamList(home.summary)}; Away: ${formatTeamList(away.summary)}`;
@@ -411,6 +422,7 @@ function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution
     homeDelta: score,
     weight: 0.05,
     available: true,
+    hasSignal: anyInjuries,
     evidence,
   };
 }

@@ -56,6 +56,7 @@ export function fixtureCongestionFactor(
     homeDelta: delta,
     weight,
     available,
+    hasSignal: available && delta !== 0,
     evidence,
   };
 }
@@ -99,6 +100,7 @@ export function keyPlayerFactor(
     homeDelta: delta,
     weight,
     available: true,
+    hasSignal: delta !== 0,
     evidence,
   };
 }
@@ -137,6 +139,7 @@ export function managerChangeFactor(
     homeDelta: delta,
     weight,
     available,
+    hasSignal: delta !== 0,
     evidence,
   };
 }

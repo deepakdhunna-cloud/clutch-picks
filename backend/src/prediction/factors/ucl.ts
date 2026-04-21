@@ -73,6 +73,7 @@ function pedigreeFactor(ctx: GameContext): FactorContribution {
       homeDelta: 0,
       weight,
       available: false,
+      hasSignal: false,
       evidence: `UCL pedigree data unavailable for ${homePed === undefined ? ctx.game.homeTeam.name : ctx.game.awayTeam.name} — factor inactive`,
     };
   }
@@ -89,6 +90,7 @@ function pedigreeFactor(ctx: GameContext): FactorContribution {
     homeDelta: delta,
     weight,
     available: true,
+    hasSignal: delta !== 0,
     evidence,
   };
 }
@@ -109,6 +111,7 @@ function travelFactor(ctx: GameContext): FactorContribution {
       homeDelta: 0,
       weight,
       available: false,
+      hasSignal: false,
       evidence: `City coordinates unavailable for ${homeCity ? ctx.game.awayTeam.name : ctx.game.homeTeam.name} — travel factor inactive`,
     };
   }
@@ -122,6 +125,7 @@ function travelFactor(ctx: GameContext): FactorContribution {
       homeDelta: 0,
       weight,
       available: false,
+      hasSignal: false,
       evidence: "City coordinate lookup failed — travel factor inactive",
     };
   }
@@ -134,6 +138,7 @@ function travelFactor(ctx: GameContext): FactorContribution {
       homeDelta: 0,
       weight,
       available: true,
+      hasSignal: false,
       evidence: `${ctx.game.awayTeam.name} traveled ~${Math.round(km)}km — under 1500km threshold, no travel penalty`,
     };
   }
@@ -146,6 +151,7 @@ function travelFactor(ctx: GameContext): FactorContribution {
     homeDelta: delta,
     weight,
     available: true,
+    hasSignal: true,
     evidence: `${ctx.game.awayTeam.name} traveled ~${Math.round(km)}km to ${homeCity} — long-travel fatigue factor (+${delta} Elo home)`,
   };
 }

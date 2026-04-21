@@ -45,6 +45,7 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: eloDelta,
     weight: 0.40,
     available: true, // Elo is always available (default 1500 for new teams)
+    hasSignal: true, // Elo + home-field advantage is always real signal
     evidence: `Home ${ctx.game.homeTeam.abbreviation} Elo ${Math.round(ctx.homeElo)} + ${homeBonus} HFA vs Away ${ctx.game.awayTeam.abbreviation} Elo ${Math.round(ctx.awayElo)} = ${Math.round(eloDelta)} pt differential`,
   });
 
@@ -77,6 +78,7 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: restDelta,
     weight: 0.05,
     available: restAvailable,
+    hasSignal: restAvailable && restDelta !== 0,
     evidence: restEvidence,
   });
 
@@ -106,6 +108,7 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: formAvailable ? formDelta : 0,
     weight: 0.10,
     available: formAvailable,
+    hasSignal: formAvailable && formDiff !== 0,
     evidence: formAvailable
       ? `Home L10: ${ctx.homeForm.wins}-${ctx.homeForm.losses} (${(homeFormWinRate * 100).toFixed(0)}%), Away L10: ${ctx.awayForm.wins}-${ctx.awayForm.losses} (${(awayFormWinRate * 100).toFixed(0)}%)`
       : `Insufficient recent games (home: ${homeResults}, away: ${awayResults})`,
@@ -133,6 +136,7 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: travelDelta,
     weight: 0.03,
     available: true, // always available, contributes 0 if no travel differential
+    hasSignal: travelDelta !== 0,
     evidence: travelEvidence,
   });
 

@@ -32,6 +32,18 @@ export type FactorContribution = {
   weight: number;
   /** false if required data was missing — contributes 0 and weight is redistributed */
   available: boolean;
+  /**
+   * true when the factor has actual evidence pushing the delta in a direction
+   * (injuries reported, net rating computed, goalie confirmed, etc.), false
+   * when it's a neutral / no-data / "no change" fallback. hasSignal=false
+   * factors donate their weight to rating_diff during aggregation instead of
+   * diluting the Elo signal with a zero contribution.
+   *
+   * Invariants:
+   *   - available=false ⇒ hasSignal=false
+   *   - rating_diff (Elo) should always be hasSignal=true
+   */
+  hasSignal: boolean;
   /** One-sentence factual justification with concrete numbers, no adjectives */
   evidence: string;
 };

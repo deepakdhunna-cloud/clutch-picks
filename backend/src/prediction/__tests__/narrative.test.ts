@@ -28,14 +28,14 @@ const BANNED_REGEX = /lock|guaranteed|can't lose|easy money|slam dunk|smash|domi
 
 function makeFactors(overrides: Partial<FactorContribution>[] = []): FactorContribution[] {
   const defaults: FactorContribution[] = [
-    { key: "rating_diff", label: "Elo rating differential", homeDelta: 80, weight: 0.40, available: true, evidence: "Home BOS Elo 1580 + 100 HFA vs Away ORL Elo 1500 = 180 pt differential" },
-    { key: "rest_diff", label: "Rest differential", homeDelta: 15, weight: 0.05, available: true, evidence: "Home 2 days rest vs Away 1 day rest" },
-    { key: "recent_form", label: "Recent form (L10)", homeDelta: 40, weight: 0.10, available: true, evidence: "Home L10: 8-2 (80%), Away L10: 5-5 (50%)" },
-    { key: "travel", label: "Travel / road trip fatigue", homeDelta: 10, weight: 0.03, available: true, evidence: "Away team on game 3 of road trip" },
-    { key: "injuries", label: "Star player availability", homeDelta: -30, weight: 0.18, available: true, evidence: "Home team missing 2 starters — net 60 Elo penalty" },
-    { key: "back_to_back", label: "Back-to-back fatigue", homeDelta: 50, weight: 0.07, available: true, evidence: "ORL on back-to-back (road)" },
-    { key: "net_rating", label: "Pace-adjusted net rating", homeDelta: 0, weight: 0.10, available: false, evidence: "Data unavailable from ESPN" },
-    { key: "three_pt", label: "Three-point regression", homeDelta: 0, weight: 0.03, available: false, evidence: "Per-game 3P% not available" },
+    { key: "rating_diff", label: "Elo rating differential", homeDelta: 80, weight: 0.40, available: true, hasSignal: true, evidence: "Home BOS Elo 1580 + 100 HFA vs Away ORL Elo 1500 = 180 pt differential" },
+    { key: "rest_diff", label: "Rest differential", homeDelta: 15, weight: 0.05, available: true, hasSignal: true, evidence: "Home 2 days rest vs Away 1 day rest" },
+    { key: "recent_form", label: "Recent form (L10)", homeDelta: 40, weight: 0.10, available: true, hasSignal: true, evidence: "Home L10: 8-2 (80%), Away L10: 5-5 (50%)" },
+    { key: "travel", label: "Travel / road trip fatigue", homeDelta: 10, weight: 0.03, available: true, hasSignal: true, evidence: "Away team on game 3 of road trip" },
+    { key: "injuries", label: "Star player availability", homeDelta: -30, weight: 0.18, available: true, hasSignal: true, evidence: "Home team missing 2 starters — net 60 Elo penalty" },
+    { key: "back_to_back", label: "Back-to-back fatigue", homeDelta: 50, weight: 0.07, available: true, hasSignal: true, evidence: "ORL on back-to-back (road)" },
+    { key: "net_rating", label: "Pace-adjusted net rating", homeDelta: 0, weight: 0.10, available: false, hasSignal: false, evidence: "Data unavailable from ESPN" },
+    { key: "three_pt", label: "Three-point regression", homeDelta: 0, weight: 0.03, available: false, hasSignal: false, evidence: "Per-game 3P% not available" },
   ];
   for (let i = 0; i < overrides.length && i < defaults.length; i++) {
     defaults[i] = { ...defaults[i]!, ...overrides[i] };
@@ -110,7 +110,7 @@ describe("buildDeterministicNarrative", () => {
 
   it("handles single factor only", () => {
     const factors: FactorContribution[] = [
-      { key: "rating_diff", label: "Elo rating differential", homeDelta: 200, weight: 1.0, available: true, evidence: "Home Elo 1700 vs Away Elo 1300 = 400 pt gap" },
+      { key: "rating_diff", label: "Elo rating differential", homeDelta: 200, weight: 1.0, available: true, hasSignal: true, evidence: "Home Elo 1700 vs Away Elo 1300 = 400 pt gap" },
     ];
     const input = buildNarrativeInput(factors, "strong edge", 75.0, "BOS", "ORL", "BOS", "NBA");
     const text = buildDeterministicNarrative(input);
@@ -120,8 +120,8 @@ describe("buildDeterministicNarrative", () => {
 
   it("handles perfectly balanced factors", () => {
     const factors: FactorContribution[] = [
-      { key: "f1", label: "Factor A", homeDelta: 50, weight: 0.5, available: true, evidence: "Slightly favors home" },
-      { key: "f2", label: "Factor B", homeDelta: -50, weight: 0.5, available: true, evidence: "Slightly favors away" },
+      { key: "f1", label: "Factor A", homeDelta: 50, weight: 0.5, available: true, hasSignal: true, evidence: "Slightly favors home" },
+      { key: "f2", label: "Factor B", homeDelta: -50, weight: 0.5, available: true, hasSignal: true, evidence: "Slightly favors away" },
     ];
     const input = buildNarrativeInput(factors, "coinflip", 50.1, "BOS", "ORL", "BOS", "NBA");
     const text = buildDeterministicNarrative(input);

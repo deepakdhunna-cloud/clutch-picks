@@ -92,11 +92,60 @@ function redistributeWeights(factors: FactorContribution[]): FactorContribution[
  *
  * Returns the factors unchanged if they already sum within 0.001 of 1.0.
  */
-function normalizeWeightsToOne(factors: FactorContribution[]): FactorContribution[] {
+export function normalizeWeightsToOne(factors: FactorContribution[]): FactorContribution[] {
   const sum = factors.reduce((acc, f) => acc + f.weight, 0);
   if (sum <= 0) return factors;
   if (Math.abs(1 - sum) <= 0.001) return factors;
   return factors.map((f) => ({ ...f, weight: f.weight / sum }));
+}
+
+/**
+ * Pool weight from "no-signal" factors into the Elo rating_diff factor so a
+ * strong Elo edge isn't diluted by empty slots on light-data nights.
+ *
+ * A factor with hasSignal=false (no evidence pushing in either direction)
+ * previously reserved its weight slice and contributed 0 to the weighted
+ * Elo delta. That artificially muted the rating_diff signal: for a 200 Elo
+ * favorite on a night with no injuries / no b2b / no net rating data, the
+ * final probability landed near 60% instead of the 77% Elo itself implies.
+ *
+ * The user-facing math (from the FIX THE BLEND spec):
+ *   final = effectiveEloWeight * eloProb + signaledWeight * factorAvg
+ * In Elo-delta space the equivalent is: give unsignaled factors' weight to
+ * rating_diff, then aggregate Elo-delta contributions as usual.
+ *
+ * Invariants:
+ *   - rating_diff (Elo) always hasSignal=true, so it never gets pooled away.
+ *   - available=false factors have already been zeroed by redistributeWeights
+ *     before this runs — they won't double-count.
+ *   - Total weight is preserved (we only move weight, never drop it).
+ */
+export function blendFactors(factors: FactorContribution[]): FactorContribution[] {
+  const ratingIdx = factors.findIndex((f) => f.key === "rating_diff");
+  if (ratingIdx === -1) {
+    // No Elo factor in this set — nowhere to pool. Return unchanged so the
+    // caller still gets a valid array (prevents accidental data loss).
+    return factors;
+  }
+
+  let pooled = 0;
+  const result = factors.map((f, i) => {
+    if (i === ratingIdx) return { ...f };
+    if (f.available && !f.hasSignal && f.weight > 0) {
+      pooled += f.weight;
+      return { ...f, weight: 0 };
+    }
+    return { ...f };
+  });
+
+  if (pooled > 0) {
+    result[ratingIdx] = {
+      ...result[ratingIdx]!,
+      weight: result[ratingIdx]!.weight + pooled,
+    };
+  }
+
+  return result;
 }
 
 /**
@@ -118,14 +167,20 @@ export function predictGame(ctx: GameContext): HonestPrediction {
 
   // 2b. Safety-net normalization. If canonical source weights drift from
   //     1.0 (e.g. a sport file sums to 1.01 after a factor is added),
-  //     divide through so the visible breakdown always sums to 1.0.
+  //     divide through so the visible breakdown always sums to 1.0. We want
+  //     visibility into drift, not silent correction — log before fixing.
   const preNormSum = redistributedFactors.reduce((acc, f) => acc + f.weight, 0);
   if (preNormSum > 0 && Math.abs(1 - preNormSum) > 0.01) {
     console.warn(
       `[engine] warning: ${ctx.sport} factor weights sum to ${preNormSum.toFixed(4)}, expected 1.0`,
     );
   }
-  const adjustedFactors = normalizeWeightsToOne(redistributedFactors);
+  const normalizedFactors = normalizeWeightsToOne(redistributedFactors);
+
+  // 2c. Pool weight from "no-signal" factors into rating_diff. Without this,
+  //     a light-data night with a strong Elo edge compresses toward 50%.
+  //     See blendFactors doc-comment for the full math.
+  const adjustedFactors = blendFactors(normalizedFactors);
 
   // 3. Sum weighted deltas → total rating advantage for home
   // Each factor's contribution = homeDelta * weight (if available)

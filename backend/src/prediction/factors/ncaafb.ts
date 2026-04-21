@@ -101,6 +101,7 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: qbDelta,
     weight: 0.20,
     available: true,
+    hasSignal: qbDelta !== 0,
     evidence: qbParts.length > 0 ? qbParts.join("; ") : "Both starting QBs appear healthy",
   });
 
@@ -138,6 +139,7 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: weatherDelta,
     weight: 0.05,
     available: weatherAvailable,
+    hasSignal: weatherAvailable && weatherDelta !== 0,
     evidence: weatherEvidence,
   });
 
@@ -171,6 +173,7 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: restEdgeDelta,
     weight: 0.04,
     available: true,
+    hasSignal: restEdgeDelta !== 0,
     evidence: restEdgeEvidence,
   });
 
@@ -209,6 +212,7 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: injuryDelta,
     weight: 0.08,
     available: true,
+    hasSignal: injuryDelta !== 0,
     evidence:
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
@@ -242,6 +246,10 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: trendDelta,
     weight: 0.05,
     available: true,
+    // Extended-stats fetch defaults scoringTrend to 0 on failure. Treat exact
+    // zero on both sides as "no signal" — an actual non-zero differential is
+    // the only way we have evidence of relative form.
+    hasSignal: trendDelta !== 0,
     evidence: `Home scoring trend ${homeTrend > 0 ? "+" : ""}${homeTrend.toFixed(2)} vs Away ${awayTrend > 0 ? "+" : ""}${awayTrend.toFixed(2)}`,
   });
 

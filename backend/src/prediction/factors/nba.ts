@@ -72,6 +72,7 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: injuryDelta,
     weight: 0.19,
     available: true,
+    hasSignal: injuryDelta !== 0,
     evidence:
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
@@ -107,6 +108,7 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: b2bDelta,
     weight: 0.08,
     available: homeRest !== null || awayRest !== null,
+    hasSignal: b2bDelta !== 0,
     evidence: b2bEvidence,
   });
 
@@ -144,6 +146,7 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: netRatingDelta,
     weight: 0.11,
     available: netRatingAvailable,
+    hasSignal: netRatingAvailable && netRatingDelta !== 0,
     evidence: netRatingEvidence,
   });
 
@@ -168,6 +171,7 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: fatigueDelta,
     weight: 0.04,
     available: true,
+    hasSignal: fatigueDelta !== 0,
     evidence: fatigueEvidence,
   });
 

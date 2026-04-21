@@ -86,6 +86,7 @@ export function computeNFLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: qbDelta,
     weight: 0.20,
     available: true, // Injury reports are always checked; no QB injury = 0 delta
+    hasSignal: qbDelta !== 0,
     evidence: qbParts.length > 0 ? qbParts.join("; ") : "Both starting QBs appear healthy",
   });
 
@@ -129,6 +130,7 @@ export function computeNFLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: weatherDelta,
     weight: 0.05,
     available: weatherAvailable,
+    hasSignal: weatherAvailable && weatherDelta !== 0,
     evidence: weatherEvidence,
   });
 
@@ -165,6 +167,7 @@ export function computeNFLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: restEdgeDelta,
     weight: 0.05,
     available: true,
+    hasSignal: restEdgeDelta !== 0,
     evidence: restEdgeEvidence,
   });
 
@@ -183,6 +186,7 @@ export function computeNFLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: 0,
     weight: 0.04,
     available: false,
+    hasSignal: false,
     evidence: "Division data not available in current data model — factor inactive",
   });
 
@@ -222,6 +226,7 @@ export function computeNFLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: injuryDelta,
     weight: 0.08,
     available: true,
+    hasSignal: injuryDelta !== 0,
     evidence:
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")

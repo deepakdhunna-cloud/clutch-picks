@@ -108,6 +108,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: goalieDelta,
     weight: 0.22,
     available: goalieAvailable,
+    hasSignal: goalieAvailable && goalieDelta !== 0,
     evidence: goalieEvidence,
   });
 
@@ -139,6 +140,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: b2bDelta,
     weight: 0.08,
     available: homeRest !== null || awayRest !== null,
+    hasSignal: b2bDelta !== 0,
     evidence: b2bEvidence,
   });
 
@@ -178,6 +180,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: stDelta,
     weight: 0.06,
     available: stAvailable,
+    hasSignal: stAvailable && stDelta !== 0,
     evidence: stEvidence,
   });
 
@@ -216,6 +219,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: injuryDelta,
     weight: 0.06,
     available: true,
+    hasSignal: injuryDelta !== 0,
     evidence:
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
