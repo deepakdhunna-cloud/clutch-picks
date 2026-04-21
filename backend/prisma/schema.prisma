@@ -297,6 +297,37 @@ model PredictionVersion {
   @@index([sport, createdAt])
 }
 
+// Shadow comparison log — persists old-vs-new engine comparisons to the
+// database so they survive Railway redeploys (ephemeral filesystem).
+// The JSONL file writes remain as a belt-and-suspenders backup.
+model ShadowComparison {
+  id                      String   @id @default(cuid())
+  gameId                  String
+  league                  String
+  matchup                 String
+  scheduledStart          DateTime
+  // Old engine snapshot
+  oldPredictedWinner      String
+  oldHomeWinProb          Float
+  oldConfidence           Float
+  // New engine snapshot
+  newPredictedWinner      String?  // null = pickem
+  newHomeWinProb          Float
+  newAwayWinProb          Float
+  newDrawProb             Float?
+  newConfidence           Float
+  newConfidenceBand       String
+  unavailableFactorsJson  String   // JSON.stringify of string[]
+  // Derived
+  agreement               Boolean
+  confidenceDelta         Float
+  createdAt               DateTime @default(now())
+
+  @@index([gameId])
+  @@index([league, createdAt])
+  @@index([createdAt])
+}
+
 // Time-series of sportsbook lines for each game. Populated by the 30-min
 // market-snapshot cron in src/index.ts. Also captured at pick resolution
 // with isClosing=true so we can benchmark our pregame picks against the

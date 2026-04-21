@@ -93,9 +93,11 @@ const ESPN_TO_UNDERSTAT_ALIASES: Record<string, string> = {
   "nottingham forest": "nottingham forest",
   "atletico madrid": "atletico madrid",
   "real sociedad": "real sociedad",
+  "leicester city": "leicester",
+  "ipswich town": "ipswich",
 };
 
-function canonicalName(raw: string): string {
+export function canonicalName(raw: string): string {
   const normalized = normalizeSoccerTeamName(raw);
   return ESPN_TO_UNDERSTAT_ALIASES[normalized] ?? normalized;
 }
@@ -233,7 +235,12 @@ export function lookupInLeague(
   espnTeamName: string,
   leagueLabel: string,
 ): UnderstatTeam | null {
-  if (!leagueMap) return null;
+  if (!leagueMap) {
+    console.warn(
+      `[understat] miss: ${leagueLabel} — league map is NULL (fetch failed or timed out). ESPN team "${espnTeamName}" cannot be looked up.`,
+    );
+    return null;
+  }
   const key = canonicalName(espnTeamName);
   const hit = leagueMap.get(key);
   if (hit) return hit;
@@ -241,8 +248,16 @@ export function lookupInLeague(
   const altKey = normalizeSoccerTeamName(espnTeamName);
   const altHit = leagueMap.get(altKey);
   if (altHit) return altHit;
+
+  // Verbose diagnostic: dump what we tried and a sample of what's actually in the map
+  const mapKeys = Array.from(leagueMap.keys());
+  const sampleKeys = mapKeys.slice(0, 5);
   console.warn(
-    `[understat] miss: ${leagueLabel} — ESPN "${espnTeamName}" (normalized "${key}") not in Understat map`,
+    `[understat] miss: ${leagueLabel} — ESPN "${espnTeamName}"\n` +
+    `  canonical key: "${key}"\n` +
+    `  alt key (raw normalized): "${altKey}"\n` +
+    `  map has ${mapKeys.length} teams, sample keys: [${sampleKeys.map(k => `"${k}"`).join(", ")}]\n` +
+    `  all keys: [${mapKeys.join(", ")}]`,
   );
   return null;
 }
@@ -255,17 +270,26 @@ export async function lookupTeamXG(
   teamName: string,
   leagueHints: UnderstatLeague[],
 ): Promise<UnderstatTeam | null> {
+  const key = canonicalName(teamName);
+  const altKey = normalizeSoccerTeamName(teamName);
+  const triedLeagues: string[] = [];
+
   for (const league of leagueHints) {
     const leagueMap = await fetchLeagueXG(league);
-    if (!leagueMap) continue;
-    const key = canonicalName(teamName);
+    if (!leagueMap) {
+      triedLeagues.push(`${league}(null map)`);
+      continue;
+    }
     const hit = leagueMap.get(key);
     if (hit) return hit;
-    const altHit = leagueMap.get(normalizeSoccerTeamName(teamName));
+    const altHit = leagueMap.get(altKey);
     if (altHit) return altHit;
+    triedLeagues.push(`${league}(${leagueMap.size} teams)`);
   }
   console.warn(
-    `[understat] UCL cross-league miss for "${teamName}" (tried ${leagueHints.join(", ")})`,
+    `[understat] UCL cross-league miss for "${teamName}"\n` +
+    `  canonical: "${key}", alt: "${altKey}"\n` +
+    `  tried: ${triedLeagues.join(", ")}`,
   );
   return null;
 }

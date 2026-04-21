@@ -128,20 +128,27 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   }
 
   // 6. Determine winner and confidence
-  // Confidence = max(home, away) * 100, rounded to 1 decimal. No manipulation.
-  const winnerProb = Math.max(homeWinProb, awayWinProb);
-  const confidence = Math.round(winnerProb * 1000) / 10; // 1 decimal place
+  // For soccer: max of home/draw/away. For others: max of home/away.
+  // Confidence = max probability * 100, rounded to 1 decimal. No manipulation.
+  const maxProb = Math.max(homeWinProb, awayWinProb, drawProb ?? 0);
+  const confidence = Math.round(maxProb * 1000) / 10; // 1 decimal place
 
-  // If exactly 50/50 (or within floating-point epsilon), it's a true pick'em
-  const isPickem = Math.abs(homeWinProb - awayWinProb) < 0.001;
-
+  // Determine predicted winner based on highest probability
   let predictedWinner: { teamId: string; abbr: string } | null = null;
-  if (!isPickem) {
-    const isHome = homeWinProb > awayWinProb;
-    predictedWinner = {
-      teamId: isHome ? ctx.game.homeTeam.id : ctx.game.awayTeam.id,
-      abbr: isHome ? ctx.game.homeTeam.abbreviation : ctx.game.awayTeam.abbreviation,
-    };
+
+  if (drawProb !== undefined && drawProb >= homeWinProb && drawProb >= awayWinProb) {
+    // Soccer: draw is the most likely outcome → predictedWinner = null (draw)
+    predictedWinner = null;
+  } else {
+    // If exactly 50/50 (or within floating-point epsilon), it's a true pick'em
+    const isPickem = Math.abs(homeWinProb - awayWinProb) < 0.001;
+    if (!isPickem) {
+      const isHome = homeWinProb > awayWinProb;
+      predictedWinner = {
+        teamId: isHome ? ctx.game.homeTeam.id : ctx.game.awayTeam.id,
+        abbr: isHome ? ctx.game.homeTeam.abbreviation : ctx.game.awayTeam.abbreviation,
+      };
+    }
   }
 
   // 7. Collect unavailable factors for display
@@ -188,6 +195,28 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     };
   }
 
+  // ─── Runtime invariant checks (log-only, never crash) ──────────────
+  const expectedConfidence = Math.round(maxProb * 1000) / 10;
+  if (Math.abs(confidence - expectedConfidence) > 0.1) {
+    console.error(
+      `[prediction-invariant] Confidence mismatch for ${ctx.game.id} ${ctx.sport}: ` +
+      `computed=${confidence} expected=${expectedConfidence} home=${homeWinProb} away=${awayWinProb} draw=${drawProb}`,
+    );
+  }
+  if (predictedWinner) {
+    const winnerSide = predictedWinner.teamId === ctx.game.homeTeam.id ? "home" : "away";
+    if (winnerSide === "home" && homeWinProb < Math.max(awayWinProb, drawProb ?? 0)) {
+      console.error(
+        `[prediction-invariant] predictedWinner=home but home is not max prob for ${ctx.game.id} ${ctx.sport}`,
+      );
+    }
+    if (winnerSide === "away" && awayWinProb < Math.max(homeWinProb, drawProb ?? 0)) {
+      console.error(
+        `[prediction-invariant] predictedWinner=away but away is not max prob for ${ctx.game.id} ${ctx.sport}`,
+      );
+    }
+  }
+
   return {
     gameId: ctx.game.id,
     league: ctx.sport,
@@ -196,7 +225,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     awayWinProbability: awayWinProb,
     drawProbability: drawProb,
     confidence,
-    confidenceBand: getConfidenceBand(winnerProb),
+    confidenceBand: getConfidenceBand(maxProb),
     factors: adjustedFactors,
     unavailableFactors,
     narrative: "", // Filled by narrative.ts in a separate step

@@ -7,89 +7,81 @@
  *   GET /api/shadow/logs                — aggregated stats across all shadow logs
  *   GET /api/shadow/resolved-comparison — head-to-head accuracy on resolved games
  *   GET /api/shadow/recent?limit=50     — last N raw shadow entries
+ *   GET /api/shadow/understat-diag      — diagnostic: Understat cache state
  *
  * All endpoints are gated on the CALIBRATION_ADMIN_KEY header.
+ * Reads from the ShadowComparison Postgres table (survives Railway redeploys).
  */
 
 import { Hono } from "hono";
-import { readdir, readFile } from "fs/promises";
-import { existsSync } from "fs";
-import { join } from "path";
 import { prisma } from "../prisma";
+import {
+  fetchLeagueXG,
+  lookupInLeague,
+  normalizeSoccerTeamName,
+  type UnderstatLeague,
+} from "../lib/understatApi";
 
 const shadowRouter = new Hono();
 
-// ─── Types ──────────────────────────────────────────────────────────────
+// ─── In-memory cache (5-minute TTL) ────────────────────────────────────
 
-interface ShadowEntry {
-  timestamp: string;
+interface CachedRow {
   gameId: string;
   league: string;
   matchup: string;
-  scheduledStart: string;
-  old: {
-    predictedWinner: string;
-    homeWinProb: number;
-    confidence: number;
-  };
-  new: {
-    predictedWinner: string | null;
-    homeWinProb: number;
-    confidence: number;
-    confidenceBand: string;
-    unavailableFactors: string[];
-  };
+  scheduledStart: Date;
+  oldPredictedWinner: string;
+  oldHomeWinProb: number;
+  oldConfidence: number;
+  newPredictedWinner: string | null;
+  newHomeWinProb: number;
+  newAwayWinProb: number;
+  newDrawProb: number | null;
+  newConfidence: number;
+  newConfidenceBand: string;
+  unavailableFactorsJson: string;
   agreement: boolean;
   confidenceDelta: number;
+  createdAt: Date;
 }
 
-// ─── In-memory cache (5-minute TTL) ────────────────────────────────────
-
-const LOGS_DIR = join(__dirname, "../../logs");
 const CACHE_TTL_MS = 5 * 60 * 1000;
-
-let cachedEntries: ShadowEntry[] | null = null;
+let cachedRows: CachedRow[] | null = null;
 let cacheTimestamp = 0;
 
-async function loadAllEntries(): Promise<ShadowEntry[]> {
+async function loadAllRows(): Promise<CachedRow[]> {
   const now = Date.now();
-  if (cachedEntries && now - cacheTimestamp < CACHE_TTL_MS) {
-    return cachedEntries;
+  if (cachedRows && now - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedRows;
   }
 
-  if (!existsSync(LOGS_DIR)) {
-    cachedEntries = [];
-    cacheTimestamp = now;
-    return [];
-  }
+  const rows = await prisma.shadowComparison.findMany({
+    select: {
+      gameId: true,
+      league: true,
+      matchup: true,
+      scheduledStart: true,
+      oldPredictedWinner: true,
+      oldHomeWinProb: true,
+      oldConfidence: true,
+      newPredictedWinner: true,
+      newHomeWinProb: true,
+      newAwayWinProb: true,
+      newDrawProb: true,
+      newConfidence: true,
+      newConfidenceBand: true,
+      unavailableFactorsJson: true,
+      agreement: true,
+      confidenceDelta: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
 
-  const files = (await readdir(LOGS_DIR)).filter((f) =>
-    f.startsWith("prediction_shadow_") && f.endsWith(".jsonl") && !f.includes("errors"),
-  );
-
-  if (files.length === 0) {
-    cachedEntries = [];
-    cacheTimestamp = now;
-    return [];
-  }
-
-  const entries: ShadowEntry[] = [];
-
-  for (const file of files.sort()) {
-    const content = await readFile(join(LOGS_DIR, file), "utf-8");
-    for (const line of content.split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        entries.push(JSON.parse(line) as ShadowEntry);
-      } catch {
-        // Skip malformed lines
-      }
-    }
-  }
-
-  cachedEntries = entries;
+  cachedRows = rows;
   cacheTimestamp = now;
-  return entries;
+  return rows;
 }
 
 // ─── Admin key guard ───────────────────────────────────────────────────
@@ -118,15 +110,16 @@ shadowRouter.get("/logs", async (c) => {
   const denied = checkAdminKey(c);
   if (denied) return denied;
 
-  const entries = await loadAllEntries();
+  const rows = await loadAllRows();
 
-  if (entries.length === 0) {
+  if (rows.length === 0) {
     return c.json({
       data: {
         totalComparisons: 0,
         perSport: {},
         dailyBreakdown: [],
-        note: "No shadow logs found. Logs directory may be empty or not yet populated.",
+        warnings: [],
+        note: "No shadow comparisons found in the database.",
       },
     });
   }
@@ -144,30 +137,31 @@ shadowRouter.get("/logs", async (c) => {
   // Daily aggregation
   const dayMap = new Map<string, { count: number; agreements: number }>();
 
-  for (const e of entries) {
+  for (const r of rows) {
     // Sport
-    const sport = e.league;
+    const sport = r.league;
     let s = sportMap.get(sport);
     if (!s) {
       s = { count: 0, agreements: 0, oldConfSum: 0, newConfSum: 0, deltaSum: 0, unavailableCount: 0 };
       sportMap.set(sport, s);
     }
     s.count++;
-    if (e.agreement) s.agreements++;
-    s.oldConfSum += e.old.confidence;
-    s.newConfSum += e.new.confidence;
-    s.deltaSum += e.confidenceDelta;
-    if (e.new.unavailableFactors.length > 0) s.unavailableCount++;
+    if (r.agreement) s.agreements++;
+    s.oldConfSum += r.oldConfidence;
+    s.newConfSum += r.newConfidence;
+    s.deltaSum += r.confidenceDelta;
+    const factors: string[] = JSON.parse(r.unavailableFactorsJson);
+    if (factors.length > 0) s.unavailableCount++;
 
     // Day
-    const day = e.timestamp.slice(0, 10);
+    const day = r.createdAt.toISOString().slice(0, 10);
     let d = dayMap.get(day);
     if (!d) {
       d = { count: 0, agreements: 0 };
       dayMap.set(day, d);
     }
     d.count++;
-    if (e.agreement) d.agreements++;
+    if (r.agreement) d.agreements++;
   }
 
   const perSport: Record<string, any> = {};
@@ -190,11 +184,63 @@ shadowRouter.get("/logs", async (c) => {
       agreementRate: +(d.agreements / d.count * 100).toFixed(1),
     }));
 
+  // ─── Warnings: scan for inconsistencies ──────────────────────────────
+  const SOCCER = new Set(["EPL", "MLS", "UCL"]);
+  const warnings: string[] = [];
+
+  const confidenceMismatchIds: string[] = [];
+  const winnerMismatchIds: string[] = [];
+  let missingDrawCount = 0;
+
+  for (const r of rows) {
+    const maxP = Math.max(r.newHomeWinProb, r.newAwayWinProb, r.newDrawProb ?? 0);
+    const expectedConf = Math.round(maxP * 1000) / 10;
+    if (Math.abs(r.newConfidence - expectedConf) > 0.1) {
+      confidenceMismatchIds.push(r.gameId);
+    }
+
+    if (r.newPredictedWinner !== null) {
+      // Determine which side the predicted winner is on — we don't have
+      // the team IDs in the cached row, but we do have newHomeWinProb/newAwayWinProb.
+      // If newPredictedWinner is set and the corresponding prob is not max, flag it.
+      const homeIsMax = r.newHomeWinProb >= r.newAwayWinProb && r.newHomeWinProb >= (r.newDrawProb ?? 0);
+      const awayIsMax = r.newAwayWinProb >= r.newHomeWinProb && r.newAwayWinProb >= (r.newDrawProb ?? 0);
+      // We can't definitively match winner to home/away from the abbreviation alone,
+      // but if neither home nor away is max (draw is max), that's a clear mismatch.
+      if (!homeIsMax && !awayIsMax) {
+        winnerMismatchIds.push(r.gameId);
+      }
+    }
+
+    if (SOCCER.has(r.league) && r.newDrawProb === null) {
+      missingDrawCount++;
+    }
+  }
+
+  if (confidenceMismatchIds.length > 0) {
+    const examples = confidenceMismatchIds.slice(0, 3).join(", ");
+    warnings.push(
+      `${confidenceMismatchIds.length} comparisons have confidence/probability mismatch — example gameIds: ${examples}`,
+    );
+  }
+  if (winnerMismatchIds.length > 0) {
+    const examples = winnerMismatchIds.slice(0, 3).join(", ");
+    warnings.push(
+      `${winnerMismatchIds.length} comparisons have predictedWinner inconsistent with probabilities — example gameIds: ${examples}`,
+    );
+  }
+  if (missingDrawCount > 0) {
+    warnings.push(
+      `${missingDrawCount} soccer comparisons stored without draw probability`,
+    );
+  }
+
   return c.json({
     data: {
-      totalComparisons: entries.length,
+      totalComparisons: rows.length,
       perSport,
       dailyBreakdown,
+      warnings,
     },
   });
 });
@@ -205,20 +251,20 @@ shadowRouter.get("/resolved-comparison", async (c) => {
   const denied = checkAdminKey(c);
   if (denied) return denied;
 
-  const entries = await loadAllEntries();
+  const rows = await loadAllRows();
 
-  if (entries.length === 0) {
+  if (rows.length === 0) {
     return c.json({
       data: {
         perSport: [],
         newEngineWins: false,
-        note: "No shadow logs found.",
+        note: "No shadow comparisons found in the database.",
       },
     });
   }
 
   // Collect unique gameIds
-  const gameIds = Array.from(new Set(entries.map((e) => e.gameId)));
+  const gameIds = Array.from(new Set(rows.map((r) => r.gameId)));
 
   // Fetch resolved predictions from database
   const resolved = await prisma.predictionResult.findMany({
@@ -242,11 +288,11 @@ shadowRouter.get("/resolved-comparison", async (c) => {
     newTotal: number;
   }>();
 
-  for (const e of entries) {
-    const actual = resolvedMap.get(e.gameId);
+  for (const r of rows) {
+    const actual = resolvedMap.get(r.gameId);
     if (!actual) continue; // Game not resolved yet
 
-    const sport = e.league;
+    const sport = r.league;
     let s = sportStats.get(sport);
     if (!s) {
       s = { oldCorrect: 0, newCorrect: 0, oldTotal: 0, newTotal: 0 };
@@ -255,12 +301,12 @@ shadowRouter.get("/resolved-comparison", async (c) => {
 
     // Old engine
     s.oldTotal++;
-    if (e.old.predictedWinner === actual) s.oldCorrect++;
+    if (r.oldPredictedWinner === actual) s.oldCorrect++;
 
     // New engine (skip if it didn't produce a pick)
-    if (e.new.predictedWinner) {
+    if (r.newPredictedWinner) {
       s.newTotal++;
-      if (e.new.predictedWinner === actual) s.newCorrect++;
+      if (r.newPredictedWinner === actual) s.newCorrect++;
     }
   }
 
@@ -306,14 +352,91 @@ shadowRouter.get("/recent", async (c) => {
   if (denied) return denied;
 
   const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "50", 10) || 50, 1), 500);
-  const entries = await loadAllEntries();
 
-  // Most recent first
-  const recent = entries
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-    .slice(0, limit);
+  const rows = await prisma.shadowComparison.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
 
-  return c.json({ data: recent });
+  const data = rows.map((r) => ({
+    timestamp: r.createdAt.toISOString(),
+    gameId: r.gameId,
+    league: r.league,
+    matchup: r.matchup,
+    scheduledStart: r.scheduledStart.toISOString(),
+    old: {
+      predictedWinner: r.oldPredictedWinner,
+      homeWinProb: r.oldHomeWinProb,
+      confidence: r.oldConfidence,
+    },
+    new: {
+      predictedWinner: r.newPredictedWinner,
+      homeWinProb: r.newHomeWinProb,
+      confidence: r.newConfidence,
+      confidenceBand: r.newConfidenceBand,
+      unavailableFactors: JSON.parse(r.unavailableFactorsJson),
+    },
+    agreement: r.agreement,
+    confidenceDelta: r.confidenceDelta,
+  }));
+
+  return c.json({ data });
+});
+
+// ─── GET /api/shadow/understat-diag ────────────────────────────────────
+
+/**
+ * One-time diagnostic: fetches every Understat league and returns the
+ * normalized team-name keys in each cache. Lets us see exactly what
+ * Understat has vs what ESPN sends so we can expand the alias map.
+ */
+shadowRouter.get("/understat-diag", async (c) => {
+  const denied = checkAdminKey(c);
+  if (denied) return denied;
+
+  const leagues: UnderstatLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
+  const result: Record<string, { teamCount: number; normalizedKeys: string[] } | { error: string }> = {};
+
+  for (const league of leagues) {
+    try {
+      const map = await fetchLeagueXG(league);
+      if (!map) {
+        result[league] = { error: "fetch returned null (timeout or parse failure)" };
+      } else {
+        const keys = Array.from(map.keys()).sort();
+        result[league] = { teamCount: keys.length, normalizedKeys: keys };
+      }
+    } catch (err: any) {
+      result[league] = { error: err?.message ?? String(err) };
+    }
+  }
+
+  // Also test a few known problematic lookups
+  const testLookups = [
+    { espnName: "Chelsea", league: "EPL" as UnderstatLeague },
+    { espnName: "Brighton & Hove Albion", league: "EPL" as UnderstatLeague },
+    { espnName: "Brighton", league: "EPL" as UnderstatLeague },
+  ];
+
+  const lookupResults = [];
+  for (const t of testLookups) {
+    const map = await fetchLeagueXG(t.league);
+    const hit = lookupInLeague(map, t.espnName, t.league);
+    lookupResults.push({
+      espnName: t.espnName,
+      league: t.league,
+      normalizedTo: normalizeSoccerTeamName(t.espnName),
+      found: !!hit,
+      understatName: hit?.name ?? null,
+    });
+  }
+
+  return c.json({
+    data: {
+      leagues: result,
+      testLookups: lookupResults,
+    },
+  });
 });
 
 export { shadowRouter };

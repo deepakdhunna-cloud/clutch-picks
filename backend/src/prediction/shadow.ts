@@ -13,6 +13,7 @@ import { appendFile, readdir, unlink } from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { predictGame } from "./index";
+import { prisma } from "../prisma";
 import type { GameContext } from "./types";
 import type { Game } from "../types/sports";
 import { Sport, League, GameStatus } from "../types/sports";
@@ -46,7 +47,7 @@ import { createInitialVersion } from "../lib/ingestion/predictionVersions";
 
 // ─── Paths ──────────────────────────────────────────────────────────────
 
-const LOGS_DIR = join(__dirname, "../../logs");
+const LOGS_DIR = process.env.LOGS_DIR ?? join(__dirname, "../../logs");
 
 function ensureLogsDir(): void {
   if (!existsSync(LOGS_DIR)) {
@@ -356,6 +357,31 @@ export function runShadowPrediction(
       };
 
       await appendFile(shadowLogPath(), JSON.stringify(entry) + "\n", "utf-8");
+
+      // Persist to Postgres so comparisons survive Railway redeploys.
+      // Fire-and-forget — DB failure never blocks the shadow path.
+      void prisma.shadowComparison.create({
+        data: {
+          gameId: entry.gameId,
+          league: entry.league,
+          matchup: entry.matchup,
+          scheduledStart: new Date(entry.scheduledStart),
+          oldPredictedWinner: entry.old.predictedWinner,
+          oldHomeWinProb: entry.old.homeWinProb,
+          oldConfidence: entry.old.confidence,
+          newPredictedWinner: entry.new.predictedWinner === "PICKEM" ? null : entry.new.predictedWinner,
+          newHomeWinProb: entry.new.homeWinProb,
+          newAwayWinProb: newPred.awayWinProbability,
+          newDrawProb: newPred.drawProbability ?? null,
+          newConfidence: entry.new.confidence,
+          newConfidenceBand: entry.new.confidenceBand,
+          unavailableFactorsJson: JSON.stringify(entry.new.unavailableFactors),
+          agreement: entry.agreement,
+          confidenceDelta: entry.confidenceDelta,
+        },
+      }).catch((dbErr: any) => {
+        console.error(`[shadow] DB write failed for game ${entry.gameId}:`, dbErr?.message);
+      });
     } catch (e: any) {
       // Log error — never propagate
       try {
