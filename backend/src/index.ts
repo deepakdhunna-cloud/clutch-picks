@@ -17,6 +17,7 @@ import { backtestRouter } from "./routes/backtest";
 import { historicalBacktestRouter } from "./routes/historical-backtest";
 import { calibrationRouter } from "./routes/calibration";
 import { ingestionRouter } from "./routes/ingestion";
+import { shadowRouter } from "./routes/shadow";
 import { logger } from "hono/logger";
 
 // Clear any stale prediction caches on startup so deploys with calibration
@@ -169,6 +170,7 @@ app.route("/api/backtest", backtestRouter);
 app.route("/api/historical-backtest", historicalBacktestRouter);
 app.route("/api/calibration", calibrationRouter);
 app.route("/api/ingestion", ingestionRouter);
+app.route("/api/shadow", shadowRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
