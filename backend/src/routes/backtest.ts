@@ -1,12 +1,19 @@
 /**
  * Backtest API
- * GET /api/backtest       — run a fresh backtest and return results
- * GET /api/backtest/latest — return the most recent saved backtest (fast, no DB query)
+ * GET  /api/backtest              — run a fresh backtest and return results
+ * GET  /api/backtest/latest       — return the most recent saved backtest (fast, no DB query)
+ * POST /api/backtest/replay       — kick off async replay backtest (admin-gated)
+ * GET  /api/backtest/replay/latest — return last replay backtest report
+ * GET  /api/backtest/replay/status — check if replay is running
  */
 
 import { Hono } from "hono";
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
 import { runBacktest, loadLatestResults } from "../lib/backtesting";
 import { prisma } from "../prisma";
+import { runReplayBacktest, getReplayProgress, type ReplayBacktestReport } from "../scripts/replayBacktest";
 
 export const backtestRouter = new Hono();
 
@@ -88,5 +95,91 @@ backtestRouter.get("/diagnostic", async (c) => {
     });
   } catch (err) {
     return c.json({ error: { message: String(err), code: "DIAG_ERROR" } }, 500);
+  }
+});
+
+// ─── Replay backtest endpoints ──────────────────────────────────────────
+
+function checkAdminKey(c: any): Response | null {
+  const adminKey = process.env.CALIBRATION_ADMIN_KEY;
+  if (!adminKey) {
+    return c.json(
+      { error: { message: "CALIBRATION_ADMIN_KEY not configured", code: "ADMIN_KEY_UNSET" } },
+      503,
+    );
+  }
+  const provided = c.req.header("x-calibration-admin-key");
+  if (provided !== adminKey) {
+    return c.json(
+      { error: { message: "Forbidden", code: "FORBIDDEN" } },
+      403,
+    );
+  }
+  return null;
+}
+
+// POST /api/backtest/replay — kick off async replay
+backtestRouter.post("/replay", async (c) => {
+  const denied = checkAdminKey(c);
+  if (denied) return denied;
+
+  const progress = getReplayProgress();
+  if (progress.running) {
+    return c.json({
+      data: {
+        status: "already_running",
+        startedAt: progress.startedAt,
+        progress: progress.progress,
+      },
+    });
+  }
+
+  const jobId = `replay-${Date.now()}`;
+
+  // Fire and forget — run in background
+  void runReplayBacktest().catch((err) => {
+    console.error("[replay] Backtest failed:", err?.message ?? err);
+  });
+
+  return c.json({
+    data: {
+      status: "started",
+      jobId,
+      note: "Replay running in background. Check /api/backtest/replay/status for progress, /api/backtest/replay/latest for results.",
+    },
+  });
+});
+
+// GET /api/backtest/replay/status — check if replay is running
+backtestRouter.get("/replay/status", async (c) => {
+  const denied = checkAdminKey(c);
+  if (denied) return denied;
+
+  return c.json({ data: getReplayProgress() });
+});
+
+// GET /api/backtest/replay/latest — return last replay report
+backtestRouter.get("/replay/latest", async (c) => {
+  const denied = checkAdminKey(c);
+  if (denied) return denied;
+
+  const latestPath = join(__dirname, "../../backtest-results/replay-latest.json");
+  if (!existsSync(latestPath)) {
+    return c.json({
+      error: {
+        message: "No replay backtest results available yet. POST /api/backtest/replay to start one.",
+        code: "NO_RESULTS",
+      },
+    }, 404);
+  }
+
+  try {
+    const content = await readFile(latestPath, "utf-8");
+    const report = JSON.parse(content) as ReplayBacktestReport;
+    return c.json({ data: report });
+  } catch (err: any) {
+    return c.json({
+      error: { message: `Failed to read replay results: ${err?.message}`, code: "READ_ERROR" },
+    }, 500);
   }
 });
