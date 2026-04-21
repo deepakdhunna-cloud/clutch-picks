@@ -48,3 +48,8 @@ yarn-error.*
 # Expo log
 expo.log
 backend/.env
+
+# Environment files — never commit
+.env
+.env.*
+!.env.example

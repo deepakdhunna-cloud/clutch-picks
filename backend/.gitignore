@@ -36,3 +36,8 @@ studio.log
 
 # Prisma generated files (bunx prisma generate)
 /generated/prisma
+
+# Environment files — never commit
+.env
+.env.*
+!.env.example
