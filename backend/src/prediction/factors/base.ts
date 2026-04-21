@@ -14,6 +14,21 @@
 import type { GameContext, FactorContribution } from "../types";
 import { getHomeBonus } from "../../lib/elo";
 
+// ─── Rest-cap sanity guard ──────────────────────────────────────────────────
+// Resolved-game data can go stale (resolve-picks falling behind leaves a team's
+// "last completed game" stuck on an old fixture). When that happens the raw
+// diff turns into nonsense like "247 days rest vs 246 days rest". Rather than
+// feeding that into the factor pipeline we mark it no-signal; blendFactors()
+// will pool the 0.05 weight onto rating_diff.
+const SOCCER_SPORTS = new Set(["EPL", "MLS", "UCL"]);
+const NON_SOCCER_REST_CAP_DAYS = 14;
+const SOCCER_REST_CAP_DAYS = 10;
+const warnedStaleRest = new Set<string>();
+
+export function __resetRestWarningCacheForTests(): void {
+  warnedStaleRest.clear();
+}
+
 // ─── Home-field baselines ───────────────────────────────────────────────────
 // Added to home Elo before computing rating differential.
 // Sources:
@@ -59,8 +74,24 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
 
   let restDelta = 0;
   let restEvidence = "Rest data unavailable";
+  let restHasSignal = false;
+  const restCap = SOCCER_SPORTS.has(ctx.sport)
+    ? SOCCER_REST_CAP_DAYS
+    : NON_SOCCER_REST_CAP_DAYS;
+  const restIsStale =
+    restAvailable && (homeRest! > restCap || awayRest! > restCap);
 
-  if (restAvailable) {
+  if (restIsStale) {
+    restEvidence =
+      "Rest data unavailable (stale fixture data for one or both teams)";
+    const warnKey = `${ctx.sport}:${ctx.game.id}`;
+    if (!warnedStaleRest.has(warnKey)) {
+      warnedStaleRest.add(warnKey);
+      console.warn(
+        `[rest] ${ctx.sport} gameId=${ctx.game.id} computed ${homeRest}/${awayRest} days rest — exceeds cap, marking no-signal`,
+      );
+    }
+  } else if (restAvailable) {
     const diff = homeRest! - awayRest!;
     // Each day of rest advantage ≈ 15 Elo points (conservative estimate).
     // Cap at ±3 days (±45 pts) to prevent extreme values from long breaks.
@@ -70,6 +101,7 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
       diff === 0
         ? `Both teams on equal rest (${homeRest} days)`
         : `Home ${homeRest} days rest vs Away ${awayRest} days rest (${diff > 0 ? "+" : ""}${diff} day advantage home)`;
+    restHasSignal = restDelta !== 0;
   }
 
   factors.push({
@@ -77,8 +109,11 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
     label: "Rest differential",
     homeDelta: restDelta,
     weight: 0.05,
+    // Stale-but-present rest data stays available=true with hasSignal=false
+    // so blendFactors() pools the 0.05 weight onto rating_diff instead of
+    // letting redistributeWeights scatter it to unrelated factors.
     available: restAvailable,
-    hasSignal: restAvailable && restDelta !== 0,
+    hasSignal: restHasSignal,
     evidence: restEvidence,
   });
 
