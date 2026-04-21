@@ -175,6 +175,66 @@ function buildTeamFromRaw(raw: UnderstatTeamRaw): UnderstatTeam | null {
 
 // ─── Public fetchers ────────────────────────────────────────────────────────
 
+const UNDERSTAT_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Connection": "keep-alive",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+};
+
+const UNDERSTAT_TIMEOUT_MS = 20_000; // 20s — Railway → Understat has higher latency
+const UNDERSTAT_MAX_RETRIES = 2;
+
+/**
+ * Detect Cloudflare challenge pages that won't contain our data.
+ */
+function isCloudflareChallenge(body: string): boolean {
+  return body.includes("Just a moment") || body.includes("Checking your browser");
+}
+
+async function fetchWithRetry(url: string): Promise<Response | null> {
+  const delays = [1000, 2000]; // backoff schedule
+  for (let attempt = 0; attempt < UNDERSTAT_MAX_RETRIES; attempt++) {
+    const start = Date.now();
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(UNDERSTAT_TIMEOUT_MS),
+        headers: UNDERSTAT_HEADERS,
+      });
+      const durationMs = Date.now() - start;
+
+      if (!response.ok) {
+        console.warn(
+          `[understat] attempt ${attempt + 1}/${UNDERSTAT_MAX_RETRIES}: ${url} → HTTP ${response.status} (${durationMs}ms)`,
+        );
+        if (attempt < UNDERSTAT_MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, delays[attempt]!));
+          continue;
+        }
+        return null;
+      }
+
+      console.log(`[understat] fetch OK: ${url} → ${response.status} (${durationMs}ms)`);
+      return response;
+    } catch (err: any) {
+      const durationMs = Date.now() - start;
+      console.warn(
+        `[understat] attempt ${attempt + 1}/${UNDERSTAT_MAX_RETRIES}: ${url} failed after ${durationMs}ms: ${err?.message ?? err}`,
+      );
+      if (attempt < UNDERSTAT_MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, delays[attempt]!));
+      }
+    }
+  }
+  return null;
+}
+
 export async function fetchLeagueXG(
   league: UnderstatLeague,
   season?: number,
@@ -188,23 +248,31 @@ export async function fetchLeagueXG(
 
   const url = `https://understat.com/league/${league}/${seasonYear}`;
 
+  const response = await fetchWithRetry(url);
+  if (!response) {
+    leagueCache.set(cacheKey, { data: null, timestamp: Date.now() });
+    return null;
+  }
+
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-      },
-    });
-    if (!response.ok) {
+    const html = await response.text();
+
+    // Detect Cloudflare challenge
+    if (isCloudflareChallenge(html)) {
+      console.error(
+        `[understat] Cloudflare challenge detected for ${league} ${seasonYear}. ` +
+        `Body starts with: ${html.slice(0, 200)}`,
+      );
       leagueCache.set(cacheKey, { data: null, timestamp: Date.now() });
       return null;
     }
 
-    const html = await response.text();
     const match = TEAMS_DATA_RE.exec(html);
     if (!match || !match[1]) {
+      console.warn(
+        `[understat] teamsData regex miss for ${league} ${seasonYear}. ` +
+        `Body length=${html.length}, first 200 chars: ${html.slice(0, 200)}`,
+      );
       leagueCache.set(cacheKey, { data: null, timestamp: Date.now() });
       return null;
     }
@@ -217,10 +285,11 @@ export async function fetchLeagueXG(
       result.set(normalizeSoccerTeamName(team.name), team);
     }
 
+    console.log(`[understat] parsed ${result.size} teams for ${league} ${seasonYear}`);
     leagueCache.set(cacheKey, { data: result, timestamp: Date.now() });
     return result;
   } catch (err) {
-    console.warn(`[understat] fetch failed for ${league} ${seasonYear}:`, err instanceof Error ? err.message : err);
+    console.warn(`[understat] parse failed for ${league} ${seasonYear}:`, err instanceof Error ? err.message : err);
     leagueCache.set(cacheKey, { data: null, timestamp: Date.now() });
     return null;
   }

@@ -21,6 +21,7 @@ import {
   normalizeSoccerTeamName,
   type UnderstatLeague,
 } from "../lib/understatApi";
+import { NBA_STATS_HEADERS } from "../lib/nbaStatsApi";
 
 const shadowRouter = new Hono();
 
@@ -386,57 +387,175 @@ shadowRouter.get("/recent", async (c) => {
 // ─── GET /api/shadow/understat-diag ────────────────────────────────────
 
 /**
- * One-time diagnostic: fetches every Understat league and returns the
- * normalized team-name keys in each cache. Lets us see exactly what
- * Understat has vs what ESPN sends so we can expand the alias map.
+ * Raw diagnostic: bypasses the cached fetchLeagueXG and issues direct fetches
+ * to Understat for each league, returning HTTP status, headers, body preview,
+ * regex match status, and timing. Lets us see exactly WHY fetches fail.
  */
 shadowRouter.get("/understat-diag", async (c) => {
   const denied = checkAdminKey(c);
   if (denied) return denied;
 
   const leagues: UnderstatLeague[] = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1"];
-  const result: Record<string, { teamCount: number; normalizedKeys: string[] } | { error: string }> = {};
+  const TEAMS_DATA_RE = /var\s+teamsData\s*=\s*JSON\.parse\('([^']+)'\)/;
 
+  // Determine current season
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const season = m >= 6 ? y : y - 1;
+
+  const results: Record<string, any> = {};
+
+  for (const league of leagues) {
+    const url = `https://understat.com/league/${league}/${season}`;
+    const start = Date.now();
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(20_000),
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Connection": "keep-alive",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+        },
+      });
+      const durationMs = Date.now() - start;
+      const body = await response.text();
+
+      const relevantHeaders: Record<string, string> = {};
+      for (const key of ["content-type", "cf-ray", "server", "x-robots-tag"]) {
+        const val = response.headers.get(key);
+        if (val) relevantHeaders[key] = val;
+      }
+
+      const regexMatch = TEAMS_DATA_RE.test(body);
+      const isCloudflare = body.includes("Just a moment") || body.includes("Checking your browser");
+
+      results[league] = {
+        url,
+        httpStatus: response.status,
+        headers: relevantHeaders,
+        bodyLength: body.length,
+        bodyPreview: body.slice(0, 500),
+        teamsDataRegexMatch: regexMatch,
+        isCloudflareChallenge: isCloudflare,
+        durationMs,
+      };
+    } catch (err: any) {
+      const durationMs = Date.now() - start;
+      results[league] = {
+        url,
+        error: err?.message ?? String(err),
+        errorName: err?.name,
+        durationMs,
+      };
+    }
+  }
+
+  // Also run the cached path for comparison
+  const cachedResults: Record<string, any> = {};
   for (const league of leagues) {
     try {
       const map = await fetchLeagueXG(league);
       if (!map) {
-        result[league] = { error: "fetch returned null (timeout or parse failure)" };
+        cachedResults[league] = { status: "null" };
       } else {
-        const keys = Array.from(map.keys()).sort();
-        result[league] = { teamCount: keys.length, normalizedKeys: keys };
+        cachedResults[league] = { status: "ok", teamCount: map.size };
       }
     } catch (err: any) {
-      result[league] = { error: err?.message ?? String(err) };
+      cachedResults[league] = { status: "error", message: err?.message };
     }
-  }
-
-  // Also test a few known problematic lookups
-  const testLookups = [
-    { espnName: "Chelsea", league: "EPL" as UnderstatLeague },
-    { espnName: "Brighton & Hove Albion", league: "EPL" as UnderstatLeague },
-    { espnName: "Brighton", league: "EPL" as UnderstatLeague },
-  ];
-
-  const lookupResults = [];
-  for (const t of testLookups) {
-    const map = await fetchLeagueXG(t.league);
-    const hit = lookupInLeague(map, t.espnName, t.league);
-    lookupResults.push({
-      espnName: t.espnName,
-      league: t.league,
-      normalizedTo: normalizeSoccerTeamName(t.espnName),
-      found: !!hit,
-      understatName: hit?.name ?? null,
-    });
   }
 
   return c.json({
     data: {
-      leagues: result,
-      testLookups: lookupResults,
+      season,
+      rawFetches: results,
+      cachedFetchLeagueXG: cachedResults,
     },
   });
+});
+
+// ─── GET /api/shadow/nba-stats-diag ───────────────────────────────────
+
+/**
+ * Diagnostic for stats.nba.com — performs a raw fetch with current headers
+ * and returns detailed status for debugging.
+ */
+shadowRouter.get("/nba-stats-diag", async (c) => {
+  const denied = checkAdminKey(c);
+  if (denied) return denied;
+
+  const teamId = c.req.query("teamId") ?? "1610612747"; // Lakers default
+  const now = new Date();
+  const startYear = now.getUTCMonth() >= 9 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  const endShort = String((startYear + 1) % 100).padStart(2, "0");
+  const season = `${startYear}-${endShort}`;
+
+  const url = `https://stats.nba.com/stats/teamgamelog?TeamID=${teamId}&Season=${season}&SeasonType=Regular+Season`;
+
+  const start = Date.now();
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(15_000),
+      headers: NBA_STATS_HEADERS,
+    });
+    const durationMs = Date.now() - start;
+    const body = await response.text();
+
+    const relevantHeaders: Record<string, string> = {};
+    for (const key of ["content-type", "cf-ray", "server", "x-cache", "access-control-allow-origin"]) {
+      const val = response.headers.get(key);
+      if (val) relevantHeaders[key] = val;
+    }
+
+    let parseResult: any = null;
+    try {
+      const json = JSON.parse(body);
+      const set = json.resultSets?.[0];
+      parseResult = {
+        resultSetCount: json.resultSets?.length ?? 0,
+        firstSetName: set?.name ?? null,
+        headerCount: set?.headers?.length ?? 0,
+        rowCount: set?.rowSet?.length ?? 0,
+        sampleHeaders: set?.headers?.slice(0, 10) ?? [],
+      };
+    } catch {
+      parseResult = { error: "JSON parse failed" };
+    }
+
+    return c.json({
+      data: {
+        url,
+        teamId,
+        season,
+        httpStatus: response.status,
+        headers: relevantHeaders,
+        bodyLength: body.length,
+        bodyPreview: body.slice(0, 500),
+        parseResult,
+        durationMs,
+      },
+    });
+  } catch (err: any) {
+    const durationMs = Date.now() - start;
+    return c.json({
+      data: {
+        url,
+        teamId,
+        season,
+        error: err?.message ?? String(err),
+        errorName: err?.name,
+        durationMs,
+      },
+    });
+  }
 });
 
 export { shadowRouter };

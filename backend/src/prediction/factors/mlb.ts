@@ -4,14 +4,14 @@
  * MLB IS STARTER-DOMINATED. The weights reflect this.
  *
  * Weight budget: 0.42 (remaining after 0.58 base).
- * Breakdown:
- *   - Starting pitcher matchup: 0.22
- *   - Bullpen fatigue: 0.06
- *   - Ballpark factor: 0.04
- *   - Lineup handedness vs starter: 0.04
+ * Breakdown (handedness removed — data too expensive to source reliably):
+ *   - Starting pitcher matchup: 0.24
+ *   - Bullpen fatigue: 0.07
+ *   - Ballpark factor: 0.05  (static data from Baseball Savant 2023-2024)
  *   - Weather (wind for outdoor day games): 0.02
- *   - Umpire strike zone: 0.02 (currently unavailable)
+ *   - Umpire strike zone: 0.02
  *   - Early-season dampening adjustment: 0.02
+ *   Total: 0.42
  *
  * Data source: MLB StatsAPI provides reliable probable pitcher data including
  * ERA, FIP, WHIP, K/9, BB/9, and recent 5-start ERA.
@@ -23,6 +23,18 @@
 
 import type { GameContext, FactorContribution } from "../types";
 import type { LineupPlayer } from "../../lib/espnStats";
+import parkFactorsData from "../../lib/data/mlbParkFactors.json";
+
+// ─── Park factor lookup ────────────────────────────────────────────────
+const PARK_FACTORS: Record<string, number> = parkFactorsData.parks;
+
+/**
+ * Look up park factor for a team's home ballpark.
+ * Returns null if the abbreviation isn't in our data.
+ */
+export function getParkFactor(teamAbbreviation: string): number | null {
+  return PARK_FACTORS[teamAbbreviation] ?? null;
+}
 
 // ─── League average baselines (2024-2025 seasons) ───────────────────────
 // Source: Baseball Reference / FanGraphs league averages
@@ -110,7 +122,7 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     key: "starting_pitcher",
     label: "Starting pitcher matchup",
     homeDelta: spDelta,
-    weight: 0.22,
+    weight: 0.24,
     available: spAvailable,
     evidence: spEvidence,
   });
@@ -142,39 +154,39 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     key: "bullpen_fatigue",
     label: "Bullpen fatigue (proxy)",
     homeDelta: bullpenDelta,
-    weight: 0.06,
+    weight: 0.07,
     available: true,
     evidence: bullpenEvidence,
   });
 
   // ── 3. Ballpark factor ────────────────────────────────────────────────
-  // Source: ESPN Park Factors / Baseball Reference.
-  // Coors Field (COL) is +15% runs; Petco Park (SD), Oracle Park (SF) are
-  // ~-8-10% runs. This affects total runs but also has a slight directional
-  // impact: hitter-friendly parks favor the better offense.
-  // We don't have park factor data in the current ESPN feed, so this is
-  // marked unavailable and weight redistributes.
+  // Source: Baseball Savant / Statcast 2023-2024 park factors.
+  // Conversion: 0.5 runs/game ≈ 10 Elo swing.
+  // Home delta = parkFactor × 20 (so +1.0 runs/game = +20 Elo), capped ±10.
+  // Positive park factor = hitter-friendly → slight home offensive edge
+  // (home team bats last in a high-run environment).
+  const homeAbbr = ctx.game.homeTeam.abbreviation;
+  const parkFactor = getParkFactor(homeAbbr);
+  let ballparkDelta = 0;
+  let ballparkEvidence: string;
+  const ballparkAvailable = parkFactor !== null;
+
+  if (parkFactor !== null) {
+    ballparkDelta = Math.max(-10, Math.min(10, Math.round(parkFactor * 20)));
+    const sign = parkFactor >= 0 ? "+" : "";
+    const friendliness = parkFactor > 0.1 ? "hitter-friendly" : parkFactor < -0.1 ? "pitcher-friendly" : "neutral";
+    ballparkEvidence = `${homeAbbr} park (${sign}${parkFactor.toFixed(2)} runs/game) — ${friendliness} (${ballparkDelta >= 0 ? "+" : ""}${ballparkDelta} Elo home)`;
+  } else {
+    ballparkEvidence = `Park factor not found for ${homeAbbr} — factor inactive, weight redistributed`;
+  }
+
   factors.push({
     key: "ballpark",
     label: "Ballpark run environment",
-    homeDelta: 0,
-    weight: 0.04,
-    available: false,
-    evidence: "Park factor data not available — factor inactive, weight redistributed",
-  });
-
-  // ── 4. Lineup handedness vs starter ───────────────────────────────────
-  // Source: FanGraphs platoon splits — LHB vs RHP and RHB vs LHP are
-  // well-documented advantages (~20 OPS points).
-  // We don't have team batting handedness splits or pitcher handedness
-  // in the current data model.
-  factors.push({
-    key: "handedness",
-    label: "Lineup handedness vs starter",
-    homeDelta: 0,
-    weight: 0.04,
-    available: false,
-    evidence: "Handedness data not available — factor inactive, weight redistributed",
+    homeDelta: ballparkDelta,
+    weight: 0.05,
+    available: ballparkAvailable,
+    evidence: ballparkEvidence,
   });
 
   // ── 5. Weather (wind for outdoor day games) ───────────────────────────

@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "description": "MLB park factors from Statcast/Baseball Savant 2023-2024 averages. Signed runs-per-game delta vs league average (positive = hitter-friendly, negative = pitcher-friendly).",
+    "sourcesConsulted": ["Baseball Savant park factors", "Statcast ballpark data"],
+    "lastUpdated": "2026-04-21"
+  },
+  "parks": {
+    "ARI": 0.35, "ATL": 0.15, "BAL": 0.10, "BOS": 0.20, "CHC": 0.05,
+    "CHW": 0.00, "CIN": 0.35, "CLE": -0.10, "COL": 1.20, "DET": -0.15,
+    "HOU": 0.05, "KC": 0.00, "LAA": -0.05, "LAD": -0.15, "MIA": -0.30,
+    "MIL": 0.05, "MIN": 0.00, "NYM": -0.05, "NYY": 0.25, "OAK": -0.20,
+    "PHI": 0.10, "PIT": -0.10, "SD": -0.35, "SEA": -0.25, "SF": -0.40,
+    "STL": 0.00, "TB": -0.10, "TEX": 0.15, "TOR": 0.05, "WSH": 0.00
+  }
+}
