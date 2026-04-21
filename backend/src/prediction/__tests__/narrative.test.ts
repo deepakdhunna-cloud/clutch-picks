@@ -127,6 +127,43 @@ describe("buildDeterministicNarrative", () => {
     const text = buildDeterministicNarrative(input);
     expect(text.length).toBeGreaterThan(20);
   });
+
+  // ── Elo-only fallback ──
+  // Light-data night: rating_diff has the only real signal; every other
+  // factor was pooled to hasSignal=false with homeDelta=0. The narrative
+  // must still be populated with the Elo lead AND an explicit note that
+  // no supporting signals were available.
+  it("produces an Elo-only narrative when only rating_diff has real signal", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 220,
+        weight: 1.0, // blendFactors pooled everything onto Elo
+        available: true,
+        hasSignal: true,
+        evidence: "Home BOS Elo 1561 + 100 HFA vs Away PHI Elo 1441 = 220 pt differential",
+      },
+      // These match what post-blendFactors no-signal factors look like.
+      { key: "injuries_nba", label: "Star player availability", homeDelta: 0, weight: 0, available: true, hasSignal: false, evidence: "No significant injuries reported for either team" },
+      { key: "back_to_back", label: "Back-to-back fatigue", homeDelta: 0, weight: 0, available: true, hasSignal: false, evidence: "No back-to-back for either team" },
+      { key: "net_rating", label: "Pace-adjusted net rating", homeDelta: 0, weight: 0, available: true, hasSignal: false, evidence: "Offensive/defensive rating data unavailable from ESPN" },
+    ];
+    const input = buildNarrativeInput(factors, "strong edge", 78.0, "BOS", "PHI", "BOS", "NBA");
+    const text = buildDeterministicNarrative(input);
+
+    // Must reference the Elo evidence (the only signal).
+    expect(text).toContain("Elo");
+    expect(text).toContain("BOS");
+
+    // Must explicitly flag the absence of supporting signals instead of
+    // silently ending after the lead factor.
+    expect(text.toLowerCase()).toContain("no additional contextual signals available");
+
+    // Non-empty, no banned words.
+    expect(text.length).toBeGreaterThan(40);
+    expect(BANNED_REGEX.test(text)).toBe(false);
+  });
 });
 
 describe("computeFactorHash", () => {

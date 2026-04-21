@@ -71,12 +71,13 @@ export function buildNarrativeInput(
     .filter((f) => f.available && Math.abs(f.homeDelta) > 0.01)
     .sort((a, b) => Math.abs(b.homeDelta * b.weight) - Math.abs(a.homeDelta * a.weight));
 
-  const leadFactor = sorted[0] ?? {
+  const leadFactor: FactorContribution = sorted[0] ?? {
     key: "none",
     label: "No decisive factor",
     homeDelta: 0,
     weight: 0,
     available: true,
+    hasSignal: false,
     evidence: "No factor provides meaningful separation between these teams",
   };
 
@@ -164,6 +165,18 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
   // ── Counterpoint ──
   if (counterpoint) {
     parts.push(`Working against the pick: ${counterpoint.evidence}.`);
+  }
+
+  // ── Elo-only note ──
+  // If the lead is the only factor with meaningful signal and nothing is
+  // pushing against the pick, say so explicitly. Prevents the narrative
+  // from sounding like we ran out of things to mention.
+  if (
+    leadFactor.key !== "none" &&
+    supportingFactors.length === 0 &&
+    counterpoint === null
+  ) {
+    parts.push(`No additional contextual signals available.`);
   }
 
   // ── Unavailable caveats ──

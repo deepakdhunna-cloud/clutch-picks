@@ -8,7 +8,9 @@
 
 import { predictGame } from "./index";
 import { buildGameContext } from "./shadow";
+import { buildDeterministicNarrative, buildNarrativeInput } from "./narrative";
 import type { HonestPrediction, FactorContribution } from "./types";
+import { getConfidenceBand } from "./types";
 import type { Game, GamePrediction, PredictionFactor } from "../routes/games";
 import { prisma } from "../prisma";
 import { enqueueWrite } from "../lib/writeQueue";
@@ -39,6 +41,41 @@ function translateFactor(f: FactorContribution): PredictionFactor {
     awayScore: 1 - homeScore,
     description: f.evidence,
   };
+}
+
+/**
+ * Build a 2-4 sentence narrative for a new-engine prediction. Reads the
+ * factor list, picks the lead + supporting factors, and composes a
+ * deterministic summary.
+ *
+ * Called synchronously in the API path so the response always ships with
+ * a populated analysis string — no "" placeholders reaching the client.
+ *
+ * When no non-Elo factor has real signal (light-data night), the template
+ * appends "No additional contextual signals available." so the reader
+ * knows the pick is Elo-only, not that we forgot to mention supporting
+ * evidence.
+ */
+export function buildAdapterNarrative(
+  newPred: HonestPrediction,
+  sport: string,
+  game: Game,
+): string {
+  const confidencePct = newPred.confidence;
+  const band = getConfidenceBand(
+    Math.max(newPred.homeWinProbability, newPred.awayWinProbability, newPred.drawProbability ?? 0),
+  );
+  const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const input = buildNarrativeInput(
+    newPred.factors,
+    band,
+    confidencePct,
+    game.homeTeam.abbreviation,
+    game.awayTeam.abbreviation,
+    winnerAbbr,
+    sport,
+  );
+  return buildDeterministicNarrative(input);
 }
 
 /**
@@ -111,6 +148,13 @@ export function translateNewEnginePrediction(
 export async function runNewEnginePrediction(game: Game): Promise<GamePrediction> {
   const ctx = await buildGameContext(game);
   const newPred = predictGame(ctx);
+
+  // Populate the narrative. predictGame leaves newPred.narrative as "" so a
+  // separate step can fill it in; historically that step was only wired up
+  // on the old-engine path. Use the deterministic template — synchronous,
+  // always valid, no LLM latency tax on cold requests. LLM enrichment can
+  // layer on later via generateNarrative() if we want richer prose.
+  newPred.narrative = buildAdapterNarrative(newPred, ctx.sport, game);
 
   const prediction = translateNewEnginePrediction(
     game,
