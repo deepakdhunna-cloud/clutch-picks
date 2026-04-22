@@ -213,3 +213,50 @@ describe("DELETE /api/me — HTTP handler", () => {
     expect(mockTx.appNotification.deleteMany).toHaveBeenCalled();
   });
 });
+
+// ─── Legacy profile path ────────────────────────────────────────────────────
+// The mobile app calls DELETE /api/profile/delete-account (not /api/me), so
+// that route must share the same deleteUserAccount module and keep the
+// { data: { success: true } } envelope the frontend already parses.
+
+function buildProfileDeleteApp(opts: {
+  user: { id: string; email: string } | null;
+  prisma: DeleteAccountPrisma;
+}) {
+  const app = new Hono<{ Variables: { user: typeof opts.user } }>();
+  app.use("*", async (c, next) => {
+    c.set("user", opts.user);
+    await next();
+  });
+  app.delete("/api/profile/delete-account", async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: { message: "Not authenticated", code: "UNAUTHORIZED" } }, 401);
+    }
+    try {
+      await deleteUserAccount(opts.prisma, { id: user.id, email: user.email });
+      return c.json({ data: { success: true } });
+    } catch {
+      return c.json(
+        { error: { message: "Failed to delete account", code: "DELETE_FAILED" } },
+        500,
+      );
+    }
+  });
+  return app;
+}
+
+describe("DELETE /api/profile/delete-account — legacy mobile path", () => {
+  test("authenticated call returns { data: { success: true } } and deletes the user", async () => {
+    const { prisma, mockTx } = buildMockPrisma();
+    const app = buildProfileDeleteApp({
+      user: { id: "u1", email: "a@b.com" },
+      prisma,
+    });
+    const res = await app.request("/api/profile/delete-account", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    // Shape must match what mobile settings.tsx expects — do not change.
+    expect(await res.json()).toEqual({ data: { success: true } });
+    expect(mockTx.user.delete).toHaveBeenCalledWith({ where: { id: "u1" } });
+  });
+});

@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { deleteUserAccount } from "../lib/deleteAccount";
 
 const profileRouter = new Hono<{
   Variables: {
@@ -226,25 +227,26 @@ profileRouter.put("/image", zValidator("json", updateImageSchema), async (c) => 
   }
 });
 
-// DELETE /api/profile/delete-account - Permanently delete user account and all data
+// DELETE /api/profile/delete-account
+// Mobile app (src/app/settings.tsx) calls this path. DELETE /api/me in
+// index.ts does the same thing via the same module — both are kept so
+// the REST-style path can be used by future clients without breaking
+// the existing mobile app. Response envelope stays { data: { success:
+// true } } because that's what the mobile client already parses.
 profileRouter.delete('/delete-account', async (c) => {
   const user = c.get('user');
   if (!user) {
     return c.json({ error: { message: 'Not authenticated', code: 'UNAUTHORIZED' } }, 401);
   }
-
   try {
-    // Delete all user-related data in order (respecting foreign keys)
-    await prisma.userPick.deleteMany({ where: { odId: user.id } });
-    await prisma.follow.deleteMany({ where: { OR: [{ followerId: user.id }, { followingId: user.id }] } });
-    await prisma.session.deleteMany({ where: { userId: user.id } });
-    await prisma.account.deleteMany({ where: { userId: user.id } });
-    await prisma.user.delete({ where: { id: user.id } });
-
+    await deleteUserAccount(prisma, { id: user.id, email: user.email });
     return c.json({ data: { success: true } });
   } catch (error) {
-    console.error('Error deleting account:', error);
-    return c.json({ error: { message: 'Failed to delete account', code: 'DELETE_FAILED' } }, 500);
+    console.error(`[delete-account] FAILURE user=${user.id}:`, error);
+    return c.json(
+      { error: { message: 'Failed to delete account', code: 'DELETE_FAILED' } },
+      500,
+    );
   }
 });
 
