@@ -18,6 +18,8 @@ import { historicalBacktestRouter } from "./routes/historical-backtest";
 import { calibrationRouter } from "./routes/calibration";
 import { ingestionRouter } from "./routes/ingestion";
 import { shadowRouter } from "./routes/shadow";
+import { createHealthRouter } from "./routes/health";
+import { prisma } from "./prisma";
 import { logger } from "hono/logger";
 
 // Clear any stale prediction caches on startup so deploys with calibration
@@ -119,8 +121,13 @@ app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 100, keyGenerator: ipKe
 // Mount auth handler
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
-// Health check endpoint
-app.get("/health", (c) => c.json({ status: "ok" }));
+// Health check endpoints — /health (liveness, no DB) and /ready (DB ping).
+// Mounted at root so they bypass /api/* rate limiting. During shutdown both
+// return 503 so the load balancer drains this instance.
+app.route("/", createHealthRouter({
+  isShuttingDown: () => isShuttingDown,
+  prisma,
+}));
 
 // File upload endpoint (authenticated, validated)
 app.post("/api/upload", async (c) => {
@@ -203,7 +210,6 @@ cleanOldShadowLogs().catch(e => console.error("[shadow] Startup cleanup failed:"
 
 import { resolvePicks } from "./lib/resolve-picks";
 import { checkLiveGamesAndNotify, checkBigGameAlerts } from "./lib/notification-jobs";
-import { prisma } from "./prisma";
 
 async function resolvePicksInBackground() {
   try {
