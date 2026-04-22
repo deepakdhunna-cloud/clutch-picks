@@ -37,6 +37,10 @@ studio.log
 # Prisma generated files (bunx prisma generate)
 /generated/prisma
 
+# Local SQLite dev database — never commit. Production uses Postgres.
+prisma/dev.db
+prisma/dev.db-journal
+
 # Environment files — never commit
 .env
 .env.*
