@@ -328,6 +328,23 @@ model ShadowComparison {
   @@index([createdAt])
 }
 
+// LLM-generated analyst narratives per game. Keyed by (gameId, versionHash)
+// so when the underlying prediction changes (new injury flips a factor,
+// confidence band shifts, etc.) we regenerate instead of serving stale
+// prose. The 12h TTL is a safety net: even with an unchanged hash, old
+// blurbs eventually retire. Writes happen in background from the engine
+// path; reads happen on cache miss before calling OpenAI.
+model LLMNarrativeCache {
+  gameId      String
+  versionHash String
+  narrative   String
+  tokensUsed  Int      @default(0)
+  generatedAt DateTime @default(now())
+
+  @@id([gameId, versionHash])
+  @@index([generatedAt])
+}
+
 // Time-series of sportsbook lines for each game. Populated by the 30-min
 // market-snapshot cron in src/index.ts. Also captured at pick resolution
 // with isClosing=true so we can benchmark our pregame picks against the

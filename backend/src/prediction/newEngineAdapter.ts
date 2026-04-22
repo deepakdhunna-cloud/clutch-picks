@@ -9,11 +9,23 @@
 import { predictGame } from "./index";
 import { buildGameContext } from "./shadow";
 import { buildDeterministicNarrative, buildNarrativeInput } from "./narrative";
-import type { HonestPrediction, FactorContribution } from "./types";
+import type { HonestPrediction, FactorContribution, GameContext } from "./types";
 import { getConfidenceBand } from "./types";
 import type { Game, GamePrediction, PredictionFactor } from "../routes/games";
 import { prisma } from "../prisma";
 import { enqueueWrite } from "../lib/writeQueue";
+import {
+  extractInjuryListForLLM,
+  generateLLMNarrative,
+  isRateCapped,
+  mapConfidenceTier,
+  type LLMNarrativeInput,
+} from "./llmNarrative";
+import {
+  computeVersionHash,
+  getCachedLLMNarrative,
+  putCachedLLMNarrative,
+} from "./narrativeCache";
 
 /**
  * Map a new-engine factor (FactorContribution) into the old PredictionFactor
@@ -193,5 +205,157 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
     });
   });
 
+  // Fire-and-forget LLM enrichment. setImmediate defers the work until
+  // after Hono has serialized and sent the current response, so this
+  // never blocks /api/games. On success, the cached GamePrediction's
+  // `analysis` field is mutated in place; the LRU stores references,
+  // so the next request sees the LLM text.
+  scheduleLLMEnrichment(game, ctx, newPred, prediction);
+
   return prediction;
+}
+
+/**
+ * Schedule LLM narrative enrichment after the response has been sent.
+ *
+ * Hot path:
+ *   - Never awaits. Never throws. Uses setImmediate to drain the current
+ *     request before doing any work.
+ *   - Reuses the already-built GameContext and HonestPrediction, so no
+ *     re-fetch of the 20 parallel ESPN endpoints.
+ *   - Mutates `prediction.analysis` on success; the LRU cache upstream
+ *     holds this same object by reference.
+ */
+function scheduleLLMEnrichment(
+  game: Game,
+  ctx: GameContext,
+  newPred: HonestPrediction,
+  prediction: GamePrediction,
+): void {
+  setImmediate(async () => {
+    try {
+      await enrichPredictionWithLLMNarrative(game, ctx, newPred, prediction);
+    } catch (err) {
+      console.warn(
+        `[llm-narrative] enrichment crashed gameId=${game.id}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  });
+}
+
+/**
+ * Synchronous orchestration of the LLM cache check → OpenAI call →
+ * cache write → in-place prediction mutation pipeline. Exported so the
+ * test suite can drive it deterministically without setImmediate.
+ */
+export async function enrichPredictionWithLLMNarrative(
+  game: Game,
+  ctx: GameContext,
+  newPred: HonestPrediction,
+  prediction: GamePrediction,
+): Promise<void> {
+  const sport = ctx.sport;
+  const injuries = extractInjuryListForLLM(
+    sport,
+    game.homeTeam.abbreviation,
+    ctx.homeInjuries,
+    game.awayTeam.abbreviation,
+    ctx.awayInjuries,
+  );
+
+  const versionHash = computeVersionHash(prediction, injuries);
+
+  // Tier-2 cache hit: reuse stored narrative, no OpenAI call.
+  const cached = await getCachedLLMNarrative(game.id, versionHash);
+  if (cached) {
+    prediction.analysis = cached;
+    return;
+  }
+
+  if (isRateCapped()) {
+    console.warn(
+      `[llm-narrative] rate cap hit, skipping enrichment for gameId=${game.id}`,
+    );
+    return;
+  }
+
+  const input = buildLLMNarrativeInput(game, newPred, sport, injuries);
+  const result = await generateLLMNarrative(input);
+
+  if (!result.text) {
+    if (result.reason && result.reason !== "no_api_key") {
+      console.log(
+        `[llm-narrative] fallback (${result.reason}) gameId=${game.id}`,
+      );
+    }
+    return;
+  }
+
+  prediction.analysis = result.text;
+  await putCachedLLMNarrative(
+    game.id,
+    versionHash,
+    result.text,
+    result.tokensUsed,
+  );
+  console.log(
+    `[llm-narrative] generation success gameId=${game.id} tokens=${result.tokensUsed}`,
+  );
+}
+
+function buildLLMNarrativeInput(
+  game: Game,
+  newPred: HonestPrediction,
+  sport: string,
+  injuries: ReturnType<typeof extractInjuryListForLLM>,
+): LLMNarrativeInput {
+  // Reuse the existing sort/select logic from buildNarrativeInput so the
+  // LLM sees the same top factors the deterministic fallback would have
+  // used. The band is recomputed here just for mapConfidenceTier.
+  const band = getConfidenceBand(
+    Math.max(
+      newPred.homeWinProbability,
+      newPred.awayWinProbability,
+      newPred.drawProbability ?? 0,
+    ),
+  );
+  const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const narrativeInput = buildNarrativeInput(
+    newPred.factors,
+    band,
+    newPred.confidence,
+    game.homeTeam.abbreviation,
+    game.awayTeam.abbreviation,
+    winnerAbbr,
+    sport,
+  );
+
+  const topFactors: FactorContribution[] = [narrativeInput.leadFactor].concat(
+    narrativeInput.supportingFactors,
+  );
+
+  const pickTeamName =
+    winnerAbbr === null
+      ? null
+      : winnerAbbr === game.homeTeam.abbreviation
+        ? game.homeTeam.name
+        : game.awayTeam.name;
+
+  return {
+    sport,
+    awayTeam: {
+      abbr: game.awayTeam.abbreviation,
+      name: game.awayTeam.name,
+    },
+    homeTeam: {
+      abbr: game.homeTeam.abbreviation,
+      name: game.homeTeam.name,
+    },
+    pickTeamName,
+    confidenceTier: mapConfidenceTier(newPred.confidence),
+    topFactors,
+    counterpoint: narrativeInput.counterpoint,
+    injuries,
+  };
 }
