@@ -38,6 +38,7 @@ import { lookupManagerChange } from "../lib/soccerManagerChanges";
 import { fetchMarketConsensus } from "../lib/sharpApi";
 import type { SoccerStakes } from "./types";
 import { createInitialVersion } from "../lib/ingestion/predictionVersions";
+import { useNewPredictionEngine } from "../env";
 
 // ─── Paths ──────────────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ interface ShadowErrorEntry {
 // ─── Feature flag ───────────────────────────────────────────────────────
 
 export function useNewEngine(): boolean {
-  return process.env.USE_NEW_PREDICTION_ENGINE === "true";
+  return useNewPredictionEngine;
 }
 
 // ─── Log rotation (keep last 14 days) ───────────────────────────────────

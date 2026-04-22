@@ -343,29 +343,8 @@ async function cleanupOldData() {
 const cleanupInterval = setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldData, 60_000);
 
-// ─── SharpAPI gate warning ──────────────────────────────────────────────────
-// Single startup-time check so the operator knows whether market data is on.
-if (!process.env.SHARPAPI_KEY) {
-  console.warn(
-    "[market] SHARPAPI_KEY not set — market lines disabled, model will run without market anchor",
-  );
-}
-
-// ─── Ingestion gate warnings ────────────────────────────────────────────────
-// The ingestion pipeline has two feature-gated external deps: Apify (for
-// Twitter) and Anthropic (for LLM extraction). Either can be missing and
-// the pipeline still partially works — log a single warning per missing
-// key at boot so the operator knows what's silently off.
-if (!process.env.APIFY_API_KEY) {
-  console.warn(
-    "[ingestion] APIFY_API_KEY not set — Twitter ingestion disabled, RSS will run alone",
-  );
-}
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.warn(
-    "[ingestion] ANTHROPIC_API_KEY not set — LLM extraction disabled, ingestion will collect but not process",
-  );
-}
+// Integration / feature-flag / admin-key status is reported once by
+// env.ts's printEnvReport() at import time — see top of file.
 
 // ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────────
 import cron from "node-cron";
