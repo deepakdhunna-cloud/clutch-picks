@@ -225,274 +225,32 @@ app.route("/api/shadow", shadowRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
-// ─── Shadow log cleanup (delete files older than 14 days) ───────────────────
-import { cleanOldShadowLogs } from "./prediction/shadow";
-cleanOldShadowLogs().catch(e => console.error("[shadow] Startup cleanup failed:", e));
-
-// ─── Background jobs ────────────────────────────────────────────────────────
-
-import { resolvePicks } from "./lib/resolve-picks";
-import { checkLiveGamesAndNotify, checkBigGameAlerts } from "./lib/notification-jobs";
-
-async function resolvePicksInBackground() {
-  try {
-    const { resolved, skipped } = await resolvePicks();
-    if (resolved > 0) console.log(`[resolve-picks] Resolved ${resolved}, skipped ${skipped}`);
-  } catch (err) {
-    console.error("[resolve-picks] Failed:", err);
-  }
-}
-
-let resolverRunning = false;
-async function resolvePicksGuarded() {
-  if (isShuttingDown) {
-    console.log("[resolve-picks] shutdown in progress, skipping tick");
-    return;
-  }
-  if (resolverRunning) {
-    console.log("[resolve-picks] Previous run still in progress, skipping");
-    return;
-  }
-  resolverRunning = true;
-  try {
-    await resolvePicksInBackground();
-  } finally {
-    resolverRunning = false;
-  }
-}
-
-// Resolve picks every 5 minutes
-const resolveInterval = setInterval(resolvePicksGuarded, 5 * 60 * 1000);
-// Also resolve once on startup after a 30-second delay
-setTimeout(resolvePicksGuarded, 30_000);
-
-// Pre-warm prediction cache and refresh live games
-async function warmPredictions() {
-  try {
-    const response = await fetch(`http://localhost:${port}/api/games`);
-    if (!response.ok) return;
-    const data = await response.json() as { data?: Array<{ id: string; status: string }> };
-    const games = data.data ?? [];
-    const liveGames = games.filter(g => g.status === "LIVE");
-    // Refresh live caches for in-progress games so the list page reflects
-    // current scores even when no user is actively viewing the detail page.
-    let warmed = 0;
-    for (const g of liveGames) {
-      try {
-        const detailRes = await fetch(`http://localhost:${port}/api/games/id/${g.id}`);
-        if (detailRes.ok) warmed++;
-      } catch (error) {
-        console.warn("[warm] Single prediction warm failed:", error);
-      }
-    }
-    console.log(`[prediction-warmer] Warmed ${games.length} games (${warmed}/${liveGames.length} live refreshed)`);
-  } catch (err) {
-    console.error("[prediction-warmer] Failed:", err);
-  }
-}
-let warmerRunning = false;
-async function warmPredictionsGuarded() {
-  if (isShuttingDown) {
-    console.log("[prediction-warmer] shutdown in progress, skipping tick");
-    return;
-  }
-  if (warmerRunning) {
-    console.log("[prediction-warmer] Previous run still in progress, skipping");
-    return;
-  }
-  warmerRunning = true;
-  try {
-    await warmPredictions();
-  } finally {
-    warmerRunning = false;
-  }
-}
-
-// Run more frequently so live caches don't go stale (was 4 min)
-const warmInterval = setInterval(warmPredictionsGuarded, 90 * 1000);
-setTimeout(warmPredictionsGuarded, 10_000);
-
-let liveCheckRunning = false;
-async function liveCheckGuarded() {
-  if (isShuttingDown) {
-    console.log("[notify] shutdown in progress, skipping tick");
-    return;
-  }
-  if (liveCheckRunning) {
-    console.log("[notify] Previous live game check still in progress, skipping");
-    return;
-  }
-  liveCheckRunning = true;
-  try {
-    await checkLiveGamesAndNotify();
-  } catch (err) {
-    console.error("[notify] Live game check failed:", err);
-  } finally {
-    liveCheckRunning = false;
-  }
-}
-
-// Check for live games and notify users who picked them — every 2 minutes
-const liveCheckInterval = setInterval(liveCheckGuarded, 2 * 60 * 1000);
-setTimeout(liveCheckGuarded, 45_000);
-
-// Check for big upcoming games — every 30 minutes
-function runBigGameAlertsTick() {
-  if (isShuttingDown) {
-    console.log("[big-game-alert] shutdown in progress, skipping tick");
-    return;
-  }
-  checkBigGameAlerts().catch(err => console.error("[notify] Big game alert failed:", err));
-}
-const bigGameInterval = setInterval(runBigGameAlertsTick, 30 * 60 * 1000);
-setTimeout(runBigGameAlertsTick, 60_000);
-
-// Clean up old resolved predictions (keep 90 days) — runs daily
-async function cleanupOldData() {
-  if (isShuttingDown) {
-    console.log("[cleanup] shutdown in progress, skipping tick");
-    return;
-  }
-  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  try {
-    const { count } = await prisma.predictionResult.deleteMany({
-      where: { resolvedAt: { not: null, lt: cutoff } },
-    });
-    if (count > 0) console.log(`[cleanup] Removed ${count} old prediction results`);
-  } catch (err) {
-    console.error("[cleanup] Failed:", err);
-  }
-}
-const cleanupInterval = setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
-setTimeout(cleanupOldData, 60_000);
-
-// Integration / feature-flag / admin-key status is reported once by
-// env.ts's printEnvReport() at import time — see top of file.
-
-// ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────────
-import cron from "node-cron";
-import { runWeeklyCalibration } from "./scripts/runWeeklyCalibration";
-import { snapshotMarketLines } from "./scripts/snapshotMarketLines";
-
-let calibrationRunning = false;
-async function calibrationGuarded() {
-  if (isShuttingDown) {
-    console.log("[calibration] shutdown in progress, skipping tick");
-    return;
-  }
-  if (calibrationRunning) {
-    console.log("[calibration] Previous run still in progress, skipping");
-    return;
-  }
-  calibrationRunning = true;
-  try {
-    await runWeeklyCalibration();
-  } catch (err) {
-    console.error("[calibration] Weekly run failed:", err);
-  } finally {
-    calibrationRunning = false;
-  }
-}
-// "0 3 * * 1" = minute 0, hour 3, every day, every month, Monday
-const calibrationCron = cron.schedule("0 3 * * 1", calibrationGuarded, { timezone: "UTC" });
-
-// ─── Market-line snapshot cron (every 30 minutes) ───────────────────────────
-// Pulls SharpAPI consensus for scheduled games in the next 24h and persists
-// a MarketSnapshot row per game. Gated on SHARPAPI_KEY — no-op without it.
-let marketSnapshotRunning = false;
-async function marketSnapshotGuarded() {
-  if (isShuttingDown) {
-    console.log("[market] shutdown in progress, skipping tick");
-    return;
-  }
-  if (!process.env.SHARPAPI_KEY) return; // No key, no work
-  if (marketSnapshotRunning) {
-    console.log("[market] Previous snapshot still in progress, skipping");
-    return;
-  }
-  marketSnapshotRunning = true;
-  try {
-    await snapshotMarketLines(port);
-  } catch (err) {
-    console.error("[market] Snapshot run failed:", err);
-  } finally {
-    marketSnapshotRunning = false;
-  }
-}
-// "*/30 * * * *" = every 30 minutes
-const marketSnapshotCron = cron.schedule("*/30 * * * *", marketSnapshotGuarded, { timezone: "UTC" });
-
-// ─── Beat-writer ingestion cron (every 2 minutes) ───────────────────────────
-// Full ingestion cycle — see lib/ingestion/orchestrator.ts. Feature-gated
-// components (Twitter, LLM extraction) no-op when their keys aren't set.
-import { runIngestionCycle, recordCycleResult } from "./lib/ingestion/orchestrator";
-
-let ingestionRunning = false;
-async function ingestionGuarded() {
-  if (isShuttingDown) {
-    console.log("[ingestion] shutdown in progress, skipping tick");
-    return;
-  }
-  if (ingestionRunning) {
-    console.log("[ingestion] Previous cycle still in progress, skipping");
-    return;
-  }
-  ingestionRunning = true;
-  try {
-    const result = await runIngestionCycle(port);
-    recordCycleResult(result);
-    console.log(
-      `[ingestion] cycle complete — items=${result.itemsProcessed} signals=${result.signalsExtracted}` +
-        ` stored=${result.signalsStored} re-predicts=${result.rePredictionsTriggered}` +
-        ` expired=${result.expiredCleaned} errors=${result.errors.length}`,
-    );
-  } catch (err) {
-    console.error("[ingestion] Cycle failed:", err);
-  } finally {
-    ingestionRunning = false;
-  }
-}
-// "*/2 * * * *" = every 2 minutes
-const ingestionCron = cron.schedule("*/2 * * * *", ingestionGuarded, { timezone: "UTC" });
+// Background jobs (resolve-picks, warm, ingestion, calibration, etc.) and
+// shadow-log maintenance live in src/worker.ts — a separate Railway service
+// ('clutch-picks-worker') so scaling HTTP replicas > 1 doesn't double-fire
+// crons. Web owns only the HTTP server + graceful drain.
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
-// Railway sends SIGTERM ~30s before SIGKILL during deploys. Without a
-// handler, in-flight HTTP requests, SSE streams, and background jobs are
-// killed mid-run — users see 502s and DB state can be half-written (pick
-// resolved but notification not sent, etc). We stop accepting new work,
-// drain for up to 25s (margin under Railway's 30s window), then exit.
+// Railway sends SIGTERM ~30s before SIGKILL during deploys. Stop accepting
+// new connections, drain in-flight requests for up to 25s (margin under
+// Railway's 30s window), release the DB pool, and exit.
 const server = Bun.serve({
   port,
   fetch: app.fetch,
   idleTimeout: 255,
 });
-console.log(`[server] listening on port ${port}`);
+console.log(`[web] starting HTTP server on port ${port}`);
 
 async function gracefulShutdown(signal: NodeJS.Signals) {
   if (isShuttingDown) return; // Signals can repeat; only drain once.
   isShuttingDown = true;
   console.log(`[shutdown] signal=${signal} received, draining`);
 
-  // 1. Stop ticking timers so no new background work kicks off. In-flight
-  //    work is not interrupted — the guards already have tryFinally.
-  clearInterval(resolveInterval);
-  clearInterval(warmInterval);
-  clearInterval(liveCheckInterval);
-  clearInterval(bigGameInterval);
-  clearInterval(cleanupInterval);
-
-  // 2. Stop cron tasks. stop() halts future fires; destroy() releases them.
-  await Promise.allSettled([
-    Promise.resolve(calibrationCron.stop()),
-    Promise.resolve(marketSnapshotCron.stop()),
-    Promise.resolve(ingestionCron.stop()),
-  ]);
-
-  // 3. Stop accepting new HTTP connections. Passing false keeps existing
-  //    connections open so in-flight requests finish.
+  // Stop accepting new HTTP connections. Passing false keeps existing
+  // connections open so in-flight requests finish.
   server.stop(false);
 
-  // 4. Poll pendingRequests until it drains or we hit the 25s budget.
+  // Poll pendingRequests until it drains or we hit the 25s budget.
   const drainDeadline = Date.now() + 25_000;
   while (server.pendingRequests > 0 && Date.now() < drainDeadline) {
     await new Promise((r) => setTimeout(r, 200));
@@ -504,7 +262,6 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
     server.stop(true); // Now actually close everything.
   }
 
-  // 5. Release DB pool so Postgres doesn't see connection leaks.
   try {
     await prisma.$disconnect();
   } catch (err) {

@@ -36,9 +36,9 @@ interface ScheduledGame {
   awayTeam: { id: string; name: string; abbreviation: string; logo?: string; record?: string };
 }
 
-async function loadUpcomingGames(port: number): Promise<ScheduledGame[]> {
+async function loadUpcomingGames(baseUrl: string): Promise<ScheduledGame[]> {
   try {
-    const res = await fetch(`http://localhost:${port}/api/games`, {
+    const res = await fetch(`${baseUrl}/api/games`, {
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return [];
@@ -78,12 +78,12 @@ function triggerReason(signal: ExtractedSignal): string {
 export async function triggerRePrediction(
   signal: ExtractedSignal,
   signalId: string,
-  port: number,
+  baseUrl: string,
 ): Promise<number> {
   if (signal.severity === "minor") return 0;
   if (signal.confidence < 0.5) return 0; // don't move the model on low-confidence signals
 
-  const games = await loadUpcomingGames(port);
+  const games = await loadUpcomingGames(baseUrl);
   const affected = games.filter((g) => affectsTeam(g, signal.teamAbbreviation));
   if (affected.length === 0) return 0;
 

@@ -32,9 +32,9 @@ interface ScheduledGame {
  * `/api/games` aggregator so we don't re-implement per-sport schedule
  * fetchers here. Filters to SCHEDULED games within the next 24 hours.
  */
-async function loadScheduledGames(port: number): Promise<ScheduledGame[]> {
+async function loadScheduledGames(baseUrl: string): Promise<ScheduledGame[]> {
   try {
-    const response = await fetch(`http://localhost:${port}/api/games`, {
+    const response = await fetch(`${baseUrl}/api/games`, {
       signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) return [];
@@ -107,11 +107,11 @@ async function snapshotGame(game: ScheduledGame): Promise<boolean> {
  * Top-level entry invoked by the cron. Batches in groups of 5 to keep the
  * token bucket from starving (SharpAPI allows 10 req/min).
  */
-export async function snapshotMarketLines(port: number): Promise<{
+export async function snapshotMarketLines(baseUrl: string): Promise<{
   attempted: number;
   written: number;
 }> {
-  const games = await loadScheduledGames(port);
+  const games = await loadScheduledGames(baseUrl);
   if (games.length === 0) return { attempted: 0, written: 0 };
 
   console.log(`[market] snapshot run — ${games.length} scheduled games in next 24h`);

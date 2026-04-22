@@ -51,7 +51,11 @@ export function prioritize(items: RawNewsItem[]): RawNewsItem[] {
   });
 }
 
-export async function runIngestionCycle(port: number): Promise<IngestionCycleResult> {
+// baseUrl is the HTTP origin of the web service (e.g. "http://localhost:3000"
+// in dev, the Railway public URL in prod). Threaded through so the worker
+// process, which has no HTTP server of its own, can still reach the games
+// aggregator that triggerRePrediction → loadUpcomingGames depends on.
+export async function runIngestionCycle(baseUrl: string): Promise<IngestionCycleResult> {
   const runAt = new Date().toISOString();
   const errors: string[] = [];
 
@@ -98,7 +102,7 @@ export async function runIngestionCycle(port: number): Promise<IngestionCycleRes
         if (signal.severity === "critical" || signal.severity === "moderate") {
           // Fire-and-forget. The trigger never throws (it logs + swallows),
           // but we keep a .catch anyway for belt-and-suspenders.
-          void triggerRePrediction(signal, row.id, port)
+          void triggerRePrediction(signal, row.id, baseUrl)
             .then((n) => {
               rePredictionsTriggered += n;
             })

@@ -1,0 +1,336 @@
+// Background worker process. Owns every setInterval + cron task that used
+// to live in src/index.ts so scaling HTTP replicas > 1 doesn't cause
+// duplicate ticks.
+//
+// Deployed as the 'clutch-picks-worker' Railway service:
+//   - Same Docker image as web
+//   - Railway service CMD override: `bun run worker`
+//   - Replicas locked to 1 (no leader election; a second instance would
+//     double-fire every cron)
+//   - Healthcheck path cleared (no HTTP endpoint)
+//   - Shares env vars with the web service (DATABASE_URL, admin keys, etc.)
+//
+// The web service runs `prisma migrate deploy` on boot; the worker skips
+// migrations to avoid a deploy-time race.
+
+import { env } from "./env";
+import { prisma } from "./prisma";
+import { cleanOldShadowLogs } from "./prediction/shadow";
+import { resolvePicks } from "./lib/resolve-picks";
+import {
+  checkLiveGamesAndNotify,
+  checkBigGameAlerts,
+} from "./lib/notification-jobs";
+import cron from "node-cron";
+import { runWeeklyCalibration } from "./scripts/runWeeklyCalibration";
+import { snapshotMarketLines } from "./scripts/snapshotMarketLines";
+import {
+  runIngestionCycle,
+  recordCycleResult,
+} from "./lib/ingestion/orchestrator";
+
+console.log("[worker] starting background jobs");
+
+// Worker-scoped shutdown flag. Isolated from the web process's flag so the
+// two services drain independently. Each *Guarded fn short-circuits when
+// this flips to true, preventing a new tick from starting just before the
+// process exits.
+let isShuttingDown = false;
+
+// The three cron-ish jobs that previously hit http://localhost:${port}
+// from inside the web process now need the web service's real URL. In
+// dev env.BACKEND_URL defaults to http://localhost:3000; in prod Railway
+// sets it to the public web URL.
+const baseUrl = env.BACKEND_URL;
+
+// ─── Shadow log cleanup (delete files older than 14 days) ───────────────
+// One-shot maintenance task — lived at boot in index.ts; moved here because
+// it's worker-class work (touches the filesystem, no HTTP interaction).
+cleanOldShadowLogs().catch((e) =>
+  console.error("[shadow] Startup cleanup failed:", e),
+);
+
+// ─── resolve-picks — every 5 minutes ────────────────────────────────────
+
+async function resolvePicksInBackground() {
+  try {
+    const { resolved, skipped } = await resolvePicks();
+    if (resolved > 0)
+      console.log(`[resolve-picks] Resolved ${resolved}, skipped ${skipped}`);
+  } catch (err) {
+    console.error("[resolve-picks] Failed:", err);
+  }
+}
+
+let resolverRunning = false;
+async function resolvePicksGuarded() {
+  if (isShuttingDown) {
+    console.log("[resolve-picks] shutdown in progress, skipping tick");
+    return;
+  }
+  if (resolverRunning) {
+    console.log("[resolve-picks] Previous run still in progress, skipping");
+    return;
+  }
+  resolverRunning = true;
+  try {
+    await resolvePicksInBackground();
+  } finally {
+    resolverRunning = false;
+  }
+}
+
+console.log("[worker] scheduling resolve-picks every 5 min");
+const resolveInterval = setInterval(resolvePicksGuarded, 5 * 60 * 1000);
+setTimeout(resolvePicksGuarded, 30_000);
+
+// ─── prediction-warmer — every 90 seconds ───────────────────────────────
+// Hits the web service's /api/games to warm its in-memory prediction
+// cache. From the worker, each request populates whichever web replica
+// the load balancer routes to — imperfect at N>1 replicas but better
+// than letting the cache go cold.
+
+async function warmPredictions() {
+  try {
+    const response = await fetch(`${baseUrl}/api/games`);
+    if (!response.ok) return;
+    const data = (await response.json()) as {
+      data?: Array<{ id: string; status: string }>;
+    };
+    const games = data.data ?? [];
+    const liveGames = games.filter((g) => g.status === "LIVE");
+    let warmed = 0;
+    for (const g of liveGames) {
+      try {
+        const detailRes = await fetch(`${baseUrl}/api/games/id/${g.id}`);
+        if (detailRes.ok) warmed++;
+      } catch (error) {
+        console.warn("[warm] Single prediction warm failed:", error);
+      }
+    }
+    console.log(
+      `[prediction-warmer] Warmed ${games.length} games (${warmed}/${liveGames.length} live refreshed)`,
+    );
+  } catch (err) {
+    console.error("[prediction-warmer] Failed:", err);
+  }
+}
+
+let warmerRunning = false;
+async function warmPredictionsGuarded() {
+  if (isShuttingDown) {
+    console.log("[prediction-warmer] shutdown in progress, skipping tick");
+    return;
+  }
+  if (warmerRunning) {
+    console.log(
+      "[prediction-warmer] Previous run still in progress, skipping",
+    );
+    return;
+  }
+  warmerRunning = true;
+  try {
+    await warmPredictions();
+  } finally {
+    warmerRunning = false;
+  }
+}
+
+console.log("[worker] scheduling prediction-warmer every 90 sec");
+const warmInterval = setInterval(warmPredictionsGuarded, 90 * 1000);
+setTimeout(warmPredictionsGuarded, 10_000);
+
+// ─── live-game notify — every 2 minutes ─────────────────────────────────
+
+let liveCheckRunning = false;
+async function liveCheckGuarded() {
+  if (isShuttingDown) {
+    console.log("[notify] shutdown in progress, skipping tick");
+    return;
+  }
+  if (liveCheckRunning) {
+    console.log(
+      "[notify] Previous live game check still in progress, skipping",
+    );
+    return;
+  }
+  liveCheckRunning = true;
+  try {
+    await checkLiveGamesAndNotify();
+  } catch (err) {
+    console.error("[notify] Live game check failed:", err);
+  } finally {
+    liveCheckRunning = false;
+  }
+}
+
+console.log("[worker] scheduling live-check every 2 min");
+const liveCheckInterval = setInterval(liveCheckGuarded, 2 * 60 * 1000);
+setTimeout(liveCheckGuarded, 45_000);
+
+// ─── big-game alerts — every 30 minutes ─────────────────────────────────
+
+function runBigGameAlertsTick() {
+  if (isShuttingDown) {
+    console.log("[big-game-alert] shutdown in progress, skipping tick");
+    return;
+  }
+  checkBigGameAlerts().catch((err) =>
+    console.error("[notify] Big game alert failed:", err),
+  );
+}
+
+console.log("[worker] scheduling big-game alerts every 30 min");
+const bigGameInterval = setInterval(runBigGameAlertsTick, 30 * 60 * 1000);
+setTimeout(runBigGameAlertsTick, 60_000);
+
+// ─── cleanup old prediction results — daily ─────────────────────────────
+
+async function cleanupOldData() {
+  if (isShuttingDown) {
+    console.log("[cleanup] shutdown in progress, skipping tick");
+    return;
+  }
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  try {
+    const { count } = await prisma.predictionResult.deleteMany({
+      where: { resolvedAt: { not: null, lt: cutoff } },
+    });
+    if (count > 0)
+      console.log(`[cleanup] Removed ${count} old prediction results`);
+  } catch (err) {
+    console.error("[cleanup] Failed:", err);
+  }
+}
+
+console.log("[worker] scheduling cleanup daily");
+const cleanupInterval = setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
+setTimeout(cleanupOldData, 60_000);
+
+// ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────
+
+let calibrationRunning = false;
+async function calibrationGuarded() {
+  if (isShuttingDown) {
+    console.log("[calibration] shutdown in progress, skipping tick");
+    return;
+  }
+  if (calibrationRunning) {
+    console.log("[calibration] Previous run still in progress, skipping");
+    return;
+  }
+  calibrationRunning = true;
+  try {
+    await runWeeklyCalibration();
+  } catch (err) {
+    console.error("[calibration] Weekly run failed:", err);
+  } finally {
+    calibrationRunning = false;
+  }
+}
+
+console.log("[worker] scheduling calibration Mondays 03:00 UTC");
+const calibrationCron = cron.schedule("0 3 * * 1", calibrationGuarded, {
+  timezone: "UTC",
+});
+
+// ─── Market-line snapshot cron (every 30 minutes) ───────────────────────
+
+let marketSnapshotRunning = false;
+async function marketSnapshotGuarded() {
+  if (isShuttingDown) {
+    console.log("[market] shutdown in progress, skipping tick");
+    return;
+  }
+  if (!process.env.SHARPAPI_KEY) return; // No key, no work
+  if (marketSnapshotRunning) {
+    console.log("[market] Previous snapshot still in progress, skipping");
+    return;
+  }
+  marketSnapshotRunning = true;
+  try {
+    await snapshotMarketLines(baseUrl);
+  } catch (err) {
+    console.error("[market] Snapshot run failed:", err);
+  } finally {
+    marketSnapshotRunning = false;
+  }
+}
+
+console.log("[worker] scheduling market-snapshot every 30 min");
+const marketSnapshotCron = cron.schedule(
+  "*/30 * * * *",
+  marketSnapshotGuarded,
+  { timezone: "UTC" },
+);
+
+// ─── Beat-writer ingestion cron (every 2 minutes) ───────────────────────
+
+let ingestionRunning = false;
+async function ingestionGuarded() {
+  if (isShuttingDown) {
+    console.log("[ingestion] shutdown in progress, skipping tick");
+    return;
+  }
+  if (ingestionRunning) {
+    console.log("[ingestion] Previous cycle still in progress, skipping");
+    return;
+  }
+  ingestionRunning = true;
+  try {
+    const result = await runIngestionCycle(baseUrl);
+    recordCycleResult(result);
+    console.log(
+      `[ingestion] cycle complete — items=${result.itemsProcessed} signals=${result.signalsExtracted}` +
+        ` stored=${result.signalsStored} re-predicts=${result.rePredictionsTriggered}` +
+        ` expired=${result.expiredCleaned} errors=${result.errors.length}`,
+    );
+  } catch (err) {
+    console.error("[ingestion] Cycle failed:", err);
+  } finally {
+    ingestionRunning = false;
+  }
+}
+
+console.log("[worker] scheduling ingestion every 2 min");
+const ingestionCron = cron.schedule("*/2 * * * *", ingestionGuarded, {
+  timezone: "UTC",
+});
+
+// ─── Graceful shutdown ──────────────────────────────────────────────────
+
+async function gracefulShutdown(signal: NodeJS.Signals) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[worker-shutdown] signal=${signal} received, draining`);
+
+  clearInterval(resolveInterval);
+  clearInterval(warmInterval);
+  clearInterval(liveCheckInterval);
+  clearInterval(bigGameInterval);
+  clearInterval(cleanupInterval);
+
+  await Promise.allSettled([
+    Promise.resolve(calibrationCron.stop()),
+    Promise.resolve(marketSnapshotCron.stop()),
+    Promise.resolve(ingestionCron.stop()),
+  ]);
+
+  try {
+    await prisma.$disconnect();
+  } catch (err) {
+    console.error("[worker-shutdown] prisma.$disconnect failed:", err);
+  }
+
+  console.log("[worker-shutdown] complete, exiting");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => {
+  void gracefulShutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  void gracefulShutdown("SIGINT");
+});
+
+console.log("[worker] all jobs scheduled, running");
