@@ -19,6 +19,7 @@ import { calibrationRouter } from "./routes/calibration";
 import { ingestionRouter } from "./routes/ingestion";
 import { shadowRouter } from "./routes/shadow";
 import { createHealthRouter } from "./routes/health";
+import { deleteUserAccount } from "./lib/deleteAccount";
 import { prisma } from "./prisma";
 import { logger } from "hono/logger";
 
@@ -174,6 +175,28 @@ app.get("/api/me", (c) => {
   const user = c.get("user");
   if (!user) return c.body(null, 401);
   return c.json({ data: user });
+});
+
+// Delete current user's account + all associated data. Required by Apple
+// App Store Guideline 5.1.1(v) for any app that allows account creation.
+// Known gap: Apple OAuth token revocation on appleid.apple.com/auth/revoke
+// is not yet wired — see lib/deleteAccount.ts. Must be closed before App
+// Store submission.
+app.delete("/api/me", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+  try {
+    await deleteUserAccount(prisma, { id: user.id, email: user.email });
+    return c.json({ data: { status: "deleted", userId: user.id } });
+  } catch (err) {
+    console.error(`[delete-account] Failed to delete user=${user.id}:`, err);
+    return c.json(
+      { error: { message: "Account deletion failed. Please try again.", code: "DELETE_FAILED" } },
+      500,
+    );
+  }
 });
 
 // Cache-control headers for games API responses
