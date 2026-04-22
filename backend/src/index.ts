@@ -37,6 +37,15 @@ clearAllPredictionCaches();
   );
 }
 
+// Flipped true when SIGTERM/SIGINT arrives. Exported so tests can reset it.
+// Background jobs (setInterval tickers + cron handlers) consult this and
+// skip ticks once the drain has started, so a 5-minute job doesn't kick off
+// with ~seconds left before Railway's SIGKILL.
+export let isShuttingDown = false;
+export function __resetShutdownForTests() {
+  isShuttingDown = false;
+}
+
 // Type the Hono app with user/session variables
 const app = new Hono<{
   Variables: {
@@ -207,6 +216,10 @@ async function resolvePicksInBackground() {
 
 let resolverRunning = false;
 async function resolvePicksGuarded() {
+  if (isShuttingDown) {
+    console.log("[resolve-picks] shutdown in progress, skipping tick");
+    return;
+  }
   if (resolverRunning) {
     console.log("[resolve-picks] Previous run still in progress, skipping");
     return;
@@ -220,7 +233,7 @@ async function resolvePicksGuarded() {
 }
 
 // Resolve picks every 5 minutes
-setInterval(resolvePicksGuarded, 5 * 60 * 1000);
+const resolveInterval = setInterval(resolvePicksGuarded, 5 * 60 * 1000);
 // Also resolve once on startup after a 30-second delay
 setTimeout(resolvePicksGuarded, 30_000);
 
@@ -250,6 +263,10 @@ async function warmPredictions() {
 }
 let warmerRunning = false;
 async function warmPredictionsGuarded() {
+  if (isShuttingDown) {
+    console.log("[prediction-warmer] shutdown in progress, skipping tick");
+    return;
+  }
   if (warmerRunning) {
     console.log("[prediction-warmer] Previous run still in progress, skipping");
     return;
@@ -263,11 +280,15 @@ async function warmPredictionsGuarded() {
 }
 
 // Run more frequently so live caches don't go stale (was 4 min)
-setInterval(warmPredictionsGuarded, 90 * 1000);
+const warmInterval = setInterval(warmPredictionsGuarded, 90 * 1000);
 setTimeout(warmPredictionsGuarded, 10_000);
 
 let liveCheckRunning = false;
 async function liveCheckGuarded() {
+  if (isShuttingDown) {
+    console.log("[notify] shutdown in progress, skipping tick");
+    return;
+  }
   if (liveCheckRunning) {
     console.log("[notify] Previous live game check still in progress, skipping");
     return;
@@ -283,19 +304,26 @@ async function liveCheckGuarded() {
 }
 
 // Check for live games and notify users who picked them — every 2 minutes
-setInterval(liveCheckGuarded, 2 * 60 * 1000);
+const liveCheckInterval = setInterval(liveCheckGuarded, 2 * 60 * 1000);
 setTimeout(liveCheckGuarded, 45_000);
 
 // Check for big upcoming games — every 30 minutes
-setInterval(() => {
+function runBigGameAlertsTick() {
+  if (isShuttingDown) {
+    console.log("[big-game-alert] shutdown in progress, skipping tick");
+    return;
+  }
   checkBigGameAlerts().catch(err => console.error("[notify] Big game alert failed:", err));
-}, 30 * 60 * 1000);
-setTimeout(() => {
-  checkBigGameAlerts().catch(err => console.error("[notify] Big game alert failed:", err));
-}, 60_000);
+}
+const bigGameInterval = setInterval(runBigGameAlertsTick, 30 * 60 * 1000);
+setTimeout(runBigGameAlertsTick, 60_000);
 
 // Clean up old resolved predictions (keep 90 days) — runs daily
 async function cleanupOldData() {
+  if (isShuttingDown) {
+    console.log("[cleanup] shutdown in progress, skipping tick");
+    return;
+  }
   const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   try {
     const { count } = await prisma.predictionResult.deleteMany({
@@ -306,7 +334,7 @@ async function cleanupOldData() {
     console.error("[cleanup] Failed:", err);
   }
 }
-setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
+const cleanupInterval = setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldData, 60_000);
 
 // ─── SharpAPI gate warning ──────────────────────────────────────────────────
@@ -340,6 +368,10 @@ import { snapshotMarketLines } from "./scripts/snapshotMarketLines";
 
 let calibrationRunning = false;
 async function calibrationGuarded() {
+  if (isShuttingDown) {
+    console.log("[calibration] shutdown in progress, skipping tick");
+    return;
+  }
   if (calibrationRunning) {
     console.log("[calibration] Previous run still in progress, skipping");
     return;
@@ -354,13 +386,17 @@ async function calibrationGuarded() {
   }
 }
 // "0 3 * * 1" = minute 0, hour 3, every day, every month, Monday
-cron.schedule("0 3 * * 1", calibrationGuarded, { timezone: "UTC" });
+const calibrationCron = cron.schedule("0 3 * * 1", calibrationGuarded, { timezone: "UTC" });
 
 // ─── Market-line snapshot cron (every 30 minutes) ───────────────────────────
 // Pulls SharpAPI consensus for scheduled games in the next 24h and persists
 // a MarketSnapshot row per game. Gated on SHARPAPI_KEY — no-op without it.
 let marketSnapshotRunning = false;
 async function marketSnapshotGuarded() {
+  if (isShuttingDown) {
+    console.log("[market] shutdown in progress, skipping tick");
+    return;
+  }
   if (!process.env.SHARPAPI_KEY) return; // No key, no work
   if (marketSnapshotRunning) {
     console.log("[market] Previous snapshot still in progress, skipping");
@@ -376,7 +412,7 @@ async function marketSnapshotGuarded() {
   }
 }
 // "*/30 * * * *" = every 30 minutes
-cron.schedule("*/30 * * * *", marketSnapshotGuarded, { timezone: "UTC" });
+const marketSnapshotCron = cron.schedule("*/30 * * * *", marketSnapshotGuarded, { timezone: "UTC" });
 
 // ─── Beat-writer ingestion cron (every 2 minutes) ───────────────────────────
 // Full ingestion cycle — see lib/ingestion/orchestrator.ts. Feature-gated
@@ -385,6 +421,10 @@ import { runIngestionCycle, recordCycleResult } from "./lib/ingestion/orchestrat
 
 let ingestionRunning = false;
 async function ingestionGuarded() {
+  if (isShuttingDown) {
+    console.log("[ingestion] shutdown in progress, skipping tick");
+    return;
+  }
   if (ingestionRunning) {
     console.log("[ingestion] Previous cycle still in progress, skipping");
     return;
@@ -405,10 +445,71 @@ async function ingestionGuarded() {
   }
 }
 // "*/2 * * * *" = every 2 minutes
-cron.schedule("*/2 * * * *", ingestionGuarded, { timezone: "UTC" });
+const ingestionCron = cron.schedule("*/2 * * * *", ingestionGuarded, { timezone: "UTC" });
 
-export default {
+// ─── Graceful shutdown ──────────────────────────────────────────────────────
+// Railway sends SIGTERM ~30s before SIGKILL during deploys. Without a
+// handler, in-flight HTTP requests, SSE streams, and background jobs are
+// killed mid-run — users see 502s and DB state can be half-written (pick
+// resolved but notification not sent, etc). We stop accepting new work,
+// drain for up to 25s (margin under Railway's 30s window), then exit.
+const server = Bun.serve({
   port,
   fetch: app.fetch,
   idleTimeout: 255,
-};
+});
+console.log(`[server] listening on port ${port}`);
+
+async function gracefulShutdown(signal: NodeJS.Signals) {
+  if (isShuttingDown) return; // Signals can repeat; only drain once.
+  isShuttingDown = true;
+  console.log(`[shutdown] signal=${signal} received, draining`);
+
+  // 1. Stop ticking timers so no new background work kicks off. In-flight
+  //    work is not interrupted — the guards already have tryFinally.
+  clearInterval(resolveInterval);
+  clearInterval(warmInterval);
+  clearInterval(liveCheckInterval);
+  clearInterval(bigGameInterval);
+  clearInterval(cleanupInterval);
+
+  // 2. Stop cron tasks. stop() halts future fires; destroy() releases them.
+  await Promise.allSettled([
+    Promise.resolve(calibrationCron.stop()),
+    Promise.resolve(marketSnapshotCron.stop()),
+    Promise.resolve(ingestionCron.stop()),
+  ]);
+
+  // 3. Stop accepting new HTTP connections. Passing false keeps existing
+  //    connections open so in-flight requests finish.
+  server.stop(false);
+
+  // 4. Poll pendingRequests until it drains or we hit the 25s budget.
+  const drainDeadline = Date.now() + 25_000;
+  while (server.pendingRequests > 0 && Date.now() < drainDeadline) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  if (server.pendingRequests > 0) {
+    console.warn(
+      `[shutdown] drain deadline hit with ${server.pendingRequests} in-flight request(s) — force-closing`,
+    );
+    server.stop(true); // Now actually close everything.
+  }
+
+  // 5. Release DB pool so Postgres doesn't see connection leaks.
+  try {
+    await prisma.$disconnect();
+  } catch (err) {
+    console.error("[shutdown] prisma.$disconnect failed:", err);
+  }
+
+  console.log("[shutdown] complete, exiting");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => {
+  void gracefulShutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  void gracefulShutdown("SIGINT");
+});
