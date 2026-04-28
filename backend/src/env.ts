@@ -15,6 +15,10 @@ const envSchema = z.object({
   BACKEND_URL: z
     .url("BACKEND_URL must be a valid URL")
     .default("http://localhost:3000"),
+  // Tags every log line so we can split web vs worker traffic in the
+  // log aggregator. Set explicitly per Railway service (web → "web",
+  // clutch-picks-worker → "worker"); falls back to "web" in dev.
+  SERVICE_NAME: z.string().optional().default("web"),
 
   // ─── Database ─────────────────────────────────────────────────────────
   DATABASE_URL: z

@@ -27,7 +27,8 @@ import { shadowRouter } from "./routes/shadow";
 import { createHealthRouter } from "./routes/health";
 import { deleteUserAccount } from "./lib/deleteAccount";
 import { prisma } from "./prisma";
-import { logger } from "hono/logger";
+import { logger as honoLogger } from "hono/logger";
+import { logger, withContext, type Logger } from "./lib/logger";
 
 // Clear any stale prediction caches on startup so deploys with calibration
 // changes take effect immediately instead of waiting up to 15 minutes for
@@ -38,11 +39,13 @@ clearAllPredictionCaches();
 {
   const flagValue = process.env.USE_NEW_PREDICTION_ENGINE;
   const isNew = flagValue === "true";
-  console.log(
-    `[engine] USE_NEW_PREDICTION_ENGINE=${flagValue ?? "(unset)"}, using ${isNew ? "new" : "old"} engine`,
+  logger.info(
+    { tag: "engine", flag: flagValue ?? null, engine: isNew ? "new" : "old" },
+    "prediction engine selection",
   );
-  console.log(
-    "[injuries] source=espn-summary (NBA/MLB/NHL), unavailable (soccer)",
+  logger.info(
+    { tag: "injuries", source: "espn-summary", supported: ["NBA", "MLB", "NHL"] },
+    "injuries adapter configured (soccer unsupported)",
   );
 }
 
@@ -61,6 +64,7 @@ const app = new Hono<{
     user: typeof auth.$Infer.Session.user | null;
     session: typeof auth.$Infer.Session.session | null;
     requestId: string;
+    logger: Logger;
   };
 }>();
 
@@ -80,8 +84,10 @@ app.use(
   })
 );
 
-// Logging
-app.use("*", logger());
+// Hono's default text logger — left in place for now; the structured
+// per-request log line below is what downstream tooling should query against.
+// Once route files are migrated to Pino we can drop this.
+app.use("*", honoLogger());
 
 // Auth middleware - populates user/session for all routes
 app.use("*", async (c, next) => {
@@ -97,18 +103,40 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-// Per-request Sentry scope: tag every captured event with the request ID
-// (so logs and Sentry events line up) and the authenticated user ID when
-// available. Re-throws so the global onError handler still runs.
+// Per-request observability: assign a request ID, attach a Pino child
+// logger pre-bound with request metadata to the Hono context (so route
+// handlers can do `c.get("logger").info(...)`), and pin the same context
+// onto the Sentry scope so any captured error carries it. Re-throws so
+// the global onError handler still runs.
 app.use("/api/*", async (c, next) => {
   const requestId = c.req.header("x-request-id") ?? randomUUID();
   c.set("requestId", requestId);
-  Sentry.getCurrentScope().setTag("requestId", requestId);
   const user = c.get("user");
-  if (user?.id) Sentry.getCurrentScope().setUser({ id: user.id });
+  const userId = user?.id;
+
+  const reqLogger = withContext({
+    requestId,
+    userId,
+    method: c.req.method,
+    path: c.req.path,
+  });
+  c.set("logger", reqLogger);
+
+  Sentry.getCurrentScope().setTag("requestId", requestId);
+  if (userId) Sentry.getCurrentScope().setUser({ id: userId });
+
+  const start = Date.now();
   try {
     await next();
+    reqLogger.info(
+      { status: c.res.status, durationMs: Date.now() - start },
+      "request",
+    );
   } catch (err) {
+    reqLogger.error(
+      { err, durationMs: Date.now() - start },
+      "request error",
+    );
     Sentry.captureException(err, {
       tags: { route: c.req.path, method: c.req.method },
     });
@@ -217,7 +245,10 @@ app.delete("/api/me", async (c) => {
     await deleteUserAccount(prisma, { id: user.id, email: user.email });
     return c.json({ data: { status: "deleted", userId: user.id } });
   } catch (err) {
-    console.error(`[delete-account] Failed to delete user=${user.id}:`, err);
+    c.get("logger").error(
+      { err, tag: "delete-account", targetUserId: user.id },
+      "account deletion failed",
+    );
     return c.json(
       { error: { message: "Account deletion failed. Please try again.", code: "DELETE_FAILED" } },
       500,
@@ -263,7 +294,14 @@ app.onError((err, c) => {
       requestId: c.get("requestId"),
     },
   });
-  console.error(`[error] ${c.req.method} ${c.req.path}:`, err);
+  // Prefer the per-request child logger when middleware already ran (so
+  // requestId/userId are bound). For early-pipeline errors (e.g., before
+  // /api/* matched), the request logger may not be set; fall back to root.
+  const log = c.get("logger") ?? logger;
+  log.error(
+    { err, route: c.req.path, method: c.req.method },
+    "unhandled route error",
+  );
   return c.json(
     { error: { message: "Internal server error", code: "INTERNAL" } },
     500,
@@ -286,12 +324,12 @@ const server = Bun.serve({
   fetch: app.fetch,
   idleTimeout: 255,
 });
-console.log(`[web] starting HTTP server on port ${port}`);
+logger.info({ tag: "web", port }, "HTTP server listening");
 
 async function gracefulShutdown(signal: NodeJS.Signals) {
   if (isShuttingDown) return; // Signals can repeat; only drain once.
   isShuttingDown = true;
-  console.log(`[shutdown] signal=${signal} received, draining`);
+  logger.info({ tag: "shutdown", signal }, "drain started");
 
   // Stop accepting new HTTP connections. Passing false keeps existing
   // connections open so in-flight requests finish.
@@ -303,8 +341,9 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
     await new Promise((r) => setTimeout(r, 200));
   }
   if (server.pendingRequests > 0) {
-    console.warn(
-      `[shutdown] drain deadline hit with ${server.pendingRequests} in-flight request(s) — force-closing`,
+    logger.warn(
+      { tag: "shutdown", pending: server.pendingRequests },
+      "drain deadline hit, force-closing in-flight connections",
     );
     server.stop(true); // Now actually close everything.
   }
@@ -312,10 +351,10 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
   try {
     await prisma.$disconnect();
   } catch (err) {
-    console.error("[shutdown] prisma.$disconnect failed:", err);
+    logger.error({ err, tag: "shutdown" }, "prisma.$disconnect failed");
   }
 
-  console.log("[shutdown] complete, exiting");
+  logger.info({ tag: "shutdown" }, "drain complete, exiting");
   process.exit(0);
 }
 
@@ -331,9 +370,9 @@ process.on("SIGINT", () => {
 // exit so the server keeps serving other requests.
 process.on("uncaughtException", (err) => {
   Sentry.captureException(err, { tags: { service: "web" } });
-  console.error("[web] uncaughtException:", err);
+  logger.fatal({ err, tag: "process" }, "uncaughtException");
 });
 process.on("unhandledRejection", (reason) => {
   Sentry.captureException(reason, { tags: { service: "web" } });
-  console.error("[web] unhandledRejection:", reason);
+  logger.fatal({ err: reason, tag: "process" }, "unhandledRejection");
 });

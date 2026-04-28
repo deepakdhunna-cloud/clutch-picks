@@ -33,8 +33,22 @@ import {
   runIngestionCycle,
   recordCycleResult,
 } from "./lib/ingestion/orchestrator";
+import { withContext } from "./lib/logger";
 
-console.log("[worker] starting background jobs");
+// Per-job child loggers so every line is queryable by job name (e.g.
+// `service:"worker" job:"resolve-picks"`) without scraping log prefixes.
+const workerLogger = withContext({ tag: "worker" });
+const shadowLogger = withContext({ tag: "shadow" });
+const resolveLogger = withContext({ job: "resolve-picks" });
+const warmLogger = withContext({ job: "prediction-warmer" });
+const notifyLogger = withContext({ job: "live-check" });
+const bigGameLogger = withContext({ job: "big-game-alerts" });
+const cleanupLogger = withContext({ job: "cleanup" });
+const calibrationLogger = withContext({ job: "calibration" });
+const marketLogger = withContext({ job: "market-snapshot" });
+const ingestionLogger = withContext({ job: "ingestion" });
+
+workerLogger.info("starting background jobs");
 
 // Worker-scoped shutdown flag. Isolated from the web process's flag so the
 // two services drain independently. Each *Guarded fn short-circuits when
@@ -51,8 +65,8 @@ const baseUrl = env.BACKEND_URL;
 // ─── Shadow log cleanup (delete files older than 14 days) ───────────────
 // One-shot maintenance task — lived at boot in index.ts; moved here because
 // it's worker-class work (touches the filesystem, no HTTP interaction).
-cleanOldShadowLogs().catch((e) =>
-  console.error("[shadow] Startup cleanup failed:", e),
+cleanOldShadowLogs().catch((err) =>
+  shadowLogger.error({ err }, "startup cleanup failed"),
 );
 
 // ─── resolve-picks — every 5 minutes ────────────────────────────────────
@@ -61,9 +75,9 @@ async function resolvePicksInBackground() {
   try {
     const { resolved, skipped } = await resolvePicks();
     if (resolved > 0)
-      console.log(`[resolve-picks] Resolved ${resolved}, skipped ${skipped}`);
+      resolveLogger.info({ resolved, skipped }, "tick complete");
   } catch (err) {
-    console.error("[resolve-picks] Failed:", err);
+    resolveLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "resolve-picks", service: "worker" },
     });
@@ -73,11 +87,11 @@ async function resolvePicksInBackground() {
 let resolverRunning = false;
 async function resolvePicksGuarded() {
   if (isShuttingDown) {
-    console.log("[resolve-picks] shutdown in progress, skipping tick");
+    resolveLogger.info("shutdown in progress, skipping tick");
     return;
   }
   if (resolverRunning) {
-    console.log("[resolve-picks] Previous run still in progress, skipping");
+    resolveLogger.info("previous run still in progress, skipping");
     return;
   }
   resolverRunning = true;
@@ -88,7 +102,7 @@ async function resolvePicksGuarded() {
   }
 }
 
-console.log("[worker] scheduling resolve-picks every 5 min");
+resolveLogger.info({ intervalMs: 5 * 60 * 1000 }, "scheduled");
 const resolveInterval = setInterval(resolvePicksGuarded, 5 * 60 * 1000);
 setTimeout(resolvePicksGuarded, 30_000);
 
@@ -112,15 +126,16 @@ async function warmPredictions() {
       try {
         const detailRes = await fetch(`${baseUrl}/api/games/id/${g.id}`);
         if (detailRes.ok) warmed++;
-      } catch (error) {
-        console.warn("[warm] Single prediction warm failed:", error);
+      } catch (err) {
+        warmLogger.warn({ err, gameId: g.id }, "single prediction warm failed");
       }
     }
-    console.log(
-      `[prediction-warmer] Warmed ${games.length} games (${warmed}/${liveGames.length} live refreshed)`,
+    warmLogger.info(
+      { games: games.length, warmed, liveTotal: liveGames.length },
+      "tick complete",
     );
   } catch (err) {
-    console.error("[prediction-warmer] Failed:", err);
+    warmLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "prediction-warmer", service: "worker" },
     });
@@ -130,13 +145,11 @@ async function warmPredictions() {
 let warmerRunning = false;
 async function warmPredictionsGuarded() {
   if (isShuttingDown) {
-    console.log("[prediction-warmer] shutdown in progress, skipping tick");
+    warmLogger.info("shutdown in progress, skipping tick");
     return;
   }
   if (warmerRunning) {
-    console.log(
-      "[prediction-warmer] Previous run still in progress, skipping",
-    );
+    warmLogger.info("previous run still in progress, skipping");
     return;
   }
   warmerRunning = true;
@@ -147,7 +160,7 @@ async function warmPredictionsGuarded() {
   }
 }
 
-console.log("[worker] scheduling prediction-warmer every 90 sec");
+warmLogger.info({ intervalMs: 90 * 1000 }, "scheduled");
 const warmInterval = setInterval(warmPredictionsGuarded, 90 * 1000);
 setTimeout(warmPredictionsGuarded, 10_000);
 
@@ -156,20 +169,18 @@ setTimeout(warmPredictionsGuarded, 10_000);
 let liveCheckRunning = false;
 async function liveCheckGuarded() {
   if (isShuttingDown) {
-    console.log("[notify] shutdown in progress, skipping tick");
+    notifyLogger.info("shutdown in progress, skipping tick");
     return;
   }
   if (liveCheckRunning) {
-    console.log(
-      "[notify] Previous live game check still in progress, skipping",
-    );
+    notifyLogger.info("previous run still in progress, skipping");
     return;
   }
   liveCheckRunning = true;
   try {
     await checkLiveGamesAndNotify();
   } catch (err) {
-    console.error("[notify] Live game check failed:", err);
+    notifyLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "live-check", service: "worker" },
     });
@@ -178,7 +189,7 @@ async function liveCheckGuarded() {
   }
 }
 
-console.log("[worker] scheduling live-check every 2 min");
+notifyLogger.info({ intervalMs: 2 * 60 * 1000 }, "scheduled");
 const liveCheckInterval = setInterval(liveCheckGuarded, 2 * 60 * 1000);
 setTimeout(liveCheckGuarded, 45_000);
 
@@ -186,18 +197,18 @@ setTimeout(liveCheckGuarded, 45_000);
 
 function runBigGameAlertsTick() {
   if (isShuttingDown) {
-    console.log("[big-game-alert] shutdown in progress, skipping tick");
+    bigGameLogger.info("shutdown in progress, skipping tick");
     return;
   }
   checkBigGameAlerts().catch((err) => {
-    console.error("[notify] Big game alert failed:", err);
+    bigGameLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "big-game-alerts", service: "worker" },
     });
   });
 }
 
-console.log("[worker] scheduling big-game alerts every 30 min");
+bigGameLogger.info({ intervalMs: 30 * 60 * 1000 }, "scheduled");
 const bigGameInterval = setInterval(runBigGameAlertsTick, 30 * 60 * 1000);
 setTimeout(runBigGameAlertsTick, 60_000);
 
@@ -205,7 +216,7 @@ setTimeout(runBigGameAlertsTick, 60_000);
 
 async function cleanupOldData() {
   if (isShuttingDown) {
-    console.log("[cleanup] shutdown in progress, skipping tick");
+    cleanupLogger.info("shutdown in progress, skipping tick");
     return;
   }
   const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
@@ -214,16 +225,16 @@ async function cleanupOldData() {
       where: { resolvedAt: { not: null, lt: cutoff } },
     });
     if (count > 0)
-      console.log(`[cleanup] Removed ${count} old prediction results`);
+      cleanupLogger.info({ removed: count }, "tick complete");
   } catch (err) {
-    console.error("[cleanup] Failed:", err);
+    cleanupLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "cleanup", service: "worker" },
     });
   }
 }
 
-console.log("[worker] scheduling cleanup daily");
+cleanupLogger.info({ intervalMs: 24 * 60 * 60 * 1000 }, "scheduled");
 const cleanupInterval = setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldData, 60_000);
 
@@ -232,18 +243,18 @@ setTimeout(cleanupOldData, 60_000);
 let calibrationRunning = false;
 async function calibrationGuarded() {
   if (isShuttingDown) {
-    console.log("[calibration] shutdown in progress, skipping tick");
+    calibrationLogger.info("shutdown in progress, skipping tick");
     return;
   }
   if (calibrationRunning) {
-    console.log("[calibration] Previous run still in progress, skipping");
+    calibrationLogger.info("previous run still in progress, skipping");
     return;
   }
   calibrationRunning = true;
   try {
     await runWeeklyCalibration();
   } catch (err) {
-    console.error("[calibration] Weekly run failed:", err);
+    calibrationLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "calibration", service: "worker" },
     });
@@ -252,7 +263,7 @@ async function calibrationGuarded() {
   }
 }
 
-console.log("[worker] scheduling calibration Mondays 03:00 UTC");
+calibrationLogger.info({ schedule: "0 3 * * 1", tz: "UTC" }, "scheduled");
 const calibrationCron = cron.schedule("0 3 * * 1", calibrationGuarded, {
   timezone: "UTC",
 });
@@ -262,19 +273,19 @@ const calibrationCron = cron.schedule("0 3 * * 1", calibrationGuarded, {
 let marketSnapshotRunning = false;
 async function marketSnapshotGuarded() {
   if (isShuttingDown) {
-    console.log("[market] shutdown in progress, skipping tick");
+    marketLogger.info("shutdown in progress, skipping tick");
     return;
   }
   if (!process.env.SHARPAPI_KEY) return; // No key, no work
   if (marketSnapshotRunning) {
-    console.log("[market] Previous snapshot still in progress, skipping");
+    marketLogger.info("previous run still in progress, skipping");
     return;
   }
   marketSnapshotRunning = true;
   try {
     await snapshotMarketLines(baseUrl);
   } catch (err) {
-    console.error("[market] Snapshot run failed:", err);
+    marketLogger.error({ err }, "tick failed");
     Sentry.captureException(err, {
       tags: { job: "market-snapshot", service: "worker" },
     });
@@ -283,7 +294,7 @@ async function marketSnapshotGuarded() {
   }
 }
 
-console.log("[worker] scheduling market-snapshot every 30 min");
+marketLogger.info({ schedule: "*/30 * * * *", tz: "UTC" }, "scheduled");
 const marketSnapshotCron = cron.schedule(
   "*/30 * * * *",
   marketSnapshotGuarded,
@@ -295,24 +306,30 @@ const marketSnapshotCron = cron.schedule(
 let ingestionRunning = false;
 async function ingestionGuarded() {
   if (isShuttingDown) {
-    console.log("[ingestion] shutdown in progress, skipping tick");
+    ingestionLogger.info("shutdown in progress, skipping tick");
     return;
   }
   if (ingestionRunning) {
-    console.log("[ingestion] Previous cycle still in progress, skipping");
+    ingestionLogger.info("previous cycle still in progress, skipping");
     return;
   }
   ingestionRunning = true;
   try {
     const result = await runIngestionCycle(baseUrl);
     recordCycleResult(result);
-    console.log(
-      `[ingestion] cycle complete — items=${result.itemsProcessed} signals=${result.signalsExtracted}` +
-        ` stored=${result.signalsStored} re-predicts=${result.rePredictionsTriggered}` +
-        ` expired=${result.expiredCleaned} errors=${result.errors.length}`,
+    ingestionLogger.info(
+      {
+        items: result.itemsProcessed,
+        signals: result.signalsExtracted,
+        stored: result.signalsStored,
+        rePredicts: result.rePredictionsTriggered,
+        expired: result.expiredCleaned,
+        errors: result.errors.length,
+      },
+      "cycle complete",
     );
   } catch (err) {
-    console.error("[ingestion] Cycle failed:", err);
+    ingestionLogger.error({ err }, "cycle failed");
     Sentry.captureException(err, {
       tags: { job: "ingestion", service: "worker" },
     });
@@ -321,7 +338,7 @@ async function ingestionGuarded() {
   }
 }
 
-console.log("[worker] scheduling ingestion every 2 min");
+ingestionLogger.info({ schedule: "*/2 * * * *", tz: "UTC" }, "scheduled");
 const ingestionCron = cron.schedule("*/2 * * * *", ingestionGuarded, {
   timezone: "UTC",
 });
@@ -331,7 +348,7 @@ const ingestionCron = cron.schedule("*/2 * * * *", ingestionGuarded, {
 async function gracefulShutdown(signal: NodeJS.Signals) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[worker-shutdown] signal=${signal} received, draining`);
+  workerLogger.info({ signal, phase: "shutdown" }, "drain started");
 
   clearInterval(resolveInterval);
   clearInterval(warmInterval);
@@ -348,10 +365,13 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
   try {
     await prisma.$disconnect();
   } catch (err) {
-    console.error("[worker-shutdown] prisma.$disconnect failed:", err);
+    workerLogger.error(
+      { err, phase: "shutdown" },
+      "prisma.$disconnect failed",
+    );
   }
 
-  console.log("[worker-shutdown] complete, exiting");
+  workerLogger.info({ phase: "shutdown" }, "drain complete, exiting");
   process.exit(0);
 }
 
@@ -360,11 +380,11 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
 // exit so the remaining schedulers keep running.
 process.on("uncaughtException", (err) => {
   Sentry.captureException(err, { tags: { service: "worker" } });
-  console.error("[worker] uncaughtException:", err);
+  workerLogger.fatal({ err }, "uncaughtException");
 });
 process.on("unhandledRejection", (reason) => {
   Sentry.captureException(reason, { tags: { service: "worker" } });
-  console.error("[worker] unhandledRejection:", reason);
+  workerLogger.fatal({ err: reason }, "unhandledRejection");
 });
 
 process.on("SIGTERM", () => {
@@ -374,4 +394,4 @@ process.on("SIGINT", () => {
   void gracefulShutdown("SIGINT");
 });
 
-console.log("[worker] all jobs scheduled, running");
+workerLogger.info("all jobs scheduled, running");
