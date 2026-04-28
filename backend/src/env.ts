@@ -39,6 +39,10 @@ const envSchema = z.object({
   APIFY_API_KEY: z.string().optional(),
   // RevenueCat: server-side subscription validation + webhooks.
   REVENUECAT_SECRET_KEY: z.string().optional(),
+  // Sentry error tracking — when set, both web and worker init the SDK and
+  // forward unhandled exceptions/captured errors. Optional so dev runs
+  // without it.
+  SENTRY_DSN: z.string().optional(),
 
   // ─── Admin gates ──────────────────────────────────────────────────────
   // CALIBRATION_ADMIN_KEY gates calibration + backtest replay routes.
@@ -88,6 +92,7 @@ export const features = {
   sharpapi: !!env.SHARPAPI_KEY,
   apify: !!env.APIFY_API_KEY,
   revenuecat: !!env.REVENUECAT_SECRET_KEY,
+  sentry: !!env.SENTRY_DSN,
 } as const;
 
 // Prediction-engine flag centralized here so the shadow module and any
@@ -123,7 +128,7 @@ export function printEnvReport(): void {
   console.log(
     `  openai=${onOff(f.openai)}  sharpapi=${onOff(f.sharpapi)}  apify=${onOff(f.apify)}  anthropic=${onOff(f.anthropic)}`,
   );
-  console.log(`  revenuecat=${onOff(f.revenuecat)}`);
+  console.log(`  revenuecat=${onOff(f.revenuecat)}  sentry=${onOff(f.sentry)}`);
   console.log("[env] feature flags:");
   console.log(`  new_prediction_engine=${useNewPredictionEngine}`);
   const admin = adminKeyStatus();

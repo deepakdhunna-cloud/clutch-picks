@@ -1,4 +1,10 @@
+// Sentry must initialize before any other imports so its instrumentation
+// can wrap subsequent module loads (HTTP client, fs, etc.) for breadcrumbs.
+import { initSentry, Sentry } from "./lib/sentry";
+initSentry("web");
+
 // Prediction engine v2 — improved calibration parameters
+import { randomUUID } from "crypto";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { rateLimiter } from "hono-rate-limiter";
@@ -54,6 +60,7 @@ const app = new Hono<{
   Variables: {
     user: typeof auth.$Infer.Session.user | null;
     session: typeof auth.$Infer.Session.session | null;
+    requestId: string;
   };
 }>();
 
@@ -88,6 +95,25 @@ app.use("*", async (c, next) => {
   c.set("user", session.user);
   c.set("session", session.session);
   await next();
+});
+
+// Per-request Sentry scope: tag every captured event with the request ID
+// (so logs and Sentry events line up) and the authenticated user ID when
+// available. Re-throws so the global onError handler still runs.
+app.use("/api/*", async (c, next) => {
+  const requestId = c.req.header("x-request-id") ?? randomUUID();
+  c.set("requestId", requestId);
+  Sentry.getCurrentScope().setTag("requestId", requestId);
+  const user = c.get("user");
+  if (user?.id) Sentry.getCurrentScope().setUser({ id: user.id });
+  try {
+    await next();
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { route: c.req.path, method: c.req.method },
+    });
+    throw err;
+  }
 });
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
@@ -223,6 +249,27 @@ app.route("/api/calibration", calibrationRouter);
 app.route("/api/ingestion", ingestionRouter);
 app.route("/api/shadow", shadowRouter);
 
+// Global error handler — safety net for anything Hono's per-request middleware
+// doesn't catch. Forwards to Sentry with route + request context, then returns
+// a generic 500 (no internal error details leak to the client).
+app.onError((err, c) => {
+  Sentry.captureException(err, {
+    tags: {
+      route: c.req.path,
+      method: c.req.method,
+      service: "web",
+    },
+    extra: {
+      requestId: c.get("requestId"),
+    },
+  });
+  console.error(`[error] ${c.req.method} ${c.req.path}:`, err);
+  return c.json(
+    { error: { message: "Internal server error", code: "INTERNAL" } },
+    500,
+  );
+});
+
 const port = Number(process.env.PORT) || 3000;
 
 // Background jobs (resolve-picks, warm, ingestion, calibration, etc.) and
@@ -277,4 +324,16 @@ process.on("SIGTERM", () => {
 });
 process.on("SIGINT", () => {
   void gracefulShutdown("SIGINT");
+});
+
+// Last-resort capture for anything that escapes Hono's error path or async
+// background work in this process. Logs and forwards to Sentry; we don't
+// exit so the server keeps serving other requests.
+process.on("uncaughtException", (err) => {
+  Sentry.captureException(err, { tags: { service: "web" } });
+  console.error("[web] uncaughtException:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  Sentry.captureException(reason, { tags: { service: "web" } });
+  console.error("[web] unhandledRejection:", reason);
 });

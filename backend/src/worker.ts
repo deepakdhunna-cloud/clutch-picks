@@ -13,6 +13,11 @@
 // The web service runs `prisma migrate deploy` on boot; the worker skips
 // migrations to avoid a deploy-time race.
 
+// Sentry must initialize before any other imports so its instrumentation
+// can wrap subsequent module loads for breadcrumbs.
+import { initSentry, Sentry } from "./lib/sentry";
+initSentry("worker");
+
 import { env } from "./env";
 import { prisma } from "./prisma";
 import { cleanOldShadowLogs } from "./prediction/shadow";
@@ -59,6 +64,9 @@ async function resolvePicksInBackground() {
       console.log(`[resolve-picks] Resolved ${resolved}, skipped ${skipped}`);
   } catch (err) {
     console.error("[resolve-picks] Failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "resolve-picks", service: "worker" },
+    });
   }
 }
 
@@ -113,6 +121,9 @@ async function warmPredictions() {
     );
   } catch (err) {
     console.error("[prediction-warmer] Failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "prediction-warmer", service: "worker" },
+    });
   }
 }
 
@@ -159,6 +170,9 @@ async function liveCheckGuarded() {
     await checkLiveGamesAndNotify();
   } catch (err) {
     console.error("[notify] Live game check failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "live-check", service: "worker" },
+    });
   } finally {
     liveCheckRunning = false;
   }
@@ -175,9 +189,12 @@ function runBigGameAlertsTick() {
     console.log("[big-game-alert] shutdown in progress, skipping tick");
     return;
   }
-  checkBigGameAlerts().catch((err) =>
-    console.error("[notify] Big game alert failed:", err),
-  );
+  checkBigGameAlerts().catch((err) => {
+    console.error("[notify] Big game alert failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "big-game-alerts", service: "worker" },
+    });
+  });
 }
 
 console.log("[worker] scheduling big-game alerts every 30 min");
@@ -200,6 +217,9 @@ async function cleanupOldData() {
       console.log(`[cleanup] Removed ${count} old prediction results`);
   } catch (err) {
     console.error("[cleanup] Failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "cleanup", service: "worker" },
+    });
   }
 }
 
@@ -224,6 +244,9 @@ async function calibrationGuarded() {
     await runWeeklyCalibration();
   } catch (err) {
     console.error("[calibration] Weekly run failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "calibration", service: "worker" },
+    });
   } finally {
     calibrationRunning = false;
   }
@@ -252,6 +275,9 @@ async function marketSnapshotGuarded() {
     await snapshotMarketLines(baseUrl);
   } catch (err) {
     console.error("[market] Snapshot run failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "market-snapshot", service: "worker" },
+    });
   } finally {
     marketSnapshotRunning = false;
   }
@@ -287,6 +313,9 @@ async function ingestionGuarded() {
     );
   } catch (err) {
     console.error("[ingestion] Cycle failed:", err);
+    Sentry.captureException(err, {
+      tags: { job: "ingestion", service: "worker" },
+    });
   } finally {
     ingestionRunning = false;
   }
@@ -325,6 +354,18 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
   console.log("[worker-shutdown] complete, exiting");
   process.exit(0);
 }
+
+// Last-resort capture for anything that escapes a job's try/catch or comes
+// from async work that wasn't awaited. Logs and forwards to Sentry; we don't
+// exit so the remaining schedulers keep running.
+process.on("uncaughtException", (err) => {
+  Sentry.captureException(err, { tags: { service: "worker" } });
+  console.error("[worker] uncaughtException:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  Sentry.captureException(reason, { tags: { service: "worker" } });
+  console.error("[worker] unhandledRejection:", reason);
+});
 
 process.on("SIGTERM", () => {
   void gracefulShutdown("SIGTERM");
