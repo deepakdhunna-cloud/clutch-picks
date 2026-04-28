@@ -11,7 +11,6 @@ import { runShadowPrediction, useNewEngine, cleanOldShadowLogs } from "../predic
 import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
 import { Sport as SportEnum, League, GameStatus as SportsGameStatus } from "../types/sports";
 import type { Game as SportsGame } from "../types/sports";
-import { resolvePicksInBackground } from "../lib/resolve-picks";
 import { notifyWinnerFlip } from "../lib/notification-jobs";
 import { prisma } from "../prisma";
 import { fetchMarketConsensus } from "../lib/sharpApi";
@@ -1385,12 +1384,6 @@ gamesRouter.get("/", async (c) => {
       generatePredictionsInBackground(gamesNeedingPredictions);
     }
 
-    // Fire-and-forget: resolve any pending picks against final scores (throttled to once/minute)
-    if (Date.now() - lastResolveTime > RESOLVE_COOLDOWN_MS) {
-      lastResolveTime = Date.now();
-      resolvePicksInBackground();
-    }
-
     return c.json({ data: filteredGames });
   } catch (error) {
     console.error("Error fetching all games:", error);
@@ -1638,10 +1631,6 @@ interface LiveScore {
 
 let liveGamesCache: { data: LiveScore[]; timestamp: number } | null = null;
 const LIVE_POLL_INTERVAL = 4_000; // 4 seconds — fast ESPN polling for live scores
-
-// Fix 1: throttle resolvePicksInBackground — at most once per minute
-let lastResolveTime = 0;
-const RESOLVE_COOLDOWN_MS = 60_000;
 
 // Fix 3: track which sports currently have live games so SSE skips idle ones
 let activeSports: Set<SportKey> = new Set();
