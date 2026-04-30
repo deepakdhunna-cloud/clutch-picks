@@ -1771,4 +1771,92 @@ gamesRouter.get("/live-stream", async (c) => {
   });
 });
 
+// ─── Public lookup helpers (used by the intelligence route) ──────────────
+
+/**
+ * Resolve a game by ID using the same lookup strategy as GET /api/games/id/:id.
+ * Order: secondary index → today's games → ±3 days fallback. Always returns
+ * with a fresh prediction attached (cache-first, falls back to on-demand).
+ *
+ * Returns null when the game is not found within the search window.
+ */
+export async function lookupGameById(gameId: string): Promise<Game | null> {
+  const ensurePrediction = async (game: Game): Promise<Game> => {
+    const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+    if (cached) return { ...game, prediction: cached };
+    return addPredictionToGame(game);
+  };
+
+  const indexedGame = gameById.get(gameId);
+  if (indexedGame && indexedGame.status !== "LIVE") {
+    return ensurePrediction(indexedGame);
+  }
+
+  const todayStr = new Date().toISOString().split("T")[0]!;
+  const todays = await fetchAllGames(todayStr);
+  const found = todays.find((g) => g.id === gameId);
+  if (found) return ensurePrediction(found);
+
+  const today = new Date();
+  const dates: string[] = [];
+  for (let i = -3; i <= 3; i++) {
+    if (i === 0) continue;
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]!);
+  }
+
+  const knownSport = gameIdToSport.get(gameId);
+  const dateResults = await Promise.all(
+    dates.map(async (date) => {
+      const games = knownSport
+        ? await fetchGamesBySport(knownSport, date)
+        : await fetchAllGames(date);
+      return games.find((g) => g.id === gameId) ?? null;
+    }),
+  );
+  const fallback = dateResults.find((g) => g !== null) ?? null;
+  return fallback ? ensurePrediction(fallback) : null;
+}
+
+/**
+ * Best-effort: scan the next 7 days for an upcoming SCHEDULED game involving
+ * either team from `game`. Used by the intelligence route's FINAL-state
+ * "nextOpportunity" box. Returns null when no rematch / next-game found.
+ */
+export async function findSimilarUpcomingGame(game: Game): Promise<Game | null> {
+  const today = new Date();
+  const dates: string[] = [];
+  for (let i = 0; i <= 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]!);
+  }
+
+  const sport = game.sport as SportKey;
+  const homeId = game.homeTeam.id;
+  const awayId = game.awayTeam.id;
+
+  for (const date of dates) {
+    let candidates: Game[] = [];
+    try {
+      candidates = await fetchGamesBySport(sport, date);
+    } catch {
+      candidates = [];
+    }
+    const next = candidates.find((g) => {
+      if (g.id === game.id) return false;
+      if (g.status !== "SCHEDULED") return false;
+      return (
+        g.homeTeam.id === homeId ||
+        g.awayTeam.id === homeId ||
+        g.homeTeam.id === awayId ||
+        g.awayTeam.id === awayId
+      );
+    });
+    if (next) return next;
+  }
+  return null;
+}
+
 export { gamesRouter };
