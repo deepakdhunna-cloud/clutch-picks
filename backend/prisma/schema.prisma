@@ -24,6 +24,7 @@ model User {
   followers     Follow[]   @relation("UserFollowing")
   following     Follow[]   @relation("UserFollowers")
   pushTokens   PushToken[]
+  subscription   Subscription?
 }
 
 model UserPick {
@@ -372,3 +373,44 @@ model MarketSnapshot {
   @@index([gameId, isClosing])
 }
 
+// Mirror of the user's RevenueCat subscription state. Updated by the
+// /api/webhooks/revenuecat handler in response to RC events. The app
+// reads from RevenueCat directly for live entitlements; this table
+// exists so the backend can answer "is this user a subscriber" without
+// calling RC, drive notifications/analytics, and audit lifecycle.
+model Subscription {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // RC's app_user_id — usually equals our userId, kept separate in case
+  // a user's RC alias diverges (e.g. anonymous → identified merge).
+  rcAppUserId         String
+
+  // Currently entitled? Derived from the latest event. We don't try to
+  // reconstruct the full entitlement object — RC remains source of truth.
+  isActive            Boolean   @default(false)
+
+  // Product / period / store snapshot from latest event.
+  productId           String?
+  periodType          String?  // NORMAL | TRIAL | INTRO | PROMOTIONAL
+  store               String?  // APP_STORE | PLAY_STORE | STRIPE | PROMOTIONAL
+  environment         String?  // PRODUCTION | SANDBOX
+
+  // Lifecycle timestamps from the latest event.
+  purchasedAt         DateTime?
+  expiresAt           DateTime?
+  cancelledAt         DateTime?
+  unsubscribeDetectedAt DateTime?
+
+  // Last event we processed — useful for debugging out-of-order delivery.
+  lastEventType       String?
+  lastEventId         String?
+  lastEventAt         DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([rcAppUserId])
+  @@index([isActive])
+}

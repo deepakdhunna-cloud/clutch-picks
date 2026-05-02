@@ -54,6 +54,11 @@ const envSchema = z.object({
   APPLE_PRIVATE_KEY: z.string().optional(),
   APPLE_CLIENT_ID: z.string().optional(),
 
+  // ─── RevenueCat webhook — inbound subscription events ────────────────
+  // Shared secret RevenueCat sends in the Authorization header on every
+  // webhook POST. Required for any webhook to be honored; missing → 503.
+  REVENUECAT_WEBHOOK_AUTH: z.string().optional(),
+
   // ─── Admin gates ──────────────────────────────────────────────────────
   // CALIBRATION_ADMIN_KEY gates calibration + backtest replay routes.
   // INGESTION_ADMIN_KEY gates ingestion status; when unset, those routes
@@ -104,6 +109,7 @@ export const features = {
   revenuecat: !!env.REVENUECAT_SECRET_KEY,
   sentry: !!env.SENTRY_DSN,
   appleRevoke: !!(env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY && env.APPLE_CLIENT_ID),
+  revenuecatWebhook: !!env.REVENUECAT_WEBHOOK_AUTH,
 } as const;
 
 // Prediction-engine flag centralized here so the shadow module and any

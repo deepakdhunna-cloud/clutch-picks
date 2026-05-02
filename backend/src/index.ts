@@ -25,6 +25,7 @@ import { historicalBacktestRouter } from "./routes/historical-backtest";
 import { calibrationRouter } from "./routes/calibration";
 import { ingestionRouter } from "./routes/ingestion";
 import { shadowRouter } from "./routes/shadow";
+import { webhooksRouter } from "./routes/webhooks";
 import { createHealthRouter } from "./routes/health";
 import { deleteUserAccount } from "./lib/deleteAccount";
 import { prisma } from "./prisma";
@@ -281,6 +282,7 @@ app.route("/api/historical-backtest", historicalBacktestRouter);
 app.route("/api/calibration", calibrationRouter);
 app.route("/api/ingestion", ingestionRouter);
 app.route("/api/shadow", shadowRouter);
+app.route("/api/webhooks", webhooksRouter);
 
 // Global error handler — safety net for anything Hono's per-request middleware
 // doesn't catch. Forwards to Sentry with route + request context, then returns
