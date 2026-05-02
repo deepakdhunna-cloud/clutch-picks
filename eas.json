@@ -24,12 +24,12 @@
         "EXPO_PUBLIC_EXAMPLE_ENV_VAR": "test"
       },
       "ios": {
-        "distribution": "store"
+        "distribution": "store",
+        "image": "latest"
       },
       "android": {
         "distribution": "store"
-      },
-      "image": "latest"
+      }
     }
   },
   "submit": {
