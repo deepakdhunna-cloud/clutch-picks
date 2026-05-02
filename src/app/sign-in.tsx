@@ -9,6 +9,7 @@ import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { authClient } from '@/lib/auth/auth-client';
+import { setUserId, setEmail, setDisplayName } from '@/lib/revenuecatClient';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { AuthBackground } from '@/components/AuthBackground';
 import { BG, TEAL, MAROON, TEAL_DARK } from '@/lib/theme';
@@ -89,6 +90,27 @@ export default function SignInScreen() {
         if (result.error) {
           setError(result.error.message || 'Apple sign in failed');
         } else if (result.data) {
+          // Identify the user to RevenueCat so the customer dashboard shows
+          // real users instead of anonymous UUIDs. Apple only returns
+          // fullName/email on the FIRST signin for a given Apple ID — better-
+          // auth's session is a reliable backstop on subsequent signins.
+          const userId = (result.data as any)?.user?.id;
+          if (userId) {
+            await setUserId(userId);
+          }
+          const userEmail = (result.data as any)?.user?.email ?? credential.email;
+          if (userEmail) {
+            await setEmail(userEmail);
+          }
+          const givenName = credential.fullName?.givenName;
+          const familyName = credential.fullName?.familyName;
+          const sessionName = (result.data as any)?.user?.name;
+          const displayName =
+            sessionName ??
+            ([givenName, familyName].filter(Boolean).join(" ") || null);
+          if (displayName) {
+            await setDisplayName(displayName);
+          }
           await invalidateSession();
           const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
           router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');

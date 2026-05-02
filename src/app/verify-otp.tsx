@@ -9,7 +9,7 @@ import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-s
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
-import { setUserId } from '@/lib/revenuecatClient';
+import { setUserId, setEmail } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
 import { BG, TEAL, TEAL_DARK, MAROON } from '@/lib/theme';
 
@@ -89,6 +89,11 @@ export default function VerifyOTP() {
       const userId = result.data?.user?.id;
       if (userId) {
         await setUserId(userId);
+      }
+      // Also push the email to RC so the customer dashboard shows it.
+      const userEmail = result.data?.user?.email ?? email.trim();
+      if (userEmail) {
+        await setEmail(userEmail);
       }
       await invalidateSession();
       const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');

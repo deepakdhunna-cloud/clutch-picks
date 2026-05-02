@@ -216,6 +216,32 @@ export const setUserId = (userId: string): Promise<RevenueCatResult<void>> => {
 };
 
 /**
+ * Set the user's email address on the RevenueCat customer record.
+ * Surfaces in the RC customer dashboard. No-op if RC isn't configured.
+ *
+ * @param email - The user's email address
+ * @returns RevenueCatResult<void>
+ */
+export const setEmail = (email: string): Promise<RevenueCatResult<void>> => {
+  return guardRevenueCatUsage("setEmail", async () => {
+    await Purchases.setEmail(email);
+  });
+};
+
+/**
+ * Set the user's display name on the RevenueCat customer record.
+ * Surfaces in the RC customer dashboard. No-op if RC isn't configured.
+ *
+ * @param displayName - The user's display name
+ * @returns RevenueCatResult<void>
+ */
+export const setDisplayName = (displayName: string): Promise<RevenueCatResult<void>> => {
+  return guardRevenueCatUsage("setDisplayName", async () => {
+    await Purchases.setDisplayName(displayName);
+  });
+};
+
+/**
  * Log out the current user
  *
  * @returns RevenueCatResult<void> describing success/failure
