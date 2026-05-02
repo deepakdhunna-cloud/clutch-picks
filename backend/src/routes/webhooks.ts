@@ -16,6 +16,23 @@ const webhooksRouter = new Hono();
 webhooksRouter.post("/revenuecat", async (c) => {
   const auth = c.req.header("authorization") ?? c.req.header("Authorization");
   const verify = verifyRevenueCatAuth(auth);
+  // ── TEMP DEBUG (remove after RC integration verified) ──────────────
+  // Logs byte-level info about the incoming Authorization header so we
+  // can diagnose mismatches without leaking the secret. Logs:
+  //   - whether header is present
+  //   - first/last 6 chars (safe to log; full secret is 64 chars)
+  //   - byte length of header vs env var
+  //   - whether a "Bearer " prefix was sent
+  const headerLen = auth?.length ?? 0;
+  const expectedLen = process.env.REVENUECAT_WEBHOOK_AUTH?.length ?? 0;
+  const hasBearer = auth?.toLowerCase().startsWith("bearer ") ?? false;
+  const head = auth ? auth.slice(0, 6) : "(none)";
+  const tail = auth && auth.length > 6 ? auth.slice(-6) : "(short)";
+  console.log(
+    `[webhooks/revenuecat] DEBUG headerLen=${headerLen} expectedLen=${expectedLen} ` +
+      `hasBearerPrefix=${hasBearer} head=${head} tail=${tail}`,
+  );
+  // ── END TEMP DEBUG ─────────────────────────────────────────────────
   if (!verify.ok) {
     console.warn(`[webhooks/revenuecat] reject reason=${verify.reason}`);
     // 401 for bad creds, 503 if we're misconfigured (RC will retry).
