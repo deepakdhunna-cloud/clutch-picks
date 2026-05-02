@@ -604,15 +604,22 @@ export default function ProfileScreen() {
               const jerseyType = sportEnumToJersey(p.sport);
               const isWin = p.result === 'win';
               const isLoss = p.result === 'loss';
-              const ribbonColor = isWin ? C.TEAL : isLoss ? C.MAROON : undefined;
-              const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'Pending';
+              // Premium corner-ribbon tokens per state. Pending uses a neutral
+              // slate gradient so it reads as distinct from win (teal) / loss
+              // (maroon) without mixing the two win/loss colors together.
+              const ribbonGradient: [string, string, string] =
+                isWin ? [C.TEAL, '#5A8A9A', C.TEAL]
+                : isLoss ? [C.MAROON, '#6A0818', C.MAROON]
+                : ['#4A5568', '#2D3748', '#4A5568'];
+              const ribbonShadowColor = isWin ? C.TEAL : isLoss ? C.MAROON : '#1A202C';
+              const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'TBD';
               return (
                 <View key={p.id} style={{
                   width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 10, borderWidth: 1,
                   borderColor: isWin ? 'rgba(122,157,184,0.2)' : isLoss ? 'rgba(139,10,31,0.2)' : 'rgba(255,255,255,0.08)',
                   alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
                 }}>
-                  {/* Corner ribbon — premium layered */}
+                  {/* Corner ribbon — premium layered. TBD shown for unresolved picks. */}
                   <View style={{ position: 'absolute', top: 0, right: 0, width: 44, height: 44, zIndex: 10, overflow: 'hidden' }}>
                     {/* Shadow layer */}
                     <View style={{
@@ -622,39 +629,23 @@ export default function ProfileScreen() {
                       transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -4 }],
                     }} />
                     {/* Main ribbon */}
-                    {ribbonColor ? (
-                      <LinearGradient
-                        colors={isWin ? [C.TEAL, '#5A8A9A', C.TEAL] : [C.MAROON, '#6A0818', C.MAROON]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={{
-                          position: 'absolute', top: 0, right: 0,
-                          width: 62, height: 20,
-                          transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
-                          alignItems: 'center', justifyContent: 'center',
-                          shadowColor: ribbonColor,
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.4,
-                          shadowRadius: 4,
-                        }}
-                      >
-                        <Text style={{ fontSize: 7, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{ribbonLabel}</Text>
-                      </LinearGradient>
-                    ) : (
-                      <LinearGradient
-                        colors={[C.MAROON, '#5A4A5A', C.TEAL]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={{
-                          position: 'absolute', top: 0, right: 0,
-                          width: 62, height: 20,
-                          transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
-                          alignItems: 'center', justifyContent: 'center',
-                        }}
-                      >
-                        <Text style={{ fontSize: 6, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{ribbonLabel}</Text>
-                      </LinearGradient>
-                    )}
+                    <LinearGradient
+                      colors={ribbonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        position: 'absolute', top: 0, right: 0,
+                        width: 62, height: 20,
+                        transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
+                        alignItems: 'center', justifyContent: 'center',
+                        shadowColor: ribbonShadowColor,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{ribbonLabel}</Text>
+                    </LinearGradient>
                     {/* Highlight edge — thin white line on top edge */}
                     <View style={{
                       position: 'absolute', top: 0, right: 0,

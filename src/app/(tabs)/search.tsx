@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import {
-  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet,
+  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -30,6 +30,8 @@ import {
   BG, PANEL_DARK, PANEL_DARKER, BORDER_MED, BORDER_BOLD, WHITE,
   TEXT_SECONDARY, TEXT_MUTED,
 } from '@/lib/theme';
+import { LedScorePanel } from '@/components/sports';
+import { TeamJersey } from '@/components/sports/TeamJersey';
 
 // ─── COLORS ───
 const ERROR_DIM = 'rgba(239,68,68,0.10)';
@@ -248,91 +250,346 @@ const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction
   );
 });
 
-// ─── LIVE CARD (gradient + sport pill + tappable) ───
+// ─── LIVE CARD (My Arena) ───────────────────────────────────────
+// Refined live card that ties My Arena visually to the home-page LED design
+// language: team-color washes flank a dark base, an inline LED scoreboard sits
+// in the middle, and three compact stat tiles sit below a hairline divider.
+
+// Maps the existing 4-tier confidence ladder to the user-facing strength labels
+// used by this card. Distinct from getConfidenceTier (which is the global
+// neutral palette) — these labels and colors only appear here.
+function getPickStrengthDisplay(confidence: number, isTossUp?: boolean): { label: string; color: string } {
+  if (isTossUp || confidence < 53) return { label: 'Avoid',  color: '#ef4444' };
+  if (confidence < 60)             return { label: 'Risky',  color: '#f97316' };
+  if (confidence < 72)             return { label: 'Lean',   color: '#facc15' };
+  return                                  { label: 'Solid',  color: '#4ade80' };
+}
+
+// Pulsing red dot used in the live card header.
+const LiveDot = memo(function LiveDot() {
+  const op = useSharedValue(1);
+  const sc = useSharedValue(1);
+  useEffect(() => {
+    op.value = withRepeat(withTiming(0.55, { duration: 750, easing: Easing.inOut(Easing.ease) }), -1, true);
+    sc.value = withRepeat(withTiming(0.85, { duration: 750, easing: Easing.inOut(Easing.ease) }), -1, true);
+    return () => { cancelAnimation(op); cancelAnimation(sc); };
+  }, []);
+  const ds = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ scale: sc.value }] }));
+  return <Animated.View style={[{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#ef4444' }, ds]} />;
+});
+
+// Soft team-color glow that radiates from the jersey silhouette itself — no
+// disk or backdrop shape. Wraps the jersey; the shadow renders from the SVG's
+// alpha mask, so the halo follows the jersey outline and fades smoothly with
+// no hard edges.
+//
+// iOS: native colored shadow with a wide shadowRadius silhouettes the SVG.
+//   Two nested shadow layers stack a tight inner halo and a wider outer halo
+//   for stronger spread.
+// Android: shadowColor on a View with elevation tints the elevation shadow on
+//   API 28+. Less expressive than iOS but stays color-accurate, no hard edges.
+const JerseyGlow = memo(function JerseyGlow({ color, children }: { color: string; children: React.ReactNode }) {
+  if (Platform.OS === 'ios') {
+    return (
+      <View
+        style={{
+          backgroundColor: 'transparent',
+          shadowColor: color,
+          shadowOpacity: 0.55,
+          shadowRadius: 22,
+          shadowOffset: { width: 0, height: 0 },
+        }}
+      >
+        <View
+          style={{
+            backgroundColor: 'transparent',
+            shadowColor: color,
+            shadowOpacity: 0.85,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 0 },
+          }}
+        >
+          {children}
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View
+      style={{
+        backgroundColor: 'transparent',
+        elevation: 14,
+        shadowColor: color,
+      }}
+    >
+      {children}
+    </View>
+  );
+});
+
+// Add an alpha channel to a hex color string. Falls back to transparent if the
+// input isn't a recognised #rrggbb / #rgb format.
+function hexWithAlpha(hex: string | undefined, alpha: number): string {
+  if (!hex) return 'rgba(31,41,55,0)';
+  const a = Math.max(0, Math.min(1, alpha));
+  const aHex = Math.round(a * 255).toString(16).padStart(2, '0');
+  if (hex.length === 7 && hex[0] === '#') return `${hex}${aHex}`;
+  if (hex.length === 4 && hex[0] === '#') {
+    const expanded = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+    return `${expanded}${aHex}`;
+  }
+  return hex;
+}
+
 const LiveCard = memo(function LiveCard({ game, pick, cardWidth }: { game: GameWithPrediction; pick?: UserPick; cardWidth: number }) {
   const router = useRouter();
-  const hs = game.homeScore ?? 0; const as2 = game.awayScore ?? 0;
+  const hs = game.homeScore ?? 0;
+  const as2 = game.awayScore ?? 0;
   const ph = pick?.pickedTeam === 'home';
   const pt = ph ? game.homeTeam : game.awayTeam;
-  const ps = ph ? hs : as2; const os = ph ? as2 : hs;
-  const lead = ps > os; const d = ps - os;
+  const ps = ph ? hs : as2;
+  const os = ph ? as2 : hs;
+  const lead = ps > os;
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color);
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color);
+  // Splits "Bayern Munich" → ["Bayern", "Munich"]; "FC Barcelona" → ["FC", "Barcelona"].
+  const splitName = (raw: string) => {
+    const parts = raw.trim().split(/\s+/);
+    if (parts.length <= 1) return [parts[0] ?? '', ''];
+    return [parts[0], parts.slice(1).join(' ')];
+  };
+  const [homeNameTop, homeNameBot] = splitName(game.homeTeam.name);
+  const [awayNameTop, awayNameBot] = splitName(game.awayTeam.name);
+
+  const matchTime = formatGameTime(game.sport, game.quarter, game.clock);
+
+  // Momentum sparkline: simple deterministic gradient derived from current state
+  // so it varies per game without needing live momentum-feed data. Wired to a
+  // real model-confidence feed later — values & coloring will swap in here.
+  const momentumBars = useMemo<number[]>(() => {
+    const seed = (hs + as2 * 7) % 11;
+    return [0.30, 0.45, 0.55, 0.70, 0.85, 0.95, 0.78, 0.62].map((v, i) => {
+      const wob = ((seed + i * 3) % 5) / 25;
+      return Math.max(0.15, Math.min(1, v - wob));
+    });
+  }, [hs, as2]);
+  const peakIndex = momentumBars.reduce((acc, v, i, arr) => v > arr[acc] ? i : acc, 0);
+  const momentumLabel = lead
+    ? `${pt?.abbreviation ?? ''} surge`
+    : ps === os
+      ? 'Even pace'
+      : `${(ph ? game.awayTeam : game.homeTeam).abbreviation} surge`;
+
+  const strength = getPickStrengthDisplay(game.prediction?.confidence ?? 50, game.prediction?.isTossUp);
+
   return (
     <Pressable
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/game/[id]', params: { id: game.id } }); }}
-      style={{ opacity: 1, width: cardWidth }}
+      style={{ width: cardWidth }}
     >
-      <View style={{ borderRadius: 22, borderWidth: 1.5, borderColor: BORDER_BOLD, overflow: 'hidden' }}>
-        {/* Dark base */}
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#06080A' }} />
-        {/* Team color washes */}
-        <LinearGradient colors={[`${awayColors.primary}22`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-        <LinearGradient colors={['transparent', `${homeColors.primary}18`]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-        {/* Shimmer ribbon */}
-        <LinearGradient colors={[MAROON, TEAL, MAROON]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 2.5, width: '100%' }} />
-        {/* Ribbon bleed glow */}
-        <LinearGradient colors={['rgba(122,157,184,0.06)', 'rgba(139,10,31,0.03)', 'transparent']} style={{ height: 40, width: '100%' }} />
-        {/* Live + sport — overlapping the ribbon bleed */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: -20 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LIVE_RED }} />
-            <Text style={{ fontSize: 11, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>LIVE</Text>
+      <View
+        style={{
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: '#1f2937',
+          overflow: 'hidden',
+          paddingVertical: 16,
+          paddingHorizontal: 14,
+        }}
+      >
+        {/* Dark frosted tint — BlurView softens whatever sits behind the card,
+            then a heavier semi-transparent dark layer establishes a deeper
+            ink-blue base. Together they read as frosted glass over a dark
+            substrate. */}
+        <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(6,10,18,0.82)' }]} />
+
+        {/* Team-color washes — pulled from team primary color data, not hardcoded.
+            Approximated as horizontal LinearGradients (RN doesn't ship a native
+            radial-gradient primitive); the falloff lands in the same place a
+            radial wash would, with the dark base showing through the middle. */}
+        <LinearGradient
+          colors={[hexWithAlpha(homeColors.primary, 0.20), hexWithAlpha(homeColors.primary, 0)]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 0.65, y: 0.5 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        <LinearGradient
+          colors={[hexWithAlpha(awayColors.primary, 0), hexWithAlpha(awayColors.primary, 0.24)]}
+          start={{ x: 0.35, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+
+        {/* Top edge live indicator — 14% inset on either side, fades in/out */}
+        <LinearGradient
+          colors={['transparent', '#ef4444', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ position: 'absolute', top: 0, left: '14%' as any, right: '14%' as any, height: 2 }}
+        />
+
+        {/* A) Header row — live indicator left, competition pill right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <LiveDot />
+            <Text style={{ color: '#ef4444', fontSize: 11, fontWeight: '600', letterSpacing: 1.5 }}>LIVE</Text>
           </View>
-          <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
-            <Text style={{ fontSize: 9, fontWeight: '700', color: WHITE, letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
+          <View
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.06)',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.10)',
+              borderRadius: 10,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ color: '#d1d5db', fontSize: 11, letterSpacing: 1, fontWeight: '600' }}>
+              {displaySport(game.sport)}
+            </Text>
           </View>
         </View>
 
-        {/* Card content */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}>
-          {/* Scores */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SECONDARY, marginBottom: 2, letterSpacing: 0.5 }}>{game.awayTeam.abbreviation}</Text>
-              {pick?.pickedTeam === 'away' ? <View style={{ width: 16, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} /> : null}
-              <Text style={{ fontSize: 48, fontFamily: 'VT323_400Regular', color: WHITE, letterSpacing: 2 }}>{as2}</Text>
-            </View>
-            <View style={{ alignItems: 'center', marginHorizontal: 8 }}>
-              <Text style={{ fontSize: 20, fontWeight: '300', color: 'rgba(255,255,255,0.15)' }}>–</Text>
-              {(() => {
-                const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
-                return timeStr ? (
-                  <Text style={{ fontSize: 14, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, marginTop: 2 }}>
-                    {timeStr}
-                  </Text>
-                ) : null;
-              })()}
-            </View>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SECONDARY, marginBottom: 2, letterSpacing: 0.5 }}>{game.homeTeam.abbreviation}</Text>
-              {pick?.pickedTeam === 'home' ? <View style={{ width: 16, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} /> : null}
-              <Text style={{ fontSize: 48, fontFamily: 'VT323_400Regular', color: WHITE, letterSpacing: 2 }}>{hs}</Text>
-            </View>
+        {/* C) Match body — home left, score middle, away right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4, paddingBottom: 14 }}>
+          {/* Home block (left) */}
+          <View style={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
+            <JerseyGlow color={homeColors.primary}>
+              <TeamJersey
+                teamAbbreviation={game.homeTeam.abbreviation}
+                primaryColor={homeColors.primary}
+                secondaryColor={homeColors.secondary}
+                size={46}
+                sport={game.sport as Sport}
+              />
+            </JerseyGlow>
+            <Text style={{ color: '#f3f4f6', fontSize: 13, fontWeight: '500', lineHeight: 16, textAlign: 'center', marginTop: 6 }} numberOfLines={1}>
+              {homeNameTop}
+            </Text>
+            {homeNameBot ? (
+              <Text style={{ color: '#f3f4f6', fontSize: 13, fontWeight: '500', lineHeight: 16, textAlign: 'center' }} numberOfLines={1}>
+                {homeNameBot}
+              </Text>
+            ) : null}
+            <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 4 }}>{game.homeTeam.record}</Text>
           </View>
-          {/* Stat boxes */}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, backgroundColor: PANEL_DARKER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_MED }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>YOUR PICK</Text>
-              {pick ? (<><Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>{pt?.abbreviation}</Text><Text style={{ fontSize: 9, fontWeight: '600', color: lead ? TEAL : d === 0 ? TEXT_MUTED : LOSS, marginTop: 2 }}>{lead ? 'Leading' : d === 0 ? 'Tied' : 'Trailing'}</Text></>) : <Text style={{ fontSize: 10, color: TEXT_MUTED }}>No pick</Text>}
+
+          {/* D) LED score panel — same primitives as the home-page LED tiles. */}
+          <View style={{ flexShrink: 0, alignItems: 'center' }}>
+            {matchTime ? (
+              <Text
+                style={{
+                  color: '#9ca3af',
+                  fontSize: 10,
+                  fontWeight: '600',
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                {matchTime}
+              </Text>
+            ) : null}
+            <LedScorePanel awayScore={as2} homeScore={hs} />
+          </View>
+
+          {/* Away block (right) */}
+          <View style={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
+            <JerseyGlow color={awayColors.primary}>
+              <TeamJersey
+                teamAbbreviation={game.awayTeam.abbreviation}
+                primaryColor={awayColors.primary}
+                secondaryColor={awayColors.secondary}
+                size={46}
+                sport={game.sport as Sport}
+              />
+            </JerseyGlow>
+            <Text style={{ color: '#f3f4f6', fontSize: 13, fontWeight: '500', lineHeight: 16, textAlign: 'center', marginTop: 6 }} numberOfLines={1}>
+              {awayNameTop}
+            </Text>
+            {awayNameBot ? (
+              <Text style={{ color: '#f3f4f6', fontSize: 13, fontWeight: '500', lineHeight: 16, textAlign: 'center' }} numberOfLines={1}>
+                {awayNameBot}
+              </Text>
+            ) : null}
+            <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 4 }}>{game.awayTeam.record}</Text>
+          </View>
+        </View>
+
+        {/* E) Hairline divider */}
+        <View style={{ height: 0.5, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 4, marginBottom: 12 }} />
+
+        {/* F) Stat tiles row */}
+        <View style={{ flexDirection: 'row', gap: 7 }}>
+          {/* Tile 1 — YOUR PICK */}
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(10,16,25,0.55)',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.06)',
+              borderRadius: 10,
+              paddingVertical: 9,
+              paddingHorizontal: 6,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#6b7280', fontSize: 9, fontWeight: '600', letterSpacing: 1.2, marginBottom: 6 }}>YOUR PICK</Text>
+            <Text style={{ color: pick ? '#f3f4f6' : '#6b7280', fontSize: 12, fontWeight: '500' }}>
+              {pick ? (pt?.abbreviation ?? '—') : 'No pick'}
+            </Text>
+          </View>
+
+          {/* Tile 2 — MOMENTUM */}
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(10,16,25,0.55)',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.06)',
+              borderRadius: 10,
+              paddingVertical: 9,
+              paddingHorizontal: 6,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#6b7280', fontSize: 9, fontWeight: '600', letterSpacing: 1.2, marginBottom: 4 }}>MOMENTUM</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 16 }}>
+              {momentumBars.map((v, i) => {
+                const isPeak = i === peakIndex;
+                const c = isPeak ? '#ef4444' : v >= 0.75 ? '#9ca3af' : v >= 0.5 ? '#6b7280' : '#4b5563';
+                return (
+                  <View
+                    key={i}
+                    style={{
+                      width: 5,
+                      height: Math.max(3, Math.round(v * 16)),
+                      borderRadius: 1,
+                      backgroundColor: c,
+                    }}
+                  />
+                );
+              })}
             </View>
-            <View style={{ flex: 1, backgroundColor: PANEL_DARKER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_MED }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>MOMENTUM</Text>
-              <View style={{ flexDirection: 'row', gap: 3, alignItems: 'flex-end', height: 20, marginBottom: 2 }}>
-                {[0.4,0.7,0.5,0.9,0.6].map((h,i) => <View key={i} style={{ width: 4, height: 8+h*12, borderRadius: 2, backgroundColor: h > 0.5 ? TEAL : TEXT_MUTED, opacity: 0.5+h*0.5 }} />)}
-              </View>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>{lead ? 'Positive' : 'Neutral'}</Text>
-            </View>
-            {(() => {
-              const c = game.prediction?.confidence ?? 50;
-              const t = getConfidenceTier(c, game.prediction?.isTossUp);
-              return (
-                <View style={{ flex: 1, backgroundColor: PANEL_DARKER, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_MED }}>
-                  <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>PICK STRENGTH</Text>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: t.color }}>{t.label}</Text>
-                </View>
-              );
-            })()}
+            <Text style={{ color: '#9ca3af', fontSize: 10, marginTop: 4 }} numberOfLines={1}>{momentumLabel}</Text>
+          </View>
+
+          {/* Tile 3 — PICK STRENGTH */}
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(10,16,25,0.55)',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.06)',
+              borderRadius: 10,
+              paddingVertical: 9,
+              paddingHorizontal: 6,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#6b7280', fontSize: 9, fontWeight: '600', letterSpacing: 1.2, marginBottom: 6 }}>PICK STRENGTH</Text>
+            <Text style={{ color: strength.color, fontSize: 12, fontWeight: '600' }}>{strength.label}</Text>
           </View>
         </View>
       </View>

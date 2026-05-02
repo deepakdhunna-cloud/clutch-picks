@@ -1,4 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet, Platform, Dimensions } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,7 @@ import Animated, {
   FadeInDown,
   FadeInRight,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -18,7 +19,7 @@ import { ChevronRight, X, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect as SvgRect, Defs, Pattern as SvgPattern, Line as SvgLine } from 'react-native-svg';
 import { PicksBadge } from '@/components/shared/PicksBadge';
-import { SportCard, GameCard, getTicketColor, getSportIcon, DotMatrixText, DotMatrixIcon, PixelGrid, ScanLine } from '@/components/sports';
+import { SportCard, GameCard, getTicketColor, getSportIcon, DotMatrixText, DotMatrixIcon, PixelGrid, LedBarPanel } from '@/components/sports';
 import CompactLiveCard from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
 import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
@@ -29,7 +30,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
-import { MAROON, TEAL } from '@/lib/theme';
+import { MAROON, TEAL, TEAL_DARK } from '@/lib/theme';
 
 
 // Field goal post to replace "U" - with football going through - memoized
@@ -79,6 +80,190 @@ const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: strin
 // Memoize all sports array
 const allSports = Object.values(Sport);
 
+// ─── Paginated sport tile carousel ──────────────────────────────────
+const SportTileCarousel = memo(function SportTileCarousel({
+  sports,
+  gameCounts,
+  selectedSportFilter,
+  setSelectedSportFilter,
+  responsive,
+}: {
+  sports: Sport[];
+  gameCounts: Partial<Record<Sport, number>>;
+  selectedSportFilter: Sport | null;
+  setSelectedSportFilter: (s: Sport | null) => void;
+  responsive: ReturnType<typeof useResponsive>;
+}) {
+  const PAGE_SIZE = 4;
+  const GAP = 8;
+  const hPad = responsive.isTablet ? responsive.contentPadding : 16;
+  const pageWidth = responsive.width;
+  const tileWidth = (pageWidth - 2 * hPad - (PAGE_SIZE - 1) * GAP) / PAGE_SIZE;
+
+  const pages = useMemo(() => {
+    const out: Sport[][] = [];
+    for (let i = 0; i < sports.length; i += PAGE_SIZE) {
+      out.push(sports.slice(i, i + PAGE_SIZE));
+    }
+    return out;
+  }, [sports]);
+
+  const scrollX = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollX.value = e.contentOffset.x;
+    },
+  });
+
+  // LED scoreboard-style segment bar geometry
+  const SEG_W = 18;
+  const SEG_H = 5;
+  const SEG_GAP = 5;
+  const SEG_RADIUS = 1.5;
+  const litOverlayStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (scrollX.value / pageWidth) * (SEG_W + SEG_GAP) }],
+  }));
+
+  return (
+    <View>
+      <Animated.FlatList
+        data={pages}
+        keyExtractor={(_, i) => `sportpage-${i}`}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        snapToAlignment="start"
+        snapToInterval={pageWidth}
+        decelerationRate="fast"
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        renderItem={({ item }) => (
+          <View
+            style={{
+              width: pageWidth,
+              paddingHorizontal: hPad,
+              paddingVertical: 6,
+              flexDirection: 'row',
+              gap: GAP,
+            }}
+          >
+            {item.map((sport, idx) => {
+              const isSelected = selectedSportFilter === sport;
+              return (
+                <SportCard
+                  key={sport}
+                  sport={sport}
+                  gameCount={gameCounts?.[sport] ?? 0}
+                  index={idx}
+                  tile
+                  tileSize={tileWidth}
+                  onPress={() => setSelectedSportFilter(isSelected ? null : sport)}
+                  isSelected={isSelected}
+                  hasActiveFilter={selectedSportFilter !== null}
+                />
+              );
+            })}
+          </View>
+        )}
+      />
+      {pages.length > 1 ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 2 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: SEG_GAP,
+              position: 'relative',
+            }}
+          >
+            {pages.map((_, i) => (
+              <View
+                key={i}
+                style={{
+                  width: SEG_W,
+                  height: SEG_H,
+                  borderRadius: SEG_RADIUS,
+                  backgroundColor: 'rgba(255,255,255,0.10)',
+                  borderWidth: 0.5,
+                  borderColor: 'rgba(255,255,255,0.18)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-evenly',
+                  overflow: 'hidden',
+                }}
+              >
+                {[0, 1, 2, 3].map((d) => (
+                  <View
+                    key={d}
+                    style={{
+                      width: 1.5,
+                      height: 1.5,
+                      borderRadius: 0.75,
+                      backgroundColor: 'rgba(255,255,255,0.45)',
+                    }}
+                  />
+                ))}
+              </View>
+            ))}
+            {/* Sliding lit segment — solid brand color + specular highlight + bright LED bulbs */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: SEG_W,
+                  height: SEG_H,
+                  borderRadius: SEG_RADIUS,
+                  backgroundColor: TEAL_DARK,
+                  shadowColor: TEAL_DARK,
+                  shadowOpacity: 0.95,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 8,
+                  overflow: 'hidden',
+                },
+                litOverlayStyle,
+              ]}
+            >
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 1,
+                  backgroundColor: 'rgba(255,255,255,0.55)',
+                }}
+              />
+              <View
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-evenly',
+                }}
+              >
+                {[0, 1, 2, 3].map((d) => (
+                  <View
+                    key={d}
+                    style={{
+                      width: 1.5,
+                      height: 1.5,
+                      borderRadius: 0.75,
+                      backgroundColor: 'rgba(235,245,255,0.95)',
+                    }}
+                  />
+                ))}
+              </View>
+            </Animated.View>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
 interface HomeHeaderProps {
   liveGamesPreview: GameWithPrediction[];
   filteredLiveGames: GameWithPrediction[];
@@ -101,8 +286,6 @@ interface HomeHeaderProps {
   headerFontSize: number;
   responsive: ReturnType<typeof useResponsive>;
   statusFilter: 'all' | 'upcoming' | 'final';
-  sportFilterPage: number;
-  setSportFilterPage: (page: number) => void;
 }
 
 const HomeHeader = React.memo(function HomeHeader({
@@ -127,12 +310,10 @@ const HomeHeader = React.memo(function HomeHeader({
   headerFontSize,
   responsive,
   statusFilter,
-  sportFilterPage,
-  setSportFilterPage,
 }: HomeHeaderProps) {
   return (
     <>
-      {/* Today Games Bar — Jumbotron LED Style (same as sport chips) */}
+      {/* TODAY'S GAMES bar — real-LED panel (same renderer as the sport tiles below) */}
       <Animated.View
         entering={FadeInDown.delay(150).duration(500)}
         style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, marginTop: 0, marginBottom: 12 }}
@@ -161,140 +342,28 @@ const HomeHeader = React.memo(function HomeHeader({
               ? statusFilter === 'all' ? `${sportLabel!} TODAY` : statusFilter === 'final' ? `${sportLabel!} FINALS` : `${sportLabel!} SCHEDULED`
               : statusFilter === 'all' ? "TODAY'S GAMES" : statusFilter === 'final' ? "FINAL RESULTS" : "SCHEDULED GAMES";
             return (
-              <View
-                style={{
-                  position: 'relative',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingVertical: 8,
-                  paddingHorizontal: 10,
-                  height: 42,
-                  borderRadius: 3,
-                  backgroundColor: '#080c10',
-                  borderWidth: 1,
-                  borderColor: 'rgba(122,157,184,0.15)',
-                  overflow: 'hidden',
-                  ...Platform.select({
-                    ios: {
-                      shadowColor: '#7A9DB8',
-                      shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 14,
-                    },
-                    android: { elevation: 4 },
-                  }),
-                }}
-              >
-                {/* Shared pixel grid */}
-                <PixelGrid />
-
-                {/* Shared synced scanline */}
-                <ScanLine active={true} />
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 4 }}>
-                  {selectedSportFilter ? (
-                    <View style={{ height: 22, overflow: 'visible', justifyContent: 'center' }}>
-                      <DotMatrixIcon sport={selectedSportFilter} litColor="#FFFFFF" pixelSize={2} />
-                    </View>
-                  ) : (
-                    <Svg width={14} height={16} viewBox="0 0 14 16">
-                      {[[0,1,0,0,0,1,0],[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1],[1,0,1,0,1,0,1],[1,0,0,0,0,0,1],[1,0,1,0,1,0,1],[1,1,1,1,1,1,1]].map((row, r) =>
-                        row.map((px, c) => (
-                          <SvgRect key={`${r}-${c}`} x={c * 2} y={r * 2} width={2} height={2} rx={0.3} fill={px ? '#FFFFFF' : 'rgba(255,255,255,0.04)'} />
-                        ))
-                      )}
-                    </Svg>
-                  )}
-                  <DotMatrixText text={barLabel} litColor="#9BB8CF" pixelSize={2} />
-                </View>
-
-                {/* Count — dot matrix */}
-                <DotMatrixText text={String(barCount)} litColor="#FFFFFF" pixelSize={2} />
-
-              </View>
+              <LedBarPanel
+                label={barLabel}
+                count={barCount}
+                leftSport={selectedSportFilter}
+              />
             );
           })()}
         </Pressable>
       </Animated.View>
 
-      {/* Sports Categories — 2 rows, scroll horizontally to see more */}
+      {/* Sports Categories — paginated carousel of square LED tiles */}
       <Animated.View
         entering={FadeInDown.delay(100).duration(500)}
-        style={{ paddingTop: 0, paddingBottom: 16 }}
+        style={{ paddingTop: 0, paddingBottom: 24 }}
       >
-        {(() => {
-          const sorted = [...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0));
-          const columns: [Sport, Sport | undefined][] = [];
-          for (let i = 0; i < sorted.length; i += 2) {
-            columns.push([sorted[i], sorted[i + 1]]);
-          }
-          const hPad = responsive.isTablet ? responsive.contentPadding : 16;
-          const colGap = 8;
-          const screenW = Dimensions.get('window').width;
-          const colWidth = (screenW - hPad * 2 - colGap) / 2;
-          const pages: [Sport, Sport | undefined][][] = [];
-          for (let i = 0; i < columns.length; i += 2) {
-            pages.push(columns.slice(i, i + 2));
-          }
-          return (
-            <>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                pagingEnabled
-                style={{ flexGrow: 0 }}
-                decelerationRate="fast"
-                onScroll={(e) => {
-                  const page = Math.round(e.nativeEvent.contentOffset.x / screenW);
-                  if (page !== sportFilterPage) setSportFilterPage(page);
-                }}
-                scrollEventThrottle={16}
-              >
-                {pages.map((page, pi) => (
-                  <View key={pi} style={{ width: screenW, paddingHorizontal: hPad, paddingVertical: 6, flexDirection: 'row', gap: colGap }}>
-                    {page.map((col, ci) => (
-                      <View key={ci} style={{ gap: 8, width: colWidth }}>
-                        {col.map((sport) => {
-                          if (!sport) return null;
-                          const isSelected = selectedSportFilter === sport;
-                          return (
-                            <SportCard
-                              key={sport}
-                              sport={sport}
-                              gameCount={gameCounts?.[sport] ?? 0}
-                              index={ci}
-                              compact
-                              onPress={() => setSelectedSportFilter(isSelected ? null : sport)}
-                              isSelected={isSelected}
-                              hasActiveFilter={selectedSportFilter !== null}
-                            />
-                          );
-                        })}
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </ScrollView>
-              {/* Page dots */}
-              {pages.length > 1 ? (
-                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 10 }}>
-                  {pages.map((_, i) => (
-                    <View
-                      key={i}
-                      style={{
-                        width: sportFilterPage === i ? 16 : 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: sportFilterPage === i ? 'rgba(122,157,184,0.6)' : 'rgba(122,157,184,0.2)',
-                      }}
-                    />
-                  ))}
-                </View>
-              ) : null}
-            </>
-          );
-        })()}
+        <SportTileCarousel
+          sports={[...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0))}
+          gameCounts={gameCounts}
+          selectedSportFilter={selectedSportFilter}
+          setSelectedSportFilter={setSelectedSportFilter}
+          responsive={responsive}
+        />
       </Animated.View>
 
       {/* Live Games Section — header always shows */}
@@ -302,7 +371,7 @@ const HomeHeader = React.memo(function HomeHeader({
         entering={FadeInDown.delay(100).duration(500)}
         style={{ marginBottom: 24, marginTop: 0 }}
       >
-        <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+        <View style={{ paddingHorizontal: 20, marginBottom: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
             <LinearGradient colors={['transparent', 'rgba(122,157,184,0.15)', 'rgba(122,157,184,0.6)']} locations={[0, 0.6, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -596,7 +665,6 @@ export default function HomeScreen() {
   const lastRefreshRef = useRef<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSportFilter, setSelectedSportFilter] = useState<Sport | null>(null);
-  const [sportFilterPage, setSportFilterPage] = useState(0);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -722,12 +790,6 @@ export default function HomeScreen() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }, []);
 
-  const tomorrowStr = useMemo(() => {
-    const t = new Date();
-    t.setDate(t.getDate() + 1);
-    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-  }, []);
-
   // Game counts reflect the active tab
   const gameCounts = useMemo(() => {
     const counts: Partial<Record<Sport, number>> = {};
@@ -742,14 +804,19 @@ export default function HomeScreen() {
       } else if (statusFilter === 'final') {
         include = game.status === GameStatus.FINAL && dateStr === todayStr;
       } else if (statusFilter === 'upcoming') {
-        include = game.status === GameStatus.SCHEDULED && dateStr === tomorrowStr;
+        // Scheduled tab: every SCHEDULED game in the slate, regardless of date.
+        // Backend returns today + tomorrow + day-after — the user expects this
+        // tab to show all upcoming games, including today's not-yet-started
+        // ones, not just future days. Today's already-final games are still
+        // excluded because their status is FINAL, not SCHEDULED.
+        include = game.status === GameStatus.SCHEDULED;
       }
       if (include) {
         counts[sport] = (counts[sport] || 0) + 1;
       }
     });
     return counts;
-  }, [todaysGames, statusFilter, todayStr, tomorrowStr, getLocalDateStr]);
+  }, [todaysGames, statusFilter, todayStr, getLocalDateStr]);
 
   // Search results: filter todaysGames by query — includes FINAL, excludes POSTPONED/CANCELLED
   // Order: LIVE first, then SCHEDULED, then FINAL at the bottom
@@ -832,11 +899,11 @@ export default function HomeScreen() {
         return dateStr === todayStr && g.status === GameStatus.FINAL;
       });
     } else if (statusFilter === 'upcoming') {
-      // Scheduled tab: SCHEDULED games from tomorrow
-      tabGames = todaysGames.filter(g => {
-        const dateStr = getLocalDateStr(g.gameTime);
-        return dateStr === tomorrowStr && g.status === GameStatus.SCHEDULED;
-      });
+      // Scheduled tab: every SCHEDULED game in the slate, regardless of date.
+      // Same definition as the per-sport count above — show the full upcoming
+      // slate so a sport-filter + Scheduled combo doesn't silently hide today's
+      // games that haven't kicked off yet.
+      tabGames = todaysGames.filter(g => g.status === GameStatus.SCHEDULED);
     }
 
     // Step 2: Apply sport filter on top
@@ -878,7 +945,7 @@ export default function HomeScreen() {
     }
 
     return items;
-  }, [todaysGames, selectedSportFilter, isLoadingGames, statusFilter, todayStr, tomorrowStr, getLocalDateStr]);
+  }, [todaysGames, selectedSportFilter, isLoadingGames, statusFilter, todayStr, getLocalDateStr]);
 
 
   // Render item for FlatList
@@ -886,21 +953,12 @@ export default function HomeScreen() {
     if (item.type === 'sport-header') {
       const sportLabel = displaySport(item.sport);
       return (
-        <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 14, position: 'relative' as const, overflow: 'hidden' as const, borderRadius: 3, backgroundColor: '#080c10', borderWidth: 1, borderColor: 'rgba(122,157,184,0.15)', height: 42, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const }}>
-          {/* Shared pixel grid */}
-          <PixelGrid />
-          {/* Shared synced scanline */}
-          <ScanLine active={true} />
-          {/* Dot matrix content */}
-          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, flex: 1, justifyContent: 'space-between' as const, zIndex: 4 }}>
-            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 }}>
-              <View style={{ height: 22, overflow: 'visible' as const, justifyContent: 'center' as const }}>
-                <DotMatrixIcon sport={item.sport} litColor="#FFFFFF" pixelSize={2} />
-              </View>
-              <DotMatrixText text={sportLabel} litColor="#9BB8CF" pixelSize={2} />
-            </View>
-            <DotMatrixText text={String(item.gameCount)} litColor="#FFFFFF" pixelSize={2} />
-          </View>
+        <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 14 }}>
+          <LedBarPanel
+            label={sportLabel}
+            count={item.gameCount}
+            leftSport={item.sport}
+          />
         </View>
       );
     }
@@ -1043,8 +1101,6 @@ export default function HomeScreen() {
             headerFontSize={headerFontSize}
             responsive={responsive}
             statusFilter={statusFilter}
-            sportFilterPage={sportFilterPage}
-            setSportFilterPage={setSportFilterPage}
           />
           {/* Game Board header + status filter pills */}
           <View style={{ paddingHorizontal: 20, marginBottom: 6, marginTop: 0 }}>

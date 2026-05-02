@@ -147,7 +147,7 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
               </View>
             ) : (
               <View style={[s.resultBadge, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }]}>
-                <Text style={[s.resultText, { color: C.MUTED, fontSize: 9 }]}>Pending</Text>
+                <Text style={[s.resultText, { color: C.MUTED }]}>TBD</Text>
               </View>
             )}
           </View>
@@ -235,7 +235,7 @@ export default function PicksHistoryScreen() {
     { key: 'all', label: 'All', count: summary.total, color: C.TEXT },
     { key: 'win', label: 'Wins', count: summary.wins, color: C.TEAL },
     { key: 'loss', label: 'Losses', count: summary.losses, color: C.MAROON },
-    { key: 'pending', label: 'Pending', count: summary.pending, color: C.TEXT2 },
+    { key: 'pending', label: 'TBD', count: summary.pending, color: C.TEXT2 },
   ];
 
   return (
@@ -275,7 +275,7 @@ export default function PicksHistoryScreen() {
         <Animated.View entering={FadeInDown.duration(400)} style={s.statsRow}>
           <StatRing value={summary.wins} label="WINS" color={C.TEAL} total={summary.total} />
           <StatRing value={summary.losses} label="LOSSES" color={C.MAROON} total={summary.total} />
-          <StatRing value={summary.pending} label="PENDING" color={C.TEXT2} total={summary.total} />
+          <StatRing value={summary.pending} label="TBD" color={C.TEXT2} total={summary.total} />
 
           {/* Accuracy */}
           <View style={s.statRing}>
@@ -332,7 +332,7 @@ export default function PicksHistoryScreen() {
               </Svg>
             </View>
             <Text style={{ fontSize: 15, fontWeight: '700', color: C.TEXT, marginBottom: 6, textAlign: 'center' }}>
-              {filter === 'all' ? 'No picks yet' : `No ${filter === 'pending' ? 'pending' : filter === 'win' ? 'winning' : 'losing'} picks`}
+              {filter === 'all' ? 'No picks yet' : `No ${filter === 'pending' ? 'TBD' : filter === 'win' ? 'winning' : 'losing'} picks`}
             </Text>
             <Text style={{ fontSize: 12, color: C.MUTED, textAlign: 'center' }}>
               {filter === 'all' ? 'Head to the home page to make your first pick.' : 'Try a different filter to see your picks.'}
@@ -356,7 +356,7 @@ export default function PicksHistoryScreen() {
                   {section.record.w > 0 ? <Text style={[s.sectionRecordText, { color: C.TEAL }]}>{section.record.w}W</Text> : null}
                   {section.record.l > 0 ? <Text style={[s.sectionRecordText, { color: C.MAROON }]}>{section.record.l}L</Text> : null}
                   {section.data.filter(d => d.result === 'pending').length > 0 ? (
-                    <Text style={[s.sectionRecordText, { color: C.MUTED }]}>{section.data.filter(d => d.result === 'pending').length}P</Text>
+                    <Text style={[s.sectionRecordText, { color: C.MUTED }]}>{section.data.filter(d => d.result === 'pending').length} TBD</Text>
                   ) : null}
                 </View>
               </View>

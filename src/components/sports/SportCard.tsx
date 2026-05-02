@@ -1,22 +1,17 @@
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import React, { memo, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import Animated, {
   FadeInRight,
   withSpring,
-  withTiming,
-  withSequence,
-  withRepeat,
-  withDelay,
   useSharedValue,
   useAnimatedStyle,
-  Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Sport, SPORT_META } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
-import Svg, { Path, Circle, Rect, Defs, Pattern, Line, Ellipse } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, Defs, Pattern, Line, Ellipse, RadialGradient, Stop, G } from 'react-native-svg';
 
 // ─── JUMBOTRON COLORS ──────────────────────────────────────────
 const JB = {
@@ -68,6 +63,7 @@ const DOT_MATRIX: Record<string, number[][]> = {
   '8': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
   '9': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,1],[0,0,0,0,1],[0,0,0,0,1],[0,1,1,1,0]],
   '\'': [[0,0,1,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
+  '-': [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,1,1,1,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
   ' ': [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],
 };
 
@@ -84,16 +80,20 @@ SPORT_PIXEL_ICONS.MLS = SPORT_PIXEL_ICONS.EPL;
 SPORT_PIXEL_ICONS.UCL = SPORT_PIXEL_ICONS.EPL;
 SPORT_PIXEL_ICONS.NCAAB = SPORT_PIXEL_ICONS.NBA;
 
-// ─── DOT MATRIX TEXT RENDERER ─────────────────────────────────
+// ─── DOT MATRIX TEXT RENDERER (legacy — used by the FlatList sport-headers) ───
 const PX = 1.5;
 const PX_GAP = 0.5;
 const CHAR_GAP = 1.5;
-const DIM_PX = 'rgba(255,255,255,0.04)';
+const LEGACY_OFF = '#0d1825';
+const HALO_BLUE = 'rgba(122,157,184,0.12)';
 
-interface DotMatrixTextProps { text: string; litColor?: string; dimColor?: string; pixelSize?: number }
+interface DotMatrixTextProps { text: string; litColor?: string; dimColor?: string; pixelSize?: number; haloColor?: string }
 
-export const DotMatrixText = memo(function DotMatrixText({ text, litColor = '#9BB8CF', dimColor = DIM_PX, pixelSize = PX }: DotMatrixTextProps) {
+export const DotMatrixText = memo(function DotMatrixText({ text, litColor = '#9BB8CF', dimColor = LEGACY_OFF, pixelSize = PX, haloColor = HALO_BLUE }: DotMatrixTextProps) {
   const step = pixelSize + PX_GAP;
+  const coreRadius = pixelSize / 2;
+  const haloSize = pixelSize + 0.6;
+  const haloRadius = haloSize / 2;
   const chars = text.toUpperCase().split('');
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: CHAR_GAP }}>
@@ -103,50 +103,713 @@ export const DotMatrixText = memo(function DotMatrixText({ text, litColor = '#9B
         const w = matrix[0].length * step;
         const h = matrix.length * step;
         return (
-          <Svg key={ci} width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-            {matrix.map((row, ri) =>
-              row.map((px, coli) => {
-                const x = coli * step;
-                const y = ri * step;
-                return (
-                  <React.Fragment key={`${ri}-${coli}`}>
-                    {px === 1 ? <Rect x={x - 0.3} y={y - 0.3} width={pixelSize + 0.6} height={pixelSize + 0.6} rx={0.3} fill="rgba(122,157,184,0.12)" /> : null}
-                    <Rect x={x} y={y} width={pixelSize} height={pixelSize} rx={0.3} fill={px ? litColor : dimColor} />
-                  </React.Fragment>
-                );
-              })
-            )}
-          </Svg>
+          <View key={ci} style={{ width: w, height: h }}>
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+                {matrix.map((row, ri) =>
+                  row.map((px, coli) =>
+                    px === 1 ? (
+                      <Rect
+                        key={`${ri}-${coli}`}
+                        x={coli * step - 0.3}
+                        y={ri * step - 0.3}
+                        width={haloSize}
+                        height={haloSize}
+                        rx={haloRadius}
+                        fill={haloColor}
+                      />
+                    ) : null
+                  )
+                )}
+              </Svg>
+            </View>
+            <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+              {matrix.map((row, ri) =>
+                row.map((px, coli) => (
+                  <Rect
+                    key={`${ri}-${coli}`}
+                    x={coli * step}
+                    y={ri * step}
+                    width={pixelSize}
+                    height={pixelSize}
+                    rx={coreRadius}
+                    fill={px ? litColor : dimColor}
+                  />
+                ))
+              )}
+            </Svg>
+          </View>
         );
       })}
     </View>
   );
 });
 
-// ─── DOT MATRIX ICON RENDERER ─────────────────────────────────
-export const DotMatrixIcon = memo(function DotMatrixIcon({ sport, litColor = '#FFFFFF', dimColor = DIM_PX, pixelSize = PX }: { sport: string; litColor?: string; dimColor?: string; pixelSize?: number }) {
+// ─── DOT MATRIX ICON RENDERER (legacy) ────────────────────────
+export const DotMatrixIcon = memo(function DotMatrixIcon({ sport, litColor = '#FFFFFF', dimColor = LEGACY_OFF, pixelSize = PX, haloColor = HALO_BLUE }: { sport: string; litColor?: string; dimColor?: string; pixelSize?: number; haloColor?: string }) {
   const matrix = SPORT_PIXEL_ICONS[sport] || SPORT_PIXEL_ICONS.NBA;
-  if (!matrix || !matrix.length) return null;
   const step = pixelSize + PX_GAP;
+  const coreRadius = pixelSize / 2;
+  const haloSize = pixelSize + 0.6;
+  const haloRadius = haloSize / 2;
+  if (!matrix || !matrix.length) return null;
   const w = matrix[0].length * step;
   const h = matrix.length * step;
   return (
-    <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      {matrix.map((row, ri) =>
-        row.map((px, coli) => {
-          const x = coli * step;
-          const y = ri * step;
-          return (
-            <React.Fragment key={`${ri}-${coli}`}>
-              {px === 1 ? <Rect x={x - 0.3} y={y - 0.3} width={pixelSize + 0.6} height={pixelSize + 0.6} rx={0.3} fill="rgba(122,157,184,0.12)" /> : null}
-              <Rect x={x} y={y} width={pixelSize} height={pixelSize} rx={0.3} fill={px ? litColor : dimColor} />
-            </React.Fragment>
-          );
-        })
-      )}
-    </Svg>
+    <View style={{ width: w, height: h }}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+          {matrix.map((row, ri) =>
+            row.map((px, coli) =>
+              px === 1 ? (
+                <Rect
+                  key={`${ri}-${coli}`}
+                  x={coli * step - 0.3}
+                  y={ri * step - 0.3}
+                  width={haloSize}
+                  height={haloSize}
+                  rx={haloRadius}
+                  fill={haloColor}
+                />
+              ) : null
+            )
+          )}
+        </Svg>
+      </View>
+      <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+        {matrix.map((row, ri) =>
+          row.map((px, coli) => (
+            <Rect
+              key={`${ri}-${coli}`}
+              x={coli * step}
+              y={ri * step}
+              width={pixelSize}
+              height={pixelSize}
+              rx={coreRadius}
+              fill={px ? litColor : dimColor}
+            />
+          ))
+        )}
+      </Svg>
+    </View>
   );
 });
+
+// ═══════════════════════════════════════════════════════════════
+// REAL-LED PANEL RENDERING (used by sport-filter tiles + TODAY'S GAMES bar)
+// ═══════════════════════════════════════════════════════════════
+//
+// Substrate:  matte black (#050505), 1px #161616 border.
+// Off grid:   uniform 2.4-pitch dot lattice; every cell is a #262626 circle (radius 1.0).
+// Lit pixel:  same-pitch grid, but the lit position renders 4 stacked layers —
+//             three soft halos (Gaussian-blur source spec polyfilled with radial-gradient
+//             discs that fade color → transparent) plus a sharp radial-gradient core.
+// Glyph scale: every text glyph is 5×7 dots; all letters and counts share the same
+//              pixel size (no hero scale). Hierarchy comes from positioning, not size.
+// Animation:  none. Static radiance.
+//
+// Filter polyfill rationale: react-native-svg's <FeGaussianBlur> support varies across
+// versions and platforms. Per spec ("match the look, not the exact filter primitive"),
+// each blurred halo is rendered as a single circle whose radius equals
+// (source radius + Gaussian σ) and whose fill is a radial gradient that fades from
+// the spec'd color@opacity at the center to fully transparent at the edge. This
+// approximates the soft 3-stage falloff with a single quad per layer, which keeps
+// the SVG node count tractable for ~60 lit pixels per panel.
+
+export const LED_BG = '#050505';
+export const LED_BORDER = '#161616';
+export const LED_OFF = '#262626';
+// PITCH and DOT_RADIUS are the SHARED grid constants — used by both the off-grid
+// background pattern AND the sharp core of every lit pixel. There is exactly one
+// grid; the only thing that differs between an off-pixel and a lit-pixel at the
+// same (col, row) is the fill (LED_OFF vs the bright core gradient + the four
+// stacked halo circles around it).
+export const LED_PITCH = 2.4;
+export const LED_OFF_RADIUS = 1.0;
+const PITCH = LED_PITCH;
+const DOT_RADIUS = LED_OFF_RADIUS;
+// Whole-cell letter gap so multi-character text stays on the same grid as the
+// off-grid Pattern. (Half-pitch gaps would put characters past the first off the
+// shared grid and re-introduce the misalignment bug.)
+const LED_LETTER_GAP_COLS = 1;
+
+const BLUE_FAR = '#5a85b5';
+const BLUE_NEAR = '#c0d4e8';
+
+// Sharpened bloom — the wide outer halo (the source of fuzzy bleed between
+// adjacent lit pixels) is gone entirely. What remains: a 2-circle mid glow,
+// a 2-circle tight inner glow, and a sharp gradient core. Stacked solid
+// circles, no filter primitives — works identically on iOS and Android.
+const LIT_CORE_RADIUS = 1.2;
+const LIT_HALO_LAYERS = {
+  blue: [
+    // Layer 1 — mid glow (outer ring + denser inner ring fakes a soft falloff)
+    { r: 2.10, color: BLUE_FAR, opacity: 0.16 },
+    { r: 1.85, color: BLUE_FAR, opacity: 0.32 },
+    // Layer 2 — tight inner glow
+    { r: 1.55, color: BLUE_NEAR, opacity: 0.46 },
+    { r: 1.40, color: BLUE_NEAR, opacity: 0.78 },
+  ],
+  white: [
+    { r: 2.10, color: '#ffffff', opacity: 0.08 },
+    { r: 1.85, color: '#ffffff', opacity: 0.16 },
+    { r: 1.55, color: '#ffffff', opacity: 0.26 },
+    { r: 1.40, color: '#ffffff', opacity: 0.50 },
+  ],
+} as const;
+
+const CORE_STOPS = {
+  blue: [
+    ['0%', '#ffffff'] as const,
+    ['50%', '#cfddef'] as const,
+    ['100%', '#5d86b3'] as const,
+  ],
+  white: [
+    ['0%', '#ffffff'] as const,
+    ['70%', '#ffffff'] as const,
+    ['100%', '#dadada'] as const,
+  ],
+} as const;
+
+export type LedPalette = 'blue' | 'white';
+
+// Reusable <Defs> block — must be a child of every LED panel <Svg>.
+// The Pattern places one off-pixel at the center of every PITCH×PITCH cell,
+// globally anchored to (0, 0). Lit pixels MUST be positioned at the same
+// canonical grid coordinates (PITCH/2 + N*PITCH) — see gridX/gridY.
+function LedDefs() {
+  return (
+    <Defs>
+      <Pattern id="ledOffGrid" width={PITCH} height={PITCH} patternUnits="userSpaceOnUse">
+        <Circle cx={PITCH / 2} cy={PITCH / 2} r={DOT_RADIUS} fill={LED_OFF} />
+      </Pattern>
+      {(['blue', 'white'] as const).map((p) => (
+        <RadialGradient key={`core-${p}`} id={`led-core-${p}`} cx="50%" cy="50%" r="50%">
+          {CORE_STOPS[p].map(([offset, color]) => (
+            <Stop key={offset} offset={offset} stopColor={color} />
+          ))}
+        </RadialGradient>
+      ))}
+    </Defs>
+  );
+}
+
+// Single grid coordinate function — used for BOTH off-pixels (implicitly via the
+// Pattern, whose dots land at PITCH/2 + col*PITCH) and lit pixels (explicitly
+// via gridX/Y below). The sharp core of every lit pixel sits at exactly the
+// same (cx, cy) the corresponding off-pixel would occupy.
+function gridX(col: number): number {
+  return PITCH / 2 + col * PITCH;
+}
+function gridY(row: number): number {
+  return PITCH / 2 + row * PITCH;
+}
+
+// Render one lit pixel: 4 solid halo circles + 1 sharp gradient core. The core
+// sits at exactly the same (cx, cy) as the off-pixel it replaces (alignment fix
+// from the previous commit, preserved here). The core is slightly larger than
+// the off-pixel (LIT_CORE_RADIUS=1.2 vs DOT_RADIUS=1.0) so the bright center
+// dominates and characters read crisp.
+function ledLitCell(cx: number, cy: number, palette: LedPalette, key: string | number) {
+  const halos = LIT_HALO_LAYERS[palette];
+  return (
+    <G key={key}>
+      {halos.map((h, i) => (
+        <Circle key={i} cx={cx} cy={cy} r={h.r} fill={h.color} fillOpacity={h.opacity} />
+      ))}
+      <Circle cx={cx} cy={cy} r={LIT_CORE_RADIUS} fill={`url(#led-core-${palette})`} />
+    </G>
+  );
+}
+
+type LitPos = { cx: number; cy: number; palette: LedPalette };
+
+// baseCol/baseRow are the integer grid column/row of the matrix's (0, 0) cell.
+function emitMatrixCells(matrix: number[][], baseCol: number, baseRow: number, palette: LedPalette, out: LitPos[]) {
+  for (let ri = 0; ri < matrix.length; ri++) {
+    for (let ci = 0; ci < matrix[ri].length; ci++) {
+      if (matrix[ri][ci] === 1) {
+        out.push({ cx: gridX(baseCol + ci), cy: gridY(baseRow + ri), palette });
+      }
+    }
+  }
+}
+
+function measureLedText(text: string) {
+  const chars = text.toUpperCase().split('');
+  const datas = chars
+    .map((c) => DOT_MATRIX[c])
+    .filter(Boolean) as number[][][];
+  const colCount = datas.reduce(
+    (sum, m, i) => sum + m[0].length + (i > 0 ? LED_LETTER_GAP_COLS : 0),
+    0,
+  );
+  const rowCount = datas.length > 0 ? datas[0].length : 0;
+  const width = colCount * PITCH;
+  const height = rowCount * PITCH;
+  return { width, height, datas, colCount, rowCount };
+}
+
+function emitTextCells(text: string, baseCol: number, baseRow: number, palette: LedPalette, out: LitPos[]) {
+  const { datas } = measureLedText(text);
+  let cursorCol = baseCol;
+  for (const matrix of datas) {
+    emitMatrixCells(matrix, cursorCol, baseRow, palette, out);
+    cursorCol += matrix[0].length + LED_LETTER_GAP_COLS;
+  }
+}
+
+// Calendar pictograph used in the bar's default state.
+const LED_CALENDAR_MATRIX = [
+  [0, 1, 0, 0, 0, 1, 0],
+  [1, 1, 1, 1, 1, 1, 1],
+  [1, 0, 0, 0, 0, 0, 1],
+  [1, 1, 1, 1, 1, 1, 1],
+  [1, 0, 1, 0, 1, 0, 1],
+  [1, 0, 0, 0, 0, 0, 1],
+  [1, 0, 1, 0, 1, 0, 1],
+  [1, 1, 1, 1, 1, 1, 1],
+];
+
+// ─── LED TILE PANEL ─────────────────────────────────────────────
+// 86×86 square, vertical stack: icon (blue) → abbreviation (white) → count (blue).
+// Layout is computed in GRID COLUMNS/ROWS so every lit core lands on the same
+// lattice as every off-pixel. The off-grid Pattern fills the full panel so dots
+// are visible edge-to-edge; visual padding emerges from the glyph centering.
+export function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; gameCount: number; size?: number }) {
+  const GAP_ICON_ROWS = 3;   // ~7.2 px — must be an integer number of grid rows
+  const GAP_TEXT_ROWS = 3;   // ~7.2 px
+  const ICON_ROW_SPAN = 9;   // accommodate the tallest icon (NBA/EPL/UCL/MLS at 9 rows)
+  const TEXT_ROWS = 7;       // every char is 5×7
+
+  const iconMatrix = SPORT_PIXEL_ICONS[sport] || SPORT_PIXEL_ICONS.NBA;
+  const iconCols = iconMatrix[0].length;
+  const iconRows = iconMatrix.length;
+
+  const abbrText = displaySport(sport);
+  const abbr = measureLedText(abbrText);
+  const countText = String(gameCount);
+  const cnt = measureLedText(countText);
+
+  const cols = Math.floor(size / PITCH);
+  const rows = Math.floor(size / PITCH);
+
+  const totalRows = ICON_ROW_SPAN + GAP_ICON_ROWS + TEXT_ROWS + GAP_TEXT_ROWS + TEXT_ROWS;
+  const startRow = Math.max(0, Math.floor((rows - totalRows) / 2));
+
+  const iconStartRow = startRow + Math.floor((ICON_ROW_SPAN - iconRows) / 2);
+  const iconStartCol = Math.floor((cols - iconCols) / 2);
+
+  const abbrStartRow = startRow + ICON_ROW_SPAN + GAP_ICON_ROWS;
+  const abbrStartCol = Math.floor((cols - abbr.colCount) / 2);
+
+  const countStartRow = abbrStartRow + TEXT_ROWS + GAP_TEXT_ROWS;
+  const countStartCol = Math.floor((cols - cnt.colCount) / 2);
+
+  const cells: LitPos[] = [];
+  emitMatrixCells(iconMatrix, iconStartCol, iconStartRow, 'blue', cells);
+  emitTextCells(abbrText, abbrStartCol, abbrStartRow, 'white', cells);
+  emitTextCells(countText, countStartCol, countStartRow, 'blue', cells);
+
+  return (
+    <Svg width={size} height={size}>
+      <LedDefs />
+      <Rect width={size} height={size} fill="url(#ledOffGrid)" />
+      {cells.map((c, i) => ledLitCell(c.cx, c.cy, c.palette, i))}
+    </Svg>
+  );
+}
+
+// ─── LED BAR PANEL ──────────────────────────────────────────────
+// Width-flexible horizontal panel: icon left, label centered-left, count right-aligned.
+// Width is captured via onLayout so the count's grid column can be computed.
+export function LedBarPanel({
+  label,
+  count,
+  leftSport,
+  height = 44,
+  borderRadius = 7,
+}: {
+  label: string;
+  count: number | string;
+  leftSport?: Sport | null;
+  height?: number;
+  borderRadius?: number;
+}) {
+  const leftMatrix = leftSport
+    ? (SPORT_PIXEL_ICONS[leftSport as string] || LED_CALENDAR_MATRIX)
+    : LED_CALENDAR_MATRIX;
+  const ICON_LABEL_GAP_COLS = 2;
+  const SIDE_GAP_COLS = 2;
+
+  const [width, setWidth] = useState(0);
+
+  const leftCols = leftMatrix[0].length;
+  const leftRows = leftMatrix.length;
+  const labelM = measureLedText(label);
+  const countText = String(count);
+  const countM = measureLedText(countText);
+
+  // Grid extent of the bar.
+  const cols = Math.max(0, Math.floor(width / PITCH));
+  const rows = Math.max(0, Math.floor(height / PITCH));
+
+  // Vertical centering — every glyph row span is centered in the bar.
+  const centerRow = (rowSpan: number) => Math.floor((rows - rowSpan) / 2);
+  const leftStartRow = centerRow(leftRows);
+  const labelStartRow = centerRow(labelM.rowCount);
+  const countStartRow = centerRow(countM.rowCount);
+
+  const leftStartCol = SIDE_GAP_COLS;
+  const labelStartCol = leftStartCol + leftCols + ICON_LABEL_GAP_COLS;
+  const countStartCol = Math.max(
+    labelStartCol + labelM.colCount + ICON_LABEL_GAP_COLS,
+    cols - countM.colCount - SIDE_GAP_COLS,
+  );
+
+  const cells: LitPos[] = [];
+  if (cols > 0) {
+    emitMatrixCells(leftMatrix, leftStartCol, leftStartRow, 'blue', cells);
+    emitTextCells(label, labelStartCol, labelStartRow, 'white', cells);
+    emitTextCells(countText, countStartCol, countStartRow, 'blue', cells);
+  }
+
+  return (
+    <View
+      style={{
+        width: '100%',
+        height,
+        borderRadius,
+        overflow: 'hidden',
+        backgroundColor: LED_BG,
+        borderWidth: 1,
+        borderColor: LED_BORDER,
+      }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w !== width) setWidth(w);
+      }}
+    >
+      {width > 0 ? (
+        <Svg width={width} height={height}>
+          <LedDefs />
+          <Rect width={width} height={height} fill="url(#ledOffGrid)" />
+          {cells.map((c, i) => ledLitCell(c.cx, c.cy, c.palette, i))}
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
+
+// ─── LED SCORE PANEL ────────────────────────────────────────────
+// Inline LED scoreboard for the live card on My Arena. Reuses the same dot-matrix
+// glyphs and core gradient as the home-page LED tiles, but with its own pitch /
+// dot radius / bloom so the score reads at conversational distance.
+//
+// Layout: away_score | wide gap | home_score. Each character is 5×7 dots scaled
+// by SCORE_SCALE (one matrix dot → SCORE_SCALE × SCORE_SCALE grid cells).
+// 2× scale matches a real arena scoreboard's chunky pixel aesthetic.
+const SCORE_PITCH = 2.1;
+const SCORE_DOT_RADIUS = 0.85;
+const SCORE_CORE_RADIUS = 1.0;
+const SCORE_PAD = 5;
+const SCORE_SCALE = 2;
+const SCORE_GLYPH_GAP_COLS = 3;     // gap between each glyph (home, dash, away)
+const SCORE_CHAR_GAP_COLS = 1;      // small gap between digits within one number
+// Black bezel wrapping the LED face — gives it a real-scoreboard frame look.
+// Stack of layers (outer → inner):
+//   1. Drop shadow under the whole panel → physical lift off the card
+//   2. Bezel-gradient frame (darker matte black with a top→bottom sculpt)
+//   3. Recessed inner ring (slight darker stroke around the LED face)
+//   4. LED face with a thin top gloss strip → glass-screen highlight
+const SCORE_BEZEL_W = 4;
+// Bloom layers — scaled down with the smaller pitch. Stacked solid circles, no
+// filters. Score panel uses the WHITE palette: scores read as headline-bright
+// on the dark card background, distinct from the blue accents elsewhere on the
+// card.
+const SCORE_HALO_LAYERS = [
+  { r: 1.80, color: '#ffffff', opacity: 0.10 },
+  { r: 1.55, color: '#ffffff', opacity: 0.22 },
+  { r: 1.28, color: '#ffffff', opacity: 0.36 },
+  { r: 1.10, color: '#ffffff', opacity: 0.68 },
+] as const;
+
+function scoreCols(text: string): number {
+  let cols = 0;
+  for (let i = 0; i < text.length; i++) {
+    const m = DOT_MATRIX[text[i]];
+    if (!m) continue;
+    if (i > 0) cols += SCORE_CHAR_GAP_COLS;
+    cols += m[0].length * SCORE_SCALE;
+  }
+  return cols;
+}
+
+export function LedScorePanel({ awayScore, homeScore }: { awayScore: number; homeScore: number }) {
+  const homeStr = String(homeScore);
+  const awayStr = String(awayScore);
+  const dashStr = '-';
+
+  const homeColCount = scoreCols(homeStr);
+  const dashColCount = scoreCols(dashStr);
+  const awayColCount = scoreCols(awayStr);
+  // home_score | gap | dash | gap | away_score — three glyphs, two gaps.
+  const totalCols = homeColCount + SCORE_GLYPH_GAP_COLS + dashColCount + SCORE_GLYPH_GAP_COLS + awayColCount;
+  const totalRows = 7 * SCORE_SCALE;
+
+  const panelW = totalCols * SCORE_PITCH + 2 * SCORE_PAD;
+  const panelH = totalRows * SCORE_PITCH + 2 * SCORE_PAD;
+
+  // Grid-aligned coords (dot center at SCORE_PAD + col*PITCH + PITCH/2).
+  const gx = (col: number) => SCORE_PAD + col * SCORE_PITCH + SCORE_PITCH / 2;
+  const gy = (row: number) => SCORE_PAD + row * SCORE_PITCH + SCORE_PITCH / 2;
+
+  const cells: { cx: number; cy: number }[] = [];
+
+  function emitText(text: string, startCol: number) {
+    let cursor = startCol;
+    for (const ch of text) {
+      const m = DOT_MATRIX[ch];
+      if (!m) {
+        continue;
+      }
+      for (let r = 0; r < m.length; r++) {
+        for (let c = 0; c < m[r].length; c++) {
+          if (m[r][c] === 1) {
+            // 2× scale: one matrix dot lights a SCALE × SCALE block
+            for (let dy = 0; dy < SCORE_SCALE; dy++) {
+              for (let dx = 0; dx < SCORE_SCALE; dx++) {
+                cells.push({ cx: gx(cursor + c * SCORE_SCALE + dx), cy: gy(r * SCORE_SCALE + dy) });
+              }
+            }
+          }
+        }
+      }
+      cursor += m[0].length * SCORE_SCALE + SCORE_CHAR_GAP_COLS;
+    }
+  }
+
+  // Layout: home (left) → dash → away (right). The dash glyph rides the same
+  // emitText pipeline as the digits, so it inherits the off-grid alignment and
+  // bloom without any special-casing.
+  emitText(homeStr, 0);
+  emitText(dashStr, homeColCount + SCORE_GLYPH_GAP_COLS);
+  emitText(awayStr, homeColCount + SCORE_GLYPH_GAP_COLS + dashColCount + SCORE_GLYPH_GAP_COLS);
+
+  return (
+    // Container holds the 3D housing plus a separate "contact shadow" beneath it
+    // so the scoreboard reads as a physical object hovering above the card.
+    <View style={{ position: 'relative' }}>
+      {/* Contact / floor shadow — a soft dark blob below the housing. Sits a
+          touch wider than the body so it reads like cast light, not just an
+          attached drop shadow. */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 2,
+          right: 2,
+          bottom: -3,
+          height: 8,
+          borderRadius: 6,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          ...Platform.select({
+            ios: {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.55,
+              shadowRadius: 8,
+            },
+            android: { elevation: 4 },
+          }),
+        }}
+      />
+      {/* Outer ambient shadow — wide soft halo that lifts the box off the card. */}
+      <View
+        style={{
+          borderRadius: 9,
+          ...Platform.select({
+            ios: {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.6,
+              shadowRadius: 12,
+            },
+            android: { elevation: 10 },
+          }),
+        }}
+      >
+        {/* Inner key shadow — tight, sharp shadow giving a hard contact edge. */}
+        <View
+          style={{
+            borderRadius: 9,
+            ...Platform.select({
+              ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.85,
+                shadowRadius: 3,
+              },
+              android: {},
+            }),
+          }}
+        >
+          {/* Bezel — richer four-stop sculpt fakes a matte-metal housing with a
+              brighter lip on top and a darker recess at center. */}
+          <LinearGradient
+            colors={['#3d3d3d', '#1a1a1a', '#000000', '#1c1c1c']}
+            locations={[0, 0.18, 0.55, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              padding: SCORE_BEZEL_W,
+              borderRadius: 9,
+              borderWidth: 0.5,
+              borderColor: '#2a2a2a',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Top edge specular hairline — a single bright pixel-row highlight
+                that reads as light catching the front lip. */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 1,
+                right: 1,
+                height: 1,
+                backgroundColor: 'rgba(255,255,255,0.22)',
+              }}
+            />
+            {/* Bottom edge dark hairline — fakes the bezel's underside in
+                shadow. */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 1,
+                right: 1,
+                height: 1,
+                backgroundColor: 'rgba(0,0,0,0.9)',
+              }}
+            />
+            {/* Side wash — a faint left-to-right gradient on the bezel itself,
+                simulating overhead light wrapping the side faces. */}
+            <LinearGradient
+              colors={['rgba(255,255,255,0.05)', 'transparent', 'rgba(255,255,255,0.07)']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              pointerEvents="none"
+            />
+            {/* Four corner rivets / screws — the single detail that pushes this
+                from "card with gradient" to "real piece of hardware". */}
+            {[
+              { top: 2, left: 2 },
+              { top: 2, right: 2 },
+              { bottom: 2, left: 2 },
+              { bottom: 2, right: 2 },
+            ].map((pos, i) => (
+              <View
+                key={i}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  ...pos,
+                  width: 3,
+                  height: 3,
+                  borderRadius: 1.5,
+                  backgroundColor: '#050505',
+                  borderWidth: 0.5,
+                  borderColor: 'rgba(255,255,255,0.22)',
+                }}
+              />
+            ))}
+            {/* Recessed inner ring — narrow darker stroke between bezel and LED
+                face. */}
+            <View
+              style={{
+                padding: 1,
+                borderRadius: 6,
+                backgroundColor: '#000000',
+              }}
+            >
+              <View
+                style={{
+                  width: panelW,
+                  height: panelH,
+                  borderRadius: 5,
+                  overflow: 'hidden',
+                  backgroundColor: LED_BG,
+                }}
+              >
+                <Svg width={panelW} height={panelH}>
+                  <Defs>
+                    <Pattern id="ledScoreGrid" width={SCORE_PITCH} height={SCORE_PITCH} patternUnits="userSpaceOnUse">
+                      <Circle cx={SCORE_PITCH / 2} cy={SCORE_PITCH / 2} r={SCORE_DOT_RADIUS} fill={LED_OFF} />
+                    </Pattern>
+                    <RadialGradient id="led-score-core" cx="50%" cy="50%" r="50%">
+                      <Stop offset="0%" stopColor="#ffffff" />
+                      <Stop offset="70%" stopColor="#ffffff" />
+                      <Stop offset="100%" stopColor="#dadada" />
+                    </RadialGradient>
+                  </Defs>
+                  <Rect width={panelW} height={panelH} fill="url(#ledScoreGrid)" />
+                  {cells.map((c, i) => (
+                    <G key={i}>
+                      {SCORE_HALO_LAYERS.map((h, j) => (
+                        <Circle key={j} cx={c.cx} cy={c.cy} r={h.r} fill={h.color} fillOpacity={h.opacity} />
+                      ))}
+                      <Circle cx={c.cx} cy={c.cy} r={SCORE_CORE_RADIUS} fill="url(#led-score-core)" />
+                    </G>
+                  ))}
+                </Svg>
+                {/* Inner top shadow — bezel casts a shadow onto the glass face. */}
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.55)', 'transparent']}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3 }}
+                  pointerEvents="none"
+                />
+                {/* Glass-screen highlight — gloss strip across the very top of
+                    the LED face. */}
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0)']}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: Math.max(4, panelH * 0.22) }}
+                  pointerEvents="none"
+                />
+                {/* Diagonal specular streak — angled light catch across the
+                    glass surface. */}
+                <LinearGradient
+                  colors={['transparent', 'rgba(255,255,255,0.07)', 'transparent']}
+                  locations={[0.35, 0.5, 0.65]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                  pointerEvents="none"
+                />
+                {/* Edge vignette — slight darkening at the bottom for depth. */}
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.28)']}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                  pointerEvents="none"
+                />
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 // ─── JUMBOTRON SPORT ICONS (kept for full-size cards & getSportIcon) ──
 interface JBIconProps { color: string; size?: number }
@@ -220,6 +883,8 @@ const JBIcons: Record<string, React.FC<JBIconProps>> = {
 };
 
 // ─── PIXEL GRID OVERLAY ────────────────────────────────────────
+// Off-state pixels for the entire panel: same circle shape & size as the lit pixel cores.
+// Only color differs — these are dim (#0d1825) versus the bright lit core.
 export const PixelGrid = memo(function PixelGrid() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -227,7 +892,7 @@ export const PixelGrid = memo(function PixelGrid() {
         <Defs>
           <Pattern id="jbGrid" width="2" height="2" patternUnits="userSpaceOnUse">
             <Rect width="2" height="2" fill="transparent" />
-            <Rect x="0" y="0" width="1.5" height="1.5" rx="0.2" fill="rgba(255,255,255,0.04)" />
+            <Rect x="0.25" y="0.25" width="1.5" height="1.5" rx="0.75" fill={LED_OFF} />
           </Pattern>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#jbGrid)" />
@@ -268,64 +933,6 @@ const DeadPixels = memo(function DeadPixels({ visible }: { visible: boolean }) {
   );
 });
 
-// ─── SCANLINE (synced via global clock) ────────────────────────
-const SCAN_DURATION = 2500;
-export const ScanLine = memo(function ScanLine({ active }: { active: boolean }) {
-  // Sync all scanlines by calculating where we are in the cycle
-  const progress = useSharedValue(-24);
-
-  useEffect(() => {
-    if (active) {
-      // Start from where the global cycle currently is
-      const phase = (Date.now() % SCAN_DURATION) / SCAN_DURATION;
-      const startVal = -24 + phase * 74; // -24 to 50 range = 74
-      progress.value = startVal;
-      progress.value = withTiming(50, {
-        duration: SCAN_DURATION * (1 - phase),
-        easing: Easing.linear,
-      });
-      // After first partial cycle, start full repeating loop
-      const timer = setTimeout(() => {
-        progress.value = -24;
-        progress.value = withRepeat(
-          withTiming(50, { duration: SCAN_DURATION, easing: Easing.linear }),
-          -1,
-          false
-        );
-      }, SCAN_DURATION * (1 - phase));
-      return () => clearTimeout(timer);
-    } else {
-      progress.value = -24;
-    }
-  }, [active]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: progress.value }],
-  }));
-
-  if (!active) return null;
-
-  return (
-    <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', borderRadius: 3 }]} pointerEvents="none">
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            height: 24,
-          },
-          animStyle,
-        ]}
-      >
-        <LinearGradient
-          colors={['transparent', 'rgba(122,157,184,0.06)', 'rgba(255,255,255,0.03)', 'rgba(122,157,184,0.06)', 'transparent']}
-          style={{ flex: 1 }}
-        />
-      </Animated.View>
-    </View>
-  );
-});
 
 // ─── ORIGINAL LARGE 3D SPORT ICONS (kept for full-size cards & getSportIcon) ──
 
@@ -499,6 +1106,8 @@ interface SportCardProps {
   gameCount: number;
   index?: number;
   compact?: boolean;
+  tile?: boolean;
+  tileSize?: number;
   onPress?: () => void;
   isSelected?: boolean;
   hasActiveFilter?: boolean;
@@ -512,6 +1121,8 @@ export const SportCard = memo(function SportCard({
   gameCount,
   index = 0,
   compact = false,
+  tile = false,
+  tileSize = 86,
   onPress,
   isSelected = false,
   hasActiveFilter = false,
@@ -533,6 +1144,43 @@ export const SportCard = memo(function SportCard({
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+
+  // ═══════════════════════════════════════════════
+  // TILE: SQUARE LED PANEL (real-LED look — uniform pixel grid + 4-layer bloom)
+  // ═══════════════════════════════════════════════
+  if (tile) {
+    const isDimmed = hasActiveFilter && !isSelected;
+    const isChosen = hasActiveFilter && isSelected;
+    const borderColor = isChosen ? '#2a3a4a' : LED_BORDER;
+
+    return (
+      <AnimatedPressable
+        onPress={handlePress}
+        onPressIn={() => {
+          scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 12, stiffness: 300 });
+        }}
+        style={animatedStyle}
+      >
+        <View
+          style={{
+            width: tileSize,
+            height: tileSize,
+            borderRadius: 9,
+            overflow: 'hidden' as const,
+            backgroundColor: LED_BG,
+            borderWidth: 1,
+            borderColor,
+            opacity: isDimmed ? 0.45 : 1,
+          }}
+        >
+          <LedTilePanel sport={sport} gameCount={gameCount} size={tileSize} />
+        </View>
+      </AnimatedPressable>
+    );
+  }
 
   // ═══════════════════════════════════════════════
   // COMPACT: JUMBOTRON LED TILE (horizontal pill)
@@ -585,18 +1233,15 @@ export const SportCard = memo(function SportCard({
           {/* Pixel grid — ALWAYS visible */}
           <PixelGrid />
 
-          {/* Scanline sweep — on when lit */}
-          <ScanLine active={isLit} />
-
           {/* Content — all dot-matrix rendered */}
           <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, flex: 1, justifyContent: 'space-between' as const, zIndex: 4 }}>
             <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 }}>
               <View style={{ height: 22, overflow: 'visible' as const, justifyContent: 'center' as const }}>
-                <DotMatrixIcon sport={sport} litColor={isLit ? '#FFFFFF' : '#3a4a58'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={2} />
+                <DotMatrixIcon sport={sport} litColor={isLit ? '#FFFFFF' : '#3a4a58'} pixelSize={2} />
               </View>
-              <DotMatrixText text={displaySport(sport)} litColor={isLit ? '#9BB8CF' : '#4a5a68'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={2} />
+              <DotMatrixText text={displaySport(sport)} litColor={isLit ? '#9BB8CF' : '#4a5a68'} pixelSize={2} />
             </View>
-            <DotMatrixText text={String(gameCount)} litColor={isLit ? '#FFFFFF' : '#4a5a68'} dimColor={isDimmed ? 'rgba(255,255,255,0.02)' : DIM_PX} pixelSize={2} />
+            <DotMatrixText text={String(gameCount)} litColor={isLit ? '#FFFFFF' : '#4a5a68'} pixelSize={2} />
           </View>
 
         </View>
