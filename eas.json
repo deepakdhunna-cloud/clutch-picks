@@ -28,7 +28,8 @@
       },
       "android": {
         "distribution": "store"
-      }
+      },
+      "image": "latest"
     }
   },
   "submit": {
