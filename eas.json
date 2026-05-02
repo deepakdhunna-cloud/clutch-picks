@@ -18,9 +18,9 @@
         "EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY": "appl_ttiiqmHPmKTuvfALCxMccyWRjcE",
         "EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY": "goog_qpsKxRjYMoggqPCnnJBukFkeFbq",
         "EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY": "test_ySGTdedRmOLfYFyuTHWENpeZmiX",
-        "EXPO_PUBLIC_BACKEND_URL": "https://plush-helm.vibecode.run",
-        "EXPO_PUBLIC_VIBECODE_BACKEND_URL": "https://plush-helm.vibecode.run",
-        "BACKEND_URL": "https://plush-helm.vibecode.run",
+        "EXPO_PUBLIC_BACKEND_URL": "https://clutch-picks-production.up.railway.app",
+        "EXPO_PUBLIC_VIBECODE_BACKEND_URL": "https://clutch-picks-production.up.railway.app",
+        "BACKEND_URL": "https://clutch-picks-production.up.railway.app",
         "EXPO_PUBLIC_EXAMPLE_ENV_VAR": "test"
       },
       "ios": {
