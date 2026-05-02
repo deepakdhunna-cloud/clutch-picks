@@ -1,4 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
+import { revokeAppleToken } from "./appleAuth";
+import { features } from "../env";
 
 // Narrow prisma dependency — just the pieces we touch. Production callers
 // pass the real PrismaClient (satisfies structurally); tests cast a mock.
@@ -52,14 +54,44 @@ async function maybeRevokeAppleTokens(
       where: { userId, providerId: "apple" },
     });
     if (appleAccounts.length === 0) return;
-    console.warn(
-      "[delete-account] Apple token revocation not configured — skipping. " +
-        "Set APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY in Railway to enable. " +
-        "Apple Guideline 5.1.1(v) requires this before App Store submission.",
-    );
+
+    if (!features.appleRevoke) {
+      console.warn(
+        "[delete-account] Apple revocation env vars missing — skipping. " +
+          "Set APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY, APPLE_CLIENT_ID " +
+          "in Railway. Apple Guideline 5.1.1(v).",
+      );
+      return;
+    }
+
+    for (const acct of appleAccounts) {
+      const token = acct.refreshToken ?? acct.accessToken ?? null;
+      const tokenTypeHint = acct.refreshToken ? "refresh_token" : "access_token";
+      const result = await revokeAppleToken({ token, tokenTypeHint });
+
+      if (result.status === "revoked") {
+        console.log(
+          `[delete-account] apple revoke ok user=${userId} accountId=${acct.id} hint=${tokenTypeHint}`,
+        );
+      } else if (result.status === "failed") {
+        console.warn(
+          `[delete-account] apple revoke failed user=${userId} accountId=${acct.id} ` +
+            `http=${result.httpStatus} body=${result.body}`,
+        );
+      } else if (result.status === "error") {
+        console.warn(
+          `[delete-account] apple revoke error user=${userId} accountId=${acct.id}`,
+          result.error,
+        );
+      } else if (result.status === "skipped") {
+        console.warn(
+          `[delete-account] apple revoke skipped user=${userId} accountId=${acct.id} reason=${result.reason}`,
+        );
+      }
+    }
   } catch (err) {
     console.warn(
-      "[delete-account] Apple account lookup failed, continuing with deletion:",
+      "[delete-account] Apple account lookup or revoke flow failed, continuing with deletion:",
       err,
     );
   }

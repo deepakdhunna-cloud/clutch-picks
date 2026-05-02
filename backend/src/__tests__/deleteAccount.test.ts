@@ -104,7 +104,7 @@ describe("deleteUserAccount — core module", () => {
       console.warn = origWarn;
     }
     const warnArgs = warnSpy.mock.calls.flat().join(" ");
-    expect(warnArgs).toContain("Apple token revocation not configured");
+    expect(warnArgs).toContain("Apple revocation env vars missing");
     expect(warnArgs).toContain("APPLE_TEAM_ID");
   });
 
