@@ -134,76 +134,42 @@ export default function WelcomeScreen() {
         <View style={{ flex: 1 }} />
 
         {/* ── Buttons section — three distinct CTAs ── */}
-        <Animated.View entering={FadeInUp.delay(700).duration(700)} style={s.buttonsSection}>
+        <View style={s.buttonsSection}>
 
           {error ? (
-            <Animated.View entering={FadeIn.duration(300)} style={s.errorWrap}>
+            <View style={s.errorWrap}>
               <Text style={s.errorText}>{error}</Text>
-            </Animated.View>
+            </View>
           ) : null}
 
-          {/* Primary — Get Started (maroon gradient) */}
+          {/* Primary — Get Started (solid maroon) */}
           <Pressable
             onPress={onGetStartedPress}
             disabled={isLoading}
-            style={({ pressed }) => ({
-              height: 60,
-              borderRadius: 14,
-              overflow: 'hidden',
-              marginBottom: 12,
-              opacity: pressed ? 0.85 : isLoading ? 0.5 : 1,
-              shadowColor: MAROON,
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.35,
-              shadowRadius: 14,
-              elevation: 10,
-            })}
+            style={s.getStartedBtn}
           >
-            <LinearGradient
-              colors={['#A8132E', '#8B0A1F']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }}>
-                Get Started
-              </Text>
-            </LinearGradient>
+            <Text style={s.getStartedText}>Get Started</Text>
           </Pressable>
 
           {/* Secondary — Sign In (outlined teal) */}
           <Pressable
             onPress={onSignInPress}
             disabled={isLoading}
-            style={({ pressed }) => ({
-              height: 60,
-              borderRadius: 14,
-              backgroundColor: 'transparent',
-              borderWidth: 1.5,
-              borderColor: TEAL,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 16,
-              opacity: pressed ? 0.7 : isLoading ? 0.5 : 1,
-            })}
+            style={s.signInBtn2}
           >
-            <Text style={{ fontSize: 17, fontWeight: '700', color: TEAL, letterSpacing: 0.3 }}>
-              Sign In
-            </Text>
+            <Text style={s.signInBtnText2}>Sign In</Text>
           </Pressable>
 
           {/* Tertiary — Continue with Apple */}
-          <Animated.View style={appleAnimStyle}>
-            <Pressable
-              onPress={onApplePress}
-              disabled={isLoading}
-              style={[s.appleBtn, { opacity: isLoading ? 0.5 : 1 }]}
-            >
-              <AppleLogo size={20} color={TEAL_DARK} />
-              <Text style={s.appleBtnText}>Continue with Apple</Text>
-            </Pressable>
-          </Animated.View>
-        </Animated.View>
+          <Pressable
+            onPress={onApplePress}
+            disabled={isLoading}
+            style={s.appleBtn}
+          >
+            <AppleLogo size={20} color={TEAL_DARK} />
+            <Text style={s.appleBtnText}>Continue with Apple</Text>
+          </Pressable>
+        </View>
 
         {/* ── Terms — pinned at very bottom ── */}
         <Animated.View entering={FadeIn.delay(900).duration(500)} style={s.termsWrap}>
@@ -313,6 +279,44 @@ const s = StyleSheet.create({
   signInBtnText: {
     fontSize: 16, fontWeight: '700', color: '#FFFFFF',
     textAlign: 'center' as const,
+  },
+
+  // ── New bare-minimum button styles (hardcoded colors as defensive
+  //    measure against any theme import resolution issue) ──
+  getStartedBtn: {
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#8B0A1F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#8B0A1F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  getStartedText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  signInBtn2: {
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#7A9DB8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  signInBtnText2: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#7A9DB8',
+    letterSpacing: 0.3,
   },
 
   // ── Terms ──
