@@ -122,7 +122,7 @@ export default function WelcomeScreen() {
           <Pressable
             onPress={onGetStarted}
             disabled={isLoading}
-            style={({ pressed }) => [s.getStartedBtn, { opacity: pressed ? 0.85 : isLoading ? 0.5 : 1 }]}
+            style={s.getStartedBtn}
           >
             <Text style={s.getStartedText}>Get Started</Text>
           </Pressable>
@@ -130,7 +130,7 @@ export default function WelcomeScreen() {
           <Pressable
             onPress={onSignIn}
             disabled={isLoading}
-            style={({ pressed }) => [s.signInBtn, { opacity: pressed ? 0.7 : isLoading ? 0.5 : 1 }]}
+            style={s.signInBtn}
           >
             <Text style={s.signInText}>Sign In</Text>
           </Pressable>
@@ -138,7 +138,7 @@ export default function WelcomeScreen() {
           <Pressable
             onPress={onApple}
             disabled={isLoading}
-            style={({ pressed }) => [s.appleBtn, { opacity: pressed ? 0.85 : isLoading ? 0.5 : 1 }]}
+            style={s.appleBtn}
           >
             <AppleLogo size={20} color={TEAL_DARK} />
             <Text style={s.appleText}>Continue with Apple</Text>

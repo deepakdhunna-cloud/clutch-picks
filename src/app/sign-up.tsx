@@ -113,10 +113,7 @@ export default function SignUpScreen() {
             <Pressable
               onPress={handleContinue}
               disabled={isLoading || !email.trim()}
-              style={({ pressed }) => [
-                s.continueBtn,
-                { opacity: pressed ? 0.85 : isLoading || !email.trim() ? 0.4 : 1 },
-              ]}
+              style={[s.continueBtn, (isLoading || !email.trim()) && { opacity: 0.4 }]}
             >
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" />
