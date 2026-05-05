@@ -16,7 +16,9 @@ import {
   parseGameInjuries,
   toTeamInjuryReport,
   fetchGameInjuries,
+  mergePlayerAvailability,
 } from "../espnInjuries";
+import type { TeamInjuryReport } from "../espnStats";
 
 // Realistic shape based on ESPN's /summary?event=... response for a Lakers/Rockets game.
 const mockESPNResponse = {
@@ -237,5 +239,68 @@ describe("fetchGameInjuries — unsupported sports", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+});
+
+describe("mergePlayerAvailability", () => {
+  function emptyEspn(): TeamInjuryReport {
+    return {
+      out: [],
+      doubtful: [],
+      questionable: [],
+      totalOut: 0,
+      totalDoubtful: 0,
+      totalQuestionable: 0,
+    };
+  }
+
+  function paRow(name: string, status: string) {
+    // Structural — we only read playerName + status; Prisma row has more
+    // fields but they're irrelevant to this helper.
+    return { playerName: name, status };
+  }
+
+  it("uses PA exclusively when ESPN is empty (soccer path)", () => {
+    const result = mergePlayerAvailability(emptyEspn(), [
+      paRow("Mohamed Salah", "out"),
+      paRow("Virgil van Dijk", "questionable"),
+      paRow("Trent Alexander-Arnold", "available"), // ignored
+    ]);
+    expect(result.source).toBe("player-availability");
+    expect(result.out).toHaveLength(1);
+    expect(result.out[0]!.name).toBe("Mohamed Salah");
+    expect(result.totalOut).toBe(1);
+    expect(result.questionable).toHaveLength(1);
+    expect(result.questionable[0]!.name).toBe("Virgil van Dijk");
+    expect(result.totalQuestionable).toBe(1);
+  });
+
+  it("ESPN wins on duplicate player names", () => {
+    const espn: TeamInjuryReport = {
+      out: [{ name: "LeBron James", position: "F", detail: "Out (rest)" }],
+      doubtful: [],
+      questionable: [],
+      totalOut: 1,
+      totalDoubtful: 0,
+      totalQuestionable: 0,
+    };
+    const result = mergePlayerAvailability(espn, [
+      paRow("LeBron James", "doubtful"), // duplicate — ignored
+      paRow("Anthony Davis", "questionable"),
+    ]);
+    expect(result.source).toBe("merged");
+    expect(result.out).toHaveLength(1);
+    expect(result.out[0]!.detail).toBe("Out (rest)"); // ESPN's detail preserved
+    expect(result.doubtful).toHaveLength(0);
+    expect(result.questionable).toHaveLength(1);
+    expect(result.questionable[0]!.name).toBe("Anthony Davis");
+  });
+
+  it("returns unavailable when both sources empty", () => {
+    const result = mergePlayerAvailability(emptyEspn(), []);
+    expect(result.source).toBe("unavailable");
+    expect(result.out).toHaveLength(0);
+    expect(result.doubtful).toHaveLength(0);
+    expect(result.questionable).toHaveLength(0);
   });
 });

@@ -271,3 +271,115 @@ export function toTeamInjuryReport(
     totalQuestionable: questionable.length,
   };
 }
+
+// ─── PlayerAvailability merge ────────────────────────────────────────────
+// The Apify ingestion pipeline writes injury/availability signals to the
+// PlayerAvailability table on every cycle. ESPN's summary endpoint returns
+// empty for all soccer (EPL/MLS/UCL). The merger below joins both sources
+// so the key_player_availability factor finally has signal everywhere.
+
+/**
+ * Discriminator for the merged injury report.
+ *   - "espn-summary"        : only ESPN had data
+ *   - "player-availability" : only PlayerAvailability had data (soccer path)
+ *   - "merged"              : both sources contributed
+ *   - "unavailable"         : neither source had data
+ */
+export type InjurySourceTag =
+  | "espn-summary"
+  | "player-availability"
+  | "merged"
+  | "unavailable";
+
+/**
+ * TeamInjuryReport plus a source tag identifying which pipeline(s)
+ * contributed. Structurally a superset of TeamInjuryReport so it can be
+ * assigned to GameContext.homeInjuries / awayInjuries unchanged.
+ */
+export type MergedTeamInjuryReport = TeamInjuryReport & { source: InjurySourceTag };
+
+// Structural local type — Prisma's PlayerAvailability has more fields, but
+// these are the only two we read here. Importing from @prisma/client at the
+// type level would also work; structural keeps this helper trivially testable.
+type PlayerAvailabilityLike = {
+  playerName: string;
+  status: string;
+};
+
+/**
+ * Merge PlayerAvailability rows (from Apify ingestion) into a
+ * TeamInjuryReport already populated by ESPN's summary endpoint.
+ *
+ * - For soccer (EPL/MLS/UCL), ESPN returns no injury data, so PA is the
+ *   sole source.
+ * - For NBA/NHL/MLB, this is additive: PA fills gaps where ESPN's feed
+ *   is incomplete (and ESPN occasionally is, especially mid-day).
+ *
+ * De-dupe by lowercase trimmed playerName. ESPN row wins on conflict —
+ * its data is more authoritative for sports where ESPN does report.
+ *
+ * Status string -> bucket mapping:
+ *   - out, minutes_restriction       -> out
+ *   - doubtful                       -> doubtful
+ *   - questionable, game_time_decision -> questionable
+ *   - probable, available, anything else -> ignored (no signal)
+ */
+export function mergePlayerAvailability(
+  espnReport: TeamInjuryReport,
+  rows: PlayerAvailabilityLike[],
+): MergedTeamInjuryReport {
+  function bucketFor(status: string): "out" | "doubtful" | "questionable" | null {
+    const s = status.toLowerCase().trim();
+    if (s === "out" || s === "minutes_restriction") return "out";
+    if (s === "doubtful") return "doubtful";
+    if (s === "questionable" || s === "game_time_decision") return "questionable";
+    return null;
+  }
+
+  // Names already in ESPN report — used to de-dupe so ESPN row wins.
+  const espnNames = new Set<string>();
+  for (const list of [espnReport.out, espnReport.doubtful, espnReport.questionable]) {
+    for (const p of list) espnNames.add(p.name.toLowerCase().trim());
+  }
+
+  const out = [...espnReport.out];
+  const doubtful = [...espnReport.doubtful];
+  const questionable = [...espnReport.questionable];
+
+  let paAddedAny = false;
+  for (const row of rows) {
+    const bucket = bucketFor(row.status);
+    if (!bucket) continue;
+    const key = row.playerName.toLowerCase().trim();
+    if (espnNames.has(key)) continue;
+
+    // PA rows lack a position field; the raw status string is the most
+    // informative thing we have for the factor's "detail" slot.
+    const entry = { name: row.playerName, position: "", detail: row.status };
+    if (bucket === "out") out.push(entry);
+    else if (bucket === "doubtful") doubtful.push(entry);
+    else questionable.push(entry);
+    paAddedAny = true;
+  }
+
+  const espnHadData =
+    espnReport.out.length > 0 ||
+    espnReport.doubtful.length > 0 ||
+    espnReport.questionable.length > 0;
+
+  let source: InjurySourceTag;
+  if (!espnHadData && !paAddedAny) source = "unavailable";
+  else if (espnHadData && paAddedAny) source = "merged";
+  else if (paAddedAny) source = "player-availability";
+  else source = "espn-summary";
+
+  return {
+    out,
+    doubtful,
+    questionable,
+    totalOut: out.length,
+    totalDoubtful: doubtful.length,
+    totalQuestionable: questionable.length,
+    source,
+  };
+}

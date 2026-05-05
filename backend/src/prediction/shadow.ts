@@ -26,7 +26,7 @@ import {
   fetchGameWeather,
   fetchFixtureCongestion,
 } from "../lib/espnStats";
-import { fetchGameInjuries, toTeamInjuryReport } from "../lib/espnInjuries";
+import { fetchGameInjuries, toTeamInjuryReport, mergePlayerAvailability } from "../lib/espnInjuries";
 // fetchTeamShootingRecent removed — stats.nba.com IP-blocks Railway
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 import {
@@ -138,6 +138,13 @@ export async function buildGameContext(
 
   const isSoccer = ["EPL", "MLS", "UCL"].includes(sport);
 
+  // PlayerAvailability recency window — rows older than 72h are treated as
+  // stale (the ingestion pipeline writes expiresAt at +48h, so 72h is a
+  // safe upper bound). Wrap each query with a .catch so a DB hiccup never
+  // blocks prediction generation.
+  const PA_RECENCY_MS = 72 * 60 * 60 * 1000;
+  const paSinceDate = new Date(Date.now() - PA_RECENCY_MS);
+
   const [
     homeElo, awayElo,
     homeForm, awayForm,
@@ -150,6 +157,7 @@ export async function buildGameContext(
     homeFixtureCongestion, awayFixtureCongestion,
     leagueStandings,
     marketConsensus,
+    homeAvailability, awayAvailability,
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
@@ -175,13 +183,38 @@ export async function buildGameContext(
       : Promise.resolve(null),
     // Market consensus — all sports. Feature-flagged; returns null if no key.
     fetchMarketConsensus(sport, game.homeTeam.name, game.awayTeam.name, gameDate),
+    // PlayerAvailability rows from Apify ingestion. ESPN summary returns
+    // empty for soccer; PA is the sole source there. For NBA/NHL/MLB it
+    // fills gaps in ESPN's feed. Failure -> empty array; never throws.
+    prisma.playerAvailability
+      .findMany({
+        where: {
+          sport,
+          teamId: game.homeTeam.id,
+          updatedAt: { gte: paSinceDate },
+        },
+      })
+      .catch(() => [] as Array<{ playerName: string; status: string }>),
+    prisma.playerAvailability
+      .findMany({
+        where: {
+          sport,
+          teamId: game.awayTeam.id,
+          updatedAt: { gte: paSinceDate },
+        },
+      })
+      .catch(() => [] as Array<{ playerName: string; status: string }>),
   ]);
 
-  // Translate PlayerInjury[] → TeamInjuryReport so the existing factor
-  // code (which consumes bucketed out/doubtful/questionable arrays) sees
-  // real data with no shape change.
-  const homeInjuries = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
-  const awayInjuries = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
+  // Translate PlayerInjury[] → TeamInjuryReport, then merge in
+  // PlayerAvailability rows from the ingestion pipeline. The merger
+  // de-dupes by playerName (ESPN wins on conflict) and tags the result
+  // with source="merged" / "player-availability" / "espn-summary" /
+  // "unavailable" so downstream telemetry can attribute signal origin.
+  const homeInjuriesEspn = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
+  const awayInjuriesEspn = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
+  const homeInjuries = mergePlayerAvailability(homeInjuriesEspn, homeAvailability);
+  const awayInjuries = mergePlayerAvailability(awayInjuriesEspn, awayAvailability);
 
   // Manager-change lookup is synchronous + cheap; resolve it after the
   // parallel block so we don't have to branch on sport inside Promise.all.
