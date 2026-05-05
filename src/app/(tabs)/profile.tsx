@@ -424,6 +424,7 @@ export default function ProfileScreen() {
 
   // Sign out
   const handleSignOut = useCallback(() => {
+    console.log('[profile] handleSignOut tapped, opening modal');
     setSignOutConfirmVisible(true);
   }, []);
 
@@ -454,6 +455,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
+      {signOutConfirmVisible && console.log('[profile] signOutConfirmVisible is true — modal should render')}
       <ConfirmModal
         visible={signOutConfirmVisible}
         title="Sign Out"

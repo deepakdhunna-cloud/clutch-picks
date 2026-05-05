@@ -40,8 +40,9 @@ function ShieldCheckIcon({ size = 36 }: { size?: number }) {
 
 export default function VerifyOTP() {
   const router = useRouter();
-  const { email, otp: initialOtp } = useLocalSearchParams<{ email: string; otp?: string }>();
+  const { email, otp: initialOtp, mode } = useLocalSearchParams<{ email: string; otp?: string; mode?: string }>();
   const invalidateSession = useInvalidateSession();
+  const isSignIn = mode === 'signin';
 
   const [code, setCode] = useState(initialOtp ?? '');
   const [isLoading, setIsLoading] = useState(false);
@@ -97,7 +98,15 @@ export default function VerifyOTP() {
       }
       await invalidateSession();
       const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
-      router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
+      // Sign-in for an already-onboarded device skips onboarding straight
+      // to the app. Sign-up always routes to onboarding so a brand-new
+      // account walks through the intro even on a device where a previous
+      // user had completed it.
+      if (isSignIn && onboarded === 'true') {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/onboarding');
+      }
     }
   };
 
@@ -142,9 +151,11 @@ export default function VerifyOTP() {
               <ShieldCheckIcon size={36} />
             </View>
             <View style={{ height: 16 }} />
-            <Text style={s.title}>Verify Your Email</Text>
+            <Text style={s.title}>{isSignIn ? 'Welcome back' : 'Verify Your Email'}</Text>
             <View style={{ height: 8 }} />
-            <Text style={s.subtitle}>Code sent to</Text>
+            <Text style={s.subtitle}>
+              {isSignIn ? 'We sent a 6-digit code to your email' : 'Code sent to'}
+            </Text>
             <View style={{ height: 4 }} />
             <Text style={s.emailLabel}>{email ?? 'your email'}</Text>
           </Animated.View>

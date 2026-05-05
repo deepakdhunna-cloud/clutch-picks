@@ -51,8 +51,10 @@ export default function SignUpScreen() {
     if (result.error) {
       setError(result.error.message || 'Failed to send verification code');
     } else {
-      // Pass isNewUser flag so verify-otp routes to onboarding on success
-      router.push({ pathname: '/verify-otp' as any, params: { email: trimmed, isNewUser: 'true' } });
+      // mode='signup' tells verify-otp to always route to onboarding after
+      // verification, even if the device's clutch_onboarding_complete flag
+      // is still set from a previous account on this device.
+      router.push({ pathname: '/verify-otp' as any, params: { email: trimmed, mode: 'signup' } });
     }
   };
 
@@ -75,8 +77,8 @@ export default function SignUpScreen() {
 
           {/* Title */}
           <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-            <Text style={s.title}>Create Account</Text>
-            <Text style={s.subtitle}>Enter your email and we'll send you a verification code to get started.</Text>
+            <Text style={s.title}>Get Started</Text>
+            <Text style={s.subtitle}>Enter your email to create your account.</Text>
           </Animated.View>
 
           <View style={{ height: 32 }} />
@@ -117,7 +119,7 @@ export default function SignUpScreen() {
               style={({ pressed }) => ({ opacity: pressed ? 0.85 : isLoading ? 0.6 : 1 })}
             >
               <View style={s.submitBtn}>
-                <Text style={s.submitBtnText}>{isLoading ? 'Sending Code...' : 'Create Account'}</Text>
+                <Text style={s.submitBtnText}>{isLoading ? 'Sending Code...' : 'Continue'}</Text>
               </View>
             </Pressable>
           </Animated.View>

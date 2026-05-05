@@ -13,6 +13,7 @@ import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Haptics from 'expo-haptics';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { AuthBackground } from '@/components/AuthBackground';
@@ -73,17 +74,11 @@ export default function WelcomeScreen() {
     }
   };
 
-  // ── Button press animation ──
+  // ── Button press animation (Apple only — primary/secondary use Pressable scale) ──
   const appleScale = useSharedValue(1);
-  const emailScale = useSharedValue(1);
-
   const appleAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: appleScale.value }],
   }));
-  const emailAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: emailScale.value }],
-  }));
-
   const onApplePress = () => {
     appleScale.value = withSequence(
       withSpring(0.95, { damping: 15, stiffness: 300 }),
@@ -91,11 +86,13 @@ export default function WelcomeScreen() {
     );
     handleAppleSignIn();
   };
-  const onEmailPress = () => {
-    emailScale.value = withSequence(
-      withSpring(0.95, { damping: 15, stiffness: 300 }),
-      withSpring(1, { damping: 12, stiffness: 200 })
-    );
+
+  const onGetStartedPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('/sign-up' as any);
+  };
+  const onSignInPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/sign-in' as any);
   };
 
@@ -133,7 +130,7 @@ export default function WelcomeScreen() {
           </Animated.View>
         </View>
 
-        {/* ── Buttons section — all three stacked together ── */}
+        {/* ── Buttons section — three distinct CTAs ── */}
         <Animated.View entering={FadeInUp.delay(700).duration(700)} style={s.buttonsSection}>
 
           {error ? (
@@ -142,34 +139,57 @@ export default function WelcomeScreen() {
             </Animated.View>
           ) : null}
 
-          {/* Email button — frosted glass with coral tint */}
-          <Animated.View style={emailAnimStyle}>
-            <Pressable
-              onPress={onEmailPress}
-              disabled={isLoading}
-              style={[s.emailBtn, { opacity: isLoading ? 0.5 : 1 }]}
+          {/* Primary — Get Started (maroon gradient) */}
+          <Pressable
+            onPress={onGetStartedPress}
+            disabled={isLoading}
+            style={({ pressed }) => ({
+              height: 60,
+              borderRadius: 14,
+              overflow: 'hidden',
+              marginBottom: 12,
+              opacity: pressed ? 0.85 : isLoading ? 0.5 : 1,
+              shadowColor: MAROON,
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.35,
+              shadowRadius: 14,
+              elevation: 10,
+            })}
+          >
+            <LinearGradient
+              colors={['#A8132E', '#8B0A1F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             >
-              <LinearGradient
-                colors={[`${MAROON}45`, `${MAROON}28`, `${MAROON}38`]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.btnGradient}
-              >
-                <Text style={s.emailBtnText}>Get Started with Email</Text>
-              </LinearGradient>
-            </Pressable>
-          </Animated.View>
-
-          {/* Sign in button — glass style */}
-          <Pressable onPress={() => router.push('/sign-in')} disabled={isLoading}>
-            {({ pressed }) => (
-              <View style={[s.signInBtn, { opacity: pressed ? 0.7 : 1 }]}>
-                <Text style={s.signInBtnText}>I already have an account</Text>
-              </View>
-            )}
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }}>
+                Get Started
+              </Text>
+            </LinearGradient>
           </Pressable>
 
-          {/* Apple button — solid white with badge blue text */}
+          {/* Secondary — Sign In (outlined teal) */}
+          <Pressable
+            onPress={onSignInPress}
+            disabled={isLoading}
+            style={({ pressed }) => ({
+              height: 60,
+              borderRadius: 14,
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              borderColor: TEAL,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+              opacity: pressed ? 0.7 : isLoading ? 0.5 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 17, fontWeight: '700', color: TEAL, letterSpacing: 0.3 }}>
+              Sign In
+            </Text>
+          </Pressable>
+
+          {/* Tertiary — Continue with Apple */}
           <Animated.View style={appleAnimStyle}>
             <Pressable
               onPress={onApplePress}
@@ -236,10 +256,9 @@ const s = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // ── Buttons section — grouped together ──
+  // ── Buttons section — three distinct CTAs ──
   buttonsSection: {
-    paddingHorizontal: 24,
-    gap: 14,
+    paddingHorizontal: 20,
     marginBottom: 24,
   },
 

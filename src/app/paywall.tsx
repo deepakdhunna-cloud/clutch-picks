@@ -239,7 +239,9 @@ export default function PaywallScreen() {
     if (result.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await checkSubscription();
-      router.back();
+      // router.replace (not router.back) — onboarding+paywall users would
+      // otherwise pop back to onboarding and re-trigger the paywall, looping.
+      router.replace('/(tabs)');
     } else if (result.reason === 'sdk_error') {
       const error = result.error as any;
       if (!error?.userCancelled) {
@@ -259,7 +261,7 @@ export default function PaywallScreen() {
       if (hasActive) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Restored!', 'Your subscription has been restored.', [
-          { text: 'OK', onPress: () => router.back() },
+          { text: 'OK', onPress: () => router.replace('/(tabs)') },
         ]);
       } else {
         Alert.alert('No Subscription Found', 'No previous subscription was found for this account.');
@@ -503,7 +505,7 @@ export default function PaywallScreen() {
                           const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: promoCode.trim(), rcUserId });
                           await checkSubscription();
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                          Alert.alert('Code Applied!', result.message, [{ text: 'OK', onPress: () => router.back() }]);
+                          Alert.alert('Code Applied!', result.message, [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]);
                         } catch (error: any) {
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                           Alert.alert('Invalid Code', error?.message || 'This code could not be applied.');
