@@ -454,6 +454,15 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
+      <ConfirmModal
+        visible={signOutConfirmVisible}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        destructive
+        onConfirm={handleConfirmSignOut}
+        onCancel={() => setSignOutConfirmVisible(false)}
+      />
       <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
 
         {/* ── PAGE HEADER ── */}
@@ -754,16 +763,6 @@ export default function ProfileScreen() {
         </View>
 
       </Animated.ScrollView>
-
-      <ConfirmModal
-        visible={signOutConfirmVisible}
-        title="Sign Out"
-        message="Are you sure you want to sign out?"
-        confirmLabel="Sign Out"
-        destructive
-        onConfirm={handleConfirmSignOut}
-        onCancel={() => setSignOutConfirmVisible(false)}
-      />
     </SafeAreaView>
   );
 }

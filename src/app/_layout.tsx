@@ -8,7 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { enableScreens } from 'react-native-screens';
 import { useSession } from '@/lib/auth/use-session';
 import { View, AppState, Platform } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { SplashProvider, useSplash } from '@/lib/splash-context';
@@ -146,14 +146,31 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
   useNotificationRegistration();
   useNotificationNavigation(router);
 
-  // Re-check onboarding status whenever the session changes — if a user
-  // signs out and signs back in (or deletes their account), the flag may
-  // have been cleared and we need to re-route to onboarding.
+  // Re-check onboarding flag ONLY on auth-state transitions:
+  //   - Initial mount
+  //   - Sign-in (was anonymous, now has a user)
+  //   - Sign-out (had a user, now anonymous)
+  // Within an authenticated session, RC purchases trigger session
+  // refreshes that change session.user.id internals — we must NOT
+  // re-read on those, because the flag write from completing onboarding
+  // hasn't necessarily landed yet.
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    AsyncStorage.getItem('clutch_onboarding_complete').then((val) => {
-      setOnboardingDone(val === 'true');
-      setOnboardingChecked(true);
-    });
+    const currentId = session?.user?.id ?? null;
+    const prevId = prevUserIdRef.current;
+
+    const isFirstRun = prevId === undefined;
+    const wasSignedOut = prevId === null && currentId !== null;
+    const wasSignedIn = prevId !== null && currentId === null;
+
+    if (isFirstRun || wasSignedOut || wasSignedIn) {
+      AsyncStorage.getItem('clutch_onboarding_complete').then((val) => {
+        setOnboardingDone(val === 'true');
+        setOnboardingChecked(true);
+      });
+    }
+
+    prevUserIdRef.current = currentId;
   }, [session?.user?.id]);
 
   // Configure focus manager for React Query - refetch when app comes to foreground

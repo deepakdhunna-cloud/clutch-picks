@@ -81,7 +81,7 @@ export function ConfirmModal({
           >
             {message}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -89,6 +89,7 @@ export function ConfirmModal({
               }}
               style={({ pressed }) => ({
                 flex: 1,
+                marginRight: 5,
                 backgroundColor: 'rgba(255,255,255,0.08)',
                 paddingVertical: 12,
                 borderRadius: 10,
@@ -117,6 +118,7 @@ export function ConfirmModal({
               }}
               style={({ pressed }) => ({
                 flex: 1,
+                marginLeft: 5,
                 backgroundColor: destructive ? '#8B0A1F' : '#2563EB',
                 paddingVertical: 12,
                 borderRadius: 10,
