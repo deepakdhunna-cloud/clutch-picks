@@ -130,6 +130,9 @@ export default function WelcomeScreen() {
           </Animated.View>
         </View>
 
+        {/* Flex spacer pushes buttons to bottom */}
+        <View style={{ flex: 1 }} />
+
         {/* ── Buttons section — three distinct CTAs ── */}
         <Animated.View entering={FadeInUp.delay(700).duration(700)} style={s.buttonsSection}>
 
@@ -223,9 +226,10 @@ const s = StyleSheet.create({
 
   // ── Logo section — sits in the upper portion ──
   logoSection: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: 60,
+    paddingBottom: 40,
   },
 
   logoBlock: { alignItems: 'center' },
@@ -259,7 +263,7 @@ const s = StyleSheet.create({
   // ── Buttons section — three distinct CTAs ──
   buttonsSection: {
     paddingHorizontal: 20,
-    marginBottom: 24,
+    paddingBottom: 16,
   },
 
   errorWrap: {
