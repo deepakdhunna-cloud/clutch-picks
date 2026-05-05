@@ -22,6 +22,8 @@ import { displaySport } from '@/lib/display-confidence';
 import { authClient } from '@/lib/auth/auth-client';
 import { GameWithPrediction, GameStatus } from '@/types/sports';
 import { isRevenueCatEnabled, logoutUser } from '@/lib/revenuecatClient';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -250,6 +252,7 @@ export default function ProfileScreen() {
   const { data: allGames } = useGames();
   const invalidateSession = useInvalidateSession();
   const scrollHandler = useHideOnScroll();
+  const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ['profile'],
@@ -420,23 +423,23 @@ export default function ProfileScreen() {
   const earnedCount = achievements.filter((a) => a.earned).length;
 
   // Sign out
-  const handleSignOut = useCallback(async () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out', style: 'destructive',
-        onPress: async () => {
-          try {
-            await authClient.signOut();
-            if (isRevenueCatEnabled()) { try { await logoutUser(); } catch {} }
-            await invalidateSession();
-            router.replace('/welcome');
-          } catch {
-            Alert.alert('Error', 'Failed to sign out. Please try again.');
-          }
-        },
-      },
-    ]);
+  const handleSignOut = useCallback(() => {
+    setSignOutConfirmVisible(true);
+  }, []);
+
+  const handleConfirmSignOut = useCallback(async () => {
+    setSignOutConfirmVisible(false);
+    try {
+      await authClient.signOut();
+      if (isRevenueCatEnabled()) { try { await logoutUser(); } catch {} }
+      // Clear stale onboarding flag so next sign-in re-checks freshly.
+      await AsyncStorage.removeItem('clutch_onboarding_complete').catch(() => {});
+      await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
+      await invalidateSession();
+      router.replace('/welcome');
+    } catch {
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
   }, [invalidateSession, router]);
 
   // Loading
@@ -751,6 +754,16 @@ export default function ProfileScreen() {
         </View>
 
       </Animated.ScrollView>
+
+      <ConfirmModal
+        visible={signOutConfirmVisible}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        destructive
+        onConfirm={handleConfirmSignOut}
+        onCancel={() => setSignOutConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -14,6 +14,7 @@ import { useInvalidateSession } from '@/lib/auth/use-session';
 import { useSubscription } from '@/lib/subscription-context';
 import { isRevenueCatEnabled, logoutUser, restorePurchases, getCustomerInfo } from '@/lib/revenuecatClient';
 import { api } from '@/lib/api/api';
+import { ConfirmModal } from '@/components/ConfirmModal';
 
 interface SettingItemProps {
   icon: any;
@@ -106,6 +107,7 @@ export default function SettingsScreen() {
   const [promoModalVisible, setPromoModalVisible] = useState(false);
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const { isPremium, isLoading: isSubscriptionLoading, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
 
@@ -219,32 +221,26 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all your data. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              await api.delete('/api/profile/delete-account');
-              if (isRevenueCatEnabled()) {
-                await logoutUser();
-              }
-              await SecureStore.deleteItemAsync('vibecode_session_token').catch(() => {});
-              await SecureStore.deleteItemAsync('vibecode_refresh_token').catch(() => {});
-              await invalidateSession();
-              router.replace('/welcome');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete account. Please try again or contact support.');
-            }
-          },
-        },
-      ]
-    );
+    setDeleteConfirmVisible(true);
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    setDeleteConfirmVisible(false);
+    try {
+      await api.delete('/api/profile/delete-account');
+      if (isRevenueCatEnabled()) {
+        await logoutUser();
+      }
+      await SecureStore.deleteItemAsync('vibecode_session_token').catch(() => {});
+      await SecureStore.deleteItemAsync('vibecode_refresh_token').catch(() => {});
+      // Clear ALL stale local state so re-signin shows onboarding fresh.
+      await AsyncStorage.removeItem('clutch_onboarding_complete').catch(() => {});
+      await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
+      await invalidateSession();
+      router.replace('/welcome');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete account. Please try again or contact support.');
+    }
   };
 
   return (
@@ -487,6 +483,16 @@ export default function SettingsScreen() {
             </Pressable>
           </Modal>
         ) : null}
+
+        <ConfirmModal
+          visible={deleteConfirmVisible}
+          title="Delete Account"
+          message="This will permanently delete your account and all your data. This action cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={handleConfirmDeleteAccount}
+          onCancel={() => setDeleteConfirmVisible(false)}
+        />
       </SafeAreaView>
     </View>
   );

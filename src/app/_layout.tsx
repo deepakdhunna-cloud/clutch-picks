@@ -146,13 +146,15 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
   useNotificationRegistration();
   useNotificationNavigation(router);
 
-  // Pre-check onboarding status once on mount
+  // Re-check onboarding status whenever the session changes — if a user
+  // signs out and signs back in (or deletes their account), the flag may
+  // have been cleared and we need to re-route to onboarding.
   useEffect(() => {
     AsyncStorage.getItem('clutch_onboarding_complete').then((val) => {
       setOnboardingDone(val === 'true');
       setOnboardingChecked(true);
     });
-  }, []);
+  }, [session?.user?.id]);
 
   // Configure focus manager for React Query - refetch when app comes to foreground
   useEffect(() => {
