@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "Com.vibecode.clutchpicks-xzrxme",
-      "buildNumber": "26",
+      "buildNumber": "27",
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "CLUTCH PICKS uses the camera to capture photos inside the app before you publish them.",
