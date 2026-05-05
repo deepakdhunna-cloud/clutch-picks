@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, KeyboardAvoidingView,
-  Platform, ScrollView, StatusBar, StyleSheet,
+  View, Text, TextInput, Pressable, StyleSheet, StatusBar,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { AuthBackground } from '@/components/AuthBackground';
-import { BG, TEAL, MAROON } from '@/lib/theme';
 
+const { width: W } = Dimensions.get('window');
 
-function BackArrow({ size = 20 }: { size?: number }) {
+const MAROON = '#8B0A1F';
+const TEAL = '#7A9DB8';
+const BG = '#040608';
+
+function BackArrow({ size = 22 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M15 18L9 12L15 6" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -19,27 +24,25 @@ function BackArrow({ size = 20 }: { size?: number }) {
   );
 }
 
-function EnvelopeIcon({ size = 18 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V17C21 18.1046 20.1046 19 19 19H5C3.89543 19 3 18.1046 3 17V7Z" stroke={TEAL} strokeWidth={1.5} />
-      <Path d="M3 7L12 13L21 7" stroke={TEAL} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
 export default function SignUpScreen() {
-  const [email, setEmail] = useState('');
+  const [email, setEmailInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignUp = async () => {
+  const handleContinue = async () => {
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed) { setError('Please enter your email'); return; }
-    if (!trimmed.includes('@') || !trimmed.includes('.')) { setError('Please enter a valid email'); return; }
+    if (!trimmed) {
+      setError('Please enter your email');
+      return;
+    }
+    if (!trimmed.includes('@') || !trimmed.includes('.')) {
+      setError('Please enter a valid email');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const result = await authClient.emailOtp.sendVerificationOtp({
       email: trimmed,
@@ -49,119 +52,181 @@ export default function SignUpScreen() {
     setIsLoading(false);
 
     if (result.error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(result.error.message || 'Failed to send verification code');
-    } else {
-      // mode='signup' tells verify-otp to always route to onboarding after
-      // verification, even if the device's clutch_onboarding_complete flag
-      // is still set from a previous account on this device.
-      router.push({ pathname: '/verify-otp' as any, params: { email: trimmed, mode: 'signup' } });
+      return;
     }
+
+    router.push({
+      pathname: '/verify-otp' as any,
+      params: { email: trimmed, mode: 'signup' },
+    });
   };
 
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" />
       <AuthBackground faint />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
         >
-          {/* Back button */}
-          <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32 }}>
-            <Pressable onPress={() => router.back()} hitSlop={16} style={s.backBtn}>
-              <BackArrow />
-            </Pressable>
-          </Animated.View>
+          {/* Back arrow */}
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={16}
+            style={s.backBtn}
+          >
+            <BackArrow />
+          </Pressable>
 
-          {/* Title */}
-          <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          {/* Hero */}
+          <View style={s.hero}>
             <Text style={s.title}>Get Started</Text>
-            <Text style={s.subtitle}>Enter your email to create your account.</Text>
-          </Animated.View>
+            <Text style={s.subtitle}>Enter your email to create your account</Text>
+          </View>
 
-          <View style={{ height: 32 }} />
+          {/* Form */}
+          <View style={s.form}>
+            <Text style={s.label}>Email</Text>
+            <TextInput
+              value={email}
+              onChangeText={(v) => { setEmailInput(v); setError(null); }}
+              placeholder="you@email.com"
+              placeholderTextColor="rgba(255,255,255,0.30)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              keyboardType="email-address"
+              style={s.input}
+              editable={!isLoading}
+            />
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
+          </View>
 
-          {/* Email field */}
-          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-            <Text style={s.label}>EMAIL</Text>
-            <View style={[s.inputContainer, error ? { borderColor: '#EF444480' } : null]}>
-              <EnvelopeIcon />
-              <TextInput
-                style={s.input}
-                placeholder="your@email.com"
-                placeholderTextColor="rgba(255,255,255,0.2)"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                autoFocus
-                value={email}
-                onChangeText={(t) => { setEmail(t); setError(null); }}
-                editable={!isLoading}
-                returnKeyType="go"
-                onSubmitEditing={handleSignUp}
-              />
-            </View>
-          </Animated.View>
+          {/* Spacer */}
+          <View style={{ flex: 1 }} />
 
-          {error ? (
-            <Animated.Text entering={FadeIn.duration(200)} style={s.error}>{error}</Animated.Text>
-          ) : null}
-
-          <View style={{ height: 24 }} />
-
-          {/* Create Account button */}
-          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          {/* Continue button */}
+          <View style={s.buttonWrap}>
             <Pressable
-              onPress={handleSignUp}
-              disabled={isLoading}
-              style={({ pressed }) => ({ opacity: pressed ? 0.85 : isLoading ? 0.6 : 1 })}
+              onPress={handleContinue}
+              disabled={isLoading || !email.trim()}
+              style={({ pressed }) => [
+                s.continueBtn,
+                { opacity: pressed ? 0.85 : isLoading || !email.trim() ? 0.4 : 1 },
+              ]}
             >
-              <View style={s.submitBtn}>
-                <Text style={s.submitBtnText}>{isLoading ? 'Sending Code...' : 'Continue'}</Text>
-              </View>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={s.continueText}>Continue</Text>
+              )}
             </Pressable>
-          </Animated.View>
-
-          <View style={{ flex: 1, minHeight: 40 }} />
-
-          {/* Switch to Sign In */}
-          <Animated.View entering={FadeIn.delay(400).duration(400)} style={{ alignItems: 'center', paddingBottom: 40 }}>
-            <Text style={s.switchText}>
+            <Text style={s.disclaimer}>
               Already have an account?{' '}
-              <Text style={s.switchLink} onPress={() => router.replace('/sign-in')}>Sign In</Text>
+              <Text
+                style={s.disclaimerLink}
+                onPress={() => router.replace('/sign-in' as any)}
+              >
+                Sign In
+              </Text>
             </Text>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1 },
   backBtn: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 44,
+    height: 44,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 8,
   },
-  title: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
-  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.4)', lineHeight: 21 },
-  label: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, marginBottom: 8 },
-  inputContainer: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 16, height: 48,
+  hero: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 32,
   },
-  input: { flex: 1, color: '#FFFFFF', fontSize: 15, padding: 0 },
-  error: { color: '#EF4444', fontSize: 13, marginTop: 10 },
-  submitBtn: {
-    backgroundColor: MAROON, borderRadius: 14, height: 54,
-    alignItems: 'center', justifyContent: 'center',
+  title: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
-  submitBtnText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  switchText: { fontSize: 13, color: 'rgba(255,255,255,0.4)' },
-  switchLink: { color: MAROON, fontWeight: '600' },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 22,
+  },
+  form: {
+    paddingHorizontal: 24,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  input: {
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    paddingHorizontal: 16,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  buttonWrap: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  continueBtn: {
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: MAROON,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: MAROON,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  continueText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  disclaimer: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  disclaimerLink: {
+    color: TEAL,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
 });
