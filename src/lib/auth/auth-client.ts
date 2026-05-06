@@ -14,8 +14,11 @@ const TOKEN_KEY = "vibecode_bearer_token";
 
 function readToken(): string | null {
   try {
-    return SecureStore.getItem(TOKEN_KEY);
-  } catch {
+    const v = SecureStore.getItem(TOKEN_KEY);
+    if (__DEV__) console.log('[auth] readToken', v ? `present (len=${v.length})` : 'null');
+    return v;
+  } catch (e) {
+    if (__DEV__) console.log('[auth] readToken threw', e);
     return null;
   }
 }
@@ -23,13 +26,14 @@ function readToken(): string | null {
 function writeToken(token: string | null) {
   try {
     if (token) {
+      if (__DEV__) console.log('[auth] writeToken: storing token len=', token.length);
       SecureStore.setItem(TOKEN_KEY, token);
     } else {
-      // deleteItemAsync is the only delete API; fire and forget.
+      if (__DEV__) console.log('[auth] writeToken: clearing');
       void SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
     }
-  } catch {
-    /* ignore */
+  } catch (e) {
+    if (__DEV__) console.log('[auth] writeToken threw', e);
   }
 }
 
@@ -41,17 +45,26 @@ export const authClient = createAuthClient({
   fetchOptions: {
     onRequest: (context) => {
       const token = readToken();
+      const url = context.url?.toString() ?? '';
       if (token && !context.headers.has("authorization")) {
         context.headers.set("authorization", `Bearer ${token}`);
+        if (__DEV__) console.log('[auth] onRequest', url, 'sending Bearer');
+      } else if (__DEV__) {
+        console.log('[auth] onRequest', url, 'no token');
       }
       return context;
     },
     onSuccess: (context) => {
+      const url = context.request?.url?.toString() ?? "";
       const setAuthToken = context.response.headers.get("set-auth-token");
+      if (__DEV__) {
+        const headerNames: string[] = [];
+        context.response.headers.forEach((_v, k) => headerNames.push(k));
+        console.log('[auth] onSuccess', url, 'status', context.response.status, 'set-auth-token?', !!setAuthToken, 'headers:', headerNames.join(','));
+      }
       if (setAuthToken) {
         writeToken(setAuthToken);
       }
-      const url = context.request?.url?.toString() ?? "";
       if (url.includes("/sign-out")) {
         writeToken(null);
       }

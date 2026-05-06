@@ -92,6 +92,7 @@ export default function VerifyOTP() {
       // headers, but storing this directly removes any chance of a missed
       // header on iOS native fetch.
       const sessionToken = (result.data as any)?.token;
+      if (__DEV__) console.log('[auth] otp verify result.data keys:', Object.keys(result.data || {}), 'token?', !!sessionToken);
       if (sessionToken) setBearerToken(sessionToken);
       const userId = result.data?.user?.id;
       if (userId) {

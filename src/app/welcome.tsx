@@ -74,6 +74,7 @@ export default function WelcomeScreen() {
       // headers, but storing this directly removes any chance of a missed
       // header on iOS native fetch.
       const sessionToken = (result.data as any)?.token;
+      if (__DEV__) console.log('[auth] apple sign-in result.data keys:', Object.keys(result.data || {}), 'token?', !!sessionToken);
       if (sessionToken) setBearerToken(sessionToken);
       const userId = (result.data as any)?.user?.id;
       const userEmail = (result.data as any)?.user?.email;

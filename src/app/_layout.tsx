@@ -198,14 +198,21 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
     const inAuthGroup = segments[0] === 'sign-in' || segments[0] === 'sign-up' || segments[0] === 'verify-otp' || segments[0] === 'welcome' || segments[0] === 'onboarding';
     const inPublicGroup = segments[0] === 'privacy-policy' || segments[0] === 'terms';
 
+    if (__DEV__) {
+      console.log('[layout] guard: hasUser=', !!session?.user, 'segment=', segments[0], 'inAuthGroup=', inAuthGroup, 'onboardingDone=', onboardingDone);
+    }
+
     if (session?.user && inAuthGroup && segments[0] !== 'onboarding') {
       // Check if onboarding is complete — if not, send to onboarding first
       if (!onboardingDone) {
+        if (__DEV__) console.log('[layout] guard: signed in on auth screen → onboarding');
         router.replace('/onboarding');
       } else {
+        if (__DEV__) console.log('[layout] guard: signed in on auth screen → (tabs)');
         router.replace('/(tabs)');
       }
     } else if (!session?.user && !inAuthGroup && !inPublicGroup) {
+      if (__DEV__) console.log('[layout] guard: NOT signed in but on app screen → /welcome');
       router.replace('/welcome');
     }
   }, [session, isLoading, segments, onboardingChecked, onboardingDone]);
