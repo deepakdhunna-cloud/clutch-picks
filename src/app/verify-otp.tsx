@@ -7,7 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authClient } from '@/lib/auth/auth-client';
+import { authClient, setBearerToken } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { setUserId, setEmail } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
@@ -87,6 +87,12 @@ export default function VerifyOTP() {
       setCode('');
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
+      // Persist the bearer token from the response body as a fallback —
+      // the auth-client also captures `set-auth-token` from the response
+      // headers, but storing this directly removes any chance of a missed
+      // header on iOS native fetch.
+      const sessionToken = (result.data as any)?.token;
+      if (sessionToken) setBearerToken(sessionToken);
       const userId = result.data?.user?.id;
       if (userId) {
         await setUserId(userId);

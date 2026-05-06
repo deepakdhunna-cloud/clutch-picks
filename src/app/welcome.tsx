@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
-import { authClient } from '@/lib/auth/auth-client';
+import { authClient, setBearerToken } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { setUserId, setEmail as rcSetEmail, setDisplayName } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
@@ -69,6 +69,12 @@ export default function WelcomeScreen() {
         setError(result.error.message || 'Apple sign in failed');
         return;
       }
+      // Persist the bearer token from the response body as a fallback —
+      // the auth-client also captures `set-auth-token` from the response
+      // headers, but storing this directly removes any chance of a missed
+      // header on iOS native fetch.
+      const sessionToken = (result.data as any)?.token;
+      if (sessionToken) setBearerToken(sessionToken);
       const userId = (result.data as any)?.user?.id;
       const userEmail = (result.data as any)?.user?.email;
       const userName = (result.data as any)?.user?.name;

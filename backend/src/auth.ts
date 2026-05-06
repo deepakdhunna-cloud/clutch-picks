@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { emailOTP } from "better-auth/plugins";
+import { emailOTP, bearer } from "better-auth/plugins";
 import { prisma } from "./prisma";
 import { env } from "./env";
 
@@ -30,6 +30,12 @@ export const auth = betterAuth({
   ],
   plugins: [
     expo(),
+    // Bearer-token auth so native iOS clients can authenticate without
+    // depending on Set-Cookie response headers (which NSURLSession can
+    // strip before JS sees them, breaking the expo plugin's cookie store).
+    // The server emits `set-auth-token` after sign-in; the client
+    // captures it and sends `Authorization: Bearer <token>` on requests.
+    bearer(),
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
         // Send OTP via Vibecode SMTP service (no auth required)
