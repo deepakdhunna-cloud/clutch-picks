@@ -175,6 +175,58 @@ app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 100, keyGenerator: ipKe
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Auth debug trace — TEMP: while diagnosing the welcome-bounce issue.
+// Logs every /api/auth/* hit with: which auth headers were present
+// (authorization for bearer, cookie for the expo plugin), whether the
+// body referenced an idToken (apple flow), and the response status.
+// Look for tag=auth-trace in Railway logs to follow a single sign-in
+// attempt end-to-end.
+app.use("/api/auth/*", async (c, next) => {
+  const log = c.get("logger");
+  const hasAuthHeader = !!c.req.header("authorization");
+  const hasCookie = !!c.req.header("cookie");
+  const hasExpoOrigin = !!c.req.header("expo-origin");
+  let bodyMarker: string | undefined;
+  if (c.req.method === "POST") {
+    try {
+      const cloned = c.req.raw.clone();
+      const text = await cloned.text();
+      if (text.includes("idToken")) bodyMarker = "has-idToken";
+      else if (text.includes("\"otp\"")) bodyMarker = "has-otp";
+      else if (text.includes("\"email\"")) bodyMarker = "has-email";
+    } catch {
+      /* ignore */
+    }
+  }
+  log.info(
+    {
+      tag: "auth-trace",
+      phase: "request",
+      authPath: c.req.path,
+      method: c.req.method,
+      hasAuthHeader,
+      hasCookie,
+      hasExpoOrigin,
+      bodyMarker,
+    },
+    "auth request",
+  );
+  await next();
+  const setAuthToken = c.res.headers.get("set-auth-token");
+  const setCookie = c.res.headers.get("set-cookie");
+  log.info(
+    {
+      tag: "auth-trace",
+      phase: "response",
+      authPath: c.req.path,
+      status: c.res.status,
+      setAuthToken: setAuthToken ? `len=${setAuthToken.length}` : null,
+      setCookie: setCookie ? `len=${setCookie.length}` : null,
+    },
+    "auth response",
+  );
+});
+
 // Mount auth handler
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
