@@ -56,6 +56,7 @@ export const authClient = createAuthClient({
     },
     onSuccess: (context) => {
       const url = context.request?.url?.toString() ?? "";
+      console.log('[auth-client] onSuccess url:', context.request?.url?.toString(), 'has set-auth-token:', !!context.response.headers.get('set-auth-token'));
       const setAuthToken = context.response.headers.get("set-auth-token");
       if (__DEV__) {
         const headerNames: string[] = [];

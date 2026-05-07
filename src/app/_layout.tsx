@@ -193,6 +193,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 
   // Handle auth state changes and redirect accordingly
   useEffect(() => {
+    console.log('[guard]', segments[0], 'hasUser:', !!session?.user, 'loading:', isLoading, 'onbChk:', onboardingChecked, 'onbDone:', onboardingDone);
     if (isLoading || !onboardingChecked) return;
 
     const inAuthGroup = segments[0] === 'sign-in' || segments[0] === 'sign-up' || segments[0] === 'verify-otp' || segments[0] === 'welcome' || segments[0] === 'onboarding';
