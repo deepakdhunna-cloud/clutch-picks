@@ -47,6 +47,11 @@ const envSchema = z.object({
   // forward unhandled exceptions/captured errors. Optional so dev runs
   // without it.
   SENTRY_DSN: z.string().optional(),
+  // Resend transactional email — used for OTP sign-in delivery.
+  // Required in production for the email-OTP auth flow to work; in
+  // dev, OTP send will throw if missing so failures surface fast.
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional().default("noreply@clutchpicksapp.com"),
 
   // ─── Sign In with Apple — token revocation (App Store 5.1.1(v)) ─────
   APPLE_TEAM_ID: z.string().optional(),

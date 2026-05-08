@@ -38,24 +38,37 @@ export const auth = betterAuth({
     bearer(),
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
-        // Send OTP via Vibecode SMTP service (no auth required)
-        // Only send OTPs for sign-in right now.
         if (type !== "sign-in") return;
-
-        const response = await fetch("https://smtp.vibecodeapp.com/v1/send/otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: email,
-            code: String(otp),
-            fromName: "Clutch Picks",
-            lang: "en",
-          }),
+        if (!env.RESEND_API_KEY) {
+          throw new Error("RESEND_API_KEY is not set — cannot send OTP");
+        }
+        const { Resend } = await import("resend");
+        const resend = new Resend(env.RESEND_API_KEY);
+        const { data, error } = await resend.emails.send({
+          from: `Clutch Picks <${env.EMAIL_FROM}>`,
+          to: email,
+          subject: "Your Clutch Picks verification code",
+          html: `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0a0a0a;color:#ffffff;">
+              <div style="text-align:center;margin-bottom:32px;">
+                <h1 style="font-size:22px;font-weight:700;letter-spacing:1px;margin:0;color:#ffffff;">CLUTCH PICKS</h1>
+              </div>
+              <div style="background:#141414;border:1px solid #262626;border-radius:14px;padding:32px;text-align:center;">
+                <p style="font-size:14px;color:#a0a0a0;margin:0 0 16px;letter-spacing:0.5px;text-transform:uppercase;">Verification Code</p>
+                <p style="font-size:42px;font-weight:700;letter-spacing:8px;margin:0;color:#ffffff;font-family:'SF Mono',Menlo,monospace;">${otp}</p>
+                <p style="font-size:13px;color:#707070;margin:24px 0 0;">This code expires in 5 minutes.</p>
+              </div>
+              <p style="font-size:12px;color:#606060;text-align:center;margin:24px 0 0;line-height:1.5;">
+                If you didn't request this code, you can safely ignore this email.
+              </p>
+            </div>
+          `,
         });
-
-        if (!response.ok) {
-          const data = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(data?.error || `Failed to send OTP (HTTP ${response.status})`);
+        if (error) {
+          throw new Error(`Resend send failed: ${error.message ?? String(error)}`);
+        }
+        if (!data?.id) {
+          throw new Error("Resend returned no message id");
         }
       },
     }),
