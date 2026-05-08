@@ -175,6 +175,7 @@ export default function VerifyOTP() {
               ref={inputRef}
               value={code}
               onChangeText={(text) => {
+                console.log('[otp] onChangeText fired with:', JSON.stringify(text));
                 const cleaned = text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH);
                 setCode(cleaned);
                 setError(null);
