@@ -60,6 +60,7 @@ export const auth = betterAuth({
           from: `Clutch Picks <${env.EMAIL_FROM}>`,
           to: email,
           subject: "Your Clutch Picks verification code",
+          text: `Your Clutch Picks verification code is ${otp}\n\nThis code expires in 5 minutes.\n\nIf you didn't request this code, you can safely ignore this email.`,
           html: `
             <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;padding:48px 24px;">
               <div style="max-width:480px;margin:0 auto;">
@@ -74,11 +75,11 @@ export const auth = betterAuth({
                     <p style="font-size:13px;color:#707070;margin:24px 0 0;">Expires in 5 minutes</p>
                   </div>
                 </div>
-                <p style="font-size:12px;color:#505050;text-align:center;margin:28px 0 0;line-height:1.6;">
+                <p style="font-size:12px;color:#9a9a9a;text-align:center;margin:28px 0 0;line-height:1.6;">
                   If you didn't request this code, you can safely ignore this email.<br/>
                   Someone may have entered your email address by mistake.
                 </p>
-                <p style="font-size:11px;color:#3a3a3a;text-align:center;margin:24px 0 0;letter-spacing:1px;">
+                <p style="font-size:11px;color:#707070;text-align:center;margin:24px 0 0;letter-spacing:1px;">
                   CLUTCH PICKS · AI SPORTS PREDICTIONS
                 </p>
               </div>
