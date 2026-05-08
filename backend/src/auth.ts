@@ -43,26 +43,54 @@ export const auth = betterAuth({
           throw new Error("RESEND_API_KEY is not set — cannot send OTP");
         }
         const { Resend } = await import("resend");
+        const fs = await import("node:fs/promises");
+        const path = await import("node:path");
+        const url = await import("node:url");
+
         const resend = new Resend(env.RESEND_API_KEY);
+
+        // Read logo at send-time. File is small (~50KB) and Resend caches
+        // outbound; reading once per send is fine and keeps the module
+        // import-side-effect-free.
+        const here = path.dirname(url.fileURLToPath(import.meta.url));
+        const logoPath = path.join(here, "assets", "email-logo.png");
+        const logoBuffer = await fs.readFile(logoPath);
+
         const { data, error } = await resend.emails.send({
           from: `Clutch Picks <${env.EMAIL_FROM}>`,
           to: email,
           subject: "Your Clutch Picks verification code",
           html: `
-            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0a0a0a;color:#ffffff;">
-              <div style="text-align:center;margin-bottom:32px;">
-                <h1 style="font-size:22px;font-weight:700;letter-spacing:1px;margin:0;color:#ffffff;">CLUTCH PICKS</h1>
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;padding:48px 24px;">
+              <div style="max-width:480px;margin:0 auto;">
+                <div style="text-align:center;margin-bottom:36px;">
+                  <img src="cid:logo" alt="Clutch Picks" width="220" style="display:inline-block;max-width:220px;height:auto;" />
+                </div>
+                <div style="background:#141414;border:1px solid #1f1f1f;border-radius:16px;overflow:hidden;">
+                  <div style="height:3px;background:linear-gradient(90deg,#8B0A1F 0%,#7A9DB8 100%);"></div>
+                  <div style="padding:36px 32px;text-align:center;">
+                    <p style="font-size:11px;color:#7A9DB8;margin:0 0 18px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">Verification Code</p>
+                    <p style="font-size:44px;font-weight:700;letter-spacing:10px;margin:0;color:#ffffff;font-family:'SF Mono','Menlo','Consolas',monospace;line-height:1;">${otp}</p>
+                    <p style="font-size:13px;color:#707070;margin:24px 0 0;">Expires in 5 minutes</p>
+                  </div>
+                </div>
+                <p style="font-size:12px;color:#505050;text-align:center;margin:28px 0 0;line-height:1.6;">
+                  If you didn't request this code, you can safely ignore this email.<br/>
+                  Someone may have entered your email address by mistake.
+                </p>
+                <p style="font-size:11px;color:#3a3a3a;text-align:center;margin:24px 0 0;letter-spacing:1px;">
+                  CLUTCH PICKS · AI SPORTS PREDICTIONS
+                </p>
               </div>
-              <div style="background:#141414;border:1px solid #262626;border-radius:14px;padding:32px;text-align:center;">
-                <p style="font-size:14px;color:#a0a0a0;margin:0 0 16px;letter-spacing:0.5px;text-transform:uppercase;">Verification Code</p>
-                <p style="font-size:42px;font-weight:700;letter-spacing:8px;margin:0;color:#ffffff;font-family:'SF Mono',Menlo,monospace;">${otp}</p>
-                <p style="font-size:13px;color:#707070;margin:24px 0 0;">This code expires in 5 minutes.</p>
-              </div>
-              <p style="font-size:12px;color:#606060;text-align:center;margin:24px 0 0;line-height:1.5;">
-                If you didn't request this code, you can safely ignore this email.
-              </p>
             </div>
           `,
+          attachments: [
+            {
+              filename: "logo.png",
+              content: logoBuffer,
+              contentId: "logo",
+            },
+          ],
         });
         if (error) {
           throw new Error(`Resend send failed: ${error.message ?? String(error)}`);
