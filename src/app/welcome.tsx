@@ -32,16 +32,19 @@ export default function WelcomeScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const onGetStarted = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isLoading) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/sign-up' as any);
   };
 
   const onSignIn = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isLoading) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/sign-in' as any);
   };
 
   const onApple = async () => {
+    if (isLoading) return;
     try {
       setIsLoading(true);
       setError(null);
@@ -79,10 +82,18 @@ export default function WelcomeScreen() {
       const userId = (result.data as any)?.user?.id;
       const userEmail = (result.data as any)?.user?.email;
       const userName = (result.data as any)?.user?.name;
-      if (userId) await setUserId(userId);
-      if (userEmail) await rcSetEmail(userEmail);
-      if (userName) await setDisplayName(userName);
-      await invalidateSession();
+      try {
+        if (userId) await setUserId(userId);
+        if (userEmail) await rcSetEmail(userEmail);
+        if (userName) await setDisplayName(userName);
+      } catch (identityError) {
+        if (__DEV__) console.log('[auth] RevenueCat Apple identity sync failed:', identityError);
+      }
+      try {
+        await invalidateSession();
+      } catch (sessionError) {
+        if (__DEV__) console.log('[auth] Session cache invalidation failed:', sessionError);
+      }
       const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
       router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
     } catch (e: any) {
@@ -106,9 +117,9 @@ export default function WelcomeScreen() {
             style={s.logoImage}
             resizeMode="contain"
           />
-          <Text style={s.tagline}>AI-powered predictions{'\n'}across 8 leagues</Text>
+          <Text style={s.tagline}>AI-powered predictions{'\n'}across 11 leagues</Text>
           <View style={s.leagueStrip}>
-            {['NBA', 'NFL', 'MLB', 'NHL', 'MLS', 'EPL'].map((l) => (
+            {['NBA', 'NFL', 'MLB', 'NHL', 'IPL', 'Tennis', 'EPL'].map((l) => (
               <View key={l} style={s.leaguePill}>
                 <Text style={s.leaguePillText}>{l}</Text>
               </View>

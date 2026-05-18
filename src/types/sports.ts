@@ -10,6 +10,8 @@ export enum Sport {
   NCAAB = 'NCAAB',
   EPL = 'EPL',
   UCL = 'UCL',
+  IPL = 'IPL',
+  TENNIS = 'TENNIS',
 }
 
 export enum League {
@@ -21,6 +23,8 @@ export enum League {
   MLS = 'MLS',
   EPL = 'EPL',
   UCL = 'UCL',
+  IPL = 'IPL',
+  TENNIS = 'TENNIS',
   // College
   NCAAF = 'NCAAF',
   NCAAB = 'NCAAB',
@@ -42,6 +46,7 @@ export interface Team {
   logo?: string;
   record: string; // e.g., "10-3" or "45-20"
   color: string; // Primary team color
+  rank?: number;
 }
 
 export interface Game {
@@ -53,6 +58,7 @@ export interface Game {
   status: GameStatus;
   venue: string;
   tvChannel?: string;
+  watchSources?: string[];
   homeScore?: number;
   awayScore?: number;
   spread?: number; // Positive means home favored
@@ -60,6 +66,29 @@ export interface Game {
   marketFavorite?: 'home' | 'away';
   quarter?: string; // For live games: "Q1", "Q2", "3rd Period", etc.
   clock?: string; // Time remaining in period
+  seasonContext?: {
+    phase: string;
+    label: string;
+    detail: string;
+    source: string;
+  } | null;
+  homeLinescores?: number[];
+  awayLinescores?: number[];
+  liveState?: {
+    balls: number;
+    strikes: number;
+    outs: number;
+    onFirst: boolean;
+    onSecond: boolean;
+    onThird: boolean;
+    inningHalf: 'top' | 'bottom' | null;
+    inning?: number;
+    inningNumber?: number | null;
+    betweenInnings?: boolean;
+    inningTransition?: 'mid' | 'end' | null;
+    pitcher: { name: string | null; teamAbbr: string } | null;
+    batter: { name: string | null; teamAbbr: string } | null;
+  };
 }
 
 export interface PredictionFactor {
@@ -74,6 +103,7 @@ export interface Prediction {
   id: string;
   gameId: string;
   predictedWinner: 'home' | 'away';
+  predictedOutcome?: 'home' | 'away' | 'draw';
   confidence: number; // 0-100
   predictedSpread?: number;
   predictedTotal?: number;
@@ -92,6 +122,25 @@ export interface Prediction {
   isTossUp?: boolean; // true if game is within 45-55% probability range
   lowDataWarning?: boolean; // true when dataCoverage < 0.6
   ensembleDivergence?: boolean; // true when sub-models disagree on winner
+  projection?: {
+    engine: string;
+    iterations: number;
+    homeWinProbability: number;
+    awayWinProbability: number;
+    drawProbability?: number;
+    projectedHomeScore: number;
+    projectedAwayScore: number;
+    projectedSpread: number;
+    projectedTotal: number;
+    volatility: number;
+    upsetRisk: number;
+    signals: Array<{
+      key: string;
+      label: string;
+      value: number;
+      evidence: string;
+    }>;
+  };
   // Post-hoc comparison to SharpAPI market consensus. Populated only when
   // the backend has SHARPAPI_KEY set. NOT a prediction input.
   marketComparison?: {
@@ -171,6 +220,22 @@ export const SPORT_META: Record<Sport, SportMeta> = {
     name: 'Champions League',
     icon: 'soccer-ball',
     color: '#1A2A6C',
+    accentColor: '#FFFFFF',
+    isCollege: false,
+  },
+  [Sport.IPL]: {
+    sport: Sport.IPL,
+    name: 'IPL Cricket',
+    icon: 'cricket',
+    color: '#D7A21E',
+    accentColor: '#FFFFFF',
+    isCollege: false,
+  },
+  [Sport.TENNIS]: {
+    sport: Sport.TENNIS,
+    name: 'Tennis',
+    icon: 'tennis',
+    color: '#2E7D5B',
     accentColor: '#FFFFFF',
     isCollege: false,
   },

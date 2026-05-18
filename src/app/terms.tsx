@@ -118,7 +118,7 @@ export default function TermsScreen() {
                       Terms and Conditions
                     </Text>
                     <Text className="text-white/70 text-xs mb-2">
-                      Last Updated: March 2026
+                      Last Updated: May 14, 2026
                     </Text>
 
                     <View style={{ marginTop: 16 }}>
@@ -168,7 +168,7 @@ export default function TermsScreen() {
                         7. Subscription Terms
                       </Text>
                       <Text className="text-white/80 text-sm leading-5 mb-4">
-                        Clutch Picks offers an optional auto-renewable subscription (Clutch Pro) that provides access to AI predictions, confidence ratings, and detailed game analysis.{'\n\n'}Payment is charged to your Apple ID account at confirmation of purchase. The subscription automatically renews unless canceled at least 24 hours before the end of the current billing period. Your account will be charged for renewal within 24 hours prior to the end of the current period at the same price.{'\n\n'}You can manage and cancel your subscription in your device Settings under your Apple ID, then Subscriptions. Cancellation takes effect at the end of the current billing period. No refunds are provided for partial billing periods.{'\n\n'}Current pricing: $4.99 per month. Prices may vary by region and are subject to change.
+                        Clutch Picks offers an optional auto-renewable monthly subscription (Clutch Picks Pro) that provides access to AI predictions, confidence ratings, and detailed game analysis. Eligible new subscribers may receive a 3-day free trial when shown on the purchase sheet.{'\n\n'}Payment is charged to your Apple ID account at confirmation of purchase or after the free trial ends. The subscription automatically renews monthly unless canceled at least 24 hours before the end of the current billing period. Your account will be charged for renewal within 24 hours prior to the end of the current period at the same price.{'\n\n'}You can manage and cancel your subscription in your device Settings under your Apple ID, then Subscriptions. Cancellation takes effect at the end of the current billing period. No refunds are provided for partial billing periods.{'\n\n'}Current pricing is shown on the paywall and App Store purchase sheet. Prices may vary by region and are subject to change.
                       </Text>
 
                       <Text className="text-white font-semibold text-base mb-2">

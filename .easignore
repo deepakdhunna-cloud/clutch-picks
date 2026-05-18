@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+web-build/
+ios/
+android/
+private/
+.env
+.env.*
+backend/.env
+*.p8
+*.p12
+*.key
+*.mobileprovision

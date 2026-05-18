@@ -3,7 +3,6 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { memo, useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import Animated, {
-  FadeInRight,
   withSpring,
   useSharedValue,
   useAnimatedStyle,
@@ -68,17 +67,125 @@ const DOT_MATRIX: Record<string, number[][]> = {
 };
 
 // ─── PIXEL ART SPORT ICONS ────────────────────────────────────
+function iconRows(rows: string[]): number[][] {
+  return rows.map((row) => row.split('').map((cell) => (cell === '#' ? 1 : 0)));
+}
+
+const FOOTBALL_ICON = iconRows([
+  '...........',
+  '...#####...',
+  '..#######..',
+  '.##..#..##.',
+  '##..###..##',
+  '###########',
+  '##..###..##',
+  '.##..#..##.',
+  '..#######..',
+  '...#####...',
+  '...........',
+]);
+
+const BASKETBALL_ICON = iconRows([
+  '..#######..',
+  '.##..#..##.',
+  '#..#.#.#..#',
+  '#...###...#',
+  '#..##.##..#',
+  '###########',
+  '#..##.##..#',
+  '#...###...#',
+  '#..#.#.#..#',
+  '.##..#..##.',
+  '..#######..',
+]);
+
+const SOCCER_ICON = iconRows([
+  '..#######..',
+  '.##.....##.',
+  '#..##.##..#',
+  '#.#######.#',
+  '#..#####..#',
+  '#.#######.#',
+  '#..##.##..#',
+  '.##.....##.',
+  '..#######..',
+  '...........',
+  '...........',
+]);
+
 const SPORT_PIXEL_ICONS: Record<string, number[][]> = {
-  NFL: [[0,0,0,1,1,1,0,0,0],[0,0,1,1,1,1,1,0,0],[0,1,1,0,1,0,1,1,0],[1,1,0,1,1,1,0,1,1],[0,1,1,0,1,0,1,1,0],[0,0,1,1,1,1,1,0,0],[0,0,0,1,1,1,0,0,0]],
-  NBA: [[0,0,1,1,1,1,1,0,0],[0,1,0,0,1,0,0,1,0],[1,0,0,0,1,0,0,0,1],[1,0,0,0,1,0,0,0,1],[1,1,1,1,1,1,1,1,1],[1,0,0,0,1,0,0,0,1],[1,0,0,0,1,0,0,0,1],[0,1,0,0,1,0,0,1,0],[0,0,1,1,1,1,1,0,0]],
-  MLB: [[0,0,0,1,0,0,0],[0,0,1,0,1,0,0],[0,1,0,0,0,1,0],[1,0,0,0,0,0,1],[0,1,0,0,0,1,0],[0,0,1,0,1,0,0],[0,0,0,1,0,0,0]],
-  NHL: [[1,0,0,0,0,0,0,0,0],[1,0,0,0,0,0,0,0,0],[1,0,0,0,0,0,0,0,0],[1,0,0,0,0,0,0,0,0],[1,1,0,0,0,1,1,1,0],[0,1,1,0,0,0,0,0,0],[0,0,1,1,1,0,0,0,0]],
-  EPL: [[0,0,1,1,1,1,1,0,0],[0,1,0,0,0,0,0,1,0],[1,0,0,1,1,1,0,0,1],[1,0,1,0,0,0,1,0,1],[1,0,1,0,0,0,1,0,1],[1,0,0,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,1],[0,1,0,0,0,0,0,1,0],[0,0,1,1,1,1,1,0,0]],
-  NCAAF: [[0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,0,1,1,0,0,1,1],[1,0,0,1,1,0,0,0,1],[1,1,0,0,0,0,0,1,1],[0,1,1,1,1,1,1,1,0],[0,0,0,1,1,1,0,0,0]],
+  NFL: FOOTBALL_ICON,
+  NCAAF: FOOTBALL_ICON,
+  NBA: BASKETBALL_ICON,
+  NCAAB: BASKETBALL_ICON,
+  MLB: iconRows([
+    '..#######..',
+    '.##.....##.',
+    '#..#...#..#',
+    '#...#.#...#',
+    '#....#....#',
+    '#....#....#',
+    '#...#.#...#',
+    '#..#...#..#',
+    '.##.....##.',
+    '..#######..',
+    '...........',
+  ]),
+  NHL: iconRows([
+    '##.........',
+    '##.........',
+    '.##........',
+    '.##........',
+    '..##.......',
+    '..##.......',
+    '...##......',
+    '...########',
+    '....#######',
+    '.......###.',
+    '.......###.',
+  ]),
+  MLS: SOCCER_ICON,
+  EPL: SOCCER_ICON,
+  UCL: iconRows([
+    '.....#.....',
+    '..#..#..#..',
+    '...#####...',
+    '.##.###.##.',
+    '..#######..',
+    '###########',
+    '..#######..',
+    '.##.###.##.',
+    '...#####...',
+    '..#..#..#..',
+    '.....#.....',
+  ]),
+  IPL: iconRows([
+    '.......##..',
+    '......##...',
+    '.....##....',
+    '....##.....',
+    '...##..###.',
+    '..##...###.',
+    '.##.....#..',
+    '##.........',
+    '..#..#..#..',
+    '..#..#..#..',
+    '..#..#..#..',
+  ]),
+  TENNIS: iconRows([
+    '..#####....',
+    '.##...##...',
+    '##.#.#.##..',
+    '#.#.#.#.#..',
+    '##.#.#.##..',
+    '.##...##...',
+    '..#####....',
+    '....##.....',
+    '...##......',
+    '..##....##.',
+    '.##.....##.',
+  ]),
 };
-SPORT_PIXEL_ICONS.MLS = SPORT_PIXEL_ICONS.EPL;
-SPORT_PIXEL_ICONS.UCL = SPORT_PIXEL_ICONS.EPL;
-SPORT_PIXEL_ICONS.NCAAB = SPORT_PIXEL_ICONS.NBA;
 
 // ─── DOT MATRIX TEXT RENDERER (legacy — used by the FlatList sport-headers) ───
 const PX = 1.5;
@@ -219,42 +326,33 @@ export const DotMatrixIcon = memo(function DotMatrixIcon({ sport, litColor = '#F
 export const LED_BG = '#050505';
 export const LED_BORDER = '#161616';
 export const LED_OFF = '#262626';
-// PITCH and DOT_RADIUS are the SHARED grid constants — used by both the off-grid
-// background pattern AND the sharp core of every lit pixel. There is exactly one
-// grid; the only thing that differs between an off-pixel and a lit-pixel at the
-// same (col, row) is the fill (LED_OFF vs the bright core gradient + the four
-// stacked halo circles around it).
+// PITCH and DOT_RADIUS are the shared grid constants for every homepage LED
+// panel. Each cell draws exactly one physical dot: either LED_OFF or the lit
+// core at the same radius.
 export const LED_PITCH = 2.4;
 export const LED_OFF_RADIUS = 1.0;
 const PITCH = LED_PITCH;
 const DOT_RADIUS = LED_OFF_RADIUS;
-// Whole-cell letter gap so multi-character text stays on the same grid as the
-// off-grid Pattern. (Half-pitch gaps would put characters past the first off the
-// shared grid and re-introduce the misalignment bug.)
+// Whole-cell letter gap so multi-character text stays on the same board grid.
 const LED_LETTER_GAP_COLS = 1;
 
 const BLUE_FAR = '#5a85b5';
 const BLUE_NEAR = '#c0d4e8';
 
-// Sharpened bloom — the wide outer halo (the source of fuzzy bleed between
-// adjacent lit pixels) is gone entirely. What remains: a 2-circle mid glow,
-// a 2-circle tight inner glow, and a sharp gradient core. Stacked solid
-// circles, no filter primitives — works identically on iOS and Android.
-const LIT_CORE_RADIUS = 1.2;
+// Subtle bloom only. The physical LED core stays DOT_RADIUS for both off and
+// lit cells; these halos sit behind lit cells so brightness changes, not the
+// dot lattice.
+const LIT_CORE_RADIUS = DOT_RADIUS;
 const LIT_HALO_LAYERS = {
   blue: [
-    // Layer 1 — mid glow (outer ring + denser inner ring fakes a soft falloff)
-    { r: 2.10, color: BLUE_FAR, opacity: 0.16 },
-    { r: 1.85, color: BLUE_FAR, opacity: 0.32 },
-    // Layer 2 — tight inner glow
-    { r: 1.55, color: BLUE_NEAR, opacity: 0.46 },
-    { r: 1.40, color: BLUE_NEAR, opacity: 0.78 },
+    { r: 2.00, color: BLUE_FAR, opacity: 0.08 },
+    { r: 1.55, color: BLUE_FAR, opacity: 0.16 },
+    { r: 1.25, color: BLUE_NEAR, opacity: 0.30 },
   ],
   white: [
-    { r: 2.10, color: '#ffffff', opacity: 0.08 },
-    { r: 1.85, color: '#ffffff', opacity: 0.16 },
-    { r: 1.55, color: '#ffffff', opacity: 0.26 },
-    { r: 1.40, color: '#ffffff', opacity: 0.50 },
+    { r: 2.00, color: '#ffffff', opacity: 0.05 },
+    { r: 1.55, color: '#ffffff', opacity: 0.10 },
+    { r: 1.25, color: '#ffffff', opacity: 0.22 },
   ],
 } as const;
 
@@ -274,15 +372,9 @@ const CORE_STOPS = {
 export type LedPalette = 'blue' | 'white';
 
 // Reusable <Defs> block — must be a child of every LED panel <Svg>.
-// The Pattern places one off-pixel at the center of every PITCH×PITCH cell,
-// globally anchored to (0, 0). Lit pixels MUST be positioned at the same
-// canonical grid coordinates (PITCH/2 + N*PITCH) — see gridX/gridY.
 function LedDefs() {
   return (
     <Defs>
-      <Pattern id="ledOffGrid" width={PITCH} height={PITCH} patternUnits="userSpaceOnUse">
-        <Circle cx={PITCH / 2} cy={PITCH / 2} r={DOT_RADIUS} fill={LED_OFF} />
-      </Pattern>
       {(['blue', 'white'] as const).map((p) => (
         <RadialGradient key={`core-${p}`} id={`led-core-${p}`} cx="50%" cy="50%" r="50%">
           {CORE_STOPS[p].map(([offset, color]) => (
@@ -294,10 +386,9 @@ function LedDefs() {
   );
 }
 
-// Single grid coordinate function — used for BOTH off-pixels (implicitly via the
-// Pattern, whose dots land at PITCH/2 + col*PITCH) and lit pixels (explicitly
-// via gridX/Y below). The sharp core of every lit pixel sits at exactly the
-// same (cx, cy) the corresponding off-pixel would occupy.
+// Single grid coordinate function — used for both off-pixels and lit pixels.
+// Every visible dot is drawn from an integer cell in this lattice, so the icon,
+// letters, and numbers are the board pattern itself instead of an overlay on it.
 function gridX(col: number): number {
   return PITCH / 2 + col * PITCH;
 }
@@ -305,31 +396,74 @@ function gridY(row: number): number {
   return PITCH / 2 + row * PITCH;
 }
 
-// Render one lit pixel: 4 solid halo circles + 1 sharp gradient core. The core
-// sits at exactly the same (cx, cy) as the off-pixel it replaces (alignment fix
-// from the previous commit, preserved here). The core is slightly larger than
-// the off-pixel (LIT_CORE_RADIUS=1.2 vs DOT_RADIUS=1.0) so the bright center
-// dominates and characters read crisp.
-function ledLitCell(cx: number, cy: number, palette: LedPalette, key: string | number) {
+function ledLitHalo(cx: number, cy: number, palette: LedPalette, key: string | number) {
   const halos = LIT_HALO_LAYERS[palette];
   return (
     <G key={key}>
       {halos.map((h, i) => (
         <Circle key={i} cx={cx} cy={cy} r={h.r} fill={h.color} fillOpacity={h.opacity} />
       ))}
-      <Circle cx={cx} cy={cy} r={LIT_CORE_RADIUS} fill={`url(#led-core-${palette})`} />
     </G>
   );
 }
 
-type LitPos = { cx: number; cy: number; palette: LedPalette };
+// Draw a real LED board cell-by-cell: halo glow first, then one physical dot at
+// every grid position. A lit glyph cell replaces the off dot at that same
+// coordinate; it does not sit on top of a separate random-looking texture.
+function renderLedBoardDots(width: number, height: number, litCells: LitPos[]) {
+  const cols = Math.max(0, Math.floor(width / PITCH));
+  const rows = Math.max(0, Math.floor(height / PITCH));
+  const litByCoord = new Map<string, LedPalette>();
+
+  for (const cell of litCells) {
+    if (cell.col >= 0 && cell.col < cols && cell.row >= 0 && cell.row < rows) {
+      litByCoord.set(`${cell.col}:${cell.row}`, cell.palette);
+    }
+  }
+
+  const halos: React.ReactNode[] = [];
+  const dots: React.ReactNode[] = [];
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const coord = `${col}:${row}`;
+      const cx = gridX(col);
+      const cy = gridY(row);
+      const palette = litByCoord.get(coord);
+
+      if (palette) {
+        halos.push(ledLitHalo(cx, cy, palette, `halo-${coord}`));
+        dots.push(
+          <Circle
+            key={`dot-${coord}`}
+            cx={cx}
+            cy={cy}
+            r={LIT_CORE_RADIUS}
+            fill={`url(#led-core-${palette})`}
+          />,
+        );
+      } else {
+        dots.push(<Circle key={`dot-${coord}`} cx={cx} cy={cy} r={DOT_RADIUS} fill={LED_OFF} />);
+      }
+    }
+  }
+
+  return (
+    <>
+      {halos}
+      {dots}
+    </>
+  );
+}
+
+type LitPos = { col: number; row: number; palette: LedPalette };
 
 // baseCol/baseRow are the integer grid column/row of the matrix's (0, 0) cell.
 function emitMatrixCells(matrix: number[][], baseCol: number, baseRow: number, palette: LedPalette, out: LitPos[]) {
   for (let ri = 0; ri < matrix.length; ri++) {
     for (let ci = 0; ci < matrix[ri].length; ci++) {
       if (matrix[ri][ci] === 1) {
-        out.push({ cx: gridX(baseCol + ci), cy: gridY(baseRow + ri), palette });
+        out.push({ col: baseCol + ci, row: baseRow + ri, palette });
       }
     }
   }
@@ -374,12 +508,12 @@ const LED_CALENDAR_MATRIX = [
 // ─── LED TILE PANEL ─────────────────────────────────────────────
 // 86×86 square, vertical stack: icon (blue) → abbreviation (white) → count (blue).
 // Layout is computed in GRID COLUMNS/ROWS so every lit core lands on the same
-// lattice as every off-pixel. The off-grid Pattern fills the full panel so dots
-// are visible edge-to-edge; visual padding emerges from the glyph centering.
+// lattice as every off-pixel. The panel is drawn cell-by-cell so the glyphs are
+// made from the same dot board as the dim surrounding LEDs.
 export function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; gameCount: number; size?: number }) {
   const GAP_ICON_ROWS = 3;   // ~7.2 px — must be an integer number of grid rows
   const GAP_TEXT_ROWS = 3;   // ~7.2 px
-  const ICON_ROW_SPAN = 9;   // accommodate the tallest icon (NBA/EPL/UCL/MLS at 9 rows)
+  const ICON_ROW_SPAN = 11;  // accommodate the larger, more recognizable sport pictographs
   const TEXT_ROWS = 7;       // every char is 5×7
 
   const iconMatrix = SPORT_PIXEL_ICONS[sport] || SPORT_PIXEL_ICONS.NBA;
@@ -414,8 +548,7 @@ export function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; ga
   return (
     <Svg width={size} height={size}>
       <LedDefs />
-      <Rect width={size} height={size} fill="url(#ledOffGrid)" />
-      {cells.map((c, i) => ledLitCell(c.cx, c.cy, c.palette, i))}
+      {renderLedBoardDots(size, size, cells)}
     </Svg>
   );
 }
@@ -440,7 +573,8 @@ export function LedBarPanel({
     ? (SPORT_PIXEL_ICONS[leftSport as string] || LED_CALENDAR_MATRIX)
     : LED_CALENDAR_MATRIX;
   const ICON_LABEL_GAP_COLS = 2;
-  const SIDE_GAP_COLS = 2;
+  const LEFT_GAP_COLS = 8;
+  const RIGHT_GAP_COLS = 8;
 
   const [width, setWidth] = useState(0);
 
@@ -460,11 +594,11 @@ export function LedBarPanel({
   const labelStartRow = centerRow(labelM.rowCount);
   const countStartRow = centerRow(countM.rowCount);
 
-  const leftStartCol = SIDE_GAP_COLS;
+  const leftStartCol = LEFT_GAP_COLS;
   const labelStartCol = leftStartCol + leftCols + ICON_LABEL_GAP_COLS;
   const countStartCol = Math.max(
     labelStartCol + labelM.colCount + ICON_LABEL_GAP_COLS,
-    cols - countM.colCount - SIDE_GAP_COLS,
+    cols - countM.colCount - RIGHT_GAP_COLS,
   );
 
   const cells: LitPos[] = [];
@@ -493,9 +627,94 @@ export function LedBarPanel({
       {width > 0 ? (
         <Svg width={width} height={height}>
           <LedDefs />
-          <Rect width={width} height={height} fill="url(#ledOffGrid)" />
-          {cells.map((c, i) => ledLitCell(c.cx, c.cy, c.palette, i))}
+          {renderLedBoardDots(width, height, cells)}
         </Svg>
+      ) : null}
+    </View>
+  );
+}
+
+// ─── LED MINI PANEL ─────────────────────────────────────────────
+// Small selected-filter pill used on the homepage. Same cell-by-cell renderer
+// as the big tiles/bar, with an optional blue rail kept as the physical marker.
+export function LedMiniPanel({
+  label,
+  count,
+  leftSport,
+  sideRail = false,
+  height = 36,
+  borderRadius = 3,
+}: {
+  label: string;
+  count?: number | string;
+  leftSport?: Sport | null;
+  sideRail?: boolean;
+  height?: number;
+  borderRadius?: number;
+}) {
+  const matrix = leftSport ? (SPORT_PIXEL_ICONS[leftSport as string] || SPORT_PIXEL_ICONS.NBA) : null;
+  const labelM = measureLedText(label);
+  const countText = count === undefined ? null : String(count);
+  const countM = countText ? measureLedText(countText) : null;
+  const ICON_LABEL_GAP_COLS = matrix ? 3 : 0;
+  const LABEL_COUNT_GAP_COLS = countM ? 3 : 0;
+  const LEFT_PAD_COLS = sideRail ? 6 : 6;
+  const RIGHT_PAD_COLS = 6;
+
+  const iconCols = matrix?.[0]?.length ?? 0;
+  const iconRows = matrix?.length ?? 0;
+  const contentCols =
+    iconCols +
+    ICON_LABEL_GAP_COLS +
+    labelM.colCount +
+    LABEL_COUNT_GAP_COLS +
+    (countM?.colCount ?? 0);
+  const cols = LEFT_PAD_COLS + contentCols + RIGHT_PAD_COLS;
+  const rows = Math.max(0, Math.floor(height / PITCH));
+  const width = Math.ceil(cols * PITCH);
+
+  const cells: LitPos[] = [];
+  let cursorCol = LEFT_PAD_COLS;
+  if (matrix) {
+    emitMatrixCells(matrix, cursorCol, Math.floor((rows - iconRows) / 2), 'blue', cells);
+    cursorCol += iconCols + ICON_LABEL_GAP_COLS;
+  }
+  emitTextCells(label, cursorCol, Math.floor((rows - labelM.rowCount) / 2), 'white', cells);
+  cursorCol += labelM.colCount + LABEL_COUNT_GAP_COLS;
+  if (countText && countM) {
+    emitTextCells(countText, cursorCol, Math.floor((rows - countM.rowCount) / 2), 'blue', cells);
+  }
+
+  return (
+    <View
+      style={{
+        position: 'relative' as const,
+        width,
+        height,
+        borderRadius,
+        overflow: 'hidden' as const,
+        backgroundColor: LED_BG,
+        borderWidth: 1,
+        borderColor: LED_BORDER,
+      }}
+    >
+      <Svg width={width} height={height}>
+        <LedDefs />
+        {renderLedBoardDots(width, height, cells)}
+      </Svg>
+      {sideRail ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute' as const,
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 3,
+            backgroundColor: '#7A9DB8',
+            opacity: 0.6,
+          }}
+        />
       ) : null}
     </View>
   );
@@ -654,7 +873,7 @@ export function LedScorePanel({ awayScore, homeScore }: { awayScore: number; hom
             }),
           }}
         >
-          {/* Bezel — richer four-stop sculpt fakes a matte-metal housing with a
+          {/* Bezel — richer four-stop sculpt creates a matte-metal housing with a
               brighter lip on top and a darker recess at center. */}
           <LinearGradient
             colors={['#3d3d3d', '#1a1a1a', '#000000', '#1c1c1c']}
@@ -683,7 +902,7 @@ export function LedScorePanel({ awayScore, homeScore }: { awayScore: number; hom
                 backgroundColor: 'rgba(255,255,255,0.22)',
               }}
             />
-            {/* Bottom edge dark hairline — fakes the bezel's underside in
+            {/* Bottom edge dark hairline — creates the bezel's underside in
                 shadow. */}
             <View
               pointerEvents="none"
@@ -814,15 +1033,21 @@ export function LedScorePanel({ awayScore, homeScore }: { awayScore: number; hom
 // ─── JUMBOTRON SPORT ICONS (kept for full-size cards & getSportIcon) ──
 interface JBIconProps { color: string; size?: number }
 
+const createJBIcon = (displayName: string, IconComponent: React.FC<JBIconProps>) => {
+  const Icon = memo(IconComponent);
+  Icon.displayName = displayName;
+  return Icon;
+};
+
 const JBIcons: Record<string, React.FC<JBIconProps>> = {
-  NFL: memo(({ color, size = 16 }: JBIconProps) => (
+  NFL: createJBIcon('JBIconNFL', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Path d="M14.5 3.5C12 1 6 1 3.5 3.5S1 12 3.5 14.5 12 17 14.5 14.5 17 6 14.5 3.5z" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
       <Path d="M6.5 11.5l5-5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
       <Path d="M7.5 8.5l-1 1M9.5 6.5l-1 1M9.5 10.5l-1 1" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
     </Svg>
   )),
-  NBA: memo(({ color, size = 16 }: JBIconProps) => (
+  NBA: createJBIcon('JBIconNBA', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
       <Path d="M2 9h14M9 2v14" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
@@ -830,49 +1055,66 @@ const JBIcons: Record<string, React.FC<JBIconProps>> = {
       <Path d="M13.8 3.5C11.5 6.5 11.5 11.5 13.8 14.5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
     </Svg>
   )),
-  MLB: memo(({ color, size = 16 }: JBIconProps) => (
+  MLB: createJBIcon('JBIconMLB', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Path d="M9 2.5L15 9l-6 6.5L3 9z" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
       <Path d="M9 11L6.5 9 9 7l2.5 2z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" />
       <Circle cx={9} cy={14} r={0.8} fill={color} />
     </Svg>
   )),
-  NHL: memo(({ color, size = 16 }: JBIconProps) => (
+  NHL: createJBIcon('JBIconNHL', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Path d="M5 3l5.5 8.5H14" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
       <Path d="M14 11.5c0 1-0.8 1.5-2 1.5h-1.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
       <Rect x={5} y={14} width={5} height={2} rx={1} stroke={color} strokeWidth={1.2} />
     </Svg>
   )),
-  MLS: memo(({ color, size = 16 }: JBIconProps) => (
+  MLS: createJBIcon('JBIconMLS', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
       <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
       <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
     </Svg>
   )),
-  EPL: memo(({ color, size = 16 }: JBIconProps) => (
+  EPL: createJBIcon('JBIconEPL', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
       <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
       <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
     </Svg>
   )),
-  UCL: memo(({ color, size = 16 }: JBIconProps) => (
+  UCL: createJBIcon('JBIconUCL', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
       <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
       <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
     </Svg>
   )),
-  NCAAF: memo(({ color, size = 16 }: JBIconProps) => (
+  IPL: createJBIcon('JBIconIPL', ({ color, size = 16 }: JBIconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path d="M4 15l8.8-8.8c0.9-0.9 2.2-0.9 3 0 0.8 0.8 0.8 2.1 0 3L7 18" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M2.5 11.5l4 4" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
+      <Circle cx={4.2} cy={4.2} r={2.1} stroke={color} strokeWidth={1.3} />
+      <Path d="M2.7 2.8c1.1 1.2 2 2.1 3 3" stroke={color} strokeWidth={0.8} strokeLinecap="round" />
+    </Svg>
+  )),
+  TENNIS: createJBIcon('JBIconTennis', ({ color, size = 16 }: JBIconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Circle cx={7.2} cy={6.2} r={4.1} stroke={color} strokeWidth={1.4} />
+      <Path d="M4.5 3.7c1.9 1.9 3.4 3.4 5.4 5.4M9.9 3.8L4.7 9" stroke={color} strokeWidth={0.8} strokeLinecap="round" strokeOpacity={0.72} />
+      <Path d="M10.2 9.2l5.1 5.1" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      <Path d="M13.7 13.8l1.9 1.9" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Circle cx={13.8} cy={4.2} r={1.7} stroke={color} strokeWidth={1.2} />
+    </Svg>
+  )),
+  NCAAF: createJBIcon('JBIconNCAAF', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Path d="M4 12c0-4 2-8 6.5-8 3 0 4.5 2 4.5 5s-1.5 5-5 5H6.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
       <Path d="M4 12h3c1.2 0 2-.8 2-2" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
       <Path d="M9.5 4v5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
     </Svg>
   )),
-  NCAAB: memo(({ color, size = 16 }: JBIconProps) => (
+  NCAAB: createJBIcon('JBIconNCAAB', ({ color, size = 16 }: JBIconProps) => (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
       <Path d="M2 9h14M9 2v14" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
@@ -903,13 +1145,12 @@ export const PixelGrid = memo(function PixelGrid() {
 
 // ─── DEAD PIXELS ───────────────────────────────────────────────
 const DeadPixels = memo(function DeadPixels({ visible }: { visible: boolean }) {
-  const pixels = useRef(
-    Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => ({
-      left: 8 + Math.random() * 78,
-      top: 15 + Math.random() * 55,
-      opacity: 0.25 + Math.random() * 0.25,
-    }))
-  ).current;
+  const pixels = useRef([
+    { left: 14, top: 24, opacity: 0.32 },
+    { left: 38, top: 62, opacity: 0.25 },
+    { left: 69, top: 31, opacity: 0.44 },
+    { left: 84, top: 54, opacity: 0.29 },
+  ]).current;
 
   if (!visible) return null;
 
@@ -1084,6 +1325,35 @@ const PremierLeagueIcon = memo(function PremierLeagueIcon({ size, color }: { siz
   );
 });
 
+const CricketBatIcon = memo(function CricketBatIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+      <Ellipse cx="25" cy="43" rx="9" ry="2" fill="black" fillOpacity="0.25" />
+      <Path d="M14 38L33.5 18.5C36 16 39 16 41 18C43 20 43 23 40.5 25.5L21 45" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M10 31L17 38" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
+      <Path d="M13 28L20 35" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeOpacity="0.45" />
+      <Circle cx="13" cy="13" r="6" stroke={color} strokeWidth="2.5" />
+      <Path d="M9 9C11.5 11.8 14.2 14.4 17 17" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeOpacity="0.75" />
+      <Path d="M29 23L35.5 29.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeOpacity="0.45" />
+    </Svg>
+  );
+});
+
+const TennisRacketIcon = memo(function TennisRacketIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+      <Ellipse cx="25" cy="43" rx="9" ry="2" fill="black" fillOpacity="0.25" />
+      <Circle cx="18" cy="17" r="10.5" stroke={color} strokeWidth="2.5" strokeOpacity="0.24" />
+      <Circle cx="17" cy="16" r="10.5" stroke={color} strokeWidth="2.5" />
+      <Path d="M9.5 9.5L24.5 24.5M24.5 9.5L9.5 24.5" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeOpacity="0.65" />
+      <Path d="M27 25L40 38" stroke={color} strokeWidth="3" strokeLinecap="round" />
+      <Path d="M36 36L42 42" stroke={color} strokeWidth="4" strokeLinecap="round" />
+      <Circle cx="34" cy="11" r="4" stroke={color} strokeWidth="2.2" />
+      <Path d="M12 8C15 5.8 19 5.5 22 7" stroke={color} strokeWidth="1.4" strokeOpacity="0.45" strokeLinecap="round" />
+    </Svg>
+  );
+});
+
 // Keep original getSportIcon for full-size cards
 export function getSportIcon(sport: Sport, size: number, color: string) {
   switch (sport) {
@@ -1094,6 +1364,8 @@ export function getSportIcon(sport: Sport, size: number, color: string) {
     case Sport.MLS: return <SoccerCleatIcon size={size} color={color} />;
     case Sport.EPL: return <PremierLeagueIcon size={size} color={color} />;
     case Sport.UCL: return <PremierLeagueIcon size={size} color={color} />;
+    case Sport.IPL: return <CricketBatIcon size={size} color={color} />;
+    case Sport.TENNIS: return <TennisRacketIcon size={size} color={color} />;
     case Sport.NCAAF: return <CollegeFootballIcon size={size} color={color} />;
     case Sport.NCAAB: return <CollegeBasketballIcon size={size} color={color} />;
     default: return <SoccerCleatIcon size={size} color={color} />;
@@ -1254,7 +1526,6 @@ export const SportCard = memo(function SportCard({
   // ═══════════════════════════════════════════════
   return (
     <AnimatedPressable
-      entering={FadeInRight.delay(index * 80).duration(500)}
       onPress={handlePress}
       className="mb-3 active:opacity-80"
     >
@@ -1327,7 +1598,7 @@ export const SportCard = memo(function SportCard({
 // Ticket color helper — used by index.tsx for Today's Games bar
 export const TICKET_COLORS = ['#8B0A1F', '#8B0A1F', '#8B0A1F'];
 export const TICKET_COLOR_MAP: Record<string, number> = {
-  NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, UCL: 0, NCAAF: 0, NCAAB: 1,
+  NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, UCL: 0, IPL: 1, TENNIS: 2, NCAAF: 0, NCAAB: 1,
 };
 export function getTicketColor(sport: string): string {
   return TICKET_COLORS[TICKET_COLOR_MAP[sport] ?? 0];

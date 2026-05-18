@@ -38,9 +38,19 @@ const envSchema = z.object({
   // items are collected but not structured into PlayerAvailability rows.
   ANTHROPIC_API_KEY: z.string().optional(),
   // SharpAPI supplies Pinnacle consensus lines for the market-anchor factor.
+  // Required in production so release predictions keep their market
+  // calibration and value-comparison surface.
   SHARPAPI_KEY: z.string().optional(),
   // Apify runs the Twitter scraper actor for beat-writer ingestion.
   APIFY_API_KEY: z.string().optional(),
+  // Verified data-source feeds for factors that must not rely on mock values.
+  // Required in production so release predictions keep the full verified-data
+  // surface. Each URL should return the same JSON shape as the corresponding
+  // file in backend/src/lib/data.
+  MLB_UMPIRE_TENDENCY_SOURCE_URL: z.url().optional(),
+  SOCCER_MANAGER_CHANGES_SOURCE_URL: z.url().optional(),
+  UCL_COEFFICIENTS_SOURCE_URL: z.url().optional(),
+  UCL_TEAM_LOCATION_SOURCE_URL: z.url().optional(),
   // RevenueCat: server-side subscription validation + webhooks.
   REVENUECAT_SECRET_KEY: z.string().optional(),
   // Sentry error tracking — when set, both web and worker init the SDK and
@@ -78,6 +88,47 @@ const envSchema = z.object({
   // Where prediction_shadow_*.jsonl files land; defaults to backend/logs
   // resolved relative to the shadow module.
   LOGS_DIR: z.string().optional(),
+  // Persistent profile image uploads. In production this should point at a
+  // mounted volume or other durable filesystem path.
+  UPLOADS_DIR: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.NODE_ENV !== "production") return;
+
+  const backendUrl = new URL(value.BACKEND_URL);
+  if (backendUrl.hostname === "localhost" || backendUrl.hostname === "127.0.0.1") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["BACKEND_URL"],
+      message: "BACKEND_URL must not point to localhost in production",
+    });
+  }
+
+  const requiredInProduction: Array<keyof typeof value> = [
+    "RESEND_API_KEY",
+    "SHARPAPI_KEY",
+    "REVENUECAT_SECRET_KEY",
+    "REVENUECAT_WEBHOOK_AUTH",
+    "APPLE_TEAM_ID",
+    "APPLE_KEY_ID",
+    "APPLE_PRIVATE_KEY",
+    "APPLE_CLIENT_ID",
+    "UPLOADS_DIR",
+    "MLB_UMPIRE_TENDENCY_SOURCE_URL",
+    "SOCCER_MANAGER_CHANGES_SOURCE_URL",
+    "UCL_COEFFICIENTS_SOURCE_URL",
+    "UCL_TEAM_LOCATION_SOURCE_URL",
+  ];
+
+  for (const key of requiredInProduction) {
+    const current = value[key];
+    if (typeof current !== "string" || current.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} is required in production`,
+      });
+    }
+  }
 });
 
 function validateEnv() {
@@ -115,12 +166,15 @@ export const features = {
   sentry: !!env.SENTRY_DSN,
   appleRevoke: !!(env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY && env.APPLE_CLIENT_ID),
   revenuecatWebhook: !!env.REVENUECAT_WEBHOOK_AUTH,
+  mlbUmpireTendencies: !!env.MLB_UMPIRE_TENDENCY_SOURCE_URL,
+  soccerManagerChanges: !!env.SOCCER_MANAGER_CHANGES_SOURCE_URL,
+  uclCoefficients: !!env.UCL_COEFFICIENTS_SOURCE_URL,
+  uclTeamLocations: !!env.UCL_TEAM_LOCATION_SOURCE_URL,
 } as const;
 
-// Prediction-engine flag centralized here so the shadow module and any
-// future consumer both read the same derivation.
-export const useNewPredictionEngine: boolean =
-  env.USE_NEW_PREDICTION_ENGINE === "true";
+// The old prediction engine is retained only as historical code. User-facing
+// predictions always use the new engine, regardless of stale environment flags.
+export const useNewPredictionEngine = true;
 
 function onOff(flag: boolean): "on" | "off" {
   return flag ? "on" : "off";
@@ -151,6 +205,11 @@ export function printEnvReport(): void {
     `  openai=${onOff(f.openai)}  sharpapi=${onOff(f.sharpapi)}  apify=${onOff(f.apify)}  anthropic=${onOff(f.anthropic)}`,
   );
   console.log(`  revenuecat=${onOff(f.revenuecat)}  sentry=${onOff(f.sentry)}`);
+  console.log("[env] verified data feeds:");
+  console.log(
+    `  mlbUmpires=${onOff(f.mlbUmpireTendencies)}  soccerManagers=${onOff(f.soccerManagerChanges)}  ` +
+      `uclCoefficients=${onOff(f.uclCoefficients)}  uclLocations=${onOff(f.uclTeamLocations)}`,
+  );
   console.log("[env] feature flags:");
   console.log(`  new_prediction_engine=${useNewPredictionEngine}`);
   const admin = adminKeyStatus();

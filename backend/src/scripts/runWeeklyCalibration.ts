@@ -42,6 +42,8 @@ export const CALIBRATION_LEAGUES = [
   "MLS",
   "EPL",
   "UCL",
+  "IPL",
+  "TENNIS",
 ] as const;
 
 export type CalibrationLeague = (typeof CALIBRATION_LEAGUES)[number];

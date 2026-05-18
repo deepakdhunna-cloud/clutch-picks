@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, GameStatus } from '@/types/sports';
 import { useWeekGamesBySport } from '@/hooks/useGames';
+import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 
 type FilterStatus = 'live' | 'today' | 'tomorrow' | 'results';
 
@@ -131,7 +132,6 @@ const FilterButton = memo(function FilterButton({
 export default function SportDetailScreen() {
   const { sport } = useLocalSearchParams<{ sport: string }>();
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterStatus>('today');
 
   const sportEnum = sport as Sport;
@@ -139,12 +139,7 @@ export default function SportDetailScreen() {
 
   // Use real API hook
   const { data: weekData, refetch, isLoading } = useWeekGamesBySport(sport ?? '');
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
+  const { refreshing, onRefresh } = useSmoothRefresh(refetch);
 
   const allGames = useMemo(() => {
     if (!weekData) return [];

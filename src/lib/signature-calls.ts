@@ -126,6 +126,15 @@ function pickPrimaryReason(reasons: SignatureCallReason[]): SignatureCallReason 
 
 // ─── Narrative generation ──────────────────────────────────────────────────
 
+function deterministicIndex(seed: string, length: number): number {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash) % Math.max(length, 1);
+}
+
 export function generateNarrative(
   pick: EnrichedPick,
   primaryReason: SignatureCallReason
@@ -136,7 +145,8 @@ export function generateNarrative(
     primaryReason === 'bold' ? BOLD_NARRATIVES :
     UNDERDOG_AND_BOLD_NARRATIVES;
 
-  const template = pool[Math.floor(Math.random() * pool.length)] ?? pool[0]!;
+  const seed = `${pick.id}|${pick.gameId}|${primaryReason}`;
+  const template = pool[deterministicIndex(seed, pool.length)] ?? pool[0]!;
 
   const team = pickedTeamLabel(pick);
   const opponent = opponentTeamLabel(pick);

@@ -26,6 +26,7 @@ import {
   getCachedLLMNarrative,
   putCachedLLMNarrative,
 } from "./narrativeCache";
+import { deriveSeasonContext } from "./seasonContext";
 
 /**
  * Map a new-engine factor (FactorContribution) into the old PredictionFactor
@@ -72,22 +73,116 @@ export function buildAdapterNarrative(
   newPred: HonestPrediction,
   sport: string,
   game: Game,
+  injuries: ReturnType<typeof extractInjuryListForLLM> = [],
 ): string {
   const confidencePct = newPred.confidence;
   const band = getConfidenceBand(
     Math.max(newPred.homeWinProbability, newPred.awayWinProbability, newPred.drawProbability ?? 0),
   );
   const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const seasonContext =
+    game.seasonContext ??
+    deriveSeasonContext({ sport, gameTime: game.gameTime });
+  const narrativeFactors = buildDecisionNarrativeFactors(newPred, game);
   const input = buildNarrativeInput(
-    newPred.factors,
+    narrativeFactors,
     band,
     confidencePct,
     game.homeTeam.abbreviation,
     game.awayTeam.abbreviation,
     winnerAbbr,
     sport,
+    injuries,
+    seasonContext,
+    game.homeTeam.name,
+    game.awayTeam.name,
   );
+  prioritizeProjectionFactor(input, narrativeFactors);
   return buildDeterministicNarrative(input);
+}
+
+function prioritizeProjectionFactor(
+  input: ReturnType<typeof buildNarrativeInput>,
+  factors: FactorContribution[],
+): void {
+  const projectionFactor = factors.find((f) => f.key === "simulation_projection" && f.available);
+  if (!projectionFactor) return;
+  const winnerIsHome = input.winnerAbbr === input.homeTeamAbbr;
+  const winnerIsAway = input.winnerAbbr === input.awayTeamAbbr;
+  if (!winnerIsHome && !winnerIsAway) return;
+  const projectionSupportsWinner =
+    (winnerIsHome && projectionFactor.homeDelta > 0) ||
+    (winnerIsAway && projectionFactor.homeDelta < 0);
+
+  if (!projectionSupportsWinner) {
+    if (!input.counterpoint && Math.abs(projectionFactor.homeDelta) > 2) {
+      input.counterpoint = projectionFactor;
+    }
+    return;
+  }
+
+  const alreadyIncluded =
+    input.leadFactor.key === projectionFactor.key ||
+    input.supportingFactors.some((f) => f.key === projectionFactor.key);
+  if (alreadyIncluded) return;
+  input.supportingFactors = [projectionFactor, ...input.supportingFactors].slice(0, 2);
+}
+
+function buildDecisionNarrativeFactors(newPred: HonestPrediction, game: Game): FactorContribution[] {
+  const factors = [...newPred.factors];
+  if (newPred.projection) {
+    const projection = newPred.projection;
+    const homePct = Math.round(projection.homeWinProbability * 100);
+    const awayPct = Math.round(projection.awayWinProbability * 100);
+    const drawPct =
+      projection.drawProbability !== undefined
+        ? Math.round(projection.drawProbability * 100)
+        : undefined;
+    const expectedHome = projection.projectedHomeScore.toFixed(1);
+    const expectedAway = projection.projectedAwayScore.toFixed(1);
+    const expectedGap = Math.abs(projection.projectedHomeScore - projection.projectedAwayScore);
+    const scoreRead =
+      expectedGap < 0.35
+        ? `Expected scoring average is tight at ${expectedHome}-${expectedAway}`
+        : `Expected scoring average is ${expectedHome}-${expectedAway}`;
+    const lean =
+      drawPct !== undefined && drawPct >= homePct && drawPct >= awayPct
+        ? `draw ${drawPct}%`
+        : homePct >= awayPct
+          ? `${game.homeTeam.abbreviation} ${homePct}%`
+          : `${game.awayTeam.abbreviation} ${awayPct}%`;
+    const probabilityDelta = projection.homeWinProbability - projection.awayWinProbability;
+
+    factors.push({
+      key: "simulation_projection",
+      label: "Expected-score projection",
+      homeDelta: probabilityDelta * 180,
+      weight: 0.14,
+      available: true,
+      hasSignal: Math.abs(probabilityDelta) >= 0.015 || Math.abs(projection.projectedSpread) >= 0.15,
+      evidence:
+        `${scoreRead}, while the simulation lean is ${lean} ` +
+        `after ${projection.iterations.toLocaleString()} game scripts; upset/draw risk ${Math.round(projection.upsetRisk * 100)}%`,
+    });
+  }
+
+  if (newPred.marketComparison) {
+    const modelHome = Math.round(newPred.marketComparison.modelHomeProb * 100);
+    const marketHome = Math.round(newPred.marketComparison.marketHomeProb * 100);
+    factors.push({
+      key: "market_comparison",
+      label: "Consensus check",
+      homeDelta: (newPred.marketComparison.modelHomeProb - newPred.marketComparison.marketHomeProb) * 120,
+      weight: newPred.marketComparison.isDivergent ? 0.07 : 0.03,
+      available: true,
+      hasSignal: newPred.marketComparison.isDivergent,
+      evidence:
+        `Internal read has home at ${modelHome}% while outside consensus sits near ${marketHome}%; ` +
+        (newPred.marketComparison.isDivergent ? "that disagreement is a real risk flag" : "that is close enough to be a calibration check"),
+    });
+  }
+
+  return factors;
 }
 
 /**
@@ -108,20 +203,22 @@ export function translateNewEnginePrediction(
       ? Math.round(newPred.drawProbability * 100)
       : undefined;
 
-  // Determine winner. If the new engine picked a team, match it; otherwise
-  // fall back to higher home/away probability (null = draw preferred, but
-  // the old API shape doesn't represent draws — default to whichever side
-  // has the higher prob).
+  // Determine winner for legacy UI fields. predictedOutcome preserves the
+  // honest three-way result for soccer so draw reads are not silently erased.
   let predictedWinner: "home" | "away";
+  let predictedOutcome: "home" | "away" | "draw";
   if (newPred.predictedWinner) {
     predictedWinner =
       newPred.predictedWinner.teamId === game.homeTeam.id ? "home" : "away";
+    predictedOutcome = predictedWinner;
   } else {
     predictedWinner = homeProbPct >= awayProbPct ? "home" : "away";
+    predictedOutcome = drawProbPct !== undefined ? "draw" : predictedWinner;
   }
 
-  // Confidence = raw winner probability, no capping.
-  const confidence = Math.max(homeProbPct, awayProbPct);
+  // Confidence = raw outcome probability, no capping. Soccer draw reads must
+  // use the three-way max, not the larger of only home/away.
+  const confidence = Math.max(homeProbPct, awayProbPct, drawProbPct ?? 0);
 
   const marketFavorite: "home" | "away" =
     game.marketFavorite ?? predictedWinner;
@@ -130,10 +227,11 @@ export function translateNewEnginePrediction(
     id: `pred-${game.id}`,
     gameId: game.id,
     predictedWinner,
+    predictedOutcome,
     confidence,
     analysis: newPred.narrative || "",
-    predictedSpread: spread ?? 0,
-    predictedTotal: overUnder ?? 0,
+    predictedSpread: newPred.projection?.projectedSpread ?? spread ?? 0,
+    predictedTotal: newPred.projection?.projectedTotal ?? overUnder ?? 0,
     marketFavorite,
     spread: spread ?? 0,
     overUnder: overUnder ?? 0,
@@ -141,6 +239,25 @@ export function translateNewEnginePrediction(
     homeWinProbability: homeProbPct,
     awayWinProbability: awayProbPct,
     drawProbability: drawProbPct,
+    projection: newPred.projection
+      ? {
+          engine: newPred.projection.engine,
+          iterations: newPred.projection.iterations,
+          homeWinProbability: Math.round(newPred.projection.homeWinProbability * 1000) / 10,
+          awayWinProbability: Math.round(newPred.projection.awayWinProbability * 1000) / 10,
+          drawProbability:
+            newPred.projection.drawProbability !== undefined
+              ? Math.round(newPred.projection.drawProbability * 1000) / 10
+              : undefined,
+          projectedHomeScore: newPred.projection.projectedHomeScore,
+          projectedAwayScore: newPred.projection.projectedAwayScore,
+          projectedSpread: newPred.projection.projectedSpread,
+          projectedTotal: newPred.projection.projectedTotal,
+          volatility: newPred.projection.volatility,
+          upsetRisk: newPred.projection.upsetRisk,
+          signals: newPred.projection.signals,
+        }
+      : undefined,
     factors: newPred.factors.map(translateFactor),
     edgeRating: 0,
     valueRating: 0,
@@ -161,12 +278,22 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
   const ctx = await buildGameContext(game);
   const newPred = predictGame(ctx);
 
-  // Populate the narrative. predictGame leaves newPred.narrative as "" so a
-  // separate step can fill it in; historically that step was only wired up
-  // on the old-engine path. Use the deterministic template — synchronous,
+  // Populate the narrative with the deterministic template: synchronous,
   // always valid, no LLM latency tax on cold requests. LLM enrichment can
   // layer on later via generateNarrative() if we want richer prose.
-  newPred.narrative = buildAdapterNarrative(newPred, ctx.sport, game);
+  const syncInjuries = extractInjuryListForLLM(
+    ctx.sport,
+    game.homeTeam.abbreviation,
+    ctx.homeInjuries,
+    game.awayTeam.abbreviation,
+    ctx.awayInjuries,
+  );
+  newPred.narrative = buildAdapterNarrative(
+    newPred,
+    ctx.sport,
+    game,
+    syncInjuries,
+  );
 
   const prediction = translateNewEnginePrediction(
     game,
@@ -175,7 +302,7 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
     game.overUnder,
   );
 
-  // Persist on first generation (same create-once semantics as the old engine).
+  // Persist on first generation; never overwrite an existing settled record.
   const gameId = game.id;
   const sport = game.sport;
   const predictedWinner = prediction.predictedWinner;
@@ -187,7 +314,24 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
 
   enqueueWrite(async () => {
     const existing = await prisma.predictionResult.findUnique({ where: { gameId } });
-    if (existing) return;
+    if (existing) {
+      if (existing.actualWinner !== null || existing.wasCorrect !== null || existing.resolvedAt !== null) {
+        return;
+      }
+      await prisma.predictionResult.update({
+        where: { gameId },
+        data: {
+          sport,
+          predictedWinner,
+          confidence,
+          isTossUp,
+          homeElo,
+          awayElo,
+          homeWinProb,
+        },
+      });
+      return;
+    }
     await prisma.predictionResult.create({
       data: {
         gameId,
@@ -264,7 +408,10 @@ export async function enrichPredictionWithLLMNarrative(
     ctx.awayInjuries,
   );
 
-  const versionHash = computeVersionHash(prediction, injuries);
+  const seasonContext =
+    game.seasonContext ??
+    deriveSeasonContext({ sport, gameTime: game.gameTime });
+  const versionHash = computeVersionHash(prediction, injuries, seasonContext);
 
   // Tier-2 cache hit: reuse stored narrative, no OpenAI call.
   const cached = await getCachedLLMNarrative(game.id, versionHash);
@@ -321,15 +468,24 @@ function buildLLMNarrativeInput(
     ),
   );
   const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const seasonContext =
+    game.seasonContext ??
+    deriveSeasonContext({ sport, gameTime: game.gameTime });
+  const decisionFactors = buildDecisionNarrativeFactors(newPred, game);
   const narrativeInput = buildNarrativeInput(
-    newPred.factors,
+    decisionFactors,
     band,
     newPred.confidence,
     game.homeTeam.abbreviation,
     game.awayTeam.abbreviation,
     winnerAbbr,
     sport,
+    injuries,
+    seasonContext,
+    game.homeTeam.name,
+    game.awayTeam.name,
   );
+  prioritizeProjectionFactor(narrativeInput, decisionFactors);
 
   const topFactors: FactorContribution[] = [narrativeInput.leadFactor].concat(
     narrativeInput.supportingFactors,
@@ -357,5 +513,6 @@ function buildLLMNarrativeInput(
     topFactors,
     counterpoint: narrativeInput.counterpoint,
     injuries,
+    seasonContext,
   };
 }

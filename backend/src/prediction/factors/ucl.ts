@@ -12,28 +12,12 @@
  * Railway. If we add a proxy service or paid xG API later, re-add this
  * factor and rebalance weights.
  *
- * Pedigree and city coords live in seed JSON files in lib/data/.
+ * Pedigree and travel factors use verified JSON tables in lib/data/.
+ * When those tables are empty, the factors stay unavailable.
  */
 
 import type { GameContext, FactorContribution } from "../types";
 import { fixtureCongestionFactor, keyPlayerFactor } from "./soccerCommon";
-import pedigreeRaw from "../../lib/data/uclPedigree.json" assert { type: "json" };
-import cityCoordsRaw from "../../lib/data/uclCityCoords.json" assert { type: "json" };
-
-// ─── Seed data ──────────────────────────────────────────────────────────────
-
-interface PedigreeFile {
-  _meta?: unknown;
-  pedigree: Record<string, number>;
-}
-interface CityCoordsFile {
-  _meta?: unknown;
-  cities: Record<string, [number, number]>;   // [lat, lon]
-  teamCity: Record<string, string>;
-}
-
-const PEDIGREE = (pedigreeRaw as unknown as PedigreeFile).pedigree ?? {};
-const COORDS = cityCoordsRaw as unknown as CityCoordsFile;
 
 // ─── Public entrypoint ──────────────────────────────────────────────────────
 
@@ -58,13 +42,13 @@ export function computeUCLFactors(ctx: GameContext): FactorContribution[] {
 }
 
 // ─── Pedigree ──────────────────────────────────────────────────────────────
-// Use the seeded 5-year UCL Elo-like rating to reward recent European
-// experience. Each 100 pts of pedigree difference ≈ 8 Elo, capped ±25.
+// Use verified UCL pedigree ratings only. Each 100 pts of pedigree difference
+// is worth ≈8 Elo, capped ±25. Empty data keeps this factor unavailable.
 
 function pedigreeFactor(ctx: GameContext): FactorContribution {
   const weight = 0.084;
-  const homePed = PEDIGREE[ctx.game.homeTeam.name];
-  const awayPed = PEDIGREE[ctx.game.awayTeam.name];
+  const homePed = ctx.uclPedigree?.home;
+  const awayPed = ctx.uclPedigree?.away;
 
   if (homePed === undefined || awayPed === undefined) {
     return {
@@ -102,9 +86,8 @@ function pedigreeFactor(ctx: GameContext): FactorContribution {
 
 function travelFactor(ctx: GameContext): FactorContribution {
   const weight = 0.056;
-  const homeCity = COORDS.teamCity[ctx.game.homeTeam.name];
-  const awayCity = COORDS.teamCity[ctx.game.awayTeam.name];
-  if (!homeCity || !awayCity) {
+  const travel = ctx.uclTravel;
+  if (!travel) {
     return {
       key: "ucl_travel",
       label: "Continental travel burden",
@@ -112,26 +95,12 @@ function travelFactor(ctx: GameContext): FactorContribution {
       weight,
       available: false,
       hasSignal: false,
-      evidence: `City coordinates unavailable for ${homeCity ? ctx.game.awayTeam.name : ctx.game.homeTeam.name} — travel factor inactive`,
+      evidence: "Verified UCL team location data unavailable — travel factor inactive",
     };
   }
 
-  const homeCoord = COORDS.cities[homeCity];
-  const awayCoord = COORDS.cities[awayCity];
-  if (!homeCoord || !awayCoord) {
-    return {
-      key: "ucl_travel",
-      label: "Continental travel burden",
-      homeDelta: 0,
-      weight,
-      available: false,
-      hasSignal: false,
-      evidence: "City coordinate lookup failed — travel factor inactive",
-    };
-  }
-
-  const km = haversineKm(homeCoord, awayCoord);
-  if (homeCity === awayCity || km < 1500) {
+  const km = travel.distanceKm;
+  if (travel.homeCity === travel.awayCity || km < 1500) {
     return {
       key: "ucl_travel",
       label: "Continental travel burden",
@@ -152,19 +121,6 @@ function travelFactor(ctx: GameContext): FactorContribution {
     weight,
     available: true,
     hasSignal: true,
-    evidence: `${ctx.game.awayTeam.name} traveled ~${Math.round(km)}km to ${homeCity} — long-travel fatigue factor (+${delta} Elo home)`,
+    evidence: `${ctx.game.awayTeam.name} traveled ~${Math.round(km)}km to ${travel.homeCity} — long-travel fatigue factor (+${delta} Elo home)`,
   };
-}
-
-function haversineKm(a: [number, number], b: [number, number]): number {
-  const [lat1, lon1] = a;
-  const [lat2, lon2] = b;
-  const R = 6371; // km
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }

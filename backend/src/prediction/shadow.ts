@@ -1,9 +1,10 @@
 /**
  * Shadow comparison logger.
  *
- * When USE_NEW_PREDICTION_ENGINE=false (current state), the old engine
- * serves predictions to users. In parallel, the new engine runs and both
- * results are logged to daily JSONL files for review.
+ * Historical shadow comparison logger.
+ *
+ * User-facing predictions now always use the new engine. This module remains
+ * only for old diagnostic logs and should not run on the response path.
  *
  * A shadow-engine failure NEVER affects the user-facing response.
  * Writes are append-only, async, fire-and-forget.
@@ -35,7 +36,12 @@ import {
   type SoccerLeague,
 } from "../lib/soccerStandings";
 import { lookupManagerChange } from "../lib/soccerManagerChanges";
+import {
+  lookupUclPedigreePair,
+  lookupUclTravelInfo,
+} from "../lib/uclVerifiedData";
 import { fetchMarketConsensus } from "../lib/sharpApi";
+import { deriveSeasonContext, type NarrativeSeasonContext } from "./seasonContext";
 import type { SoccerStakes } from "./types";
 import { createInitialVersion } from "../lib/ingestion/predictionVersions";
 import { useNewPredictionEngine } from "../env";
@@ -131,10 +137,21 @@ export async function cleanOldShadowLogs(): Promise<void> {
  * parallel fetches this function orchestrates.
  */
 export async function buildGameContext(
-  game: { id: string; sport: string; homeTeam: any; awayTeam: any; gameTime: string; venue: string },
+  game: {
+    id: string;
+    sport: string;
+    homeTeam: any;
+    awayTeam: any;
+    gameTime: string;
+    venue: string;
+    seasonContext?: NarrativeSeasonContext | null;
+  },
 ): Promise<GameContext> {
   const sport = game.sport;
   const gameDate = new Date(game.gameTime);
+  const seasonContext =
+    game.seasonContext ??
+    deriveSeasonContext({ sport, gameTime: game.gameTime });
 
   const isSoccer = ["EPL", "MLS", "UCL"].includes(sport);
 
@@ -158,6 +175,8 @@ export async function buildGameContext(
     leagueStandings,
     marketConsensus,
     homeAvailability, awayAvailability,
+    uclPedigree,
+    uclTravel,
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
@@ -204,6 +223,12 @@ export async function buildGameContext(
         },
       })
       .catch(() => [] as Array<{ playerName: string; status: string }>),
+    sport === "UCL"
+      ? lookupUclPedigreePair(game.homeTeam.name, game.awayTeam.name)
+      : Promise.resolve(null),
+    sport === "UCL"
+      ? lookupUclTravelInfo(game.homeTeam.name, game.awayTeam.name)
+      : Promise.resolve(null),
   ]);
 
   // Translate PlayerInjury[] → TeamInjuryReport, then merge in
@@ -216,14 +241,14 @@ export async function buildGameContext(
   const homeInjuries = mergePlayerAvailability(homeInjuriesEspn, homeAvailability);
   const awayInjuries = mergePlayerAvailability(awayInjuriesEspn, awayAvailability);
 
-  // Manager-change lookup is synchronous + cheap; resolve it after the
-  // parallel block so we don't have to branch on sport inside Promise.all.
-  const homeManagerChange = isSoccer
-    ? lookupManagerChange(sport, game.homeTeam.name, gameDate)
-    : null;
-  const awayManagerChange = isSoccer
-    ? lookupManagerChange(sport, game.awayTeam.name, gameDate)
-    : null;
+  // Manager-change data comes from an optional verified feed. If it is not
+  // configured, both values resolve null and the factor is redistributed.
+  const [homeManagerChange, awayManagerChange] = isSoccer
+    ? await Promise.all([
+        lookupManagerChange(sport, game.homeTeam.name, gameDate),
+        lookupManagerChange(sport, game.awayTeam.name, gameDate),
+      ])
+    : [null, null];
 
   // Stakes derived from standings (EPL / MLS only; UCL handled separately).
   let homeStakes: SoccerStakes | null = null;
@@ -250,6 +275,7 @@ export async function buildGameContext(
       name: game.homeTeam.name,
       abbreviation: game.homeTeam.abbreviation,
       logo: game.homeTeam.logo || "",
+      rank: game.homeTeam.rank,
       record: {
         wins: typeof game.homeTeam.record === "string"
           ? parseInt(game.homeTeam.record.split("-")[0] ?? "0")
@@ -264,6 +290,7 @@ export async function buildGameContext(
       name: game.awayTeam.name,
       abbreviation: game.awayTeam.abbreviation,
       logo: game.awayTeam.logo || "",
+      rank: game.awayTeam.rank,
       record: {
         wins: typeof game.awayTeam.record === "string"
           ? parseInt(game.awayTeam.record.split("-")[0] ?? "0")
@@ -277,6 +304,7 @@ export async function buildGameContext(
     venue: game.venue ?? "Unknown",
     tvChannel: "",
     status: GameStatus.Scheduled,
+    seasonContext,
   };
 
   return {
@@ -303,6 +331,8 @@ export async function buildGameContext(
     homeStakes,
     awayStakes,
     leagueStandings,
+    uclPedigree,
+    uclTravel,
     marketConsensus,
     gameDate: gameDate.toISOString(),
   };
@@ -313,14 +343,14 @@ export async function buildGameContext(
 /**
  * Run the new engine in shadow mode for a game and log the comparison.
  *
- * Called AFTER the old engine has produced its prediction. This function:
+ * Historical diagnostic helper. This function:
  * 1. Builds a GameContext from the game data
  * 2. Runs predictGame() from the new engine
  * 3. Logs both predictions to the daily shadow JSONL file
  * 4. If the new engine throws, logs to the error file instead
  *
  * CRITICAL: This is fire-and-forget. It must NEVER be awaited on the
- * response path. The old prediction is already served to the user.
+ * response path.
  */
 export function runShadowPrediction(
   game: { id: string; sport: string; homeTeam: any; awayTeam: any; gameTime: string; venue: string },

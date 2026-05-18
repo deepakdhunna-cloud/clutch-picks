@@ -187,6 +187,7 @@ export function buildPredictionEnrichment(pred: {
 export async function resolvePicks(): Promise<{ resolved: number; skipped: number }> {
   let resolved = 0;
   let skipped = 0;
+  let voided = 0;
 
   try {
     const unresolvedPicks = await prisma.userPick.findMany({
@@ -199,7 +200,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
     const calibrationCutoff = new Date(Date.now() - 30 * 60 * 1000);
     const unresolvedPredictions = await prisma.predictionResult.findMany({
       where: { actualWinner: null, createdAt: { lt: calibrationCutoff } },
-      select: { gameId: true },
+      select: { gameId: true, createdAt: true },
     });
 
     if (unresolvedPicks.length === 0 && unresolvedPredictions.length === 0) {
@@ -213,6 +214,8 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
     ])];
     console.log(`[resolve-picks] Checking ${uniqueGameIds.length} unique games (${unresolvedPicks.length} user picks, ${unresolvedPredictions.length} calibration rows)`);
     const gameResultMap = new Map<string, FinalGameResult | null>();
+    const pickGameIdSet = new Set(unresolvedPicks.map((p) => p.gameId));
+    const staleUnavailableCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     for (const gameId of uniqueGameIds) {
       try {
@@ -221,6 +224,36 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
       } catch (err) {
         console.error(`[resolve-picks] Error fetching game ${gameId}:`, err);
         gameResultMap.set(gameId, null);
+      }
+    }
+
+    // Some scheduled/postponed/renumbered ESPN events disappear from the API
+    // before ever becoming final. Keep those out of calibration, but close the
+    // row so diagnostics and workers do not carry dead records forever.
+    for (const prediction of unresolvedPredictions) {
+      if (pickGameIdSet.has(prediction.gameId)) continue;
+      if (prediction.createdAt >= staleUnavailableCutoff) continue;
+      if (gameResultMap.get(prediction.gameId) !== null) continue;
+
+      try {
+        const result = await prisma.predictionResult.updateMany({
+          where: {
+            gameId: prediction.gameId,
+            actualWinner: null,
+            createdAt: { lt: staleUnavailableCutoff },
+          },
+          data: {
+            actualWinner: "unavailable",
+            wasCorrect: null,
+            resolvedAt: new Date(),
+          },
+        });
+        if (result.count > 0) {
+          voided += result.count;
+          console.warn(`[resolve-picks] Voided stale unavailable PredictionResult for game ${prediction.gameId}`);
+        }
+      } catch (err) {
+        console.error(`[resolve-picks] Error voiding stale PredictionResult for game ${prediction.gameId}:`, err);
       }
     }
 
@@ -344,7 +377,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
     console.error("[resolve-picks] Fatal error during resolution:", err);
   }
 
-  console.log(`[resolve-picks] Done: ${resolved} resolved, ${skipped} skipped`);
+  console.log(`[resolve-picks] Done: ${resolved} resolved, ${skipped} skipped, ${voided} voided`);
   return { resolved, skipped };
 }
 

@@ -68,6 +68,7 @@ const ESPN_SPORT_PATHS: Record<string, string> = {
   NCAAB: "basketball/mens-college-basketball",
   EPL: "soccer/eng.1",
   UCL: "soccer/uefa.champions",
+  IPL: "cricket/8048",
 };
 
 // ─── ESPN game fetcher ──────────────────────────────────────────────────

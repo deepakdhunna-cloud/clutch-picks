@@ -7,10 +7,13 @@ import { NHLJersey } from './NHLJersey';
 import { CollegeBBJersey } from './CollegeBBJersey';
 import { SoccerJersey as SoccerJerseyNew } from './SoccerJersey';
 import { UCLJersey } from './UCLJersey';
+import { CricketJersey } from './CricketJersey';
+import { TennisJersey } from './TennisJersey';
 import { getTeamColors } from '@/lib/team-colors';
 
 interface TeamJerseyProps {
   teamAbbreviation: string;
+  teamName?: string;
   primaryColor?: string;
   secondaryColor?: string;
   size?: number;
@@ -23,7 +26,7 @@ interface TeamJerseyProps {
  */
 function getSportJersey(
   sport: Sport,
-  props: { primary: string; secondary: string; accent: string; abbr: string; number: string; size: number },
+  props: { primary: string; secondary: string; accent: string; abbr: string; teamName?: string; number: string; size: number },
 ) {
   switch (sport) {
     case Sport.NBA:
@@ -44,6 +47,10 @@ function getSportJersey(
       return <SoccerJerseyNew {...props} />;
     case Sport.UCL:
       return <UCLJersey {...props} />;
+    case Sport.IPL:
+      return <CricketJersey {...props} />;
+    case Sport.TENNIS:
+      return <TennisJersey {...props} />;
     default:
       return <NFLJersey {...props} />;
   }
@@ -51,6 +58,7 @@ function getSportJersey(
 
 export const TeamJersey = memo(function TeamJersey({
   teamAbbreviation,
+  teamName,
   primaryColor,
   secondaryColor,
   size = 56,
@@ -75,6 +83,7 @@ export const TeamJersey = memo(function TeamJersey({
     secondary,
     accent,
     abbr: teamAbbreviation,
+    teamName,
     number: teamAbbreviation,
     size,
   });
@@ -83,6 +92,7 @@ export const TeamJersey = memo(function TeamJersey({
 // Compact version for smaller spaces - memoized
 export const TeamJerseyCompact = memo(function TeamJerseyCompact({
   teamAbbreviation,
+  teamName,
   primaryColor,
   secondaryColor,
   size = 44,
@@ -92,6 +102,7 @@ export const TeamJerseyCompact = memo(function TeamJerseyCompact({
   return (
     <TeamJersey
       teamAbbreviation={teamAbbreviation}
+      teamName={teamName}
       primaryColor={primaryColor}
       secondaryColor={secondaryColor}
       size={size}

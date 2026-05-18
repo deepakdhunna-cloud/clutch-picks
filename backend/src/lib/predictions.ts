@@ -22,6 +22,7 @@ const SPORT_CALIBRATION: Record<string, { dampener: number; ceiling: number; tos
   NHL:   { dampener: 0.80, ceiling: 80, tossUpCeiling: 53 },
   MLS:   { dampener: 0.75, ceiling: 78, tossUpCeiling: 53 },
   EPL:   { dampener: 0.75, ceiling: 82, tossUpCeiling: 53 },
+  IPL:   { dampener: 0.78, ceiling: 76, tossUpCeiling: 53 },
 };
 function getCalibration(sport: string) {
   return SPORT_CALIBRATION[sport] ?? { dampener: 0.65, ceiling: 87, tossUpCeiling: 54 };
@@ -43,10 +44,23 @@ function roundHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
+function textHash(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function pickVariant<T>(items: T[], seed: string): T {
+  return items[textHash(seed) % items.length]!;
+}
+
 // ─── Sport-specific sigmoid scaling: NBA is most predictable, MLB least ─────
 const SIGMOID_SCALING: Record<string, number> = {
   NBA: 5.5, NFL: 4.0, NCAAF: 4.5, NCAAB: 5.0,
   MLB: 3.0, NHL: 3.5, MLS: 4.0, EPL: 4.5,
+  IPL: 3.2,
 };
 
 // ─── Over/Under baseline by sport (fallback if ESPN doesn't provide) ────────
@@ -60,6 +74,7 @@ const SPORT_OVER_UNDER_BASELINES: Record<string, number> = {
   NHL: 6,
   MLS: 2.5,
   EPL: 2.5,
+  IPL: 320,
 };
 
 // ─── Season total games by sport (for dampening calculation) ─────────────────
@@ -73,7 +88,20 @@ const SEASON_TOTAL_GAMES: Record<string, number> = {
   NHL: 82,
   MLS: 34,
   EPL: 38,
+  IPL: 14,
 };
+
+const SPORTS_WITH_STRUCTURED_INJURY_FEED = new Set(["NBA", "MLB", "NHL"]);
+
+type SeasonContextCacheShape = {
+  phase: string;
+  label: string;
+  source: string;
+};
+
+function hasStructuredInjuryFeed(sport: string): boolean {
+  return SPORTS_WITH_STRUCTURED_INJURY_FEED.has(sport);
+}
 
 // ─── AI analysis cache (game ID + injury state hash) ────────────────────────
 
@@ -81,6 +109,7 @@ import { LRUCache } from "lru-cache";
 
 const AI_CACHE_TTL_MS       = 60 * 60 * 1000; // 1 hour for games > 6 hours away
 const AI_CACHE_TTL_NEAR_MS  = 20 * 60 * 1000; // 20 minutes for games within 6 hours
+const AI_ANALYSIS_STYLE_VERSION = "bar-friend-v4";
 const aiAnalysisCache = new LRUCache<string, { text: string; timestamp: number }>({ max: 500 });
 
 /**
@@ -108,12 +137,24 @@ function computeInjuryHash(
   return h.toString(36);
 }
 
+function seasonContextCacheKey(
+  seasonContext: SeasonContextCacheShape | null | undefined,
+): string {
+  if (!seasonContext) return "no-season-context";
+  return [
+    seasonContext.phase,
+    seasonContext.label,
+    seasonContext.source,
+  ].join(":");
+}
+
 function aiCacheKey(
   gameId: string,
   homeInjuries: TeamInjuryReport,
-  awayInjuries: TeamInjuryReport
+  awayInjuries: TeamInjuryReport,
+  seasonContext?: SeasonContextCacheShape | null,
 ): string {
-  return `${gameId}_${computeInjuryHash(homeInjuries, awayInjuries)}`;
+  return `${AI_ANALYSIS_STYLE_VERSION}_${gameId}_${computeInjuryHash(homeInjuries, awayInjuries)}_${seasonContextCacheKey(seasonContext)}`;
 }
 
 function aiCacheTTL(gameDateTime: string): number {
@@ -125,9 +166,10 @@ function getCachedAIAnalysis(
   gameId: string,
   gameDateTime: string,
   homeInjuries: TeamInjuryReport,
-  awayInjuries: TeamInjuryReport
+  awayInjuries: TeamInjuryReport,
+  seasonContext?: SeasonContextCacheShape | null,
 ): string | null {
-  const key = aiCacheKey(gameId, homeInjuries, awayInjuries);
+  const key = aiCacheKey(gameId, homeInjuries, awayInjuries, seasonContext);
   const entry = aiAnalysisCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > aiCacheTTL(gameDateTime)) {
@@ -141,9 +183,10 @@ function setCachedAIAnalysis(
   gameId: string,
   homeInjuries: TeamInjuryReport,
   awayInjuries: TeamInjuryReport,
-  text: string
+  text: string,
+  seasonContext?: SeasonContextCacheShape | null,
 ): void {
-  const key = aiCacheKey(gameId, homeInjuries, awayInjuries);
+  const key = aiCacheKey(gameId, homeInjuries, awayInjuries, seasonContext);
   aiAnalysisCache.set(key, { text, timestamp: Date.now() });
 }
 
@@ -183,6 +226,30 @@ function injuryList(
     .join(", ");
 }
 
+function formatTeamAvailabilityForPrompt(
+  report: TeamInjuryReport,
+  feedAvailable: boolean,
+): string {
+  if (!feedAvailable) return "Structured injury feed unavailable; do not claim healthy roster.";
+  const outList = injuryList(report.out, 5);
+  const doubtList = injuryList(report.doubtful, 3);
+  if (report.totalOut === 0 && report.totalDoubtful === 0) {
+    return "No Out/Doubtful players listed in structured feed.";
+  }
+  return `Out: ${outList || "none"}. Doubtful: ${doubtList || "none"}.`;
+}
+
+function teamSubjectForNarrative(sport: string, team: Team): string {
+  if (["NBA", "NFL", "MLB", "NHL", "NCAAB", "NCAAF"].includes(sport)) {
+    return `the ${team.name}`;
+  }
+  return team.name;
+}
+
+function teamPossessiveForNarrative(team: Team): string {
+  return team.name.endsWith("s") ? `${team.name}'` : `${team.name}'s`;
+}
+
 // ─── Template-based fallback analysis ───────────────────────────────────────
 
 function buildTemplateAnalysis(
@@ -208,16 +275,100 @@ function buildTemplateAnalysis(
   const winnerInjuries = predictedWinner === "home" ? homeInjuries : awayInjuries;
   const winnerExtended = predictedWinner === "home" ? homeExtended : awayExtended;
   const loserExtended = predictedWinner === "home" ? awayExtended : homeExtended;
+  const injuryFeedAvailable = hasStructuredInjuryFeed(game.sport);
 
   const winnerRecord = `${winnerTeam.record.wins}-${winnerTeam.record.losses}`;
   const loserRecord = `${loserTeam.record.wins}-${loserTeam.record.losses}`;
   const winnerFormStr = winnerForm.formString || "N/A";
   const loserFormStr = loserForm.formString || "N/A";
+  const winnerSubject = teamSubjectForNarrative(game.sport, winnerTeam);
+  const loserSubject = teamSubjectForNarrative(game.sport, loserTeam);
+  const winnerPossessive = teamPossessiveForNarrative(winnerTeam);
+  const loserPossessive = teamPossessiveForNarrative(loserTeam);
 
   const locationStr = predictedWinner === "home" ? "at home" : "on the road";
-  const confLevel = confidence >= 80 ? "strong" : confidence >= 70 ? "solid" : confidence >= 60 ? "slight" : "marginal";
+  const seed = `${game.id}|${game.sport}|${winnerTeam.abbreviation}|${loserTeam.abbreviation}`;
+  const seasonPrefix = game.seasonContext
+    ? pickVariant(
+      [
+        `${game.seasonContext.label}: `,
+        `In this ${game.seasonContext.label.toLowerCase()}, `,
+        `Context matters here — ${game.seasonContext.label.toLowerCase()}: `,
+      ],
+      `${seed}|season`,
+    )
+    : "";
 
-  let line = `${winnerTeam.name} (${winnerRecord}, Elo ${Math.round(winnerElo)}, L10: ${winnerFormStr}) hold a ${confLevel} edge over ${loserTeam.name} (${loserRecord}, Elo ${Math.round(loserElo)}, L10: ${loserFormStr}) ${locationStr}.`;
+  const eloGap = Math.round(winnerElo - loserElo);
+  const winnerGames = winnerTeam.record.wins + winnerTeam.record.losses + (winnerTeam.record.ties ?? 0);
+  const loserGames = loserTeam.record.wins + loserTeam.record.losses + (loserTeam.record.ties ?? 0);
+  const winnerWinPct = winnerGames > 0
+    ? (winnerTeam.record.wins + (winnerTeam.record.ties ?? 0) * 0.5) / winnerGames
+    : 0.5;
+  const loserWinPct = loserGames > 0
+    ? (loserTeam.record.wins + (loserTeam.record.ties ?? 0) * 0.5) / loserGames
+    : 0.5;
+  const winnerFormGames = winnerForm.wins + winnerForm.losses;
+  const loserFormGames = loserForm.wins + loserForm.losses;
+  const winnerFormPct = winnerFormGames > 0 ? winnerForm.wins / winnerFormGames : 0.5;
+  const loserFormPct = loserFormGames > 0 ? loserForm.wins / loserFormGames : 0.5;
+
+  const mainReason = (() => {
+    if (predictedWinner === "home") {
+      return `the home setup matters, and the model gives ${winnerSubject} first crack at the cleaner path`;
+    }
+    if (eloGap >= 25) {
+      return `${winnerPossessive} power rating travels well enough to offset the road setting`;
+    }
+    if (winnerFormPct > loserFormPct + 0.15) {
+      return `${winnerPossessive} recent form is carrying more of the case`;
+    }
+    return `${winnerSubject} have a few more usable edges in the current matchup data`;
+  })();
+
+  const leanLabel = isTossUp || confidence < 55
+    ? "thin lean"
+    : confidence < 65
+      ? "modest lean"
+      : confidence < 75
+        ? "solid lean"
+        : "firm model read";
+
+  const sentences: string[] = [
+    seasonPrefix +
+    pickVariant(
+      [
+        `I lean ${winnerSubject} over ${loserSubject}, mostly because ${mainReason}.`,
+        `${winnerSubject} are the pick over ${loserSubject}, and the short version is this: ${mainReason}.`,
+        `Give me ${winnerSubject} as a ${leanLabel} over ${loserSubject}; ${mainReason}.`,
+      ],
+      `${seed}|open`,
+    ),
+  ];
+
+  if (game.seasonContext) {
+    sentences.push(
+      pickVariant(
+        [
+          `Because this is ${game.seasonContext.label.toLowerCase()}, the regular-season resume is background and the model is looking for repeatable matchup edges.`,
+          `The ${game.seasonContext.label.toLowerCase()} context matters here, so the record is only part of the story.`,
+          `${game.seasonContext.detail}`,
+        ],
+        `${seed}|season-detail`,
+      ),
+    );
+  }
+
+  sentences.push(
+    pickVariant(
+      [
+        `The core numbers are not mysterious: ${winnerTeam.name} are ${winnerRecord} with ${winnerFormStr} recent form, while ${loserTeam.name} are ${loserRecord} with ${loserFormStr}.`,
+        `The model is weighing ${winnerRecord} against ${loserRecord}, recent form at ${winnerFormStr} vs ${loserFormStr}, and Elo ${Math.round(winnerElo)} vs ${Math.round(loserElo)}.`,
+        `The resume check gives ${winnerTeam.name} ${winnerRecord}, ${winnerFormStr} lately, and a ${Math.round(winnerElo)} Elo mark against ${loserPossessive} ${winnerRecord === loserRecord ? "matching" : loserRecord} record and ${Math.round(loserElo)} Elo.`,
+      ],
+      `${seed}|numbers`,
+    ),
+  );
 
   // Rest sentence — only if there's a meaningful difference
   const homeRest = homeExtended.restDays;
@@ -227,27 +378,60 @@ function buildTemplateAnalysis(
     const fatiguedTeam = homeRest > awayRest ? game.awayTeam.name : game.homeTeam.name;
     const restedDays = homeRest > awayRest ? homeRest : awayRest;
     const fatiguedDays = homeRest > awayRest ? awayRest : homeRest;
-    line += ` ${restedTeam} has ${restedDays} days rest while ${fatiguedTeam} plays on ${fatiguedDays === 0 ? "a back-to-back" : "short rest"}.`;
+    sentences.push(`${restedTeam} also has the schedule edge with ${restedDays} days rest while ${fatiguedTeam} plays on ${fatiguedDays === 0 ? "a back-to-back" : "short rest"}.`);
   } else if ((homeRest === 0 || awayRest === 0) && homeRest !== awayRest) {
     const b2bTeam = homeRest === 0 ? game.homeTeam.name : game.awayTeam.name;
-    line += ` ${b2bTeam} is on a back-to-back.`;
+    sentences.push(`${b2bTeam} is on a back-to-back, which is the kind of small schedule detail that can swing a close projection.`);
+  } else if (predictedWinner === "home" && winnerExtended.homeRecord.wins + winnerExtended.homeRecord.losses > 0) {
+    sentences.push(`${winnerPossessive} home split (${winnerExtended.homeRecord.wins}-${winnerExtended.homeRecord.losses}) gives the pick a little more shape.`);
+  } else if (predictedWinner === "away" && winnerExtended.awayRecord.wins + winnerExtended.awayRecord.losses > 0) {
+    sentences.push(`${winnerPossessive} road split (${winnerExtended.awayRecord.wins}-${winnerExtended.awayRecord.losses}) is part of why the model is willing to travel with them.`);
   }
 
-  // Injury sentence — only if winner has notable absences
-  if (winnerInjuries.totalOut > 0) {
+  // Injury sentence — only if the sport has a structured feed and the winner
+  // has notable absences. For unsupported leagues, say nothing rather than
+  // implying a clean injury report.
+  if (injuryFeedAvailable && winnerInjuries.totalOut > 0) {
     const outList = injuryList(winnerInjuries.out, 2);
-    line += ` Key absence${winnerInjuries.totalOut > 1 ? "s" : ""}: ${outList} (out) may limit ${winnerTeam.name}'s ceiling.`;
-  } else if (winnerInjuries.totalDoubtful > 0) {
+    sentences.push(`The availability risk is real for ${winnerTeam.name}: ${outList} ${winnerInjuries.totalOut > 1 ? "are" : "is"} out, which trims some margin off the pick.`);
+  } else if (injuryFeedAvailable && winnerInjuries.totalDoubtful > 0) {
     const doubtList = injuryList(winnerInjuries.doubtful, 1);
-    line += ` Watch ${doubtList} (doubtful) for ${winnerTeam.name}.`;
+    sentences.push(`Keep an eye on ${doubtList} being doubtful for ${winnerTeam.name}; that matters more if this stays tight late.`);
   }
 
+  const counterpoints: string[] = [];
   if (isTossUp) {
-    line += ` This is a toss-up — Elo ratings (${Math.round(homeElo)} vs ${Math.round(awayElo)}) show neither team has a clear edge.`;
+    counterpoints.push(`the probabilities are close enough that this is still more lean than statement`);
+  }
+  if (loserFormPct > winnerFormPct + 0.15) {
+    counterpoints.push(`${loserPossessive} recent form (${loserFormStr}) is better than ${winnerPossessive} (${winnerFormStr})`);
+  }
+  if (loserWinPct > winnerWinPct + 0.05) {
+    counterpoints.push(`${loserSubject} own the better season record`);
+  }
+  if (eloGap < -25) {
+    counterpoints.push(`${loserSubject} carry the higher raw Elo number`);
   }
 
-  return line;
+  if (counterpoints.length > 0) {
+    sentences.push(`The counterpoint is ${counterpoints.slice(0, 2).join(", and ")}.`);
+  }
+
+  sentences.push(
+    pickVariant(
+      [
+        `For fans, the hook is whether ${winnerPossessive} main edge shows up before ${loserPossessive} counterpunch does.`,
+        `That is what makes the card interesting: ${winnerSubject} have the model's nod, but ${loserSubject} have enough here to test it.`,
+        `The watch point is simple: if ${winnerSubject} control the part of the matchup the model likes, the pick makes sense fast; if not, this gets uncomfortable.`,
+      ],
+      `${seed}|fan`,
+    ),
+  );
+
+  return sentences.slice(0, 7).join(" ");
 }
+
+export const _buildTemplateAnalysis_forTest = buildTemplateAnalysis;
 
 // ─── AI agreement helper ─────────────────────────────────────────────────────
 
@@ -305,7 +489,13 @@ async function generateAIAnalysis(
   dataCoverage: number
 ): Promise<{ text: string; aiAgreesWithModel: boolean }> {
   // Return cached response if available
-  const cached = getCachedAIAnalysis(game.id, game.dateTime, homeInjuries, awayInjuries);
+  const cached = getCachedAIAnalysis(
+    game.id,
+    game.dateTime,
+    homeInjuries,
+    awayInjuries,
+    game.seasonContext,
+  );
   if (cached) {
     const aiPrefersHome = aiPrefersHomeTeam(cached, game.homeTeam.name, game.awayTeam.name);
     return { text: cached, aiAgreesWithModel: aiPrefersHome === (predictedWinner === "home") };
@@ -339,18 +529,13 @@ async function generateAIAnalysis(
   const restSection = `Rest: Home rest: ${homeRestStr} | Away rest: ${awayRestStr}`;
 
   // ── Build injury section ────────────────────────────────────────────────
-  const homeOutList = injuryList(homeInjuries.out, 5);
-  const homeDoubtList = injuryList(homeInjuries.doubtful, 3);
-  const awayOutList = injuryList(awayInjuries.out, 5);
-  const awayDoubtList = injuryList(awayInjuries.doubtful, 3);
+  const injuryFeedAvailable = hasStructuredInjuryFeed(game.sport);
 
-  const homeInjuryStr = homeInjuries.totalOut === 0 && homeInjuries.totalDoubtful === 0
-    ? "Healthy roster."
-    : `Out: ${homeOutList || "none"}. Doubtful: ${homeDoubtList || "none"}.`;
-  const awayInjuryStr = awayInjuries.totalOut === 0 && awayInjuries.totalDoubtful === 0
-    ? "Healthy roster."
-    : `Out: ${awayOutList || "none"}. Doubtful: ${awayDoubtList || "none"}.`;
-  const injurySection = `Injuries: Home — ${homeInjuryStr} Away — ${awayInjuryStr}`;
+  const homeInjuryStr = formatTeamAvailabilityForPrompt(homeInjuries, injuryFeedAvailable);
+  const awayInjuryStr = formatTeamAvailabilityForPrompt(awayInjuries, injuryFeedAvailable);
+  const injurySection = injuryFeedAvailable
+    ? `Injuries: Home — ${homeInjuryStr} Away — ${awayInjuryStr}`
+    : "Injuries: structured injury feed unavailable for this league; do not mention injuries unless listed elsewhere in the prompt.";
 
   // ── Build H2H section ───────────────────────────────────────────────────
   const h2hTotal = homeExtended.headToHeadResults.length;
@@ -401,6 +586,10 @@ async function generateAIAnalysis(
     ? `Data note: ${Math.round(dataCoverage * 100)}% factor coverage.`
     : "";
 
+  const seasonContextSection = game.seasonContext
+    ? `Season context: ${game.seasonContext.label} — ${game.seasonContext.detail}`
+    : "";
+
   const userPrompt = `
 Sport: ${game.sport}
 Matchup: ${game.awayTeam.name} (${game.awayTeam.record.wins}-${game.awayTeam.record.losses}, L10: ${awayForm.formString || "N/A"}) @ ${game.homeTeam.name} (${game.homeTeam.record.wins}-${game.homeTeam.record.losses}, L10: ${homeForm.formString || "N/A"})
@@ -413,12 +602,13 @@ ${injurySection}
 ${weatherSection ? weatherSection + "\n" : ""}${situationalSection ? situationalSection + "\n" : ""}${lineupSection ? lineupSection + "\n" : ""}${h2hSection}
 ${trendsSection}
 ${splitsSection}
+${seasonContextSection ? seasonContextSection + "\n" : ""}${seasonContextSection ? "Do not write this like a generic regular-season game; reflect the provided season context naturally.\n" : ""}
 ${tossUpNote}
 ${dataCoverageNote ? dataCoverageNote + "\n" : ""}
 Factors:
 ${factorSummary}
 
-Write a sharp 2-3 sentence sports prediction analysis.`.trim();
+Write a sharp 4-6 sentence game-card prediction narrative. Explain why the model picked ${predictedWinner === "home" ? game.homeTeam.name : game.awayTeam.name}, include the best counterpoint if the matchup is close, and keep it under 10 sentences.`.trim();
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -433,12 +623,12 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
           {
             role: "system",
             content:
-              "You are an elite sports analyst writing for a prediction app called Clutch Picks. Based only on the data provided, independently assess which team has the statistical edge. Do not assume any pre-determined winner. If the data is mixed or close, say so honestly. Never state a conclusion the data does not support. Write exactly 2-3 sentences that are specific, data-driven, and reference concrete numbers: rest days, head-to-head records, scoring trends, Elo ratings, and key injuries when they tell a meaningful story. Never use generic phrases like 'should be a good game' or 'anything can happen'.",
+              "You are writing for Clutch Picks. Sound like a smart sports friend at a bar: conversational, specific, confident but not hypey. Explain why the model picked the provided team using only the data in the prompt. If the data is mixed or close, say so honestly and include the best counterpoint. Write 4-6 short sentences, maximum 10, unique to this matchup. Include why the game is interesting from a fan perspective. Mention out/doubtful injuries only when provided. If season context is provided, make the narrative fit that moment (playoff, tournament, bowl, stretch run) instead of sounding like a generic regular-season note. Never use generic phrases like 'should be a good game' or 'anything can happen'. Never use tout/gambling hype terms like lock, guaranteed, can't lose, easy money, slam dunk, smash, hammer, sharp play, dominant, or sure thing.",
           },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 150,
-        temperature: 0.15,
+        max_tokens: 240,
+        temperature: 0.55,
       }),
       signal: AbortSignal.timeout(8000),
     });
@@ -458,7 +648,13 @@ Write a sharp 2-3 sentence sports prediction analysis.`.trim();
       return { text: fallback, aiAgreesWithModel: true };
     }
 
-    setCachedAIAnalysis(game.id, homeInjuries, awayInjuries, text);
+    setCachedAIAnalysis(
+      game.id,
+      homeInjuries,
+      awayInjuries,
+      text,
+      game.seasonContext,
+    );
     const aiPrefersHome = aiPrefersHomeTeam(text, game.homeTeam.name, game.awayTeam.name);
     const aiAgreesWithModel = aiPrefersHome === (predictedWinner === "home");
     return { text, aiAgreesWithModel };
@@ -484,6 +680,7 @@ function normalisePtDiff(diff: number, sport: string): number {
     NHL: 0.8,    // NHL goal diffs are small
     MLS: 0.6,
     EPL: 0.6,
+    IPL: 28,
   };
   const s = scale[sport] ?? 10;
   return clamp(diff / s, -1, 1);
@@ -530,7 +727,7 @@ function calcValueRating(
   // Sport-specific scale: how many points of divergence = full 10/10 value
   const valueScale: Record<string, number> = {
     NFL: 3.5, NCAAF: 4.0, NBA: 4.0, NCAAB: 3.5,
-    MLB: 1.5, NHL: 1.5, MLS: 1.0, EPL: 1.0,
+    MLB: 1.5, NHL: 1.5, MLS: 1.0, EPL: 1.0, IPL: 18,
   };
   const scale = valueScale[sport] ?? 3.5;
   // Bounded [1, 10]: larger divergence = higher value rating
@@ -629,6 +826,13 @@ const SPORT_FACTOR_WEIGHTS: Record<string, SportFactorWeights> = {
     headToHead: 0.05, strengthOfSchedule: 0.05, elo: 0.18, injuries: 0.09,
     advancedMetrics: 0.02, startingPitcher: 0.00, weather: 0.02,
     situational: 0.00, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.05,
+  },
+  IPL: {
+    winPct: 0.05, recentForm: 0.11, homeAwaySplit: 0.08, pointDiff: 0.10,
+    streak: 0.03, restDays: 0.03, scoringTrend: 0.05, defenseTrend: 0.05,
+    headToHead: 0.05, strengthOfSchedule: 0.04, elo: 0.18, injuries: 0.02,
+    advancedMetrics: 0.00, startingPitcher: 0.00, weather: 0.03,
+    situational: 0.03, refereeTendency: 0.00, clutchFactor: 0.05, matchupInteraction: 0.10,
   },
 };
 
@@ -795,7 +999,7 @@ function computeRefereeTendencyScore(): { homeScore: number; awayScore: number }
 
 // ─── Close-game clutch factor ─────────────────────────────────────────────────
 const CLOSE_GAME_THRESHOLDS: Record<string, number> = {
-  NBA: 5, NFL: 7, NCAAF: 7, NCAAB: 5, MLB: 2, NHL: 1, MLS: 1, EPL: 1,
+  NBA: 5, NFL: 7, NCAAF: 7, NCAAB: 5, MLB: 2, NHL: 1, MLS: 1, EPL: 1, IPL: 18,
 };
 function computeClutchScore(
   seasonResults: Array<{ teamScore?: number; oppScore?: number; won: boolean }>,
@@ -987,6 +1191,7 @@ const ENSEMBLE_WEIGHTS: Record<string, { composite: number; elo: number; form: n
   NHL:   { composite: 0.50, elo: 0.20, form: 0.30 },
   MLS:   { composite: 0.55, elo: 0.25, form: 0.20 },
   EPL:   { composite: 0.55, elo: 0.25, form: 0.20 },
+  IPL:   { composite: 0.52, elo: 0.25, form: 0.23 },
 };
 
 /**
@@ -1455,7 +1660,7 @@ export async function generatePrediction(
   };
 
   // ── Factor 15: Weather (outdoor sports only) ──────────────────────────
-  // Weather impacts scoring in NFL, NCAAF, MLB, MLS, EPL.
+  // Weather impacts scoring in NFL, NCAAF, MLB, MLS, EPL, and IPL.
   // Heavy wind suppresses passing/scoring; cold temps reduce output;
   // rain/snow reduces both scoring and home advantage.
   // Score: negative = bad conditions hurt both teams (slight home advantage
@@ -1572,7 +1777,7 @@ export async function generatePrediction(
 
   const spreadScaleByMart: Record<string, number> = {
     NFL: 14, NCAAF: 18, NBA: 15, NCAAB: 12,
-    MLB: 2, NHL: 2, MLS: 1.5, EPL: 1.5,
+    MLB: 2, NHL: 2, MLS: 1.5, EPL: 1.5, IPL: 28,
   };
   const mktSpreadScale = spreadScaleByMart[sportKey] ?? 10;
 
@@ -1731,7 +1936,7 @@ export async function generatePrediction(
   // for data that doesn't exist yet. Only apply when lineups should
   // realistically be available (within 3 hours of first pitch through
   // 6 hours after, covering in-progress and just-finished games).
-  const lineupPenalties: Record<string, number> = { MLB: -8, NFL: -6, NBA: -4, NHL: -5, NCAAB: -3, NCAAF: -4, MLS: -3, EPL: -3 };
+  const lineupPenalties: Record<string, number> = { MLB: -8, NFL: -6, NBA: -4, NHL: -5, NCAAB: -3, NCAAF: -4, MLS: -3, EPL: -3, IPL: -2 };
   const maxLineupPenalty = lineupPenalties[sportKey] ?? -4;
   const hoursUntilStart = (new Date(game.dateTime).getTime() - Date.now()) / (1000 * 60 * 60);
   const lineupDataExpected = hoursUntilStart < 3 && hoursUntilStart > -6;
@@ -1748,7 +1953,7 @@ export async function generatePrediction(
 
   // Derive spread from win probability using sport-specific margin distributions
   const MARGIN_SIGMA: Record<string, number> = {
-    NBA: 12.5, NFL: 13.8, NCAAF: 17.0, NCAAB: 11.0, MLB: 3.2, NHL: 2.1, MLS: 1.4, EPL: 1.4,
+    NBA: 12.5, NFL: 13.8, NCAAF: 17.0, NCAAB: 11.0, MLB: 3.2, NHL: 2.1, MLS: 1.4, EPL: 1.4, IPL: 36,
   };
   const sigma = MARGIN_SIGMA[sportKey] ?? 10;
   const spreadProb = clamp(homeWinProbability / 100, 0.05, 0.95);

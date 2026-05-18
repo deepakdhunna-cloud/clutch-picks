@@ -133,6 +133,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TeamJerseyCompact
               teamAbbreviation={game.awayTeam.abbreviation}
+              teamName={game.awayTeam.name}
               primaryColor={awayColors.primary}
               secondaryColor={awayColors.secondary}
               size={34}
@@ -169,6 +170,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TeamJerseyCompact
               teamAbbreviation={game.homeTeam.abbreviation}
+              teamName={game.homeTeam.name}
               primaryColor={homeColors.primary}
               secondaryColor={homeColors.secondary}
               size={34}

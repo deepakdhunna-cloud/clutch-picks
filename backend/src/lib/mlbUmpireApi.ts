@@ -7,18 +7,16 @@
  *   1. Use MLB Stats API /schedule?hydrate=officials to find the home plate
  *      umpire for a given matchup. We fetch one day at a time (cached) and
  *      index by (homeMlbTeamId → umpire).
- *   2. Cross-reference the umpire name against a static JSON file of known
- *      zone biases (./data/umpireZoneTendencies.json). The file is a manual
- *      seed list derived from public UmpScorecards aggregates and should be
- *      expanded over time — see the file's own _meta.description.
+ *   2. Cross-reference the umpire name against a JSON file of verified zone
+ *      biases (./data/umpireZoneTendencies.json). The table is intentionally
+ *      empty until a documented source import or ingestion job provides rows.
  *
- * The file is intentionally JSON (not TS) so it can be updated without a
- * build. If the umpire is unknown or unassigned, `lookupHomePlateUmpire`
- * returns null and the factor stays `available: false` (but with a more
- * honest evidence string than before).
+ * If the umpire is unknown or unassigned, `lookupHomePlateUmpire` returns null
+ * and the factor stays `available: false`.
  */
 
 import { LRUCache } from "lru-cache";
+import { env } from "../env";
 import { getMLBTeamIdFromESPN } from "./mlbStatsApi";
 import umpireData from "./data/umpireZoneTendencies.json" assert { type: "json" };
 
@@ -70,15 +68,60 @@ export function normalizeUmpireName(name: string): string {
     .replace(/\s+/g, " ");
 }
 
-const RAW_UMPIRES = (umpireData as unknown as UmpireTendencyFile).umpires ?? {};
-// Build a normalized lookup table once at module load. Keys in the JSON can
-// contain accented characters or inconsistent spacing; this makes us robust.
-const TENDENCY_TABLE: Record<string, UmpireTendency> = Object.fromEntries(
-  Object.entries(RAW_UMPIRES).map(([k, v]) => [normalizeUmpireName(k), v]),
+const VERIFIED_FEED_TTL_MS = 6 * 60 * 60 * 1000;
+
+type UmpireTendencyTable = Record<string, UmpireTendency>;
+
+function isUmpireTendency(value: unknown): value is UmpireTendency {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<UmpireTendency>;
+  return (
+    typeof row.runsPerGameBias === "number" &&
+    typeof row.favorsHome === "number" &&
+    typeof row.sampleSize === "number"
+  );
+}
+
+function normalizeTendencyTable(file: UmpireTendencyFile): UmpireTendencyTable {
+  const entries = Object.entries(file.umpires ?? {}).filter((entry): entry is [string, UmpireTendency] =>
+    isUmpireTendency(entry[1]),
+  );
+  return Object.fromEntries(entries.map(([k, v]) => [normalizeUmpireName(k), v]));
+}
+
+const LOCAL_TENDENCY_TABLE = normalizeTendencyTable(
+  umpireData as unknown as UmpireTendencyFile,
 );
 
-export function getUmpireTendency(name: string): UmpireTendency | null {
-  return TENDENCY_TABLE[normalizeUmpireName(name)] ?? null;
+let verifiedFeedCache: { data: UmpireTendencyTable; expiresAt: number } | null = null;
+
+async function loadVerifiedTendencyTable(): Promise<UmpireTendencyTable> {
+  if (!env.MLB_UMPIRE_TENDENCY_SOURCE_URL) return LOCAL_TENDENCY_TABLE;
+  if (verifiedFeedCache && verifiedFeedCache.expiresAt > Date.now()) {
+    return verifiedFeedCache.data;
+  }
+
+  try {
+    const response = await fetch(env.MLB_UMPIRE_TENDENCY_SOURCE_URL, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as UmpireTendencyFile;
+    const normalized = normalizeTendencyTable(data);
+    verifiedFeedCache = {
+      data: normalized,
+      expiresAt: Date.now() + VERIFIED_FEED_TTL_MS,
+    };
+    return normalized;
+  } catch (error) {
+    console.warn("[verified-data] MLB umpire tendency feed unavailable:", error);
+    return LOCAL_TENDENCY_TABLE;
+  }
+}
+
+export async function getUmpireTendency(name: string): Promise<UmpireTendency | null> {
+  const table = await loadVerifiedTendencyTable();
+  return table[normalizeUmpireName(name)] ?? null;
 }
 
 // ─── Daily officials lookup ─────────────────────────────────────────────────
@@ -166,7 +209,7 @@ export async function lookupHomePlateUmpireBias(
 ): Promise<UmpireZoneBias | null> {
   const name = await lookupHomePlateUmpireName(espnHomeTeamId, gameDate);
   if (!name) return null;
-  return { name, tendency: getUmpireTendency(name) };
+  return { name, tendency: await getUmpireTendency(name) };
 }
 
 /**

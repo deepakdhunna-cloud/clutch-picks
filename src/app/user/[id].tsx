@@ -1,12 +1,12 @@
-import { View, Text, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { User, ArrowLeft, Lock, UserPlus, UserMinus, Trophy, Target, Flame, CheckCircle2, XCircle, Activity } from 'lucide-react-native';
+import { User, ArrowLeft, Lock, UserPlus, UserMinus, Trophy, Target, Flame, CheckCircle2, XCircle, Activity, Flag, Ban } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSession } from '@/lib/auth/use-session';
-import { useUserProfile, useIsFollowing, useFollowUser, useUnfollowUser, useUserPickStats } from '@/hooks/useSocial';
+import { useUserProfile, useIsFollowing, useFollowUser, useUnfollowUser, useUserPickStats, useBlockUser, useReportUser } from '@/hooks/useSocial';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import * as Haptics from 'expo-haptics';
@@ -95,6 +95,8 @@ export default function UserProfileScreen() {
   const { data: pickStats } = useUserPickStats(id);
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
+  const blockMutation = useBlockUser();
+  const reportMutation = useReportUser();
 
   const isOwnProfile = currentUserId === id;
   const canViewContent = !profile?.isPrivate || isFollowing || isOwnProfile;
@@ -110,6 +112,46 @@ export default function UserProfileScreen() {
   const handleFollowToggle = () => {
     if (!id) return;
     if (isFollowing) { unfollowMutation.mutate(id); } else { followMutation.mutate(id); }
+  };
+
+  const handleReportUser = () => {
+    if (!id || reportMutation.isPending) return;
+    reportMutation.mutate(
+      { userId: id, reason: 'objectionable_content' },
+      {
+        onSuccess: () => {
+          Alert.alert('Report Sent', 'Thanks. We will review this profile.');
+        },
+        onError: () => {
+          Alert.alert('Report Failed', 'Please try again.');
+        },
+      },
+    );
+  };
+
+  const handleBlockUser = () => {
+    if (!id || blockMutation.isPending) return;
+    Alert.alert(
+      'Block User',
+      'This removes follow connections and hides this profile from you.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => blockMutation.mutate(id, {
+            onSuccess: () => {
+              Alert.alert('User Blocked', 'You will no longer see this profile.', [
+                { text: 'OK', onPress: () => router.back() },
+              ]);
+            },
+            onError: () => {
+              Alert.alert('Block Failed', 'Please try again.');
+            },
+          }),
+        },
+      ],
+    );
   };
 
   const handleNavigateToFollowers = () => { router.push(`/followers/${id}?tab=followers` as any); };
@@ -275,7 +317,47 @@ export default function UserProfileScreen() {
                     )}
                   </Pressable>
 
+                  <Pressable
+                    onPress={handleReportUser}
+                    disabled={reportMutation.isPending}
+                    accessibilityLabel="Report user"
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 10,
+                      paddingVertical: 10,
+                      borderRadius: 11,
+                      backgroundColor: 'rgba(255,255,255,0.06)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.14)',
+                      gap: 5,
+                    }}
+                  >
+                    <Flag size={13} color="rgba(255,255,255,0.7)" />
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '700' }}>Report</Text>
+                  </Pressable>
 
+                  <Pressable
+                    onPress={handleBlockUser}
+                    disabled={blockMutation.isPending}
+                    accessibilityLabel="Block user"
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 10,
+                      paddingVertical: 10,
+                      borderRadius: 11,
+                      backgroundColor: 'rgba(139,10,31,0.12)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(139,10,31,0.28)',
+                      gap: 5,
+                    }}
+                  >
+                    <Ban size={13} color="rgba(255,255,255,0.7)" />
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '700' }}>Block</Text>
+                  </Pressable>
                 </View>
               ) : null}
             </View>

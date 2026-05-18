@@ -21,8 +21,11 @@ import { prisma } from "../prisma";
 import type { FactorContribution } from "./types";
 import type { GamePrediction } from "../routes/games";
 import type { InjuryListEntry } from "./llmNarrative";
+import type { NarrativeSeasonContext } from "./seasonContext";
 
 // ─── Version hash ──────────────────────────────────────────────────────
+
+const NARRATIVE_STYLE_VERSION = "bar-friend-v8-projection-consensus";
 
 /**
  * Stable hash of the prediction-level bits that should invalidate a
@@ -37,9 +40,10 @@ import type { InjuryListEntry } from "./llmNarrative";
 export function computeVersionHash(
   prediction: Pick<
     GamePrediction,
-    "predictedWinner" | "confidence" | "factors"
+    "predictedWinner" | "confidence" | "factors" | "projection"
   >,
   injuries: InjuryListEntry[],
+  seasonContext: NarrativeSeasonContext | null = null,
 ): string {
   // Sort factors by weight desc, take top 3, hash on label+hasSignal-ish
   // marker. The GamePrediction shape doesn't expose hasSignal directly;
@@ -65,7 +69,20 @@ export function computeVersionHash(
   // cause needless regenerations.
   const bucket = Math.floor(prediction.confidence / 5) * 5;
 
-  const material = `${prediction.predictedWinner}|${bucket}|${topFactors}|${injuryKey}`;
+  const seasonKey = seasonContext
+    ? `${seasonContext.phase}:${seasonContext.label}:${seasonContext.source}`
+    : "no-season-context";
+
+  const projectionKey = prediction.projection
+    ? [
+        prediction.projection.projectedHomeScore.toFixed(1),
+        prediction.projection.projectedAwayScore.toFixed(1),
+        Math.round(prediction.projection.homeWinProbability * 100),
+        Math.round(prediction.projection.awayWinProbability * 100),
+      ].join(":")
+    : "no-projection";
+
+  const material = `${NARRATIVE_STYLE_VERSION}|${prediction.predictedWinner}|${bucket}|${topFactors}|${injuryKey}|${seasonKey}|${projectionKey}`;
   return createHash("sha1").update(material).digest("hex").slice(0, 16);
 }
 

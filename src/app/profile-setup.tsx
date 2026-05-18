@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
+import { setDisplayName as setRevenueCatDisplayName } from '@/lib/revenuecatClient';
 
 const BG = '#040608';
 const CORAL = '#8B0A1F';
@@ -31,6 +32,8 @@ const LEAGUES = [
   { id: 'NFL', name: 'NFL' },
   { id: 'MLB', name: 'MLB' },
   { id: 'NHL', name: 'NHL' },
+  { id: 'IPL', name: 'IPL' },
+  { id: 'TENNIS', name: 'Tennis' },
   { id: 'MLS', name: 'MLS' },
   { id: 'EPL', name: 'EPL' },
   { id: 'UCL', name: 'Champions League' },
@@ -66,7 +69,7 @@ export default function ProfileSetupScreen() {
       setProfileImage(uploadResult.url);
     } catch (error) {
       Alert.alert('Upload Failed', 'There was an error uploading your photo. Please try again.');
-      console.error('Upload error:', error);
+      if (__DEV__) console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
     }
@@ -132,7 +135,9 @@ export default function ProfileSetupScreen() {
     try {
       // Save display name if entered
       if (hasDisplayName) {
-        await api.put<UserProfile>('/api/profile', { name: displayName.trim() });
+        const name = displayName.trim();
+        await api.put<UserProfile>('/api/profile', { name });
+        await setRevenueCatDisplayName(name);
       }
 
       // Save selected leagues to AsyncStorage
@@ -146,7 +151,7 @@ export default function ProfileSetupScreen() {
       // Navigate to home
       router.replace('/(tabs)');
     } catch (error) {
-      console.error('Error saving profile:', error);
+      if (__DEV__) console.error('Error saving profile:', error);
       // Still navigate even if save fails
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
       router.replace('/(tabs)');
@@ -331,81 +336,44 @@ export default function ProfileSetupScreen() {
               Optional — helps personalize your feed
             </Text>
 
-            {/* League Grid - 2 rows of 4 */}
-            <View style={{ gap: 10 }}>
-              {/* Row 1 */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {LEAGUES.slice(0, 4).map((league) => {
-                  const isSelected = selectedLeagues.includes(league.id);
-                  return (
-                    <Pressable
-                      key={league.id}
-                      onPress={() => toggleLeague(league.id)}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {LEAGUES.map((league) => {
+                const isSelected = selectedLeagues.includes(league.id);
+                return (
+                  <Pressable
+                    key={league.id}
+                    onPress={() => toggleLeague(league.id)}
+                    style={{
+                      width: '30.6%',
+                      minHeight: 48,
+                      backgroundColor: isSelected
+                        ? 'rgba(139,10,31,0.12)'
+                        : 'rgba(255,255,255,0.04)',
+                      borderWidth: 1,
+                      borderColor: isSelected
+                        ? 'rgba(139,10,31,0.3)'
+                        : 'rgba(255,255,255,0.08)',
+                      borderRadius: 12,
+                      padding: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text
                       style={{
-                        flex: 1,
-                        backgroundColor: isSelected
-                          ? 'rgba(139,10,31,0.12)'
-                          : 'rgba(255,255,255,0.04)',
-                        borderWidth: 1,
-                        borderColor: isSelected
-                          ? 'rgba(139,10,31,0.3)'
-                          : 'rgba(255,255,255,0.08)',
-                        borderRadius: 12,
-                        padding: 14,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        color: isSelected ? CORAL : 'rgba(255,255,255,0.4)',
+                        fontSize: 13,
+                        fontWeight: '800',
+                        textAlign: 'center',
                       }}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
                     >
-                      <Text
-                        style={{
-                          color: isSelected ? CORAL : 'rgba(255,255,255,0.4)',
-                          fontSize: 13,
-                          fontWeight: '800',
-                        }}
-                      >
-                        {league.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* Row 2 */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {LEAGUES.slice(4, 8).map((league) => {
-                  const isSelected = selectedLeagues.includes(league.id);
-                  return (
-                    <Pressable
-                      key={league.id}
-                      onPress={() => toggleLeague(league.id)}
-                      style={{
-                        flex: 1,
-                        backgroundColor: isSelected
-                          ? 'rgba(139,10,31,0.12)'
-                          : 'rgba(255,255,255,0.04)',
-                        borderWidth: 1,
-                        borderColor: isSelected
-                          ? 'rgba(139,10,31,0.3)'
-                          : 'rgba(255,255,255,0.08)',
-                        borderRadius: 12,
-                        padding: 14,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: isSelected ? CORAL : 'rgba(255,255,255,0.4)',
-                          fontSize: 13,
-                          fontWeight: '800',
-                        }}
-                      >
-                        {league.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+                      {league.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </Animated.View>
         </ScrollView>

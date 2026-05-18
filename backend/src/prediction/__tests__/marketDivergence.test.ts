@@ -2,7 +2,8 @@
  * Market-divergence annotation tests — Prompt B Gap 2d.
  *
  * Exercises predictGame's post-hoc market comparison block. The divergence
- * check is cosmetic (annotation only) — model math is unchanged regardless.
+ * check annotates the final model-vs-market gap. Market is also used as a
+ * small calibration anchor, but it never owns the majority vote.
  */
 
 import { describe, it, expect } from "bun:test";
@@ -51,8 +52,8 @@ describe("marketComparison annotation", () => {
     expect(prediction.marketComparison).toBeDefined();
     expect(prediction.marketComparison!.isDivergent).toBe(true);
     expect(prediction.marketComparison!.divergence).toBeGreaterThan(0.10);
-    // Sanity: the divergence annotation should NOT change the model's own
-    // home-win probability (market is an anchor, not an input).
+    // Sanity: the divergence annotation reports the final model probability
+    // after the small market calibration anchor is applied.
     expect(prediction.marketComparison!.modelHomeProb).toBe(
       prediction.homeWinProbability,
     );

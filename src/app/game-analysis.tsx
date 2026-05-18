@@ -1,9 +1,12 @@
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, FlatList, View, Text, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { memo } from 'react';
 import { useGame } from '@/hooks/useGames';
 import { displayConfidence, displayWinProbability } from '@/lib/display-confidence';
+import { displayPredictionAnalysis } from '@/lib/narrative-display';
+import { getProjectionDisplay } from '@/lib/projection-display';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useSubscription } from '@/lib/subscription-context';
@@ -33,6 +36,7 @@ interface GameTeam {
 
 interface GamePrediction {
   predictedWinner: 'home' | 'away';
+  predictedOutcome?: 'home' | 'away' | 'draw';
   confidence: number;
   analysis: string;
   spread: number;
@@ -43,16 +47,63 @@ interface GamePrediction {
   awayWinProbability: number;
   factors: PredictionFactor[];
   isTossUp?: boolean;
+  projection?: {
+    engine: string;
+    iterations: number;
+    homeWinProbability: number;
+    awayWinProbability: number;
+    drawProbability?: number;
+    projectedHomeScore: number;
+    projectedAwayScore: number;
+    projectedSpread: number;
+    projectedTotal: number;
+    volatility: number;
+    upsetRisk: number;
+    signals: Array<{
+      key: string;
+      label: string;
+      value: number;
+      evidence: string;
+    }>;
+  };
 }
 
 interface Game {
   id: string;
+  sport?: string;
   homeTeam: GameTeam;
   awayTeam: GameTeam;
+  seasonContext?: {
+    phase: string;
+    label: string;
+    detail: string;
+    source: string;
+  } | null;
   prediction?: GamePrediction;
 }
 
-// ─── SVG Factor Icons — clean line art, no emojis ────────────────
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function factorDelta(factor: PredictionFactor): number {
+  return factor.homeScore - factor.awayScore;
+}
+
+function factorImpactPercent(factor: PredictionFactor): number {
+  const scoreImpact = Math.abs(factorDelta(factor)) * 42;
+  const weightImpact = factor.weight * 100;
+  return Math.round(clampPercent(Math.max(scoreImpact, weightImpact)));
+}
+
+function scoreShare(left: number, right: number): number {
+  const total = Math.abs(left) + Math.abs(right);
+  if (total <= 0) return 50;
+  return clampPercent((Math.abs(left) / total) * 100);
+}
+
+// SVG Factor Icons - clean line art, no emojis
 function FactorSvgIcon({ name, size = 18 }: { name: string; size?: number }) {
   const color = 'rgba(255,255,255,0.5)';
   const n = name.toLowerCase();
@@ -102,70 +153,89 @@ function FactorSvgIcon({ name, size = 18 }: { name: string; size?: number }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" /><Circle cx="12" cy="12" r="3" fill={color} fillOpacity="0.3" /></Svg>;
 }
 
-// ─── FACTOR TILE ────────────────────────────────────────────────
-function FactorTile({
+// Factor tile
+const FactorTile = memo(function FactorTile({
   factor,
   homeTeam,
   awayTeam,
+  index,
 }: {
   factor: PredictionFactor;
   homeTeam: GameTeam;
   awayTeam: GameTeam;
+  index: number;
 }) {
   const isHomeEdge = factor.homeScore > factor.awayScore + 0.3;
   const isAwayEdge = factor.awayScore > factor.homeScore + 0.3;
   const hasEdge = isHomeEdge || isAwayEdge;
-  const edgeTeam = isHomeEdge ? homeTeam : awayTeam;
-
-  const edgeBg = hasEdge ? MAROON_DIM : 'rgba(255,255,255,0.02)';
-  const edgeBorder = hasEdge ? 'rgba(139,10,31,0.18)' : 'rgba(255,255,255,0.06)';
-
-  const homeBarW = Math.max(2, Math.abs(factor.homeScore) * 50);
-  const awayBarW = Math.max(2, Math.abs(factor.awayScore) * 50);
+  const edgeTeam = isHomeEdge ? homeTeam : isAwayEdge ? awayTeam : null;
+  const edgeColor = isHomeEdge ? TEAL : isAwayEdge ? MAROON : '#6B7C94';
+  const edgeBg = hasEdge ? (isHomeEdge ? 'rgba(122,157,184,0.08)' : MAROON_DIM) : 'rgba(255,255,255,0.022)';
+  const edgeBorder = hasEdge ? (isHomeEdge ? 'rgba(122,157,184,0.18)' : 'rgba(139,10,31,0.18)') : 'rgba(255,255,255,0.065)';
+  const homeShare = scoreShare(factor.homeScore, factor.awayScore);
+  const awayShare = 100 - homeShare;
+  const impact = factorImpactPercent(factor);
 
   return (
     <View style={[s.factorTile, { backgroundColor: edgeBg, borderColor: edgeBorder }]}>
-      {hasEdge ? <View style={[s.factorAccent, { backgroundColor: MAROON }]} /> : null}
+      <View style={[s.factorAccent, { backgroundColor: edgeColor }]} />
       <View style={s.factorInner}>
-        <View style={[s.factorIconWrap, { backgroundColor: hasEdge ? MAROON_DIM : 'rgba(255,255,255,0.04)' }]}>
-          <FactorSvgIcon name={factor.name} size={18} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={s.factorTitleRow}>
-            <Text style={[s.factorName, { color: '#FFFFFF' }]}>
+        <View style={s.factorTopRow}>
+          <View style={[s.factorIconWrap, { backgroundColor: hasEdge ? `${edgeColor}18` : 'rgba(255,255,255,0.04)' }]}>
+            <FactorSvgIcon name={factor.name} size={18} />
+          </View>
+          <View style={s.factorTitleCopy}>
+            <Text style={s.factorIndex}>Factor {index + 1}</Text>
+            <Text style={s.factorName} numberOfLines={2}>
               {factor.name}
             </Text>
-            <View style={[s.edgeBadge, {
-              backgroundColor: hasEdge ? MAROON_DIM : 'rgba(255,255,255,0.04)',
-              borderColor: hasEdge ? 'rgba(139,10,31,0.25)' : 'rgba(255,255,255,0.06)',
-            }]}>
-              <Text style={[s.edgeBadgeText, { color: hasEdge ? MAROON : '#6B7C94' }]}>
-                {hasEdge ? `${edgeTeam.abbreviation} EDGE` : 'NEUTRAL'}
-              </Text>
-            </View>
           </View>
+          <View style={[s.edgeBadge, {
+            backgroundColor: hasEdge ? `${edgeColor}18` : 'rgba(255,255,255,0.04)',
+            borderColor: hasEdge ? `${edgeColor}35` : 'rgba(255,255,255,0.06)',
+          }]}>
+            <Text style={[s.edgeBadgeText, { color: edgeColor }]}>
+              {edgeTeam ? edgeTeam.abbreviation : 'EVEN'}
+            </Text>
+          </View>
+        </View>
 
-          <Text style={[s.factorDesc, { color: '#A1B3C9' }]}>
-            {factor.description}
-          </Text>
+        <Text style={s.factorDesc}>
+          {factor.description}
+        </Text>
 
-          <View style={s.barsRow}>
-            <Text style={[s.barLabel, { color: TEAL }]}>{homeTeam.abbreviation}</Text>
-            <View style={s.barTrack}>
-              <View style={[s.barFill, { width: `${homeBarW}%`, backgroundColor: TEAL }]} />
-            </View>
-            <View style={s.barTrack}>
-              <View style={[s.barFill, { width: `${awayBarW}%`, backgroundColor: MAROON }]} />
-            </View>
-            <Text style={[s.barLabel, { color: MAROON }]}>{awayTeam.abbreviation}</Text>
+        <View style={s.factorMeterHeader}>
+          <Text style={[s.barLabel, { color: TEAL }]}>{homeTeam.abbreviation}</Text>
+          <Text style={s.impactText}>{impact}% impact</Text>
+          <Text style={[s.barLabel, { color: MAROON, textAlign: 'right' }]}>{awayTeam.abbreviation}</Text>
+        </View>
+
+        <View style={s.comparisonRail}>
+          <View style={[s.comparisonFill, { flex: homeShare, backgroundColor: TEAL }]} />
+          <View style={s.comparisonDivider} />
+          <View style={[s.comparisonFill, { flex: awayShare, backgroundColor: MAROON }]} />
+        </View>
+
+        <View style={s.factorScoreRow}>
+          <View style={s.factorScorePill}>
+            <Text style={s.factorScoreLabel}>Home</Text>
+            <Text style={s.factorScoreValue}>{factor.homeScore.toFixed(1)}</Text>
+          </View>
+          <View style={s.factorScorePill}>
+            <Text style={s.factorScoreLabel}>Away</Text>
+            <Text style={s.factorScoreValue}>{factor.awayScore.toFixed(1)}</Text>
+          </View>
+          <View style={s.factorScorePill}>
+            <Text style={s.factorScoreLabel}>Weight</Text>
+            <Text style={s.factorScoreValue}>{Math.round(factor.weight * 100)}%</Text>
           </View>
         </View>
       </View>
     </View>
   );
-}
+});
 
-// ─── MAIN SCREEN ─────────────────────────────────────────────────
+// Main screen
 export default function GameAnalysisScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -177,7 +247,8 @@ export default function GameAnalysisScreen() {
   if (isLoading || !game || !game.prediction) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#6B7C94', fontSize: 14 }}>Loading analysis...</Text>
+        <ActivityIndicator color={TEAL} />
+        <Text style={{ color: '#6B7C94', fontSize: 14, marginTop: 12 }}>Loading analysis...</Text>
       </View>
     );
   }
@@ -199,7 +270,7 @@ export default function GameAnalysisScreen() {
             <Text style={{ fontSize: 13, color: '#A1B3C9', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>Detailed breakdown with edge ratings, factor analysis, and prediction confidence</Text>
             <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
               <LinearGradient colors={['#8B0A1F', '#6A0818']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Unlock with Clutch Pro</Text>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Unlock Clutch Picks Pro</Text>
               </LinearGradient>
             </Pressable>
           </View>
@@ -225,6 +296,17 @@ export default function GameAnalysisScreen() {
   const awayEdgeCount = sorted.filter(f => f.awayScore > f.homeScore + 0.3).length;
   const neutralCount = sorted.length - homeEdgeCount - awayEdgeCount;
   const winner = prediction.predictedWinner === 'home' ? homeTeam : awayTeam;
+  const projectionDisplay = prediction.projection
+    ? getProjectionDisplay({
+        sport: game.sport,
+        homeAbbr: homeTeam.abbreviation,
+        awayAbbr: awayTeam.abbreviation,
+        predictedWinner: prediction.predictedWinner,
+        predictedOutcome: prediction.predictedOutcome,
+        confidence: prediction.confidence,
+        projection: prediction.projection,
+      })
+    : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -237,16 +319,32 @@ export default function GameAnalysisScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Analysis Breakdown</Text>
             <Text style={s.headerSub}>
-              {homeTeam.abbreviation} vs {awayTeam.abbreviation} — {sorted.length} factors analyzed
+              {homeTeam.abbreviation} vs {awayTeam.abbreviation} · {sorted.length} factors analyzed
             </Text>
           </View>
         </View>
       </View>
 
-      <ScrollView
+      <FlatList
         showsVerticalScrollIndicator={false}
+        data={sorted}
+        keyExtractor={(factor, index) => `${factor.name}-${index}`}
+        renderItem={({ item, index }) => (
+          <FactorTile
+            factor={item}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            index={index}
+          />
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
-      >
+        ListHeaderComponent={
+          <>
         {/* Pick Summary */}
         <View style={{ position: 'relative' }}>
           <View style={s.pickCard}>
@@ -262,7 +360,7 @@ export default function GameAnalysisScreen() {
                 </View>
               </View>
 
-              {/* Win probability bar — teal vs maroon */}
+              {/* Win probability bar */}
               {(() => {
                 const dp = displayWinProbability(prediction.homeWinProbability, prediction.awayWinProbability);
                 return (
@@ -300,39 +398,83 @@ export default function GameAnalysisScreen() {
         {/* Model Summary */}
         <View style={s.summaryCard}>
           <Text style={s.sectionLabel}>Model Summary</Text>
-          <Text style={s.summaryText}>{prediction.analysis}</Text>
+          <Text style={s.summaryText}>{displayPredictionAnalysis({
+            sport: (game.sport ?? 'UNKNOWN') as any,
+            homeTeam,
+            awayTeam,
+            seasonContext: game.seasonContext,
+            prediction: prediction as any,
+          } as any)}</Text>
         </View>
+
+        {prediction.projection ? (
+          <View style={s.projectionCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <View>
+                <Text style={s.sectionLabel}>{projectionDisplay?.label ?? 'Expected Score'}</Text>
+                <Text style={s.projectionSub}>{projectionDisplay?.contextText ?? `${prediction.projection.iterations.toLocaleString()} simulated game scripts`}</Text>
+              </View>
+              <View style={s.upsetBadge}>
+                <Text style={s.upsetValue}>{Math.round(prediction.projection.upsetRisk * 100)}%</Text>
+                <Text style={s.upsetLabel}>UPSET RISK</Text>
+              </View>
+            </View>
+
+            <View style={s.projectionScoreRow}>
+              <View style={s.projectionScoreTile}>
+                <Text style={[s.projectionTeam, { color: TEAL }]}>{homeTeam.abbreviation}</Text>
+                <Text style={s.projectionScore}>{projectionDisplay?.homeScore ?? Math.round(prediction.projection.projectedHomeScore)}</Text>
+              </View>
+              <View style={s.projectionMid}>
+                <Text style={s.projectionMidLabel}>{projectionDisplay?.label ?? 'Expected Score'}</Text>
+                <Text style={s.projectionMidValue}>{projectionDisplay?.leanText ?? `Pick lean ${winner.abbreviation} ${Math.round(prediction.confidence)}%`}</Text>
+                <Text style={s.projectionMidValue}>Total {projectionDisplay?.total ?? Math.round(prediction.projection.projectedTotal)}</Text>
+                <Text style={s.projectionMidValue}>Spread {(projectionDisplay?.spreadValue ?? prediction.projection.projectedSpread) >= 0 ? '+' : ''}{projectionDisplay?.spread ?? Math.round(prediction.projection.projectedSpread)}</Text>
+              </View>
+              <View style={s.projectionScoreTile}>
+                <Text style={[s.projectionTeam, { color: MAROON }]}>{awayTeam.abbreviation}</Text>
+                <Text style={s.projectionScore}>{projectionDisplay?.awayScore ?? Math.round(prediction.projection.projectedAwayScore)}</Text>
+              </View>
+            </View>
+
+            {prediction.projection.signals.length > 0 ? (
+              <View style={{ gap: 8, marginTop: 14 }}>
+                {prediction.projection.signals.slice(0, 3).map((signal) => (
+                  <View key={signal.key} style={s.projectionSignal}>
+                    <Text style={s.projectionSignalTitle}>{signal.label}</Text>
+                    <Text style={s.projectionSignalBody}>{signal.evidence}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Factors */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <Text style={s.sectionLabel}>Analysis Factors</Text>
           <Text style={{ fontSize: 10, color: '#6B7C94' }}>Sorted by impact</Text>
         </View>
-
-        <View style={{ gap: 10 }}>
-          {sorted.map((factor, index) => (
-            <View key={factor.name} style={{ position: 'relative' }}>
-              <FactorTile
-                factor={factor}
-                homeTeam={homeTeam}
-                awayTeam={awayTeam}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Disclaimer */}
-        <View style={{ marginTop: 20, paddingHorizontal: 4 }}>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={s.emptyFactors}>
+            <Text style={s.emptyFactorsText}>No factor breakdown is available for this game yet.</Text>
+          </View>
+        }
+        ListFooterComponent={
+          <View style={{ marginTop: 20, paddingHorizontal: 4 }}>
           <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
             AI predictions are for entertainment purposes only. Not financial advice.
           </Text>
-        </View>
-      </ScrollView>
+          </View>
+        }
+      />
     </View>
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────
+// Styles
 const s = StyleSheet.create({
   headerWrap: {
     borderBottomWidth: 1,
@@ -357,7 +499,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0 },
   headerSub: { fontSize: 11, color: '#6B7C94', marginTop: 3 },
 
   pickCard: {
@@ -370,7 +512,7 @@ const s = StyleSheet.create({
   },
   pickCardInner: { padding: 16 },
   pickLabel: { fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 2, marginBottom: 4 },
-  pickTeam: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+  pickTeam: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0 },
   confBadge: {
     borderRadius: 14,
     paddingHorizontal: 14,
@@ -410,17 +552,204 @@ const s = StyleSheet.create({
   summaryText: { fontSize: 13, color: '#A1B3C9', lineHeight: 21, marginTop: 8 },
   sectionLabel: { fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5, textTransform: 'uppercase' },
 
-  factorTile: { borderRadius: 14, overflow: 'hidden', borderWidth: 1, position: 'relative' },
-  factorAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2 },
-  factorInner: { flexDirection: 'row', gap: 12, padding: 14, paddingLeft: 16 },
-  factorIconWrap: { width: 36, height: 36, borderRadius: 10, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
-  factorTitleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 8 },
-  factorName: { fontSize: 13, fontWeight: '800', flex: 1, lineHeight: 18 },
-  edgeBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, flexShrink: 0 },
-  edgeBadgeText: { fontSize: 8, fontWeight: '800', letterSpacing: 0.5 },
-  factorDesc: { fontSize: 12, lineHeight: 18, marginBottom: 10 },
-  barsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  barLabel: { fontSize: 10, fontWeight: '800', width: 30 },
-  barTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 2 },
+  projectionCard: {
+    backgroundColor: 'rgba(122,157,184,0.06)',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(122,157,184,0.16)',
+    marginBottom: 20,
+  },
+  projectionSub: { fontSize: 11, color: '#6B7C94', marginTop: 4 },
+  upsetBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  upsetValue: { fontSize: 18, fontWeight: '900', color: '#FFFFFF', lineHeight: 22 },
+  upsetLabel: { fontSize: 7, fontWeight: '800', color: '#6B7C94', letterSpacing: 0.6, marginTop: 2 },
+  projectionScoreRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  projectionScoreTile: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  projectionTeam: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  projectionScore: { fontSize: 26, fontWeight: '900', color: '#FFFFFF', marginTop: 4 },
+  projectionMid: {
+    width: 96,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  projectionMidLabel: { fontSize: 9, fontWeight: '800', color: '#6B7C94', marginBottom: 6, textTransform: 'uppercase' },
+  projectionMidValue: { fontSize: 10, fontWeight: '800', color: '#A1B3C9', lineHeight: 16 },
+  projectionSignal: {
+    borderRadius: 10,
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  projectionSignalTitle: { fontSize: 11, fontWeight: '900', color: '#FFFFFF', marginBottom: 3 },
+  projectionSignalBody: { fontSize: 11, color: '#A1B3C9', lineHeight: 16 },
+
+  factorTile: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    position: 'relative',
+  },
+  factorAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+  },
+  factorInner: {
+    padding: 14,
+    paddingLeft: 17,
+  },
+  factorTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  factorIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  factorTitleCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  factorIndex: {
+    fontSize: 8,
+    color: '#6B7C94',
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  factorName: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    flex: 1,
+    lineHeight: 18,
+    letterSpacing: 0,
+  },
+  edgeBadge: {
+    minWidth: 48,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1,
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  edgeBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  factorDesc: {
+    fontSize: 12,
+    color: '#A1B3C9',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  factorMeterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 7,
+  },
+  impactText: {
+    fontSize: 9,
+    color: '#6B7C94',
+    fontWeight: '800',
+    letterSpacing: 0.45,
+    textTransform: 'uppercase',
+  },
+  comparisonRail: {
+    height: 7,
+    borderRadius: 4,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+  },
+  comparisonFill: {
+    height: '100%',
+  },
+  comparisonDivider: {
+    width: 2,
+    backgroundColor: BG,
+  },
+  factorScoreRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  factorScorePill: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(0,0,0,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.055)',
+  },
+  factorScoreLabel: {
+    fontSize: 7,
+    color: '#6B7C94',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  factorScoreValue: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  barLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    width: 42,
+    letterSpacing: 0.3,
+  },
+  emptyFactors: {
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.025)',
+  },
+  emptyFactorsText: {
+    fontSize: 12,
+    color: '#6B7C94',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
 });

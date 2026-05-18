@@ -69,9 +69,11 @@ describe("buildAdapterNarrative", () => {
     const narrative = buildAdapterNarrative(makePred({ factors }), "NBA", makeGame());
 
     expect(narrative.length).toBeGreaterThan(40);
-    expect(narrative).toContain("BOS");
-    // Lead factor evidence shows up somewhere.
-    expect(narrative).toMatch(/220 pt differential|Elo/);
+    expect(narrative).toContain("Boston Celtics");
+    // Lead factor evidence is rendered conversationally, not dumped raw.
+    expect(narrative).toContain("220");
+    expect(narrative).not.toContain("Elo");
+    expect(narrative).not.toContain("Home BOS Elo");
     // No "" fallback.
     expect(narrative.trim()).not.toBe("");
   });
@@ -87,9 +89,9 @@ describe("buildAdapterNarrative", () => {
     ];
     const narrative = buildAdapterNarrative(makePred({ factors }), "NBA", makeGame());
 
-    expect(narrative).toContain("BOS");
-    expect(narrative).toContain("Elo");
-    expect(narrative.toLowerCase()).toContain("no additional contextual signals available");
+    expect(narrative).toContain("Boston Celtics");
+    expect(narrative).not.toContain("Elo");
+    expect(narrative.toLowerCase()).toContain("not much supporting context available");
   });
 
   it("produces a valid narrative even for a pick'em (winner=null)", () => {
@@ -106,7 +108,54 @@ describe("buildAdapterNarrative", () => {
     });
     const narrative = buildAdapterNarrative(pred, "NBA", makeGame());
     expect(narrative.length).toBeGreaterThan(20);
-    expect(narrative.toLowerCase()).toContain("coin flip");
+    expect(narrative.toLowerCase()).toMatch(/coin flip|toss-up|no clear edge/);
+  });
+
+  it("threads real injury context into the deterministic fallback", () => {
+    const factors: FactorContribution[] = [
+      { key: "rating_diff", label: "Elo rating differential", homeDelta: 220, weight: 0.40, available: true, hasSignal: true, evidence: "Home BOS Elo 1561 + 100 HFA vs Away PHI Elo 1441 = 220 pt differential" },
+      { key: "net_rating", label: "Pace-adjusted net rating", homeDelta: 30, weight: 0.11, available: true, hasSignal: true, evidence: "Home net rating +4.0 vs Away net rating +0.5" },
+    ];
+    const narrative = buildAdapterNarrative(
+      makePred({ factors }),
+      "NBA",
+      makeGame(),
+      [
+        {
+          name: "Joel Embiid",
+          team: "PHI",
+          position: "C",
+          status: "Out",
+          reason: "knee injury management",
+        },
+      ],
+    );
+
+    expect(narrative).toContain("Joel Embiid");
+    expect(narrative).toContain("PHI");
+    expect(narrative.toLowerCase()).toContain("out");
+    expect(narrative.toLowerCase()).toContain("knee injury management");
+  });
+
+  it("adds season context to the game-card analysis source", () => {
+    const factors: FactorContribution[] = [
+      { key: "rating_diff", label: "Elo rating differential", homeDelta: 220, weight: 0.40, available: true, hasSignal: true, evidence: "Home BOS Elo 1561 + 100 HFA vs Away PHI Elo 1441 = 220 pt differential" },
+      { key: "net_rating", label: "Pace-adjusted net rating", homeDelta: 30, weight: 0.11, available: true, hasSignal: true, evidence: "Home net rating +4.0 vs Away net rating +0.5" },
+    ];
+    const game = {
+      ...makeGame(),
+      seasonContext: {
+        phase: "playoffs" as const,
+        label: "NBA playoff window",
+        detail: "This falls in the NBA playoff window, so the pick should lean on repeatable matchup edges instead of generic regular-season form.",
+        source: "date" as const,
+      },
+    };
+
+    const narrative = buildAdapterNarrative(makePred({ factors }), "NBA", game);
+
+    expect(narrative.toLowerCase()).toContain("playoff");
+    expect(narrative.toLowerCase()).toContain("repeatable matchup edges");
   });
 });
 
@@ -117,7 +166,7 @@ describe("buildAdapterNarrative", () => {
 // without spinning up a real DB or OpenAI endpoint.
 
 const SAMPLE_NARRATIVE =
-  "Detroit's the pick here. Keider Montero has been dealing. The Tigers are rolling at 8-2. Milwaukee's been scuffling at 4-6. The home mound matchup flips the rating edge.";
+  "Detroit's the pick because the pitching matchup gives them the cleanest path into this game tonight. Keider Montero brings the better full profile with a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but 3.63 FIP. The Tigers also have the form edge, sitting 8-2 over their last 10 while Milwaukee is 4-6. The one concern is rest, since Milwaukee comes in fresher with Detroit turning around quicker after its last game. Still, the main baseball reasons point to Detroit.";
 
 function makeFactorsForEnrichment(): FactorContribution[] {
   return [

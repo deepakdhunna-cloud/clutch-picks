@@ -159,9 +159,17 @@ export async function checkBigGameAlerts() {
     // Check NotificationLog to avoid spamming
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const bigGamesSentToday = await prisma.notificationLog.count({
-      where: { type: 'big_game', sentAt: { gte: todayStart } },
+    const sentBigGames = await prisma.notificationLog.findMany({
+      where: {
+        type: 'big_game',
+        sentAt: { gte: todayStart },
+        gameId: { not: null },
+      },
+      select: { gameId: true },
+      distinct: ['gameId'],
     });
+    const sentBigGameIds = new Set(sentBigGames.map((log) => log.gameId).filter(Boolean));
+    let bigGamesSentToday = sentBigGameIds.size;
 
     // Max 2 big game alerts per day
     if (bigGamesSentToday >= 2) return;
@@ -213,10 +221,7 @@ export async function checkBigGameAlerts() {
           if (!prediction) continue;
 
           // Already sent alert for this game?
-          const alreadySent = await prisma.notificationLog.findFirst({
-            where: { type: 'big_game', gameId: event.id },
-          });
-          if (alreadySent) continue;
+          if (sentBigGameIds.has(event.id)) continue;
 
           const home = comp.competitors.find(c => c.homeAway === 'home');
           const away = comp.competitors.find(c => c.homeAway === 'away');
@@ -228,6 +233,8 @@ export async function checkBigGameAlerts() {
             `${sport} kicks off in 3 hours — our model has ${prediction.confidence}% confidence. Make your pick!`,
             { type: 'big_game', gameId: event.id, screen: 'game' }
           );
+          sentBigGameIds.add(event.id);
+          bigGamesSentToday = sentBigGameIds.size;
 
           console.log(`[NotifyJobs] Big game alert sent: ${awayAbbr} vs ${homeAbbr} (${sport})`);
           break; // One alert per sport check cycle
@@ -272,7 +279,9 @@ export async function notifyWinnerFlip(gameId: string, homeAbbr: string, awayAbb
     await sendPushToAll(
       `Prediction Shift: ${awayAbbr} vs ${homeAbbr}`,
       `${sport} — Model now picks ${newWinnerAbbr} (${confidence}%). New data changed the call.`,
-      { type: 'winner_flip', gameId, screen: 'game' }
+      { type: 'winner_flip', gameId, screen: 'game' },
+      2,
+      userIds,
     );
 
     console.log(`[NotifyJobs] Winner flip: ${awayAbbr} vs ${homeAbbr} → now ${newWinnerAbbr} (${confidence}%)`);

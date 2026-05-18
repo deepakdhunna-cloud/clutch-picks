@@ -23,6 +23,8 @@ const K_FACTORS: Record<string, number> = {
   MLS:   20,
   EPL:   20,
   UCL:  20,
+  IPL:  12,
+  TENNIS: 14,
 };
 
 // Home advantage bonuses (added to home team's effective rating)
@@ -36,6 +38,8 @@ const HOME_BONUSES: Record<string, number> = {
   MLS:   55,
   EPL:   40,
   UCL:  40,
+  IPL:  18,
+  TENNIS: 0,
 };
 
 // Sport-specific caps on the MOV multiplier to prevent over-correction in
@@ -50,6 +54,8 @@ const MOV_CAPS: Record<string, number> = {
   MLS:   2.0,
   EPL:   2.0,
   UCL:  2.0,
+  IPL:  1.7,
+  TENNIS: 1.4,
 };
 
 /**

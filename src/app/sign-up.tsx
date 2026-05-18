@@ -30,6 +30,7 @@ export default function SignUpScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleContinue = async () => {
+    if (isLoading) return;
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
       setError('Please enter your email');
@@ -42,25 +43,30 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     setError(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const result = await authClient.emailOtp.sendVerificationOtp({
-      email: trimmed,
-      type: 'sign-in',
-    });
+    try {
+      const result = await authClient.emailOtp.sendVerificationOtp({
+        email: trimmed,
+        type: 'sign-in',
+      });
 
-    setIsLoading(false);
+      if (result.error) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setError(result.error.message || 'Failed to send verification code');
+        return;
+      }
 
-    if (result.error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(result.error.message || 'Failed to send verification code');
-      return;
+      router.push({
+        pathname: '/verify-otp' as any,
+        params: { email: trimmed, mode: 'signup' },
+      });
+    } catch {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError('Could not send a code. Check your connection and try again.');
+    } finally {
+      setIsLoading(false);
     }
-
-    router.push({
-      pathname: '/verify-otp' as any,
-      params: { email: trimmed, mode: 'signup' },
-    });
   };
 
   return (

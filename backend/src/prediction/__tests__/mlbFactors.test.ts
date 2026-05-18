@@ -132,6 +132,7 @@ describe("computeMLBFactors", () => {
     const f = computeMLBFactors(ctx).find((x) => x.key === "injuries_mlb")!;
     expect(f.available).toBe(true);
     expect(f.homeDelta).toBeGreaterThan(0);
+    expect(f.homeDelta).toBeGreaterThan(20);
     expect(f.evidence).toContain("Slugger One (OF) OUT");
     expect(f.evidence).toContain("Slugger Two (SS) OUT");
   });

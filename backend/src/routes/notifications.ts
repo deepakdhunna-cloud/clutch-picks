@@ -12,6 +12,51 @@ const notificationsRouter = new Hono<{
   };
 }>();
 
+const notificationPreferencesSchema = z.object({
+  gameLive: z.boolean().optional(),
+  pickResult: z.boolean().optional(),
+  predictionShift: z.boolean().optional(),
+  bigGame: z.boolean().optional(),
+  streak: z.boolean().optional(),
+});
+
+export const DEFAULT_NOTIFICATION_PREFERENCES = {
+  gameLive: true,
+  pickResult: true,
+  predictionShift: true,
+  bigGame: true,
+  streak: true,
+};
+
+const TYPE_TO_PREF_KEY: Record<string, keyof typeof DEFAULT_NOTIFICATION_PREFERENCES> = {
+  game_live: "gameLive",
+  pick_resolved: "pickResult",
+  pick_result: "pickResult",
+  winner_flip: "predictionShift",
+  big_game: "bigGame",
+  streak: "streak",
+};
+
+export type NotificationPreferenceKey = keyof typeof DEFAULT_NOTIFICATION_PREFERENCES;
+export type NotificationPreferenceValues = typeof DEFAULT_NOTIFICATION_PREFERENCES;
+
+export function notificationPreferenceKeyForType(
+  type: string | undefined,
+): NotificationPreferenceKey | null {
+  if (!type) return null;
+  return TYPE_TO_PREF_KEY[type] ?? null;
+}
+
+export function mergeNotificationPreferences(
+  prefs?: Partial<NotificationPreferenceValues> | null,
+): NotificationPreferenceValues {
+  return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...prefs };
+}
+
+function isExpoPushToken(token: string): boolean {
+  return /^(Expo|Exponent)PushToken\[[A-Za-z0-9_.=-]+\]$/.test(token);
+}
+
 // GET /api/notifications - Get notifications for current user
 notificationsRouter.get("/", async (c) => {
   const user = c.get("user");
@@ -61,9 +106,58 @@ notificationsRouter.post("/mark-read", async (c) => {
   }
 });
 
+// GET /api/notifications/preferences - Get push preferences
+notificationsRouter.get("/preferences", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  try {
+    const prefs = await prisma.notificationPreference.findUnique({
+      where: { userId: user.id },
+      select: {
+        gameLive: true,
+        pickResult: true,
+        predictionShift: true,
+        bigGame: true,
+        streak: true,
+      },
+    });
+    return c.json({ data: mergeNotificationPreferences(prefs) });
+  } catch (error) {
+    console.error("[Notifications] Preferences fetch error:", error);
+    return c.json({ error: { message: "Failed to fetch preferences", code: "FETCH_FAILED" } }, 500);
+  }
+});
+
+// PUT /api/notifications/preferences - Update push preferences
+notificationsRouter.put("/preferences", zValidator("json", notificationPreferencesSchema), async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const prefs = c.req.valid("json");
+  try {
+    const updated = await prisma.notificationPreference.upsert({
+      where: { userId: user.id },
+      update: prefs,
+      create: { userId: user.id, ...DEFAULT_NOTIFICATION_PREFERENCES, ...prefs },
+      select: {
+        gameLive: true,
+        pickResult: true,
+        predictionShift: true,
+        bigGame: true,
+        streak: true,
+      },
+    });
+    return c.json({ data: updated });
+  } catch (error) {
+    console.error("[Notifications] Preferences update error:", error);
+    return c.json({ error: { message: "Failed to update preferences", code: "UPDATE_FAILED" } }, 500);
+  }
+});
+
 // POST /api/notifications/register — Save push token
 notificationsRouter.post("/register", zValidator("json", z.object({
-  token: z.string().min(1),
+  token: z.string().min(1).refine(isExpoPushToken, "Invalid Expo push token"),
   platform: z.enum(["ios", "android"]).default("ios"),
 })), async (c) => {
   const user = c.get("user");
@@ -85,9 +179,12 @@ notificationsRouter.post("/register", zValidator("json", z.object({
 
 // DELETE /api/notifications/unregister — Remove push token
 notificationsRouter.post("/unregister", zValidator("json", z.object({ token: z.string() })), async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
   const { token } = c.req.valid("json");
   try {
-    await prisma.pushToken.deleteMany({ where: { token } });
+    await prisma.pushToken.deleteMany({ where: { token, userId: user.id } });
   } catch (error) {
     console.error("[notifications] Failed to unregister push token:", error);
   }
@@ -108,6 +205,23 @@ interface PushMessage {
   badge?: number;
 }
 
+interface ExpoPushTicket {
+  status?: "ok" | "error";
+  id?: string;
+  message?: string;
+  details?: {
+    error?: string;
+  };
+}
+
+interface ExpoPushResponse {
+  data?: ExpoPushTicket[];
+  errors?: Array<{
+    message?: string;
+    code?: string;
+  }>;
+}
+
 async function sendPushNotifications(messages: PushMessage[]) {
   if (messages.length === 0) return;
   // Expo accepts batches of 100
@@ -117,21 +231,61 @@ async function sendPushNotifications(messages: PushMessage[]) {
   }
   for (const chunk of chunks) {
     try {
-      await fetchWithTimeout('https://exp.host/--/api/v2/push/send', {
+      const response = await fetchWithTimeout('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chunk),
         timeoutMs: 15000,
       });
+      const payload = await response.json().catch(() => null) as ExpoPushResponse | null;
+      if (!response.ok) {
+        console.error('[Push] Expo API error:', response.status, payload?.errors ?? payload);
+        continue;
+      }
+
+      const invalidTokens: string[] = [];
+      const tickets = Array.isArray(payload?.data) ? payload.data : [];
+      for (let index = 0; index < tickets.length; index += 1) {
+        const ticket = tickets[index];
+        if (ticket?.status !== "error") continue;
+
+        const token = chunk[index]?.to;
+        const errorCode = ticket.details?.error;
+        console.warn('[Push] Expo ticket error:', errorCode ?? "unknown", ticket.message ?? "");
+        if (errorCode === "DeviceNotRegistered" && token) {
+          invalidTokens.push(token);
+        }
+      }
+
+      if (invalidTokens.length > 0) {
+        await prisma.pushToken.deleteMany({
+          where: { token: { in: invalidTokens } },
+        });
+        console.log(`[Push] Removed ${invalidTokens.length} unregistered push token(s)`);
+      }
     } catch (err) {
       console.error('[Push] Send error:', err);
     }
   }
 }
 
+async function isPushEnabledForUser(userId: string, type?: string): Promise<boolean> {
+  if (!type) return true;
+  const prefKey = notificationPreferenceKeyForType(type);
+  if (!prefKey) return true;
+
+  const prefs = await prisma.notificationPreference.findUnique({
+    where: { userId },
+    select: { [prefKey]: true },
+  });
+  return prefs?.[prefKey] ?? true;
+}
+
 // Send push to a specific user
 export async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, any>) {
   try {
+    if (!(await isPushEnabledForUser(userId, data?.type))) return;
+
     const tokens = await prisma.pushToken.findMany({ where: { userId } });
     if (tokens.length === 0) return;
 
@@ -163,10 +317,17 @@ export async function sendPushToUser(userId: string, title: string, body: string
 }
 
 // Send push to all users with tokens (for big game alerts)
-export async function sendPushToAll(title: string, body: string, data?: Record<string, any>, maxPerUser = 2) {
+export async function sendPushToAll(
+  title: string,
+  body: string,
+  data?: Record<string, any>,
+  maxPerUser = 2,
+  excludeUserIds: string[] = [],
+) {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const excluded = new Set(excludeUserIds);
 
     const allTokens = await prisma.pushToken.findMany({
       include: { user: true },
@@ -182,17 +343,20 @@ export async function sendPushToAll(title: string, body: string, data?: Record<s
 
     const messages: PushMessage[] = [];
     for (const [userId, tokens] of userTokens) {
+      if (excluded.has(userId)) continue;
+      if (!(await isPushEnabledForUser(userId, data?.type))) continue;
+
       const sentToday = await prisma.notificationLog.count({
         where: { userId, sentAt: { gte: todayStart } },
       });
-      if (sentToday >= 4) continue; // Skip over-notified users
+      if (sentToday >= maxPerUser) continue; // Skip over-notified users
 
       for (const token of tokens) {
         messages.push({ to: token, title, body, data, sound: 'default' });
       }
 
       await prisma.notificationLog.create({
-        data: { userId, type: data?.type ?? 'broadcast', title, body },
+        data: { userId, type: data?.type ?? 'broadcast', gameId: data?.gameId, title, body },
       });
     }
 

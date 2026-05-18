@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
+import { setDisplayName } from '@/lib/revenuecatClient';
 
 // Match profile card palette
 import {
@@ -56,9 +57,10 @@ export default function EditProfileScreen() {
     mutationFn: async (data: { name?: string }) => {
       return api.put<UserProfile>('/api/profile', data);
     },
-    onSuccess: () => {
+    onSuccess: async (profile) => {
+      await setDisplayName(profile.name);
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      invalidateSession();
+      await invalidateSession();
       router.back();
     },
     onError: () => {
@@ -88,7 +90,7 @@ export default function EditProfileScreen() {
       await invalidateSession();
     } catch (error) {
       Alert.alert('Upload Failed', 'There was an error uploading your photo. Please try again.');
-      console.error('Upload error:', error);
+      if (__DEV__) console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
     }

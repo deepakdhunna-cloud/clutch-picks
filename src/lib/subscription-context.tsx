@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { hasEntitlement, getCustomerInfo, isRevenueCatEnabled } from './revenuecatClient';
+import { AppState, Platform } from 'react-native';
+import {
+  addCustomerInfoListener,
+  customerInfoHasPremium,
+  hasEntitlement,
+  isRevenueCatEnabled,
+  REVENUECAT_ENTITLEMENT_ID,
+} from './revenuecatClient';
 
 interface SubscriptionState {
   isPremium: boolean;
@@ -25,7 +32,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      const result = await hasEntitlement('Clutch Picks Pro');
+      const result = await hasEntitlement(REVENUECAT_ENTITLEMENT_ID);
       if (result.ok) {
         setIsPremium(result.data);
       } else {
@@ -41,6 +48,29 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     checkSubscription();
+  }, [checkSubscription]);
+
+  useEffect(() => {
+    if (!isRevenueCatEnabled()) return;
+
+    const removeListener = addCustomerInfoListener((customerInfo) => {
+      setIsPremium(customerInfoHasPremium(customerInfo));
+      setIsLoading(false);
+    });
+
+    return removeListener;
+  }, []);
+
+  useEffect(() => {
+    if (!isRevenueCatEnabled() || Platform.OS === 'web') return;
+
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') {
+        checkSubscription();
+      }
+    });
+
+    return () => subscription.remove();
   }, [checkSubscription]);
 
   return (

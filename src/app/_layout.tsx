@@ -16,16 +16,17 @@ import { SubscriptionProvider } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotificationRegistration, useNotificationNavigation } from '@/hooks/useNotifications';
+import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
+import { useLiveScores } from '@/hooks/useLiveScores';
 
 
 enableScreens(true);
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: 'welcome',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -65,12 +66,8 @@ const queryClient = new QueryClient({
 // This runs at module level so it fires before any component renders.
 // Must mirror the per-date fetch in useGames.ts (the /api/games aggregator
 // drops today's non-LIVE games + EPL; date endpoints return the full slate).
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
 const GAMES_CACHE_KEY = 'rq_cache_games_v1';
 const GAMES_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
-
-const fmtDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Hydrate games cache from disk synchronously-ish so cold opens show last-known
 // games instantly while the network fetch runs in the background.
@@ -104,46 +101,25 @@ queryClient.getQueryCache().subscribe((event) => {
   ).catch(() => {});
 });
 
-queryClient.prefetchQuery({
-  queryKey: ['games'],
-  queryFn: async () => {
-    const today = new Date();
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
-    const dates = [fmtDate(today), fmtDate(tomorrow), fmtDate(dayAfter)];
-    const results = await Promise.all(
-      dates.map(async (d) => {
-        try {
-          const response = await fetch(`${BACKEND_URL}/api/games/date/${d}`, {
-            headers: { 'Content-Type': 'application/json' },
-          });
-          if (!response.ok) return [];
-          const json = await response.json();
-          return json.data ?? [];
-        } catch {
-          return [];
-        }
-      })
-    );
-    const merged = results.flat();
-    const byId = new Map<string, any>();
-    for (const g of merged) byId.set(g.id, g);
-    return Array.from(byId.values());
-  },
-  staleTime: 30000,
-});
-
-function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
+function RootLayoutNav({
+  colorScheme,
+  fontsReady,
+}: {
+  colorScheme: 'light' | 'dark' | null | undefined;
+  fontsReady: boolean;
+}) {
   const { data: session, isLoading } = useSession();
   const router = useRouter();
   const segments = useSegments();
   const [appIsReady, setAppIsReady] = useState(false);
-  const { markAnimationComplete } = useSplash();
+  const { markAnimationComplete, splashAnimationComplete } = useSplash();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
 
-  // Register push notifications when user is signed in
-  useNotificationRegistration();
+  useRevenueCatIdentity(session?.user);
+
+  // Register push notifications when user is signed in and permission exists.
+  useNotificationRegistration(session?.user?.id);
   useNotificationNavigation(router);
 
   // Re-check onboarding flag ONLY on auth-state transitions:
@@ -183,27 +159,41 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
     return () => subscription.remove();
   }, []);
 
-  // Mark app as ready and hide native splash — AnimatedSplash takes over from here
+  const segment = segments[0];
+  const inAuthGroup =
+    segment === 'sign-in' ||
+    segment === 'sign-up' ||
+    segment === 'verify-otp' ||
+    segment === 'welcome' ||
+    segment === 'onboarding';
+  const inPublicGroup = segment === 'privacy-policy' || segment === 'terms';
+  const shouldRedirect =
+    !isLoading &&
+    onboardingChecked &&
+    (
+      (Boolean(session?.user) && inAuthGroup && segment !== 'onboarding') ||
+      (!session?.user && !inAuthGroup && !inPublicGroup)
+    );
+  const appFlowLoading = isLoading || !onboardingChecked || shouldRedirect;
+
+  // Mark app as ready and hide native splash — AnimatedSplash takes over from here.
   useEffect(() => {
-    if (!isLoading) {
+    if (fontsReady) {
       setAppIsReady(true);
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [isLoading]);
+  }, [fontsReady]);
 
   // Handle auth state changes and redirect accordingly
   useEffect(() => {
-    console.log('[guard]', segments[0], 'hasUser:', !!session?.user, 'loading:', isLoading, 'onbChk:', onboardingChecked, 'onbDone:', onboardingDone);
+    if (__DEV__) console.log('[guard]', segments[0], 'hasUser:', !!session?.user, 'loading:', isLoading, 'onbChk:', onboardingChecked, 'onbDone:', onboardingDone);
     if (isLoading || !onboardingChecked) return;
 
-    const inAuthGroup = segments[0] === 'sign-in' || segments[0] === 'sign-up' || segments[0] === 'verify-otp' || segments[0] === 'welcome' || segments[0] === 'onboarding';
-    const inPublicGroup = segments[0] === 'privacy-policy' || segments[0] === 'terms';
-
     if (__DEV__) {
-      console.log('[layout] guard: hasUser=', !!session?.user, 'segment=', segments[0], 'inAuthGroup=', inAuthGroup, 'onboardingDone=', onboardingDone);
+      console.log('[layout] guard: hasUser=', !!session?.user, 'segment=', segment, 'inAuthGroup=', inAuthGroup, 'onboardingDone=', onboardingDone);
     }
 
-    if (session?.user && inAuthGroup && segments[0] !== 'onboarding') {
+    if (session?.user && inAuthGroup && segment !== 'onboarding') {
       // Check if onboarding is complete — if not, send to onboarding first
       if (!onboardingDone) {
         if (__DEV__) console.log('[layout] guard: signed in on auth screen → onboarding');
@@ -216,7 +206,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
       if (__DEV__) console.log('[layout] guard: NOT signed in but on app screen → /welcome');
       router.replace('/welcome');
     }
-  }, [session, isLoading, segments, onboardingChecked, onboardingDone]);
+  }, [session, isLoading, segments, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup]);
 
   // Callback when splash animation completes
   const handleAnimationComplete = useCallback(() => {
@@ -224,7 +214,7 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
   }, [markAnimationComplete]);
 
   // Show animated splash while loading
-  if (isLoading || !appIsReady) {
+  if (!appIsReady) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000000' }} />
     );
@@ -232,10 +222,11 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 
   return (
     <AnimatedSplash
-      isLoading={false}
+      isLoading={appFlowLoading}
       onAnimationComplete={handleAnimationComplete}
     >
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        {splashAnimationComplete ? <LiveScoreSync /> : null}
         <Stack screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 200, gestureEnabled: true, fullScreenGestureEnabled: true }}>
           <Stack.Screen name="welcome" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="sign-in" options={{ freezeOnBlur: true }} />
@@ -267,9 +258,19 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
   );
 }
 
+function LiveScoreSync() {
+  useLiveScores({ trackState: false });
+  return null;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-useFonts({ BebasNeue_400Regular, VT323_400Regular, Orbitron_700Bold });
+  const [fontsLoaded, fontError] = useFonts({
+    BebasNeue_400Regular,
+    VT323_400Regular,
+    Orbitron_700Bold,
+  });
+  const fontsReady = fontsLoaded || Boolean(fontError);
 
 
   return (
@@ -279,7 +280,7 @@ useFonts({ BebasNeue_400Regular, VT323_400Regular, Orbitron_700Bold });
           <ErrorBoundary>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <StatusBar style="light" />
-              <RootLayoutNav colorScheme={colorScheme} />
+              <RootLayoutNav colorScheme={colorScheme} fontsReady={fontsReady} />
             </GestureHandlerRootView>
           </ErrorBoundary>
         </SplashProvider>

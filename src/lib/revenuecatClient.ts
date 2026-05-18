@@ -5,10 +5,9 @@
  * missing configuration. The app will work fine whether or not RevenueCat is configured.
  *
  * Environment Variables:
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
- * These are automatically injected into the workspace by the Vibecode service once the user sets up RevenueCat in the Payments tab.
+ * - EXPO_PUBLIC_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
+ * - EXPO_PUBLIC_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
+ * - EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
  *
  * Platform Support:
  * - iOS/Android: Fully supported via app stores
@@ -25,16 +24,16 @@ import Purchases, {
   type PurchasesOfferings,
   type CustomerInfo,
   type PurchasesPackage,
+  type CustomerInfoUpdateListener,
 } from "react-native-purchases";
 
 // Check if running on web
 const isWeb = Platform.OS === "web";
 
-// RevenueCat Apple API key — hardcoded directly, no env var dependency
-const APPLE_KEY = 'appl_ttiiqmHPmKTuvfALCxMccyWRjcE';
-const testKey = APPLE_KEY;
-const appleKey = APPLE_KEY;
-const googleKey = undefined;
+const devFallbackAppleKey = "appl_ttiiqmHPmKTuvfALCxMccyWRjcE";
+const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY ?? devFallbackAppleKey;
+const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY;
 
 // Use __DEV__ and Platform to determine which key to use
 const getApiKey = (): string | undefined => {
@@ -51,6 +50,8 @@ const apiKey = getApiKey();
 const isEnabled = !!apiKey && !isWeb;
 
 const LOG_PREFIX = "[RevenueCat]";
+export const REVENUECAT_ENTITLEMENT_ID = "Clutch Picks Pro";
+export const REVENUECAT_MONTHLY_PACKAGE_ID = "$rc_monthly";
 
 export type RevenueCatGuardReason =
   | "web_not_supported"
@@ -178,6 +179,20 @@ export const getCustomerInfo = (): Promise<RevenueCatResult<CustomerInfo>> => {
   );
 };
 
+export const customerInfoHasPremium = (customerInfo: CustomerInfo): boolean => {
+  return Boolean(customerInfo.entitlements.active?.[REVENUECAT_ENTITLEMENT_ID]);
+};
+
+export const addCustomerInfoListener = (
+  listener: CustomerInfoUpdateListener,
+): (() => void) => {
+  if (!isEnabled) return () => {};
+  Purchases.addCustomerInfoUpdateListener(listener);
+  return () => {
+    Purchases.removeCustomerInfoUpdateListener(listener);
+  };
+};
+
 /**
  * Restore previous purchases
  *
@@ -238,6 +253,33 @@ export const setEmail = (email: string): Promise<RevenueCatResult<void>> => {
 export const setDisplayName = (displayName: string): Promise<RevenueCatResult<void>> => {
   return guardRevenueCatUsage("setDisplayName", async () => {
     await Purchases.setDisplayName(displayName);
+  });
+};
+
+export const syncRevenueCatAttributes = (): Promise<
+  RevenueCatResult<PurchasesOfferings>
+> => {
+  return guardRevenueCatUsage("syncAttributes", () =>
+    Purchases.syncAttributesAndOfferingsIfNeeded(),
+  );
+};
+
+export const syncSubscriberInfo = async (input: {
+  userId?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+}): Promise<RevenueCatResult<void>> => {
+  return guardRevenueCatUsage("syncSubscriberInfo", async () => {
+    if (input.userId) {
+      await Purchases.logIn(input.userId);
+    }
+    if (input.email) {
+      await Purchases.setEmail(input.email);
+    }
+    if (input.displayName) {
+      await Purchases.setDisplayName(input.displayName);
+    }
+    await Purchases.syncAttributesAndOfferingsIfNeeded();
   });
 };
 

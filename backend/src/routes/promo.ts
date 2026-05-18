@@ -103,19 +103,19 @@ promoRouter.post("/redeem", zValidator("json", redeemSchema), async (c) => {
     // Build message based on type
     const messages: Record<string, string> = {
       lifetime: "Lifetime access granted!",
-      yearly: "1 year of Clutch Pro granted!",
-      monthly: "1 month of Clutch Pro granted!",
+      yearly: "1 year of Clutch Picks Pro granted!",
+      monthly: "1 month of Clutch Picks Pro granted!",
       three_day: "3-day trial granted!",
-      weekly: "1 week of Clutch Pro granted!",
-      two_month: "2 months of Clutch Pro granted!",
-      three_month: "3 months of Clutch Pro granted!",
-      six_month: "6 months of Clutch Pro granted!",
+      weekly: "1 week of Clutch Picks Pro granted!",
+      two_month: "2 months of Clutch Picks Pro granted!",
+      three_month: "3 months of Clutch Picks Pro granted!",
+      six_month: "6 months of Clutch Picks Pro granted!",
     };
 
     return c.json({
       data: {
         success: true,
-        message: messages[promo.type] ?? "Clutch Pro access granted!",
+        message: messages[promo.type] ?? "Clutch Picks Pro access granted!",
         type: promo.type,
       },
     });

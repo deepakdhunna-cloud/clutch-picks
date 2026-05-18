@@ -24,12 +24,14 @@ export function displayWinProbability(
 export function displaySport(sport: string): string {
   if (sport === 'NCAAF') return 'CFB';
   if (sport === 'NCAAB') return 'CBB';
+  if (sport === 'TENNIS') return 'Tennis';
   return sport;
 }
 
 /**
  * Format live game time display per sport.
  * - MLB: inning only, no clock (baseball has no running clock)
+ * - IPL: cricket status/innings summary from the feed
  * - EPL/MLS: clock only as match minute (e.g. "65'"), no period label
  * - NFL/NCAAF: quarter + clock (e.g. "Q2 · 5:32")
  * - NBA/NCAAB: quarter + clock (e.g. "Q3 · 8:15")
@@ -42,6 +44,9 @@ export function formatGameTime(sport: string, quarter?: string, clock?: string):
     case 'MLB':
       // Baseball: just the inning, never show clock
       return quarter || null;
+    case 'IPL':
+    case 'TENNIS':
+      return quarter || clock || null;
     case 'EPL':
     case 'MLS':
     case 'UCL':

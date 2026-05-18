@@ -35,17 +35,41 @@ export type FactorContribution = {
   /**
    * true when the factor has actual evidence pushing the delta in a direction
    * (injuries reported, net rating computed, goalie confirmed, etc.), false
-   * when it's a neutral / no-data / "no change" fallback. hasSignal=false
-   * factors donate their weight to rating_diff during aggregation instead of
-   * diluting the Elo signal with a zero contribution.
+   * when it's a neutral / no-data / "no change" fallback. Effectively neutral
+   * factors donate their weight to the strongest directional anchor during
+   * aggregation instead of diluting the pick with a zero contribution.
    *
    * Invariants:
    *   - available=false ⇒ hasSignal=false
-   *   - rating_diff (Elo) should always be hasSignal=true
+   *   - rating_diff usually acts as the anchor when it has a non-zero edge
    */
   hasSignal: boolean;
   /** One-sentence factual justification with concrete numbers, no adjectives */
   evidence: string;
+};
+
+// ─── Projection / simulation layer ─────────────────────────────────────────
+
+export type ProjectionSignal = {
+  key: string;
+  label: string;
+  value: number;
+  evidence: string;
+};
+
+export type SimulationProjection = {
+  engine: "game-script-v1";
+  iterations: number;
+  homeWinProbability: number;
+  awayWinProbability: number;
+  drawProbability?: number;
+  projectedHomeScore: number;
+  projectedAwayScore: number;
+  projectedSpread: number;
+  projectedTotal: number;
+  volatility: number;
+  upsetRisk: number;
+  signals: ProjectionSignal[];
 };
 
 // ─── Game Context ───────────────────────────────────────────────────────────
@@ -100,9 +124,14 @@ export type GameContext = {
   // stakes flags). Useful for evidence strings that want "vs mid-table".
   leagueStandings?: LeagueStandingsRow[] | null;
 
-  // Market consensus (SharpAPI). Never used as a prediction input — only as
-  // a post-prediction calibration anchor (see prediction/index.ts divergence
-  // check). null when SHARPAPI_KEY unset or fetch failed.
+  // UCL-only verified feeds. null when the provider URLs are unset or the
+  // teams are missing, so these factors redistribute instead of guessing.
+  uclPedigree?: { home: number; away: number } | null;
+  uclTravel?: { distanceKm: number; homeCity: string; awayCity: string } | null;
+
+  // Market consensus (SharpAPI). Used as a small calibration anchor by the
+  // new engine, plus for final model-vs-market divergence reporting. null
+  // when SHARPAPI_KEY unset or fetch failed.
   marketConsensus?: MarketConsensus | null;
 
   /** ISO date string of the game */
@@ -126,6 +155,8 @@ export type LeagueKey =
   | "MLS"
   | "EPL"
   | "UCL"
+  | "IPL"
+  | "TENNIS"
   | "NCAAF"
   | "NCAAB";
 
@@ -155,6 +186,7 @@ export type HonestPrediction = {
   confidence: number;           // max(home, away) * 100, rounded to 1 decimal
   confidenceBand: ConfidenceBand;
   factors: FactorContribution[];
+  projection?: SimulationProjection;
   unavailableFactors: string[];
   narrative: string;            // 80-150 words, factor-driven (filled by narrative.ts)
   modelVersion: string;

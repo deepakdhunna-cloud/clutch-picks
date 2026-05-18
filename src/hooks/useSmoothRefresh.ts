@@ -1,0 +1,99 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+type RefreshAction = () => Promise<unknown> | unknown;
+
+interface SmoothRefreshOptions {
+  minVisibleMs?: number;
+  maxVisibleMs?: number;
+}
+
+const DEFAULT_MIN_VISIBLE_MS = 450;
+const DEFAULT_MAX_VISIBLE_MS = 1200;
+
+const waitForNextFrame = () =>
+  new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve());
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
+
+export function useSmoothRefresh(
+  refreshAction: RefreshAction,
+  options: SmoothRefreshOptions = {},
+) {
+  const [refreshing, setRefreshing] = useState(false);
+  const actionRef = useRef(refreshAction);
+  const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  actionRef.current = refreshAction;
+
+  const minVisibleMs = options.minVisibleMs ?? DEFAULT_MIN_VISIBLE_MS;
+  const maxVisibleMs = options.maxVisibleMs ?? DEFAULT_MAX_VISIBLE_MS;
+
+  const clearTimers = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimers();
+    };
+  }, [clearTimers]);
+
+  const hideRefreshing = useCallback(() => {
+    if (!mountedRef.current) return;
+    setRefreshing(false);
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    clearTimers();
+    if (mountedRef.current) setRefreshing(true);
+
+    const startedAt = Date.now();
+    maxTimerRef.current = setTimeout(() => {
+      maxTimerRef.current = null;
+      hideRefreshing();
+    }, maxVisibleMs);
+
+    Promise.resolve()
+      .then(waitForNextFrame)
+      .then(() => actionRef.current())
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('[refresh] pull-to-refresh failed:', error);
+        }
+      })
+      .finally(() => {
+        inFlightRef.current = false;
+        if (maxTimerRef.current) {
+          clearTimeout(maxTimerRef.current);
+          maxTimerRef.current = null;
+        }
+
+        const elapsed = Date.now() - startedAt;
+        const wait = Math.max(0, minVisibleMs - elapsed);
+        hideTimerRef.current = setTimeout(() => {
+          hideTimerRef.current = null;
+          hideRefreshing();
+        }, wait);
+      });
+  }, [clearTimers, hideRefreshing, maxVisibleMs, minVisibleMs]);
+
+  return { refreshing, onRefresh };
+}

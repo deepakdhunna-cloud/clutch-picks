@@ -12,6 +12,8 @@ const ESPN_PATHS: Record<string, string> = {
   NCAAF: "football/college-football",
   MLS:   "soccer/usa.1",
   EPL:   "soccer/eng.1",
+  UCL:   "soccer/uefa.champions",
+  IPL:   "cricket/8048",
 };
 
 interface HistoricalGame {

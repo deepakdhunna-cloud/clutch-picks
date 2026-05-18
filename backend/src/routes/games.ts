@@ -6,13 +6,12 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
-import { generatePrediction, bustAIAnalysisCache } from "../lib/predictions";
-import { runShadowPrediction, useNewEngine, cleanOldShadowLogs } from "../prediction/shadow";
+import { cleanOldShadowLogs } from "../prediction/shadow";
 import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
-import { Sport as SportEnum, League, GameStatus as SportsGameStatus } from "../types/sports";
-import type { Game as SportsGame } from "../types/sports";
+import { deriveSeasonContext, type NarrativeSeasonContext } from "../prediction/seasonContext";
+import { buildDeterministicNarrative, buildNarrativeInput } from "../prediction/narrative";
+import { getConfidenceBand, type FactorContribution } from "../prediction/types";
 import { notifyWinnerFlip } from "../lib/notification-jobs";
-import { prisma } from "../prisma";
 import { fetchMarketConsensus } from "../lib/sharpApi";
 
 // ESPN API base URLs for each sport
@@ -26,6 +25,8 @@ const ESPN_ENDPOINTS = {
   NCAAB: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
   EPL: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
   UCL: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+  IPL: "https://site.api.espn.com/apis/site/v2/sports/cricket/8048/scoreboard",
+  TENNIS: "https://www.espn.com/tennis/scoreboard/_/date",
 } as const;
 
 type SportKey = keyof typeof ESPN_ENDPOINTS;
@@ -50,6 +51,7 @@ export interface GameTeam {
   record: string;
   color: string;
   logo?: string;
+  rank?: number;
 }
 
 export interface PredictionFactor {
@@ -64,6 +66,7 @@ export interface GamePrediction {
   id: string;
   gameId: string;
   predictedWinner: "home" | "away";
+  predictedOutcome?: "home" | "away" | "draw";
   confidence: number;
   analysis: string;
   predictedSpread: number;
@@ -84,8 +87,27 @@ export interface GamePrediction {
   awayStreak: number;
   isTossUp?: boolean;
   drawProbability?: number;
-  // Post-hoc comparison to SharpAPI market consensus. Populated when
-  // SHARPAPI_KEY is set. NOT a prediction input — purely informational.
+  projection?: {
+    engine: string;
+    iterations: number;
+    homeWinProbability: number;
+    awayWinProbability: number;
+    drawProbability?: number;
+    projectedHomeScore: number;
+    projectedAwayScore: number;
+    projectedSpread: number;
+    projectedTotal: number;
+    volatility: number;
+    upsetRisk: number;
+    signals: Array<{
+      key: string;
+      label: string;
+      value: number;
+      evidence: string;
+    }>;
+  };
+  // Comparison to SharpAPI market consensus. Market gets a small calibration
+  // vote in the new engine, then this object reports the remaining gap.
   marketComparison?: {
     modelHomeProb: number;     // 0..1
     marketHomeProb: number;    // 0..1 (Pinnacle de-vigged)
@@ -97,13 +119,14 @@ export interface GamePrediction {
 
 export interface Game {
   id: string;
-  sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL" | "UCL";
+  sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL" | "UCL" | "IPL" | "TENNIS";
   homeTeam: GameTeam;
   awayTeam: GameTeam;
   gameTime: string;
   status: "SCHEDULED" | "LIVE" | "FINAL" | "POSTPONED" | "CANCELLED";
   venue: string;
   tvChannel?: string;
+  watchSources?: string[];
   homeScore?: number;
   awayScore?: number;
   spread?: number;
@@ -111,6 +134,7 @@ export interface Game {
   marketFavorite?: "home" | "away";
   quarter?: string;
   clock?: string;
+  seasonContext?: NarrativeSeasonContext | null;
   homeLinescores?: number[];
   awayLinescores?: number[];
   liveState?: {
@@ -123,6 +147,7 @@ export interface Game {
     inningHalf: "top" | "bottom" | null;
     inningNumber: number | null;
     betweenInnings: boolean;
+    inningTransition: "mid" | "end" | null;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };
@@ -171,25 +196,41 @@ interface ESPNBroadcast {
 interface ESPNStatus {
   type: {
     id: string;
-    name: string;
+    name?: string;
     state: string;
-    completed: boolean;
+    completed?: boolean;
     description: string;
     detail: string;
     shortDetail: string;
   };
   period?: number;
   displayClock?: string;
+  summary?: string;
 }
 
 interface ESPNSituationAthlete {
   athlete?: {
     displayName?: string;
     fullName?: string;
+    team?: {
+      id?: string;
+    };
   };
 }
 
 interface ESPNSituation {
+  lastPlay?: {
+    text?: string;
+    summaryType?: string;
+    team?: {
+      id?: string;
+    };
+    type?: {
+      text?: string;
+      abbreviation?: string;
+      type?: string;
+    };
+  };
   balls?: number;
   strikes?: number;
   outs?: number;
@@ -213,6 +254,96 @@ interface ESPNCompetition {
   broadcasts?: ESPNBroadcast[];
   status: ESPNStatus;
   situation?: ESPNSituation;
+  notes?: Array<{ type?: string; headline?: string }>;
+}
+
+type MlbInningTransition = "mid" | "end" | null;
+
+function normalizeStatusText(text: string | null | undefined): string {
+  return (text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function textMentionsTopHalf(text: string): boolean {
+  return /\btop\b/.test(text);
+}
+
+function textMentionsBottomHalf(text: string): boolean {
+  return /\b(bot|bottom)\b/.test(text);
+}
+
+function textIndicatesMidInning(text: string): boolean {
+  return /^(mid|middle)\b/.test(text) || /\bmiddle of\b/.test(text);
+}
+
+function textIndicatesEndBreak(text: string): boolean {
+  return /^end\b/.test(text) || /\bend of\b/.test(text) || /\bend\s+\d/.test(text);
+}
+
+function teamId(value: string | number | null | undefined): string | null {
+  return value === null || value === undefined ? null : String(value);
+}
+
+export function resolveMlbInningTransitionForStatus({
+  detailTexts,
+  homeTeamId,
+  awayTeamId,
+  pitcherTeamId,
+  batterTeamId,
+  lastPlayTeamId,
+  homeHasLineScoreForPeriod,
+  awayHasLineScoreForPeriod,
+}: {
+  detailTexts: Array<string | null | undefined>;
+  homeTeamId?: string | number | null;
+  awayTeamId?: string | number | null;
+  pitcherTeamId?: string | number | null;
+  batterTeamId?: string | number | null;
+  lastPlayTeamId?: string | number | null;
+  homeHasLineScoreForPeriod?: boolean;
+  awayHasLineScoreForPeriod?: boolean;
+}): MlbInningTransition {
+  let sawGenericEndBreak = false;
+
+  for (const rawText of detailTexts) {
+    const text = normalizeStatusText(rawText);
+    if (!text) continue;
+
+    if (textIndicatesMidInning(text)) return "mid";
+
+    if (textIndicatesEndBreak(text)) {
+      if (textMentionsTopHalf(text) && !textMentionsBottomHalf(text)) return "mid";
+      if (textMentionsBottomHalf(text)) return "end";
+      sawGenericEndBreak = true;
+    }
+  }
+
+  if (!sawGenericEndBreak) return null;
+
+  const homeId = teamId(homeTeamId);
+  const awayId = teamId(awayTeamId);
+  const pitcherId = teamId(pitcherTeamId);
+  const batterId = teamId(batterTeamId);
+  const lastPlayId = teamId(lastPlayTeamId);
+
+  // Generic "End 8th" is ambiguous during the top→bottom handoff. ESPN often
+  // still carries the last batter/pitcher context, which tells us which half
+  // just ended: home pitcher + away batter means the top half ended.
+  if ((pitcherId && pitcherId === homeId) || (batterId && batterId === awayId)) {
+    return "mid";
+  }
+  if ((pitcherId && pitcherId === awayId) || (batterId && batterId === homeId)) {
+    return "end";
+  }
+
+  // Last-play team is a weaker fallback because pitch/out events usually tag
+  // the fielding team. It still beats showing END during a top-half switch.
+  if (lastPlayId && lastPlayId === homeId) return "mid";
+  if (lastPlayId && lastPlayId === awayId) return "end";
+
+  if (awayHasLineScoreForPeriod && !homeHasLineScoreForPeriod) return "mid";
+  if (awayHasLineScoreForPeriod && homeHasLineScoreForPeriod) return "end";
+
+  return "end";
 }
 
 interface ESPNEvent {
@@ -221,10 +352,105 @@ interface ESPNEvent {
   name: string;
   shortName: string;
   competitions: ESPNCompetition[];
+  season?: {
+    type?: number | string;
+    slug?: string;
+    name?: string;
+    year?: number;
+  };
 }
 
 interface ESPNScoreboardResponse {
   events: ESPNEvent[];
+}
+
+interface ESPNStandingsResponse {
+  children?: Array<{
+    standings?: {
+      entries?: ESPNStandingEntry[];
+    };
+  }>;
+}
+
+interface ESPNStandingEntry {
+  team?: {
+    id?: string;
+    abbreviation?: string;
+  };
+  stats?: Array<{
+    name?: string;
+    type?: string;
+    value?: number;
+    displayValue?: string;
+  }>;
+}
+
+interface ESPNFitTennisState {
+  page?: {
+    content?: {
+      scoreboard?: TennisScoreboard;
+    };
+  };
+}
+
+interface TennisScoreboard {
+  competitions?: Record<string, TennisCompetition>;
+  tournaments?: TennisTournament[];
+}
+
+interface TennisTournament {
+  id?: string;
+  name?: string;
+  groupings?: TennisGrouping[];
+}
+
+interface TennisGrouping {
+  id?: string;
+  name?: string;
+  competitionIds?: string[];
+}
+
+interface TennisStatus {
+  id?: string;
+  description?: string;
+  detail?: string;
+  state?: string;
+  completed?: boolean;
+}
+
+interface TennisLineScore {
+  v?: string | number;
+  w?: boolean;
+  t?: string | number;
+  p?: number;
+}
+
+interface TennisRosterPlayer {
+  nm?: string;
+  logo?: string;
+  srv?: boolean;
+}
+
+interface TennisCompetitor {
+  id?: string;
+  uid?: string;
+  homeAway?: "home" | "away";
+  logo?: string;
+  nm?: string;
+  rnk?: number;
+  wnr?: boolean;
+  srv?: boolean;
+  lnescrs?: TennisLineScore[];
+  rstr?: TennisRosterPlayer[];
+}
+
+interface TennisCompetition {
+  id?: string;
+  date?: string;
+  note?: string;
+  dbls?: boolean;
+  status?: TennisStatus;
+  competitors?: TennisCompetitor[];
 }
 
 // Cache structure
@@ -234,8 +460,11 @@ interface CacheEntry {
 }
 
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds — used when no games in entry are live
-const LIVE_CACHE_TTL_MS = 10 * 1000; // 10 seconds — used when ≥1 game in entry is live
+const LIVE_CACHE_TTL_MS = 3 * 1000; // 3 seconds — used when ≥1 game in entry is live
 const cache = new LRUCache<string, CacheEntry>({ max: 100 });
+const IPL_STANDINGS_URL = "https://site.web.api.espn.com/apis/v2/sports/cricket/8048/standings";
+const IPL_STANDINGS_CACHE_TTL_MS = 10 * 60 * 1000;
+let iplStandingsRecordCache: { data: Map<string, string>; timestamp: number } | null = null;
 // Secondary index: gameId → Game, for O(1) lookups in /id/:id
 const gameById = new Map<string, Game>();
 // In-flight request deduplication: prevents parallel requests for the same key
@@ -266,20 +495,96 @@ function setCacheData(cacheKey: string, data: Game[]): void {
 
 // Prediction cache - predictions don't change as often as scores
 const PREDICTION_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const PREDICTION_NARRATIVE_VERSION = "bar-friend-v9-projection-consensus";
 const predictionCache = new LRUCache<string, { prediction: GamePrediction; timestamp: number }>({ max: 500 });
 
+function predictionCacheKey(gameId: string): string {
+  return `${gameId}:${PREDICTION_NARRATIVE_VERSION}`;
+}
+
 function getCachedPrediction(gameId: string): GamePrediction | null {
-  const entry = predictionCache.get(gameId);
+  const key = predictionCacheKey(gameId);
+  const entry = predictionCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > PREDICTION_CACHE_TTL_MS) {
-    predictionCache.delete(gameId);
+    predictionCache.delete(key);
     return null;
   }
   return entry.prediction;
 }
 
 function setCachedPrediction(gameId: string, prediction: GamePrediction): void {
-  predictionCache.set(gameId, { prediction, timestamp: Date.now() });
+  predictionCache.set(predictionCacheKey(gameId), { prediction, timestamp: Date.now() });
+}
+
+const STALE_NARRATIVE_REGEX =
+  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b/i;
+
+function predictionFactorToContribution(factor: PredictionFactor): FactorContribution {
+  const homeScore = Number.isFinite(factor.homeScore) ? factor.homeScore : 0.5;
+  const awayScore = Number.isFinite(factor.awayScore) ? factor.awayScore : 0.5;
+  return {
+    key: factor.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "factor",
+    label: factor.name,
+    homeDelta: (homeScore - awayScore) * 100,
+    weight: Number.isFinite(factor.weight) ? factor.weight : 0,
+    available: true,
+    hasSignal: Math.abs(homeScore - awayScore) > 0.01,
+    evidence: factor.description || `${factor.name} favors neither side clearly`,
+  };
+}
+
+function rebuildNarrativeFromPrediction(game: Game, prediction: GamePrediction): string | null {
+  if (!prediction.factors || prediction.factors.length === 0) return null;
+
+  const winnerAbbr =
+    prediction.predictedWinner === "home"
+      ? game.homeTeam.abbreviation
+      : game.awayTeam.abbreviation;
+  const winnerProb = Math.max(
+    (prediction.homeWinProbability ?? 50) / 100,
+    (prediction.awayWinProbability ?? 50) / 100,
+  );
+  const input = buildNarrativeInput(
+    prediction.factors.map(predictionFactorToContribution),
+    getConfidenceBand(winnerProb),
+    prediction.confidence,
+    game.homeTeam.abbreviation,
+    game.awayTeam.abbreviation,
+    winnerAbbr,
+    game.sport,
+    [],
+    game.seasonContext ?? deriveSeasonContext({ sport: game.sport, gameTime: game.gameTime }),
+    game.homeTeam.name,
+    game.awayTeam.name,
+  );
+
+  return buildDeterministicNarrative(input);
+}
+
+function shouldRewritePredictionNarrative(_game: Game, prediction: GamePrediction): boolean {
+  return STALE_NARRATIVE_REGEX.test(prediction.analysis ?? "");
+}
+
+export function sanitizePredictionForGame(game: Game, prediction: GamePrediction): GamePrediction {
+  if (!shouldRewritePredictionNarrative(game, prediction)) return prediction;
+  const rebuilt = rebuildNarrativeFromPrediction(game, prediction);
+  if (!rebuilt) return prediction;
+  return {
+    ...prediction,
+    analysis: rebuilt,
+  };
+}
+
+function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
+  const displayPrediction = sanitizePredictionForGame(game, prediction);
+  return {
+    ...game,
+    spread: game.spread ?? displayPrediction.spread,
+    overUnder: game.overUnder ?? displayPrediction.overUnder,
+    marketFavorite: game.marketFavorite ?? displayPrediction.marketFavorite,
+    prediction: displayPrediction,
+  };
 }
 
 // ─── Live game data type ──────────────────────────────────────────────────────
@@ -291,6 +596,8 @@ export interface LiveGameData {
   period: number;
   // Seconds remaining in the current period (null = unknown)
   clockSeconds: number | null;
+  // Seconds elapsed in regulation for count-up clock sports such as soccer.
+  elapsedSeconds?: number | null;
   // Total periods in a regulation game (4 for NFL/NBA, 3 for NHL, 9 for MLB, 2 for soccer)
   totalPeriods: number;
 }
@@ -357,7 +664,19 @@ const SPORT_REGULATION_SECONDS: Record<string, number> = {
   MLS:   90 * 60,
   EPL:   90 * 60,
   UCL:  90 * 60,
+  IPL:  40 * 6 * 60,    // T20: two 20-over innings, roughly six minutes per over
+  TENNIS: 3 * 45 * 60,  // best-of-three proxy for live probability blending
 };
+
+const LIVE_SOCCER_SPORTS = new Set(["MLS", "EPL", "UCL"]);
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function roundPercentTenth(value: number): number {
+  return Math.round(value * 10) / 10;
+}
 
 /**
  * Derive the implied win probability for the leading team based purely on
@@ -396,6 +715,8 @@ function computeLiveScoreImpliedProb(
     MLS: 0.033,  // ~2.5 goals/90 min
     EPL: 0.033,
     UCL: 0.033,
+    IPL: 1.35,    // ~160 runs per innings across roughly 120 minutes
+    TENNIS: 0.02, // set-based scoring; live score is useful but intentionally dampened
   };
   const pace = paceScale[sport] ?? 1.0;
   const remainingTime = (1 - gameProgress);
@@ -430,6 +751,20 @@ function computeGameProgress(live: LiveGameData, sport: string): number {
   const totalSeconds = SPORT_REGULATION_SECONDS[sport];
   if (!totalSeconds) return 0;
 
+  if (
+    live.elapsedSeconds !== undefined &&
+    live.elapsedSeconds !== null &&
+    Number.isFinite(live.elapsedSeconds)
+  ) {
+    return clampNumber(live.elapsedSeconds / totalSeconds, 0, 1);
+  }
+
+  if (LIVE_SOCCER_SPORTS.has(sport)) {
+    // Soccer feeds use count-up clocks ("23'", "67:10") rather than quarters.
+    // If the exact minute is unavailable, only apply second-half context.
+    return live.period > 1 ? 0.5 : 0;
+  }
+
   const completedPeriods = Math.max(0, live.period - 1);
   const secondsPerPeriod = totalSeconds / live.totalPeriods;
 
@@ -443,6 +778,28 @@ function computeGameProgress(live: LiveGameData, sport: string): number {
 
   const totalElapsed = completedSeconds + Math.max(0, elapsedInCurrentPeriod);
   return Math.min(1.0, totalElapsed / totalSeconds);
+}
+
+function computeLiveSoccerDrawProb(margin: number, gameProgress: number): number {
+  if (margin === 0) {
+    return clampNumber(0.24 + gameProgress * 0.48, 0.24, 0.72);
+  }
+
+  const marginPenalty = 1 + Math.abs(margin);
+  return clampNumber(0.28 * (1 - gameProgress * 0.75) / marginPenalty, 0.03, 0.26);
+}
+
+function formatLivePredictionLabel(live: LiveGameData, sport: string): string {
+  if (
+    LIVE_SOCCER_SPORTS.has(sport) &&
+    live.elapsedSeconds !== undefined &&
+    live.elapsedSeconds !== null
+  ) {
+    return `${Math.floor(live.elapsedSeconds / 60)}'`;
+  }
+  if (sport === "NHL") return `P${live.period}`;
+  if (sport === "MLB") return `Inning ${live.period}`;
+  return `Q${live.period}`;
 }
 
 /**
@@ -481,6 +838,51 @@ export function updateLivePrediction(
   const pregameHomeProb = pregame.homeWinProbability / 100;
   const pregameAwayProb = pregame.awayWinProbability / 100;
 
+  if (LIVE_SOCCER_SPORTS.has(sport)) {
+    const pregameDrawProb =
+      typeof pregame.drawProbability === "number" && Number.isFinite(pregame.drawProbability)
+        ? pregame.drawProbability / 100
+        : 0.25;
+    const liveDrawProb = computeLiveSoccerDrawProb(
+      live.currentHomeScore - live.currentAwayScore,
+      gameProgress,
+    );
+    const liveNonDrawProb = 1 - liveDrawProb;
+    const liveHomeThreeWay = liveHomeWinProb * liveNonDrawProb;
+    const liveAwayThreeWay = liveAwayWinProb * liveNonDrawProb;
+
+    const blendedHomeProb = pregameHomeProb * (1 - gameProgress) + liveHomeThreeWay * gameProgress;
+    const blendedAwayProb = pregameAwayProb * (1 - gameProgress) + liveAwayThreeWay * gameProgress;
+    const blendedDrawProb = pregameDrawProb * (1 - gameProgress) + liveDrawProb * gameProgress;
+    const total = blendedHomeProb + blendedAwayProb + blendedDrawProb;
+
+    const newHomeProb = roundPercentTenth((blendedHomeProb / total) * 100);
+    const newAwayProb = roundPercentTenth((blendedAwayProb / total) * 100);
+    const newDrawProb = Math.max(0, roundPercentTenth(100 - newHomeProb - newAwayProb));
+    const maxProb = Math.max(newHomeProb, newAwayProb, newDrawProb);
+    const predictedOutcome: "home" | "away" | "draw" =
+      newDrawProb >= newHomeProb && newDrawProb >= newAwayProb
+        ? "draw"
+        : newHomeProb >= newAwayProb
+          ? "home"
+          : "away";
+    const newPredictedWinner: "home" | "away" =
+      predictedOutcome === "away" ? "away" : newHomeProb >= newAwayProb ? "home" : "away";
+
+    return {
+      ...pregame,
+      predictedWinner: newPredictedWinner,
+      predictedOutcome,
+      confidence: maxProb,
+      homeWinProbability: newHomeProb,
+      awayWinProbability: newAwayProb,
+      drawProbability: newDrawProb,
+      isTossUp: maxProb < 53 || Math.abs(newHomeProb - newAwayProb) < 5,
+      analysis: pregame.analysis +
+        ` [LIVE ${formatLivePredictionLabel(live, sport)}: ${live.currentHomeScore}-${live.currentAwayScore}, ${Math.round(gameProgress * 100)}% elapsed]`,
+    };
+  }
+
   // Blend: more game elapsed = more weight on live score signal
   const blendedHomeProb = pregameHomeProb * (1 - gameProgress) + liveHomeWinProb * gameProgress;
   const blendedAwayProb = pregameAwayProb * (1 - gameProgress) + liveAwayWinProb * gameProgress;
@@ -504,38 +906,15 @@ export function updateLivePrediction(
     awayWinProbability: newAwayProb,
     // Surface live context in analysis suffix
     analysis: pregame.analysis +
-      ` [LIVE Q${live.period}: ${live.currentHomeScore}–${live.currentAwayScore}, ${Math.round(gameProgress * 100)}% elapsed]`,
+      ` [LIVE ${formatLivePredictionLabel(live, sport)}: ${live.currentHomeScore}–${live.currentAwayScore}, ${Math.round(gameProgress * 100)}% elapsed]`,
   };
 }
-
-// Parse record string (e.g., "10-3" or "10-3-1") into TeamRecord format
-function parseRecord(record: string): { wins: number; losses: number; ties?: number } {
-  const parts = record.split('-').map(Number);
-  return {
-    wins: parts[0] || 0,
-    losses: parts[1] || 0,
-    ties: parts[2] !== undefined ? parts[2] : undefined,
-  };
-}
-
-// Sport string to enum mappings
-const sportEnumMap: Record<string, SportEnum> = {
-  NFL: SportEnum.NFL, NBA: SportEnum.NBA, MLB: SportEnum.MLB, NHL: SportEnum.NHL,
-  MLS: SportEnum.MLS, NCAAF: SportEnum.NCAAF, NCAAB: SportEnum.NCAAB, EPL: SportEnum.EPL,
-  UCL: SportEnum.UCL,
-};
-
-const leagueMap: Record<string, League> = {
-  NFL: League.Pro, NBA: League.Pro, MLB: League.Pro, NHL: League.Pro,
-  MLS: League.Pro, NCAAF: League.College, NCAAB: League.College, EPL: League.Pro,
-  UCL: League.Pro,
-};
 
 // ─── Live helper utilities ────────────────────────────────────────────────────
 
 /** Total regulation periods by sport. */
 const SPORT_TOTAL_PERIODS: Record<string, number> = {
-  NBA: 4, NFL: 4, NCAAF: 4, NCAAB: 2, NHL: 3, MLB: 9, MLS: 2, EPL: 2, UCL: 2,
+  NBA: 4, NFL: 4, NCAAF: 4, NCAAB: 2, NHL: 3, MLB: 9, MLS: 2, EPL: 2, UCL: 2, IPL: 2, TENNIS: 3,
 };
 
 /**
@@ -565,160 +944,86 @@ function parseClockSeconds(clock: string): number | null {
   return mins * 60 + secs;
 }
 
-// Generate AI prediction for an ESPN game, with live adjustment when in-progress
-async function addPredictionToGame(game: Game): Promise<Game> {
-  const isLive = game.status === "LIVE";
+function parseSoccerElapsedSeconds(display: string): number | null {
+  const text = display.trim().toLowerCase();
+  if (!text) return null;
+  if (text.includes("half") || text === "ht") return 45 * 60;
 
-  // For live games: check the 2-minute live cache first
-  if (isLive) {
-    const cachedLive = getCachedLivePrediction(game.id);
-    if (cachedLive) {
-      return {
-        ...game,
-        spread: game.spread ?? cachedLive.spread,
-        overUnder: game.overUnder ?? cachedLive.overUnder,
-        marketFavorite: game.marketFavorite ?? cachedLive.marketFavorite,
-        prediction: cachedLive,
-      };
-    }
+  const clock = text.match(/^(\d{1,3}):(\d{2})$/);
+  if (clock) {
+    const mins = parseInt(clock[1]!, 10);
+    const secs = parseInt(clock[2]!, 10);
+    if (Number.isFinite(mins) && Number.isFinite(secs)) return mins * 60 + secs;
   }
 
-  // Check pregame prediction cache (15 min TTL)
-  const cachedPrediction = getCachedPrediction(game.id);
-  if (cachedPrediction && !isLive) {
-    return {
-      ...game,
-      spread: game.spread ?? cachedPrediction.spread,
-      overUnder: game.overUnder ?? cachedPrediction.overUnder,
-      marketFavorite: game.marketFavorite ?? cachedPrediction.marketFavorite,
-      prediction: cachedPrediction,
-    };
+  const stoppage = text.match(/(\d{1,3})\s*(?:'|’)?\s*\+\s*(\d{1,2})/);
+  if (stoppage) {
+    const mins = parseInt(stoppage[1]!, 10);
+    const added = parseInt(stoppage[2]!, 10);
+    if (Number.isFinite(mins) && Number.isFinite(added)) return (mins + added) * 60;
   }
 
-  // ── New engine path (USE_NEW_PREDICTION_ENGINE=true) ─────────────────────
-  // Short-circuit the old prediction pipeline entirely. Shadow logging is
-  // skipped because there's nothing to compare against on this path.
-  if (useNewEngine()) {
-    try {
-      const newPrediction = await runNewEnginePrediction(game);
-
-      // Market comparison annotation (same block as old path, post-hoc only).
-      try {
-        const market = await fetchMarketConsensus(
-          game.sport,
-          game.homeTeam.name,
-          game.awayTeam.name,
-          new Date(game.gameTime),
-        );
-        if (market && Number.isFinite(market.noVigHomeProb)) {
-          const modelHomeProb = (newPrediction.homeWinProbability ?? 50) / 100;
-          const divergence = Math.abs(modelHomeProb - market.noVigHomeProb);
-          const isDivergent = divergence > 0.10;
-          const pickedSide: "home" | "away" = newPrediction.predictedWinner;
-          const bestBook = market.lines
-            .slice()
-            .sort((a, b) =>
-              pickedSide === "home"
-                ? b.homeAmerican - a.homeAmerican
-                : b.awayAmerican - a.awayAmerican,
-            )[0];
-          newPrediction.marketComparison = {
-            modelHomeProb,
-            marketHomeProb: market.noVigHomeProb,
-            divergence,
-            isDivergent,
-            bestBook: bestBook
-              ? {
-                  sportsbook: bestBook.sportsbook,
-                  american: pickedSide === "home" ? bestBook.homeAmerican : bestBook.awayAmerican,
-                }
-              : null,
-          };
-        }
-      } catch (err) {
-        console.warn("[market] annotation failed:", err instanceof Error ? err.message : err);
-      }
-
-      setCachedPrediction(game.id, newPrediction);
-
-      return {
-        ...game,
-        prediction: newPrediction,
-      };
-    } catch (err) {
-      console.error(
-        `[engine] New engine failed for ${game.id} (${game.sport}); falling back to old engine:`,
-        err instanceof Error ? err.message : err,
-      );
-      // Fall through to the old engine path on failure — never break the user response.
-    }
+  const minute = text.match(/(\d{1,3})\s*(?:'|’)/);
+  if (minute) {
+    const mins = parseInt(minute[1]!, 10);
+    if (Number.isFinite(mins)) return mins * 60;
   }
 
-  const homeRecord = parseRecord(game.homeTeam.record);
-  const awayRecord = parseRecord(game.awayTeam.record);
+  return null;
+}
 
-  const sportsGame: SportsGame = {
-    id: game.id,
-    sport: sportEnumMap[game.sport] || SportEnum.NFL,
-    league: leagueMap[game.sport] || League.Pro,
-    homeTeam: {
-      id: game.homeTeam.id,
-      name: game.homeTeam.name,
-      abbreviation: game.homeTeam.abbreviation,
-      logo: game.homeTeam.logo || '',
-      record: homeRecord,
-    },
-    awayTeam: {
-      id: game.awayTeam.id,
-      name: game.awayTeam.name,
-      abbreviation: game.awayTeam.abbreviation,
-      logo: game.awayTeam.logo || '',
-      record: awayRecord,
-    },
-    dateTime: game.gameTime,
-    venue: game.venue,
-    tvChannel: game.tvChannel || '',
-    status: game.status === 'LIVE' ? SportsGameStatus.InProgress
-           : game.status === 'FINAL' ? SportsGameStatus.Final
-           : game.status === 'POSTPONED' ? SportsGameStatus.Postponed
-           : SportsGameStatus.Scheduled,
+function parseSoccerPeriod(display: string): number {
+  const text = display.toLowerCase();
+  const elapsed = parseSoccerElapsedSeconds(display);
+  if (elapsed !== null) return elapsed >= 45 * 60 ? 2 : 1;
+  if (text.includes("2nd") || text.includes("second")) return 2;
+  return 1;
+}
+
+function applyLiveAdjustmentIfNeeded(game: Game, pregamePrediction: GamePrediction): GamePrediction {
+  if (game.status !== "LIVE" || game.homeScore === undefined || game.awayScore === undefined) {
+    return pregamePrediction;
+  }
+
+  const isSoccer = LIVE_SOCCER_SPORTS.has(game.sport);
+  const soccerElapsedSeconds = isSoccer
+    ? parseSoccerElapsedSeconds(game.clock ?? game.quarter ?? "")
+    : null;
+
+  const liveData: LiveGameData = {
+    currentHomeScore: game.homeScore,
+    currentAwayScore: game.awayScore,
+    period: isSoccer
+      ? parseSoccerPeriod(game.clock ?? game.quarter ?? "")
+      : parsePeriodNumber(game.quarter ?? "") ?? 1,
+    clockSeconds: isSoccer ? null : parseClockSeconds(game.clock ?? ""),
+    elapsedSeconds: soccerElapsedSeconds,
+    totalPeriods: SPORT_TOTAL_PERIODS[game.sport] ?? 4,
   };
 
-  const prediction = await generatePrediction(sportsGame, game.spread, game.overUnder);
+  const finalPrediction = updateLivePrediction(pregamePrediction, liveData, game.sport);
+  if (finalPrediction === pregamePrediction) {
+    return pregamePrediction;
+  }
+  if (pregamePrediction.predictedWinner !== finalPrediction.predictedWinner) {
+    console.log(
+      `[LiveFlip] ${game.id}: ${pregamePrediction.predictedWinner} -> ${finalPrediction.predictedWinner} (live score shift)`,
+    );
+    notifyWinnerFlip(
+      game.id,
+      game.homeTeam.abbreviation,
+      game.awayTeam.abbreviation,
+      game.sport,
+      finalPrediction.predictedWinner,
+      finalPrediction.confidence,
+    ).catch((err) => console.error("[LiveFlip] Notify failed:", err));
+  }
 
-  // Confidence = raw winner probability (no capping, no dampener, no band-
-  // derived value). The confidenceBand enum still exists as a separate field
-  // for display tiering.
-  const rawConfidence = Math.round(
-    Math.max(prediction.homeWinProbability, prediction.awayWinProbability),
-  );
+  setCachedLivePrediction(game.id, finalPrediction);
+  return finalPrediction;
+}
 
-  const predictionResult: GamePrediction = {
-    id: `pred-${game.id}`,
-    gameId: game.id,
-    predictedWinner: prediction.predictedWinner,
-    confidence: rawConfidence,
-    analysis: prediction.aiAnalysis,
-    predictedSpread: prediction.spread,
-    predictedTotal: prediction.overUnder,
-    marketFavorite: prediction.marketFavorite,
-    spread: prediction.spread,
-    overUnder: prediction.overUnder,
-    createdAt: new Date().toISOString(),
-    homeWinProbability: prediction.homeWinProbability,
-    awayWinProbability: prediction.awayWinProbability,
-    factors: prediction.factors,
-    edgeRating: prediction.edgeRating,
-    valueRating: prediction.valueRating,
-    recentFormHome: prediction.recentFormHome,
-    recentFormAway: prediction.recentFormAway,
-    homeStreak: prediction.homeStreak,
-    awayStreak: prediction.awayStreak,
-    isTossUp: prediction.isTossUp ?? false,
-  };
-
-  // ── Market comparison (post-hoc annotation; not a prediction input) ──────
-  // Gated on SHARPAPI_KEY — fetchMarketConsensus returns null without it.
+async function annotateMarketComparison(game: Game, prediction: GamePrediction): Promise<void> {
   try {
     const market = await fetchMarketConsensus(
       game.sport,
@@ -726,128 +1031,73 @@ async function addPredictionToGame(game: Game): Promise<Game> {
       game.awayTeam.name,
       new Date(game.gameTime),
     );
-    if (market && Number.isFinite(market.noVigHomeProb)) {
-      const modelHomeProb = (predictionResult.homeWinProbability ?? 50) / 100;
-      const divergence = Math.abs(modelHomeProb - market.noVigHomeProb);
-      const isDivergent = divergence > 0.10;
+    if (!market || !Number.isFinite(market.noVigHomeProb)) return;
 
-      // Best moneyline on the model's predicted winner — for display only.
-      const pickedSide: "home" | "away" = predictionResult.predictedWinner;
-      const bestBook = market.lines
-        .slice()
-        .sort((a, b) =>
-          pickedSide === "home"
-            ? b.homeAmerican - a.homeAmerican
-            : b.awayAmerican - a.awayAmerican,
-        )[0];
+    const modelHomeProb = (prediction.homeWinProbability ?? 50) / 100;
+    const divergence = Math.abs(modelHomeProb - market.noVigHomeProb);
+    const pickedSide: "home" | "away" = prediction.predictedWinner;
+    const bestBook = market.lines
+      .slice()
+      .sort((a, b) =>
+        pickedSide === "home"
+          ? b.homeAmerican - a.homeAmerican
+          : b.awayAmerican - a.awayAmerican,
+      )[0];
 
-      predictionResult.marketComparison = {
-        modelHomeProb,
-        marketHomeProb: market.noVigHomeProb,
-        divergence,
-        isDivergent,
-        bestBook: bestBook
-          ? {
-              sportsbook: bestBook.sportsbook,
-              american: pickedSide === "home" ? bestBook.homeAmerican : bestBook.awayAmerican,
-            }
-          : null,
-      };
-    }
+    prediction.marketComparison = {
+      modelHomeProb,
+      marketHomeProb: market.noVigHomeProb,
+      divergence,
+      isDivergent: divergence > 0.10,
+      bestBook: bestBook
+        ? {
+            sportsbook: bestBook.sportsbook,
+            american: pickedSide === "home" ? bestBook.homeAmerican : bestBook.awayAmerican,
+          }
+        : null,
+    };
   } catch (err) {
-    // Never break prediction response over a market-fetch hiccup.
     console.warn("[market] annotation failed:", err instanceof Error ? err.message : err);
   }
+}
 
-  // ── Winner-change detection ─────────────────────────────────────────────────
-  // Compare new prediction with previous cached version. If the predicted winner
-  // flipped, notify users and update the database record so the app always shows
-  // the latest pick — never stale data.
-  if (cachedPrediction && cachedPrediction.predictedWinner !== predictionResult.predictedWinner) {
-    console.log(`[PredictionFlip] ${game.id}: ${cachedPrediction.predictedWinner} → ${predictionResult.predictedWinner} (${predictionResult.confidence}%)`);
-    // Bust the AI analysis cache so it regenerates text for the new winner
-    bustAIAnalysisCache(game.id);
-    // Update DB record to reflect the new winner
-    prisma.predictionResult.updateMany({
-      where: { gameId: game.id },
-      data: {
-        predictedWinner: predictionResult.predictedWinner,
-        confidence: predictionResult.confidence,
-        isTossUp: predictionResult.isTossUp ?? false,
-      },
-    }).catch(err => console.error('[PredictionFlip] DB update failed:', err));
+// Generate prediction for an ESPN game, with live adjustment when in-progress.
+async function addPredictionToGame(game: Game): Promise<Game> {
+  const isLive = game.status === "LIVE";
 
-    // Fire notification in background — don't block the response
-    notifyWinnerFlip(
-      game.id,
-      game.homeTeam.abbreviation,
-      game.awayTeam.abbreviation,
-      game.sport,
-      predictionResult.predictedWinner,
-      predictionResult.confidence
-    ).catch(err => console.error('[PredictionFlip] Notify failed:', err));
-  }
-
-  // Cache the pregame prediction (15-min TTL)
-  setCachedPrediction(game.id, predictionResult);
-
-  // ── Shadow: run new engine in background (fire-and-forget) ────────────────
-  // When USE_NEW_PREDICTION_ENGINE is false, the old prediction above is served
-  // to users. The new engine runs in parallel for comparison logging only.
-  // A failure here NEVER affects the user-facing response.
-  if (!useNewEngine()) {
-    runShadowPrediction(
-      game,
-      {
-        predictedWinner: prediction.predictedWinner,
-        homeWinProbability: prediction.homeWinProbability,
-        confidence: prediction.confidence,
-      },
-    );
-  }
-
-  // ── Live adjustment ────────────────────────────────────────────────────────
-  // When the game is in progress and scores are available, blend the pregame
-  // model with live score signal. Cache the result for 2 minutes.
-  let finalPrediction = predictionResult;
-  if (isLive && game.homeScore !== undefined && game.awayScore !== undefined) {
-    const period = parsePeriodNumber(game.quarter ?? "");
-    const clockSec = parseClockSeconds(game.clock ?? "");
-    const totalPeriods = SPORT_TOTAL_PERIODS[game.sport] ?? 4;
-
-    const liveData: LiveGameData = {
-      currentHomeScore: game.homeScore,
-      currentAwayScore: game.awayScore,
-      period: period ?? 1,
-      clockSeconds: clockSec,
-      totalPeriods,
-    };
-
-    finalPrediction = updateLivePrediction(predictionResult, liveData, game.sport);
-
-    // Check if the live adjustment flipped the winner vs the pregame prediction
-    if (predictionResult.predictedWinner !== finalPrediction.predictedWinner) {
-      console.log(`[LiveFlip] ${game.id}: ${predictionResult.predictedWinner} → ${finalPrediction.predictedWinner} (live score shift)`);
-      notifyWinnerFlip(
-        game.id,
-        game.homeTeam.abbreviation,
-        game.awayTeam.abbreviation,
-        game.sport,
-        finalPrediction.predictedWinner,
-        finalPrediction.confidence
-      ).catch(err => console.error('[LiveFlip] Notify failed:', err));
+  if (isLive) {
+    const cachedLive = getCachedLivePrediction(game.id);
+    if (cachedLive) {
+      return attachPredictionToGame(game, cachedLive);
     }
-
-    setCachedLivePrediction(game.id, finalPrediction);
   }
 
-  return {
-    ...game,
-    spread: game.spread ?? prediction.spread,
-    overUnder: game.overUnder ?? prediction.overUnder,
-    marketFavorite: game.marketFavorite ?? prediction.marketFavorite,
-    prediction: finalPrediction,
-  };
+  const cachedPrediction = getCachedPrediction(game.id);
+  if (cachedPrediction && !isLive) {
+    return attachPredictionToGame(game, cachedPrediction);
+  }
+
+  if (cachedPrediction && isLive) {
+    const finalPrediction = applyLiveAdjustmentIfNeeded(game, cachedPrediction);
+    return attachPredictionToGame(game, finalPrediction);
+  }
+
+  try {
+    const newPrediction = await runNewEnginePrediction(game);
+    await annotateMarketComparison(game, newPrediction);
+
+    const displayPrediction = sanitizePredictionForGame(game, newPrediction);
+    setCachedPrediction(game.id, displayPrediction);
+    const finalPrediction = applyLiveAdjustmentIfNeeded(game, displayPrediction);
+
+    return attachPredictionToGame(game, finalPrediction);
+  } catch (err) {
+    console.error(
+      `[engine] New engine failed for ${game.id} (${game.sport}); no legacy fallback served:`,
+      err instanceof Error ? err.message : err,
+    );
+    return game;
+  }
 }
 
 // Background prediction generation - non-blocking
@@ -880,7 +1130,7 @@ function mapGameStatus(
   status: ESPNStatus
 ): "SCHEDULED" | "LIVE" | "FINAL" | "POSTPONED" | "CANCELLED" {
   const state = status.type.state.toLowerCase();
-  const name = status.type.name.toLowerCase();
+  const name = (status.type.name ?? status.type.description ?? status.type.detail ?? "").toLowerCase();
   if (name.includes("postponed")) return "POSTPONED";
   if (name.includes("canceled") || name.includes("cancelled")) return "CANCELLED";
   if (state === "in") return "LIVE";
@@ -890,6 +1140,9 @@ function mapGameStatus(
 
 function getPeriodDisplay(status: ESPNStatus, sport: SportKey): string | undefined {
   if (status.type.state.toLowerCase() !== "in") return undefined;
+  if (sport === "IPL") {
+    return status.type.shortDetail || status.type.detail || status.summary || undefined;
+  }
   const period = status.period;
   if (!period) return undefined;
 
@@ -929,6 +1182,159 @@ function getPeriodDisplay(status: ESPNStatus, sport: SportKey): string | undefin
   return `Period ${period}`;
 }
 
+function ordinalInning(n: number): string {
+  if (n >= 11 && n <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+function getMlbPeriodDisplay(liveState: Game["liveState"] | undefined): string | undefined {
+  const inning = liveState?.inningNumber;
+  if (!inning) return undefined;
+
+  if (liveState.betweenInnings) {
+    if (liveState.inningTransition === "mid") return `Mid ${ordinalInning(inning)}`;
+    if (liveState.inningTransition === "end") return `End ${ordinalInning(inning)}`;
+    return `Between ${ordinalInning(inning)}`;
+  }
+
+  if (liveState.inningHalf === "top") return `Top ${ordinalInning(inning)}`;
+  if (liveState.inningHalf === "bottom") return `Bot ${ordinalInning(inning)}`;
+  return undefined;
+}
+
+function standingsStat(entry: ESPNStandingEntry, names: string[]): number | null {
+  const targets = new Set(names.map((name) => name.toLowerCase()));
+  const stat = entry.stats?.find((candidate) =>
+    targets.has((candidate.name ?? "").toLowerCase()) ||
+    targets.has((candidate.type ?? "").toLowerCase()),
+  );
+  if (typeof stat?.value === "number" && Number.isFinite(stat.value)) {
+    return stat.value;
+  }
+  const parsed = Number(stat?.displayValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function fetchIPLStandingsRecords(): Promise<Map<string, string>> {
+  if (
+    iplStandingsRecordCache &&
+    Date.now() - iplStandingsRecordCache.timestamp < IPL_STANDINGS_CACHE_TTL_MS
+  ) {
+    return iplStandingsRecordCache.data;
+  }
+
+  try {
+    const response = await fetch(IPL_STANDINGS_URL, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return new Map();
+    const data = (await response.json()) as ESPNStandingsResponse;
+    const entries = data.children?.flatMap((child) => child.standings?.entries ?? []) ?? [];
+    const records = new Map<string, string>();
+
+    for (const entry of entries) {
+      const wins = standingsStat(entry, ["matchesWon", "matcheswon", "wins"]);
+      const losses = standingsStat(entry, ["matchesLost", "matcheslost", "losses"]);
+      const tied = standingsStat(entry, ["matchesTied", "matchestied", "ties"]) ?? 0;
+      const noResult = standingsStat(entry, ["noresult", "noResult"]) ?? 0;
+      if (wins === null || losses === null) continue;
+
+      const extra = tied + noResult;
+      const record = extra > 0 ? `${wins}-${losses}-${extra}` : `${wins}-${losses}`;
+      const keys = [entry.team?.id, entry.team?.abbreviation].filter(Boolean) as string[];
+      for (const key of keys) {
+        records.set(key.toUpperCase(), record);
+      }
+    }
+
+    iplStandingsRecordCache = { data: records, timestamp: Date.now() };
+    return records;
+  } catch (error) {
+    console.warn("[ipl-standings] failed to fetch standings records:", error instanceof Error ? error.message : error);
+    return iplStandingsRecordCache?.data ?? new Map();
+  }
+}
+
+function parseMlbLiveState({
+  sport,
+  status,
+  competition,
+  homeAbbr,
+  awayAbbr,
+  gameId,
+}: {
+  sport: SportKey;
+  status: Game["status"];
+  competition: ESPNCompetition;
+  homeAbbr: string;
+  awayAbbr: string;
+  gameId: string;
+}): Game["liveState"] | undefined {
+  if (sport !== "MLB" || status !== "LIVE") return undefined;
+
+  try {
+    const s = competition.situation;
+    const homeCompetitor = competition.competitors.find((c) => c.homeAway === "home");
+    const awayCompetitor = competition.competitors.find((c) => c.homeAway === "away");
+    const statusTexts = [
+      competition.status.type.shortDetail,
+      competition.status.type.detail,
+      competition.status.type.description,
+      competition.status.type.name,
+    ];
+    const normalizedStatusTexts = statusTexts.map(normalizeStatusText);
+    const inningTransition = resolveMlbInningTransitionForStatus({
+      detailTexts: statusTexts,
+      homeTeamId: homeCompetitor?.team.id,
+      awayTeamId: awayCompetitor?.team.id,
+      pitcherTeamId: s?.pitcher?.athlete?.team?.id,
+      batterTeamId: s?.batter?.athlete?.team?.id,
+      lastPlayTeamId: s?.lastPlay?.team?.id,
+      homeHasLineScoreForPeriod: homeCompetitor?.linescores?.some((ls) => ls.period === competition.status.period),
+      awayHasLineScoreForPeriod: awayCompetitor?.linescores?.some((ls) => ls.period === competition.status.period),
+    });
+    const betweenInnings = inningTransition !== null;
+    const inningHalf: "top" | "bottom" | null = betweenInnings
+      ? null
+      : normalizedStatusTexts.some((text) => text.startsWith("top"))
+      ? "top"
+      : normalizedStatusTexts.some((text) => text.startsWith("bot") || text.startsWith("bottom"))
+      ? "bottom"
+      : null;
+    const battingAbbr = inningHalf === "bottom" ? homeAbbr : awayAbbr;
+    const pitchingAbbr = inningHalf === "bottom" ? awayAbbr : homeAbbr;
+    const pitcherName =
+      s?.pitcher?.athlete?.displayName ?? s?.pitcher?.athlete?.fullName ?? null;
+    const batterName =
+      s?.batter?.athlete?.displayName ?? s?.batter?.athlete?.fullName ?? null;
+
+    return {
+      balls: s?.balls ?? 0,
+      strikes: s?.strikes ?? 0,
+      outs: s?.outs ?? 0,
+      onFirst: s?.onFirst === true,
+      onSecond: s?.onSecond === true,
+      onThird: s?.onThird === true,
+      inningHalf,
+      inningNumber: typeof competition.status.period === "number" ? competition.status.period : null,
+      betweenInnings,
+      inningTransition,
+      pitcher: s?.pitcher ? { name: pitcherName, teamAbbr: pitchingAbbr } : null,
+      batter: s?.batter ? { name: batterName, teamAbbr: battingAbbr } : null,
+    };
+  } catch (err) {
+    console.warn(`[mlb-livestate] failed to parse situation for game ${gameId}:`, err);
+    return undefined;
+  }
+}
+
 async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Game | null> {
   const competition = event.competitions[0];
   if (!competition) return null;
@@ -939,12 +1345,20 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
 
   const homeTeam = homeCompetitor.team;
   const awayTeam = awayCompetitor.team;
+  const iplRecords = sport === "IPL" ? await fetchIPLStandingsRecords() : null;
 
   const getRecord = (competitor: ESPNCompetitor): string => {
     const overallRecord = competitor.records?.find(
       (r) => r.type === "total" || r.type === "overall"
     );
-    return overallRecord?.summary || "0-0";
+    const feedRecord = overallRecord?.summary?.trim();
+    if (feedRecord) return feedRecord;
+    if (sport === "IPL") {
+      const teamId = competitor.team.id.toUpperCase();
+      const abbr = competitor.team.abbreviation.toUpperCase();
+      return iplRecords?.get(teamId) ?? iplRecords?.get(abbr) ?? "0-0";
+    }
+    return "0-0";
   };
 
   const getTeamLogo = (team: ESPNTeam): string | undefined => {
@@ -967,10 +1381,29 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     }
   }
 
-  const tvChannel = competition.broadcasts?.[0]?.names?.[0];
+  const watchSources = Array.from(
+    new Set(
+      (competition.broadcasts ?? [])
+        .flatMap((broadcast) => broadcast.names ?? [])
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  );
+  const tvChannel = watchSources[0];
   const gameStatus = mapGameStatus(competition.status);
-  const quarter = getPeriodDisplay(competition.status, sport);
+  const rawQuarter = getPeriodDisplay(competition.status, sport);
   const clock = gameStatus === "LIVE" ? competition.status.displayClock : undefined;
+  const seasonContext = deriveSeasonContext({
+    sport,
+    gameTime: event.date,
+    seasonType: event.season?.type ?? null,
+    seasonSlug: event.season?.slug ?? null,
+    seasonName: event.season?.name ?? null,
+    eventName: [event.name, event.shortName].filter(Boolean).join(" "),
+    competitionNotes: competition.notes?.map((note) =>
+      [note.type, note.headline].filter(Boolean).join(" "),
+    ),
+  });
 
   const homeScore = homeCompetitor.score ? parseInt(homeCompetitor.score, 10) : undefined;
   const awayScore = awayCompetitor.score ? parseInt(awayCompetitor.score, 10) : undefined;
@@ -982,46 +1415,17 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   const homeLinescores = extractLinescores(homeCompetitor);
   const awayLinescores = extractLinescores(awayCompetitor);
 
-  // MLB live state: emit whenever the game is LIVE — even between innings,
-  // when ESPN drops competition.situation entirely. The component then shows
-  // an "END OF Nth" placeholder until the next half-inning begins.
-  // Wrapped in try/catch so a malformed payload never breaks the response.
-  let liveState: Game["liveState"] | undefined;
-  if (sport === "MLB" && gameStatus === "LIVE") {
-    try {
-      const s = competition.situation;
-      const detail = (competition.status.type.detail || competition.status.type.shortDetail || "").toLowerCase();
-      const inningHalf: "top" | "bottom" | null =
-        detail.startsWith("top") ? "top" : detail.startsWith("bot") ? "bottom" : null;
-      // ESPN uses "Mid X" between top→bottom and "End X" between bottom→top
-      // of next inning. Both mean we're between half-innings.
-      const betweenInnings = detail.startsWith("mid") || detail.startsWith("end");
-      const battingAbbr =
-        inningHalf === "bottom" ? homeTeam.abbreviation : awayTeam.abbreviation;
-      const pitchingAbbr =
-        inningHalf === "bottom" ? awayTeam.abbreviation : homeTeam.abbreviation;
-      const pitcherName =
-        s?.pitcher?.athlete?.displayName ?? s?.pitcher?.athlete?.fullName ?? null;
-      const batterName =
-        s?.batter?.athlete?.displayName ?? s?.batter?.athlete?.fullName ?? null;
-      liveState = {
-        balls: s?.balls ?? 0,
-        strikes: s?.strikes ?? 0,
-        outs: s?.outs ?? 0,
-        onFirst: s?.onFirst === true,
-        onSecond: s?.onSecond === true,
-        onThird: s?.onThird === true,
-        inningHalf,
-        inningNumber: typeof competition.status.period === "number" ? competition.status.period : null,
-        betweenInnings,
-        pitcher: s?.pitcher ? { name: pitcherName, teamAbbr: pitchingAbbr } : null,
-        batter: s?.batter ? { name: batterName, teamAbbr: battingAbbr } : null,
-      };
-    } catch (err) {
-      console.warn(`[mlb-livestate] failed to parse situation for game ${event.id}:`, err);
-      liveState = undefined;
-    }
-  }
+  const liveState = parseMlbLiveState({
+    sport,
+    status: gameStatus,
+    competition,
+    homeAbbr: homeTeam.abbreviation,
+    awayAbbr: awayTeam.abbreviation,
+    gameId: event.id,
+  });
+  const quarter = sport === "MLB" ? getMlbPeriodDisplay(liveState) ?? rawQuarter : rawQuarter;
+  const normalizeTeamColor = (color: string | undefined): string =>
+    color ? (color.startsWith("#") ? color : `#${color}`) : "#333333";
 
   const game: Game = {
     id: event.id,
@@ -1032,7 +1436,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
       abbreviation: homeTeam.abbreviation,
       city: homeTeam.shortDisplayName || homeTeam.name.split(" ")[0] || "",
       record: getRecord(homeCompetitor),
-      color: homeTeam.color ? `#${homeTeam.color}` : "#333333",
+      color: normalizeTeamColor(homeTeam.color),
       logo: getTeamLogo(homeTeam),
     },
     awayTeam: {
@@ -1041,13 +1445,14 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
       abbreviation: awayTeam.abbreviation,
       city: awayTeam.shortDisplayName || awayTeam.name.split(" ")[0] || "",
       record: getRecord(awayCompetitor),
-      color: awayTeam.color ? `#${awayTeam.color}` : "#333333",
+      color: normalizeTeamColor(awayTeam.color),
       logo: getTeamLogo(awayTeam),
     },
     gameTime: event.date,
     status: gameStatus,
     venue: competition.venue?.fullName || "TBD",
     tvChannel,
+    watchSources,
     homeScore: homeScore !== undefined && !isNaN(homeScore) ? homeScore : undefined,
     awayScore: awayScore !== undefined && !isNaN(awayScore) ? awayScore : undefined,
     spread,
@@ -1055,6 +1460,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     marketFavorite,
     quarter,
     clock,
+    seasonContext,
     homeLinescores,
     awayLinescores,
     liveState,
@@ -1065,15 +1471,312 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   // (matching what the list/detail endpoints will return).
   const cachedPrediction = pickFreshestPrediction(game.id, gameStatus === "LIVE");
   if (cachedPrediction) {
-    return {
-      ...game,
-      spread: game.spread ?? cachedPrediction.spread,
-      overUnder: game.overUnder ?? cachedPrediction.overUnder,
-      marketFavorite: game.marketFavorite ?? cachedPrediction.marketFavorite,
-      prediction: cachedPrediction,
-    };
+    return attachPredictionToGame(game, cachedPrediction);
   }
   return game;
+}
+
+const TENNIS_COUNTRY_COLORS: Record<string, string> = {
+  ARG: "#75AADB",
+  AUS: "#006B3F",
+  AUT: "#ED2939",
+  BEL: "#FAE042",
+  CAN: "#D52B1E",
+  CHN: "#DE2910",
+  COL: "#FCD116",
+  CRO: "#171796",
+  CZE: "#11457E",
+  EGY: "#CE1126",
+  ESP: "#AA151B",
+  FIN: "#002F6C",
+  FRA: "#0055A4",
+  GBR: "#012169",
+  GER: "#000000",
+  GRE: "#0D5EAF",
+  HKG: "#DE2910",
+  ITA: "#008C45",
+  JPN: "#BC002D",
+  KAZ: "#00AFCA",
+  NOR: "#BA0C2F",
+  ROM: "#002B7F",
+  RUS: "#0033A0",
+  SLO: "#005DA4",
+  SUI: "#D52B1E",
+  SWE: "#006AA7",
+  TPE: "#000095",
+  UKR: "#0057B7",
+  USA: "#1D4ED8",
+};
+
+function tennisDateParam(date?: string): string {
+  const iso = date ?? new Date().toISOString().slice(0, 10);
+  return iso.replace(/-/g, "");
+}
+
+function parseEspnFitTennisState(html: string): ESPNFitTennisState | null {
+  const marker = /window\['__espnfitt__'\]\s*=\s*/.exec(html);
+  if (!marker || marker.index === undefined) return null;
+
+  const start = marker.index + marker[0].length;
+  const end = html.indexOf(";</script>", start);
+  const fallbackEnd = html.indexOf("</script>", start);
+  const sliceEnd = end >= 0 ? end : fallbackEnd;
+  if (sliceEnd < 0) return null;
+
+  const raw = html.slice(start, sliceEnd).replace(/;\s*$/, "");
+  try {
+    return JSON.parse(raw) as ESPNFitTennisState;
+  } catch (error) {
+    console.warn("[tennis] failed to parse ESPN page state:", error);
+    return null;
+  }
+}
+
+function buildTennisTournamentIndex(scoreboard: TennisScoreboard): Map<string, { tournament: string; grouping?: string }> {
+  const index = new Map<string, { tournament: string; grouping?: string }>();
+  for (const tournament of scoreboard.tournaments ?? []) {
+    for (const grouping of tournament.groupings ?? []) {
+      for (const competitionId of grouping.competitionIds ?? []) {
+        index.set(competitionId, {
+          tournament: tournament.name ?? "Tennis",
+          grouping: grouping.name,
+        });
+      }
+    }
+  }
+  return index;
+}
+
+function mapTennisStatus(status?: TennisStatus): Game["status"] {
+  const state = (status?.state ?? "").toLowerCase();
+  const text = [status?.description, status?.detail].filter(Boolean).join(" ").toLowerCase();
+  if (text.includes("postponed") || text.includes("suspended")) return "POSTPONED";
+  if (text.includes("canceled") || text.includes("cancelled")) return "CANCELLED";
+  if (state === "in") return "LIVE";
+  if (state === "post" || status?.completed) return "FINAL";
+  return "SCHEDULED";
+}
+
+function countryCodeFromLogo(logo?: string): string | undefined {
+  return logo?.match(/countries\/500\/([a-z]{3})\.png/i)?.[1]?.toUpperCase();
+}
+
+export function isTennisPlaceholderName(value: string | undefined): boolean {
+  const text = (value ?? "").trim();
+  if (!text) return true;
+  const lower = text.toLowerCase();
+  const compact = lower.replace(/[^a-z0-9]+/g, "");
+  return (
+    lower === "tbd" ||
+    lower === "to be determined" ||
+    lower === "to be decided" ||
+    compact === "tbd" ||
+    compact === "tobedetermined" ||
+    compact === "tobedecided" ||
+    /^(tbd)+$/.test(compact) ||
+    /^-?\d+$/.test(lower) ||
+    /^s:\d+~l:\d+~a:-?\d+$/.test(lower)
+  );
+}
+
+function tennisFallbackName(isDoubles: boolean): string {
+  return isDoubles ? "Doubles Team To Be Decided" : "Player To Be Decided";
+}
+
+export function tennisCompetitorName(competitor: TennisCompetitor, isDoubles: boolean): string {
+  if (!isTennisPlaceholderName(competitor.nm)) return competitor.nm!.trim();
+
+  const rosterNames = (competitor.rstr ?? [])
+    .map((player) => player.nm?.trim())
+    .filter((name): name is string => !isTennisPlaceholderName(name));
+  return rosterNames.length > 0 ? rosterNames.join(" / ") : tennisFallbackName(isDoubles);
+}
+
+function tennisCompetitorLogo(competitor: TennisCompetitor): string | undefined {
+  return competitor.logo ?? competitor.rstr?.find((player) => player.logo)?.logo;
+}
+
+export function tennisAbbreviation(name: string, roster?: TennisRosterPlayer[]): string {
+  if (roster && roster.length > 0) {
+    const initials = roster
+      .filter((player) => !isTennisPlaceholderName(player.nm))
+      .map((player) => player.nm?.split(/\s+/).filter(Boolean).at(-1)?.[0])
+      .filter(Boolean)
+      .join("");
+    if (initials) return initials.slice(0, 4).toUpperCase();
+  }
+  if (isTennisPlaceholderName(name) || name.endsWith("To Be Decided")) {
+    return "TBA";
+  }
+  const normalized = name.replace(/[^a-z0-9\s]/gi, " ").trim();
+  const lastName = normalized.split(/\s+/).filter(Boolean).at(-1) ?? "TBA";
+  return lastName.slice(0, 4).toUpperCase();
+}
+
+function tennisLineValue(line: TennisLineScore | undefined): number | null {
+  if (!line) return null;
+  const parsed = Number(line.v);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function tennisSetScores(competitor: TennisCompetitor): number[] | undefined {
+  const scores = (competitor.lnescrs ?? [])
+    .map((line) => tennisLineValue(line))
+    .filter((value): value is number => value !== null);
+  return scores.length > 0 ? scores : undefined;
+}
+
+function tennisSetsWon(competitor: TennisCompetitor, opponent: TennisCompetitor): number {
+  const explicitSetWins = (competitor.lnescrs ?? []).filter((line) => line.w === true).length;
+  if (explicitSetWins > 0) return explicitSetWins;
+
+  const ownScores = tennisSetScores(competitor) ?? [];
+  const opponentScores = tennisSetScores(opponent) ?? [];
+  if (ownScores.length === 0 && opponentScores.length === 0) {
+    if (competitor.wnr === true) return 1;
+    if (opponent.wnr === true) return 0;
+  }
+  let sets = 0;
+  const count = Math.min(ownScores.length, opponentScores.length);
+  for (let i = 0; i < count; i++) {
+    const own = ownScores[i]!;
+    const opp = opponentScores[i]!;
+    if (own > opp) sets++;
+  }
+  return sets;
+}
+
+function tennisTeamFromCompetitor(competitor: TennisCompetitor, isDoubles: boolean): GameTeam {
+  const name = tennisCompetitorName(competitor, isDoubles);
+  const logo = tennisCompetitorLogo(competitor);
+  const country = countryCodeFromLogo(logo);
+  const rank = typeof competitor.rnk === "number" ? competitor.rnk : undefined;
+  return {
+    id: competitor.uid ?? competitor.id ?? name,
+    name,
+    abbreviation: tennisAbbreviation(name, competitor.rstr),
+    city: name,
+    record: rank ? `Rank #${rank}` : isDoubles ? "Doubles" : "Singles",
+    color: country ? TENNIS_COUNTRY_COLORS[country] ?? "#2E7D5B" : "#2E7D5B",
+    logo,
+    rank,
+  };
+}
+
+function tennisVenueText(meta: { tournament: string; grouping?: string } | undefined, competition: TennisCompetition): string {
+  const parts = [
+    meta?.tournament ?? "Tennis",
+    meta?.grouping,
+    competition.note,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function transformTennisCompetition(
+  competition: TennisCompetition,
+  meta: { tournament: string; grouping?: string } | undefined,
+): Game | null {
+  const competitors = competition.competitors ?? [];
+  const homeCompetitor = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
+  const awayCompetitor = competitors.find((c) => c.homeAway === "away") ?? competitors.find((c) => c !== homeCompetitor);
+  if (!competition.id || !competition.date || !homeCompetitor || !awayCompetitor) return null;
+
+  const gameStatus = mapTennisStatus(competition.status);
+  const homeTeam = tennisTeamFromCompetitor(homeCompetitor, competition.dbls === true);
+  const awayTeam = tennisTeamFromCompetitor(awayCompetitor, competition.dbls === true);
+  const homeLinescores = tennisSetScores(homeCompetitor);
+  const awayLinescores = tennisSetScores(awayCompetitor);
+  const hasSetScores = Boolean(homeLinescores?.length || awayLinescores?.length || gameStatus === "LIVE" || gameStatus === "FINAL");
+  const homeScore = hasSetScores ? tennisSetsWon(homeCompetitor, awayCompetitor) : undefined;
+  const awayScore = hasSetScores ? tennisSetsWon(awayCompetitor, homeCompetitor) : undefined;
+  const statusDetail = competition.status?.detail || competition.status?.description;
+  const quarter = gameStatus === "LIVE"
+    ? statusDetail
+    : gameStatus === "FINAL"
+      ? competition.status?.description ?? "Final"
+      : undefined;
+  const venue = tennisVenueText(meta, competition);
+
+  const game: Game = {
+    id: competition.id,
+    sport: "TENNIS",
+    homeTeam,
+    awayTeam,
+    gameTime: competition.date,
+    status: gameStatus,
+    venue,
+    homeScore,
+    awayScore,
+    quarter,
+    clock: gameStatus === "LIVE" ? statusDetail : undefined,
+    seasonContext: deriveSeasonContext({
+      sport: "TENNIS",
+      gameTime: competition.date,
+      eventName: venue,
+      competitionNotes: [competition.note, meta?.grouping].filter(Boolean) as string[],
+    }),
+    homeLinescores,
+    awayLinescores,
+  };
+
+  const cachedPrediction = pickFreshestPrediction(game.id, gameStatus === "LIVE");
+  return cachedPrediction ? attachPredictionToGame(game, cachedPrediction) : game;
+}
+
+async function fetchTennisGamesFromESPN(date?: string): Promise<Game[]> {
+  const url = date
+    ? `${ESPN_ENDPOINTS.TENNIS}/${tennisDateParam(date)}`
+    : ESPN_ENDPOINTS.TENNIS.replace("/_/date", "");
+
+  if (!circuitAllowsRequest()) {
+    return [];
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      console.error(`ESPN API error for TENNIS: ${response.status}`);
+      recordESPNFailure();
+      return [];
+    }
+
+    const html = await response.text();
+    const state = parseEspnFitTennisState(html);
+    const scoreboard = state?.page?.content?.scoreboard;
+    if (!scoreboard?.competitions) {
+      recordESPNFailure();
+      return [];
+    }
+
+    recordESPNSuccess();
+    const tournamentIndex = buildTennisTournamentIndex(scoreboard);
+    const games = Object.values(scoreboard.competitions)
+      .map((competition) => transformTennisCompetition(
+        competition,
+        competition.id ? tournamentIndex.get(competition.id) : undefined,
+      ))
+      .filter((game): game is Game => game !== null)
+      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
+
+    for (const game of games) {
+      gameIdToSport.set(game.id, "TENNIS");
+    }
+    return games;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn(`[ESPN] fetch timed out for TENNIS:`, url);
+      recordESPNFailure();
+      return [];
+    }
+    console.error("Error fetching TENNIS games from ESPN:", error);
+    recordESPNFailure();
+    return [];
+  }
 }
 
 // ─── Circuit breaker for ESPN API ────────────────────────────────────────────
@@ -1127,6 +1830,10 @@ function circuitAllowsRequest(): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchGamesFromESPN(sport: SportKey, date?: string, fullList = false): Promise<Game[]> {
+  if (sport === "TENNIS") {
+    return fetchTennisGamesFromESPN(date);
+  }
+
   const baseUrl = ESPN_ENDPOINTS[sport];
   const params = new URLSearchParams();
 
@@ -1143,6 +1850,8 @@ async function fetchGamesFromESPN(sport: SportKey, date?: string, fullList = fal
   } else if (sport === "NCAAF") {
     params.set("groups", "80");
     params.set("limit", fullList ? "300" : "50");
+  } else if (sport === "IPL") {
+    params.set("limit", fullList ? "100" : "25");
   }
 
   const queryString = params.toString();
@@ -1213,7 +1922,7 @@ async function fetchAllGames(date?: string): Promise<Game[]> {
   if (existing) return existing;
 
   const promise = (async () => {
-    const sports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL"];
+    const sports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL", "IPL", "TENNIS"];
 
     const allGamesPromises: Promise<Game[]>[] = [];
     for (const sport of sports) {
@@ -1373,7 +2082,7 @@ gamesRouter.get("/", async (c) => {
       const game = filteredGames[i]!;
       const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
       if (cached) {
-        filteredGames[i] = { ...game, prediction: cached };
+        filteredGames[i] = attachPredictionToGame(game, cached);
       }
     }
 
@@ -1429,21 +2138,21 @@ gamesRouter.get("/top-picks", async (c) => {
       gamesBySport.set(game.sport, existing);
     }
 
-    // Select one representative game per sport (first scheduled)
-    const representativeGames: Game[] = [];
+    // Select the first scheduled/live game per sport.
+    const topPickGames: Game[] = [];
     for (const games of gamesBySport.values()) {
       // Sort by game time and take the first scheduled one
       const sorted = games.sort(
         (a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
       );
       if (sorted[0]) {
-        representativeGames.push(sorted[0]);
+        topPickGames.push(sorted[0]);
       }
     }
 
     // Generate predictions SYNCHRONOUSLY for these top picks (max ~8 games)
     const gamesWithPredictions = await batchProcess(
-      representativeGames,
+      topPickGames,
       async (game) => {
         try {
           return await addPredictionToGame(game);
@@ -1487,7 +2196,7 @@ gamesRouter.get("/date/:date", async (c) => {
     const gamesWithCached = games.map((g) => {
       if (g.prediction) return g;
       const cached = getCachedPrediction(g.id);
-      return cached ? { ...g, prediction: cached } : g;
+      return cached ? attachPredictionToGame(g, cached) : g;
     });
 
     // Kick off background generation for the rest so the next poll returns them.
@@ -1520,7 +2229,7 @@ gamesRouter.get("/id/:id", async (c) => {
     const ensurePrediction = async (game: Game): Promise<Game> => {
       const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
       if (cached) {
-        return { ...game, prediction: cached };
+        return attachPredictionToGame(game, cached);
       }
       // No cache at all — generate on-demand (fast, uses AI cache).
       return addPredictionToGame(game);
@@ -1528,7 +2237,7 @@ gamesRouter.get("/id/:id", async (c) => {
 
     // First, check secondary game-ID index — O(1) lookup across all cached data.
     // Skip the fast-path for LIVE games: gameById has no TTL, so a stale entry
-    // would freeze score/situation. Fall through to fetchAllGames so the 10s
+    // would freeze score/situation. Fall through to fetchAllGames so the 3s
     // adaptive list cache (LIVE_CACHE_TTL_MS) governs freshness.
     const indexedGame = gameById.get(gameId);
     if (indexedGame && indexedGame.status !== "LIVE") {
@@ -1585,14 +2294,61 @@ gamesRouter.get("/id/:id", async (c) => {
   }
 });
 
+// SSE endpoint: streams live scores/situation every 1 second. Keep this above
+// /:sport so "live-stream" is not interpreted as a sport slug.
+gamesRouter.get("/live-stream", async (c) => {
+  return streamSSE(c, async (stream) => {
+    let aborted = false;
+    stream.onAbort(() => {
+      aborted = true;
+    });
+
+    const sendScores = async (): Promise<boolean> => {
+      try {
+        const scores = await fetchLiveGamesOnce();
+        await stream.writeSSE({ data: JSON.stringify(scores), event: "scores" });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // Send immediately
+    if (!(await sendScores())) return;
+
+    // Loop every second; send a heartbeat every 10th tick (~10s) to keep NAT/proxy alive
+    let ticksSinceHeartbeat = 0;
+    while (!aborted) {
+      try {
+        await stream.sleep(LIVE_POLL_INTERVAL);
+      } catch {
+        break;
+      }
+      if (aborted) break;
+      ticksSinceHeartbeat++;
+      if (ticksSinceHeartbeat >= 10) {
+        ticksSinceHeartbeat = 0;
+        try { await stream.writeSSE({ data: "", event: "heartbeat" }); } catch { break; }
+        if (aborted) break;
+      }
+      if (!(await sendScores())) break;
+    }
+  });
+});
+
 gamesRouter.get("/:sport", async (c) => {
-  const sportParam = c.req.param("sport").toUpperCase() as SportKey;
+  const rawSportParam = c.req.param("sport").toUpperCase();
+  const sportParam = (
+    rawSportParam === "CRICKET" ? "IPL" :
+    rawSportParam === "ATP" || rawSportParam === "WTA" ? "TENNIS" :
+    rawSportParam
+  ) as SportKey;
 
   if (!ESPN_ENDPOINTS[sportParam]) {
     return c.json(
       {
         error: {
-          message: `Invalid sport: ${sportParam}. Valid options: NFL, NBA, MLB, NHL, MLS, NCAAF, NCAAB, EPL, UCL`,
+          message: `Invalid sport: ${rawSportParam}. Valid options: NFL, NBA, MLB, NHL, MLS, NCAAF, NCAAB, EPL, UCL, IPL, TENNIS`,
           code: "INVALID_SPORT",
         },
       },
@@ -1604,7 +2360,16 @@ gamesRouter.get("/:sport", async (c) => {
 
   try {
     const games = await fetchGamesBySport(sportParam, dateQuery || undefined, true);
-    return c.json({ data: games });
+    const gamesWithCached = games.map((game) => {
+      if (game.prediction) return game;
+      const cached = getCachedPrediction(game.id);
+      return cached ? attachPredictionToGame(game, cached) : game;
+    });
+    const missing = gamesWithCached.filter((game) => !game.prediction);
+    if (missing.length > 0) {
+      generatePredictionsInBackground(missing);
+    }
+    return c.json({ data: gamesWithCached });
   } catch (error) {
     console.error(`Error fetching ${sportParam} games:`, error);
     return c.json(
@@ -1626,16 +2391,18 @@ interface LiveScore {
   clock: string | null;
   period: number | null;
   quarter: string | null;
-  status: "LIVE";
+  status: "LIVE" | "FINAL";
+  liveState?: Game["liveState"];
 }
 
 let liveGamesCache: { data: LiveScore[]; timestamp: number } | null = null;
-const LIVE_POLL_INTERVAL = 4_000; // 4 seconds — fast ESPN polling for live scores
+const LIVE_POLL_INTERVAL = 1_000; // 1 second — fastest practical ESPN polling for live scores/situation
 
 // Fix 3: track which sports currently have live games so SSE skips idle ones
 let activeSports: Set<SportKey> = new Set();
+let trackedLiveGameIds: Set<string> = new Set();
 let lastFullScanTime = 0;
-const FULL_SCAN_INTERVAL_MS = 30_000; // 30s — discover new live games quickly
+const FULL_SCAN_INTERVAL_MS = 10_000; // 10s — discover newly live games quickly
 
 // Fix 4: gameId → sport for targeted /id/:id fallback searches
 const gameIdToSport = new Map<string, SportKey>();
@@ -1646,19 +2413,50 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
     return liveGamesCache.data;
   }
 
-  const allSports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL"];
+  const allSports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL", "IPL", "TENNIS"];
 
-  // Fix 3: only poll sports known to have live games; do a full scan periodically to rediscover
-  const doFullScan = activeSports.size === 0 || (now - lastFullScanTime > FULL_SCAN_INTERVAL_MS);
+  // Poll sports known to have live games every tick; do a bounded full scan to
+  // discover newly-started games without hammering every league when nothing is live.
+  const doFullScan =
+    lastFullScanTime === 0 ||
+    now - lastFullScanTime > FULL_SCAN_INTERVAL_MS;
   const sportsToCheck = doFullScan ? allSports : allSports.filter((s) => activeSports.has(s));
   if (doFullScan) lastFullScanTime = now;
+  if (sportsToCheck.length === 0) {
+    liveGamesCache = { data: [], timestamp: now };
+    return [];
+  }
 
   const results = await Promise.all(
     sportsToCheck.map(async (sport): Promise<LiveScore[]> => {
       try {
         if (!circuitAllowsRequest()) return [];
 
-        // Fix 2: 8-second timeout on SSE ESPN fetches
+        if (sport === "TENNIS") {
+          const tennisGames = await fetchTennisGamesFromESPN();
+          return tennisGames
+            .filter((game) => game.status === "LIVE" || (game.status === "FINAL" && trackedLiveGameIds.has(game.id)))
+            .map((game): LiveScore => ({
+              id: game.id,
+              sport,
+              homeTeam: {
+                abbreviation: game.homeTeam.abbreviation,
+                name: game.homeTeam.name,
+              },
+              awayTeam: {
+                abbreviation: game.awayTeam.abbreviation,
+                name: game.awayTeam.name,
+              },
+              homeScore: game.homeScore ?? 0,
+              awayScore: game.awayScore ?? 0,
+              clock: game.clock ?? null,
+              period: parsePeriodNumber(game.quarter ?? "") ?? null,
+              quarter: game.quarter ?? null,
+              status: game.status === "FINAL" ? "FINAL" : "LIVE",
+            }));
+        }
+
+        // Keep SSE polling snappy; one slow ESPN sport should not stall all live updates.
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         let resp: Response;
@@ -1678,18 +2476,26 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
         if (!data.events) return [];
 
         return data.events
-          .filter((ev) => {
-            const comp = ev.competitions?.[0];
-            if (!comp) return false;
-            const state = comp.status?.type?.state?.toLowerCase();
-            return state === "in";
-          })
           .map((ev): LiveScore | null => {
             const comp = ev.competitions[0];
             if (!comp) return null;
+            const status = mapGameStatus(comp.status);
+            if (status !== "LIVE" && !(status === "FINAL" && trackedLiveGameIds.has(ev.id))) {
+              return null;
+            }
+            const liveStatus: LiveScore["status"] = status === "FINAL" ? "FINAL" : "LIVE";
             const home = comp.competitors.find((c) => c.homeAway === "home");
             const away = comp.competitors.find((c) => c.homeAway === "away");
             if (!home || !away) return null;
+            const liveState = parseMlbLiveState({
+              sport,
+              status: liveStatus,
+              competition: comp,
+              homeAbbr: home.team.abbreviation,
+              awayAbbr: away.team.abbreviation,
+              gameId: ev.id,
+            });
+            const rawQuarter = getPeriodDisplay(comp.status, sport) ?? null;
 
             return {
               id: ev.id,
@@ -1706,8 +2512,9 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
               awayScore: parseInt(away.score ?? "0", 10),
               clock: comp.status.displayClock ?? null,
               period: comp.status.period ?? null,
-              quarter: getPeriodDisplay(comp.status, sport) ?? null,
-              status: "LIVE",
+              quarter: sport === "MLB" ? getMlbPeriodDisplay(liveState) ?? rawQuarter : rawQuarter,
+              status: liveStatus,
+              liveState,
             };
           })
           .filter((s): s is LiveScore => s !== null);
@@ -1719,57 +2526,22 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
 
   const data = results.flat();
 
-  // Fix 3: update activeSports to only the sports that returned live games
+  // Update activeSports to only sports with games still in-progress. FINAL
+  // updates are sent once for games that were live on the previous tick.
   const newActive = new Set<SportKey>();
+  const nextTrackedLiveIds = new Set<string>();
   for (const score of data) {
-    newActive.add(score.sport as SportKey);
+    if (score.status === "LIVE") {
+      newActive.add(score.sport as SportKey);
+      nextTrackedLiveIds.add(score.id);
+    }
   }
   activeSports = newActive;
+  trackedLiveGameIds = nextTrackedLiveIds;
 
   liveGamesCache = { data, timestamp: now };
   return data;
 }
-
-// SSE endpoint: streams live scores every 4 seconds
-gamesRouter.get("/live-stream", async (c) => {
-  return streamSSE(c, async (stream) => {
-    let aborted = false;
-    stream.onAbort(() => {
-      aborted = true;
-    });
-
-    const sendScores = async (): Promise<boolean> => {
-      try {
-        const scores = await fetchLiveGamesOnce();
-        await stream.writeSSE({ data: JSON.stringify(scores), event: "scores" });
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    // Send immediately
-    if (!(await sendScores())) return;
-
-    // Loop every 4 seconds; send a heartbeat every 3rd tick (~12s) to keep NAT/proxy alive
-    let ticksSinceHeartbeat = 0;
-    while (!aborted) {
-      try {
-        await stream.sleep(LIVE_POLL_INTERVAL);
-      } catch {
-        break;
-      }
-      if (aborted) break;
-      ticksSinceHeartbeat++;
-      if (ticksSinceHeartbeat >= 3) {
-        ticksSinceHeartbeat = 0;
-        try { await stream.writeSSE({ data: "", event: "heartbeat" }); } catch { break; }
-        if (aborted) break;
-      }
-      if (!(await sendScores())) break;
-    }
-  });
-});
 
 // ─── Public lookup helpers (used by the intelligence route) ──────────────
 
@@ -1783,7 +2555,7 @@ gamesRouter.get("/live-stream", async (c) => {
 export async function lookupGameById(gameId: string): Promise<Game | null> {
   const ensurePrediction = async (game: Game): Promise<Game> => {
     const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
-    if (cached) return { ...game, prediction: cached };
+    if (cached) return attachPredictionToGame(game, cached);
     return addPredictionToGame(game);
   };
 

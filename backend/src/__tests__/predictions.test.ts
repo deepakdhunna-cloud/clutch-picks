@@ -24,11 +24,11 @@ describe("Sport factor weights", () => {
     }
   });
 
-  test("scoringTrend and defenseTrend are zero for all sports", () => {
+  test("trend weights are configured for every sport", () => {
     for (const sport of sports) {
       const weights = getWeightsForSport(sport);
-      expect(weights.scoringTrend).toBe(0);
-      expect(weights.defenseTrend).toBe(0);
+      expect(weights.scoringTrend).toBeGreaterThan(0);
+      expect(weights.defenseTrend).toBeGreaterThan(0);
     }
   });
 

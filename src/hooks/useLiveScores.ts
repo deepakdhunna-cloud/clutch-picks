@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import EventSource, { CustomEvent } from 'react-native-sse';
+import { notifyManager, useQueryClient } from '@tanstack/react-query';
+import { GameStatus, type GameWithPrediction } from '@/types/sports';
 
 type SSEEvents = 'scores';
-import { useQueryClient } from '@tanstack/react-query';
 
 export interface LiveScore {
   id: string;
@@ -15,7 +16,8 @@ export interface LiveScore {
   clock: string | null;
   period: number | null;
   quarter: string | null;
-  status: 'LIVE';
+  status: GameStatus.LIVE | GameStatus.FINAL;
+  liveState?: GameWithPrediction['liveState'];
 }
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
@@ -25,10 +27,93 @@ const MAX_RECONNECT_MS = 30_000;
 // Module-level ref so useGames can read SSE connection state without subscribing
 export const sseConnectedRef = { current: false };
 
-export function useLiveScores() {
+function sameLiveState(
+  left: GameWithPrediction['liveState'],
+  right: GameWithPrediction['liveState'],
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return !left && !right;
+  return (
+    left.balls === right.balls &&
+    left.strikes === right.strikes &&
+    left.outs === right.outs &&
+    left.onFirst === right.onFirst &&
+    left.onSecond === right.onSecond &&
+    left.onThird === right.onThird &&
+    left.inningHalf === right.inningHalf &&
+    (left.inning ?? left.inningNumber ?? null) === (right.inning ?? right.inningNumber ?? null) &&
+    (left.betweenInnings ?? false) === (right.betweenInnings ?? false) &&
+    (left.inningTransition ?? null) === (right.inningTransition ?? null) &&
+    (left.pitcher?.name ?? null) === (right.pitcher?.name ?? null) &&
+    (left.pitcher?.teamAbbr ?? null) === (right.pitcher?.teamAbbr ?? null) &&
+    (left.batter?.name ?? null) === (right.batter?.name ?? null) &&
+    (left.batter?.teamAbbr ?? null) === (right.batter?.teamAbbr ?? null)
+  );
+}
+
+function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScore>): GameWithPrediction {
+  const live = scoreMap.get(game.id);
+  if (!live) return game;
+  const nextLiveState =
+    live.liveState ?? (live.status === GameStatus.FINAL ? undefined : game.liveState);
+  if (
+    game.homeScore === live.homeScore &&
+    game.awayScore === live.awayScore &&
+    (game.clock ?? null) === live.clock &&
+    (game.quarter ?? null) === live.quarter &&
+    game.status === live.status &&
+    sameLiveState(game.liveState, nextLiveState)
+  ) {
+    return game;
+  }
+  return {
+    ...game,
+    homeScore: live.homeScore,
+    awayScore: live.awayScore,
+    clock: live.clock ?? undefined,
+    quarter: live.quarter ?? undefined,
+    status: live.status,
+    liveState: nextLiveState,
+  };
+}
+
+function mergeLiveScoresIntoArray<T extends GameWithPrediction>(
+  games: T[],
+  scoreMap: Map<string, LiveScore>,
+): T[] {
+  let changed = false;
+  const updated = games.map((game) => {
+    const next = mergeLiveScore(game, scoreMap);
+    if (next !== game) changed = true;
+    return next as T;
+  });
+  return changed ? updated : games;
+}
+
+function mergeLiveScoresIntoQueryData(old: unknown, scoreMap: Map<string, LiveScore>): unknown {
+  if (!Array.isArray(old)) return old;
+
+  if (old.every((item) => item && typeof item === 'object' && Array.isArray((item as { games?: unknown }).games))) {
+    let changed = false;
+    const updatedBuckets = old.map((bucket) => {
+      const typedBucket = bucket as { games: GameWithPrediction[] };
+      const nextGames = mergeLiveScoresIntoArray(typedBucket.games, scoreMap);
+      if (nextGames === typedBucket.games) return bucket;
+      changed = true;
+      return { ...typedBucket, games: nextGames };
+    });
+    return changed ? updatedBuckets : old;
+  }
+
+  return mergeLiveScoresIntoArray(old as GameWithPrediction[], scoreMap);
+}
+
+export function useLiveScores(options: { trackState?: boolean } = {}) {
   const queryClient = useQueryClient();
   const [liveScores, setLiveScores] = useState<LiveScore[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const trackStateRef = useRef(options.trackState ?? true);
+  trackStateRef.current = options.trackState ?? true;
 
   const esRef = useRef<EventSource<SSEEvents> | null>(null);
   const reconnectDelay = useRef(MIN_RECONNECT_MS);
@@ -43,54 +128,31 @@ export function useLiveScores() {
 
   const applyScoresToCache = useCallback((scores: LiveScore[]) => {
     if (scores.length === 0) return;
+    const scoreMap = new Map(scores.map((s) => [s.id, s]));
 
-    // Batch all cache writes into a single React Query notification
-    queryClient.setQueriesData({ queryKey: ['games'] }, (old: any) => {
-      if (!Array.isArray(old)) return old;
-      const scoreMap = new Map(scores.map((s) => [s.id, s]));
-      let changed = false;
-      const updated = old.map((game: any) => {
-        const live = scoreMap.get(game.id);
-        if (!live) return game;
-        // Only update if score actually changed
-        if (
-          game.homeScore === live.homeScore &&
-          game.awayScore === live.awayScore &&
-          game.clock === live.clock &&
-          game.quarter === live.quarter
-        ) return game;
-        changed = true;
-        return {
-          ...game,
-          homeScore: live.homeScore,
-          awayScore: live.awayScore,
-          clock: live.clock,
-          quarter: live.quarter,
-          status: live.status,
-        };
-      });
-      return changed ? updated : old;
+    notifyManager.batch(() => {
+      queryClient.setQueriesData({ queryKey: ['games'] }, (old) =>
+        mergeLiveScoresIntoQueryData(old, scoreMap)
+      );
+      queryClient.setQueryData(['topPicks'], (old) =>
+        mergeLiveScoresIntoQueryData(old, scoreMap)
+      );
+
+      for (const score of scores) {
+        queryClient.setQueryData(['game', score.id], (old) => {
+          if (!old) return old;
+          return mergeLiveScore(old as GameWithPrediction, scoreMap);
+        });
+      }
     });
 
-    // Update individual game caches only for games that changed
     for (const score of scores) {
-      queryClient.setQueryData(['game', score.id], (old: any) => {
-        if (!old) return old;
-        if (
-          old.homeScore === score.homeScore &&
-          old.awayScore === score.awayScore &&
-          old.clock === score.clock &&
-          old.quarter === score.quarter
-        ) return old;
-        return {
-          ...old,
-          homeScore: score.homeScore,
-          awayScore: score.awayScore,
-          clock: score.clock,
-          quarter: score.quarter,
-          status: score.status,
-        };
-      });
+      if (score.status === GameStatus.FINAL) {
+        queryClient.invalidateQueries({
+          queryKey: ['game', score.id],
+          refetchType: 'active',
+        });
+      }
     }
   }, [queryClient]);
 
@@ -110,7 +172,7 @@ export function useLiveScores() {
 
     es.addEventListener('open', () => {
       if (!mountedRef.current) return;
-      setIsConnected(true);
+      if (trackStateRef.current) setIsConnected(true);
       sseConnectedRef.current = true;
       reconnectDelay.current = MIN_RECONNECT_MS;
     });
@@ -121,6 +183,7 @@ export function useLiveScores() {
         const scores: LiveScore[] = JSON.parse(event.data ?? '[]');
         // Always update cache immediately (cheap — only writes if data changed)
         applyScoresRef.current?.(scores);
+        if (!trackStateRef.current) return;
         // Throttle setState to max once per 500ms to avoid render storms
         pendingScores.current = scores;
         if (!throttleTimer.current) {
@@ -139,7 +202,7 @@ export function useLiveScores() {
 
     es.addEventListener('error', () => {
       if (!mountedRef.current) return;
-      setIsConnected(false);
+      if (trackStateRef.current) setIsConnected(false);
       sseConnectedRef.current = false;
       es.close();
       esRef.current = null;
@@ -160,11 +223,15 @@ export function useLiveScores() {
       clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
     }
+    if (throttleTimer.current) {
+      clearTimeout(throttleTimer.current);
+      throttleTimer.current = null;
+    }
     if (esRef.current) {
       esRef.current.close();
       esRef.current = null;
     }
-    setIsConnected(false);
+    if (trackStateRef.current) setIsConnected(false);
     sseConnectedRef.current = false;
   }, []);
 

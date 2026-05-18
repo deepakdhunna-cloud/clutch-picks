@@ -34,7 +34,7 @@ export default function PrivacyPolicyScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
           <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 22 }}>
 {`Privacy Policy
-Effective Date: March 1, 2026  ·  Last Updated: March 1, 2026
+Effective Date: March 1, 2026  ·  Last Updated: May 14, 2026
 
 This Privacy Policy explains how Clutch Picks ("Clutch Picks," "we," "us," or "our") collects, uses, discloses, and protects information when you use the Clutch Picks mobile application and any related services (collectively, the "App").
 
@@ -49,6 +49,7 @@ We collect information in three ways: (a) information you provide, (b) informati
 A. Information You Provide
 • Account information: such as username, email address, and login credentials (or authentication token if you use a third-party sign-in such as Apple).
 • Profile and preferences: such as favorite teams, notification preferences, and display settings.
+• Photos or media you choose to upload, such as profile images or other in-app content.
 • Picks and activity: picks you create, watchlists, favorites, and other actions taken inside the App.
 • Support communications: information you provide if you contact support.
 
@@ -56,6 +57,7 @@ B. Information Collected Automatically
 • Device and app information: device type, operating system version, app version, language, time zone, and IP address.
 • Usage information: pages/screens viewed, features used, session times, interaction events, and referral information.
 • Diagnostics and performance data: crash reports, error logs, and performance metrics.
+• Push notification tokens if you enable notifications.
 
 C. Information From Third Parties (Optional)
 If you sign in using a third-party provider (e.g., Apple, Google), we may receive limited information such as a unique account identifier and basic profile details permitted by your settings with that provider.
@@ -80,20 +82,23 @@ We may share information in the following limited cases:
   - OpenAI (AI-powered prediction analysis — game context is sent for analysis but no personal data is shared)
   - RevenueCat (subscription and payment processing)
   - Apple (authentication via Sign in with Apple)
+  - Resend (email verification and service emails)
+  - Expo (push notification delivery)
+  - Sentry (crash and error diagnostics)
 • Legal and safety reasons: if we believe disclosure is necessary to comply with law, court order, or valid legal process; to protect rights, safety, and security of Clutch Picks, our users, or others; or to investigate fraud, abuse, or security incidents.
 • Business transfers: if we are involved in a merger, acquisition, financing, reorganization, bankruptcy, or sale of assets, information may be transferred as part of that transaction.
 
-4. ADVERTISING AND ANALYTICS
+4. ANALYTICS AND DIAGNOSTICS
 
-Advertising and analytics partners may collect or receive certain information to measure performance and prevent fraud. This may include:
-• Device identifiers (such as an advertising ID where permitted)
+We use limited analytics and diagnostics to understand app performance, troubleshoot issues, and improve the product. This may include:
 • IP address
 • App interaction events (e.g., session data)
 • Device and app information (device model, OS version, app version)
+• Crash and error diagnostics
 
-Your choices and controls:
-• You can limit ad tracking or reset your advertising identifier using your device settings.
-• On iOS, you can control whether apps can request to track you (App Tracking Transparency) and manage tracking permissions in system settings.
+Clutch Picks does not use third-party advertising SDKs or sell personal information for advertising.
+
+Payments are processed by Apple through the App Store. We do not receive your full payment card number. RevenueCat helps us manage subscription status and entitlement access.
 
 5. LOCATION DATA
 
@@ -112,7 +117,7 @@ We may retain aggregated or de-identified information for analytics and product 
 
 7. ACCOUNT DELETION AND YOUR PRIVACY RIGHTS
 
-You may request deletion of your account and associated personal information by emailing support@clutchpicksapp.com from the email address linked to your account.
+You can delete your account directly in the App from Settings. You may also contact support@clutchpicksapp.com from the email address linked to your account if you need help.
 
 When we delete your account, we remove or de-identify personal information associated with the account, subject to limited exceptions where retention is required or permitted by law.
 

@@ -17,6 +17,7 @@ const ESPN_SPORT_PATHS: Record<string, string> = {
   NCAAB: "basketball/mens-college-basketball",
   EPL: "soccer/eng.1",
   UCL: "soccer/uefa.champions",
+  IPL: "cricket/8048",
 };
 
 export interface TeamRecentForm {
@@ -448,6 +449,8 @@ export async function fetchTeamExtendedStats(
       NHL:   0.05,
       MLS:   0.05,
       EPL:   0.05,
+      IPL:   0.06,
+      TENNIS: 0.08,
     };
     const decayRate = DECAY_RATES[sport] ?? 0.05;
 
@@ -1211,7 +1214,7 @@ const WEATHER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 const weatherCache = new LRUCache<string, { data: WeatherData | null; timestamp: number }>({ max: 100 });
 
 // Outdoor sports that benefit from weather data
-const OUTDOOR_SPORTS = new Set(["NFL", "NCAAF", "MLB", "MLS", "EPL", "UCL"]);
+const OUTDOOR_SPORTS = new Set(["NFL", "NCAAF", "MLB", "MLS", "EPL", "UCL", "IPL", "TENNIS"]);
 
 // Indoor sports — always return isDomed: true
 const INDOOR_SPORTS = new Set(["NBA", "NHL", "NCAAB"]);
@@ -1498,6 +1501,8 @@ export function srsToBlendfactor(srs: number, sport: string): number {
     NHL: 1.5,
     MLS: 1.5,
     EPL: 1.5,
+    IPL: 25,
+    TENNIS: 2,
   };
   const s = scale[sport] ?? 6;
   // sigmoid(srs / s) → 0–1 centred at 0.5 when srs = 0

@@ -11,22 +11,22 @@ export const auth = betterAuth({
   baseURL: env.BACKEND_URL,
   socialProviders: {
     apple: {
-      clientId: "Com.vibecode.clutchpicks-xzrxme",
+      clientId: env.APPLE_CLIENT_ID ?? "Com.vibecode.clutchpicks-xzrxme",
       clientSecret: "native-ios-unused",
     },
   },
 
-  // ============================================
-  // REQUIRED: All trustedOrigins below are needed
-  // ============================================
   trustedOrigins: [
-    "vibecode://*/*",           // Mobile deep links - REQUIRED
-    "exp://*/*",                // Expo development - REQUIRED
+    // Existing dev/App Store builds present the original URL scheme.
+    // This is only a local app-origin identifier, not a dependency on any service.
+    "vibecode://",
+    "clutchpicks://",
+    "exp://*/*",
+    "exp://",
+    "https://clutchpicksapp.com",
+    "https://www.clutchpicksapp.com",
     "http://localhost:*",
     "http://127.0.0.1:*",
-    "https://*.dev.vibecode.run",
-    "https://*.vibecode.run",
-    "https://*.vibecodeapp.com",
   ],
   plugins: [
     expo(),

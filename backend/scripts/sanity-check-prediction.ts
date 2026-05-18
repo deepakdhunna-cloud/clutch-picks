@@ -20,11 +20,11 @@ import { DEFAULT_RATING } from "../src/lib/elo";
 import {
   fetchTeamRecentForm,
   fetchTeamExtendedStats,
-  fetchTeamInjuries,
   fetchAdvancedMetrics,
   fetchStartingLineup,
   fetchGameWeather,
 } from "../src/lib/espnStats";
+import { fetchGameInjuries, toTeamInjuryReport } from "../src/lib/espnInjuries";
 
 // ─── ESPN scoreboard fetching ───────────────────────────────────────────
 
@@ -145,7 +145,7 @@ async function buildContext(espnGame: ESPNScoreboardGame, sport: string): Promis
   const [
     homeForm, awayForm,
     homeExtended, awayExtended,
-    homeInjuries, awayInjuries,
+    gameInjuries,
     homeAdvanced, awayAdvanced,
     homeLineup, awayLineup,
     weather,
@@ -154,14 +154,16 @@ async function buildContext(espnGame: ESPNScoreboardGame, sport: string): Promis
     fetchTeamRecentForm(awayTeam.id, sport),
     fetchTeamExtendedStats(homeTeam.id, sport, awayTeam.id, gameDate),
     fetchTeamExtendedStats(awayTeam.id, sport, homeTeam.id, gameDate),
-    fetchTeamInjuries(homeTeam.id, sport),
-    fetchTeamInjuries(awayTeam.id, sport),
+    fetchGameInjuries(sport, game.id, homeTeam.id, awayTeam.id),
     fetchAdvancedMetrics(homeTeam.id, sport),
     fetchAdvancedMetrics(awayTeam.id, sport),
     fetchStartingLineup(homeTeam.id, sport, gameDate),
     fetchStartingLineup(awayTeam.id, sport, gameDate),
     fetchGameWeather(comp.venue?.fullName ?? "", gameDate, sport),
   ]);
+
+  const homeInjuries = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
+  const awayInjuries = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
 
   return {
     game,

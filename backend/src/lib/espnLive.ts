@@ -11,6 +11,7 @@
  *   - EPL, MLS, UCL: ESPN summary returns structure but no live win-prob
  *     for soccer. We return winProbability:null, sparkline:null and let the
  *     caller render a degraded "winProbabilityPlaceholder" box.
+ *   - IPL: cricket summary coverage varies, so it follows the degraded path.
  *   - NFL/NCAA: ESPN does have a winprobability feed for some games but
  *     coverage is inconsistent. We treat it as unavailable and degrade the
  *     same way as soccer for now.
@@ -33,6 +34,7 @@ const SPORT_PATHS: Record<string, string> = {
   EPL: "soccer/eng.1",
   MLS: "soccer/usa.1",
   UCL: "soccer/uefa.champions",
+  IPL: "cricket/8048",
 };
 
 // Sports for which ESPN exposes a live win-probability feed in /summary.

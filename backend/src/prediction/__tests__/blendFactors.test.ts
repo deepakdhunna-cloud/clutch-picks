@@ -176,6 +176,25 @@ describe("blendFactors — partial signal", () => {
     expect(blended.find((x) => x.key === "some_unavail")!.weight).toBe(0);
   });
 
+  it("pools into the strongest non-Elo signal when Elo is neutral", () => {
+    const factors: FactorContribution[] = [
+      f("rating_diff", 0, 0.40, true, true),
+      f("tennis_ranking_edge", -120, 0.16, true, true),
+      f("rest_diff", 0, 0.05, true, false),
+      f("recent_form", 0, 0, false, false),
+      f("travel", 0, 0.03, true, false),
+      f("tennis_match_format", 0, 0.04, true, false),
+    ];
+
+    const blended = blendFactors(factors);
+
+    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "tennis_ranking_edge")!.weight).toBeCloseTo(0.16 + 0.40 + 0.05 + 0.03 + 0.04, 6);
+    expect(blended.find((x) => x.key === "rest_diff")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "travel")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "tennis_match_format")!.weight).toBe(0);
+  });
+
   it("returns factors unchanged if rating_diff is missing (safety)", () => {
     const factors: FactorContribution[] = [
       f("some_factor", 0, 0.5, true, false),

@@ -5,10 +5,12 @@ initSentry("web");
 
 // Prediction engine v2 — improved calibration parameters
 import { randomUUID } from "crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { rateLimiter } from "hono-rate-limiter";
-import "./env";
+import { env, useNewPredictionEngine } from "./env";
 import { auth } from "./auth";
 import { picksRouter } from "./routes/picks";
 import { profileRouter } from "./routes/profile";
@@ -26,8 +28,10 @@ import { calibrationRouter } from "./routes/calibration";
 import { ingestionRouter } from "./routes/ingestion";
 import { shadowRouter } from "./routes/shadow";
 import { webhooksRouter } from "./routes/webhooks";
+import { verifiedFeedsRouter } from "./routes/verified-feeds";
 import { createHealthRouter } from "./routes/health";
 import { deleteUserAccount } from "./lib/deleteAccount";
+import { isManagedUploadFilename, managedUploadUrl, uploadsDir } from "./lib/uploads";
 import { prisma } from "./prisma";
 import { logger as honoLogger } from "hono/logger";
 import { logger, withContext, type Logger } from "./lib/logger";
@@ -40,9 +44,8 @@ clearAllPredictionCaches();
 // Log which prediction engine is active so we can verify the flag in Railway.
 {
   const flagValue = process.env.USE_NEW_PREDICTION_ENGINE;
-  const isNew = flagValue === "true";
   logger.info(
-    { tag: "engine", flag: flagValue ?? null, engine: isNew ? "new" : "old" },
+    { tag: "engine", flag: flagValue ?? null, engine: useNewPredictionEngine ? "new" : "old" },
     "prediction engine selection",
   );
   logger.info(
@@ -72,11 +75,44 @@ const app = new Hono<{
 
 // CORS middleware - validates origin against allowlist
 const allowed = [
+  /^https:\/\/clutchpicksapp\.com$/,
+  /^https:\/\/www\.clutchpicksapp\.com$/,
   /^http:\/\/localhost(:\d+)?$/,
   /^http:\/\/127\.0\.0\.1(:\d+)?$/,
-  /^https:\/\/[a-z0-9-]+\.dev\.vibecode\.run$/,
-  /^https:\/\/[a-z0-9-]+\.vibecode\.run$/,
 ];
+
+function uploadExtension(filename: string, contentType: string): string {
+  const fromName = path.extname(filename).toLowerCase();
+  if ([".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(fromName)) return fromName;
+  switch (contentType) {
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    case "image/gif":
+      return ".gif";
+    default:
+      return "";
+  }
+}
+
+function uploadContentType(filename: string): string {
+  switch (path.extname(filename).toLowerCase()) {
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".png":
+      return "image/png";
+    case ".webp":
+      return "image/webp";
+    case ".gif":
+      return "image/gif";
+    default:
+      return "application/octet-stream";
+  }
+}
 
 app.use(
   "*",
@@ -175,57 +211,55 @@ app.use("/api/*", rateLimiter({ windowMs: 60_000, limit: 100, keyGenerator: ipKe
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Auth debug trace — TEMP: while diagnosing the welcome-bounce issue.
-// Logs every /api/auth/* hit with: which auth headers were present
-// (authorization for bearer, cookie for the expo plugin), whether the
-// body referenced an idToken (apple flow), and the response status.
-// Look for tag=auth-trace in Railway logs to follow a single sign-in
-// attempt end-to-end.
-app.use("/api/auth/*", async (c, next) => {
-  const log = c.get("logger");
-  const hasAuthHeader = !!c.req.header("authorization");
-  const hasCookie = !!c.req.header("cookie");
-  const hasExpoOrigin = !!c.req.header("expo-origin");
-  let bodyMarker: string | undefined;
-  if (c.req.method === "POST") {
-    try {
-      const cloned = c.req.raw.clone();
-      const text = await cloned.text();
-      if (text.includes("idToken")) bodyMarker = "has-idToken";
-      else if (text.includes("\"otp\"")) bodyMarker = "has-otp";
-      else if (text.includes("\"email\"")) bodyMarker = "has-email";
-    } catch {
-      /* ignore */
+if (env.NODE_ENV !== "production") {
+  // Auth trace for local/TestFlight login debugging. Keep out of production
+  // logs so release traffic only emits normal request/error telemetry.
+  app.use("/api/auth/*", async (c, next) => {
+    const log = c.get("logger");
+    const hasAuthHeader = !!c.req.header("authorization");
+    const hasCookie = !!c.req.header("cookie");
+    const hasExpoOrigin = !!c.req.header("expo-origin");
+    let bodyMarker: string | undefined;
+    if (c.req.method === "POST") {
+      try {
+        const cloned = c.req.raw.clone();
+        const text = await cloned.text();
+        if (text.includes("idToken")) bodyMarker = "has-idToken";
+        else if (text.includes("\"otp\"")) bodyMarker = "has-otp";
+        else if (text.includes("\"email\"")) bodyMarker = "has-email";
+      } catch {
+        /* ignore */
+      }
     }
-  }
-  log.info(
-    {
-      tag: "auth-trace",
-      phase: "request",
-      authPath: c.req.path,
-      method: c.req.method,
-      hasAuthHeader,
-      hasCookie,
-      hasExpoOrigin,
-      bodyMarker,
-    },
-    "auth request",
-  );
-  await next();
-  const setAuthToken = c.res.headers.get("set-auth-token");
-  const setCookie = c.res.headers.get("set-cookie");
-  log.info(
-    {
-      tag: "auth-trace",
-      phase: "response",
-      authPath: c.req.path,
-      status: c.res.status,
-      setAuthToken: setAuthToken ? `len=${setAuthToken.length}` : null,
-      setCookie: setCookie ? `len=${setCookie.length}` : null,
-    },
-    "auth response",
-  );
-});
+    log.info(
+      {
+        tag: "auth-trace",
+        phase: "request",
+        authPath: c.req.path,
+        method: c.req.method,
+        hasAuthHeader,
+        hasCookie,
+        hasExpoOrigin,
+        bodyMarker,
+      },
+      "auth request",
+    );
+    await next();
+    const setAuthToken = c.res.headers.get("set-auth-token");
+    const setCookie = c.res.headers.get("set-cookie");
+    log.info(
+      {
+        tag: "auth-trace",
+        phase: "response",
+        authPath: c.req.path,
+        status: c.res.status,
+        setAuthToken: setAuthToken ? `len=${setAuthToken.length}` : null,
+        setCookie: setCookie ? `len=${setCookie.length}` : null,
+      },
+      "auth response",
+    );
+  });
+}
 
 // Mount auth handler
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -239,6 +273,22 @@ app.route("/", createHealthRouter({
 }));
 
 // File upload endpoint (authenticated, validated)
+app.get("/uploads/:filename", async (c) => {
+  const filename = c.req.param("filename");
+  if (!isManagedUploadFilename(filename)) {
+    return c.body(null, 404);
+  }
+
+  const file = Bun.file(path.join(uploadsDir, filename));
+  if (!(await file.exists())) return c.body(null, 404);
+  return new Response(file, {
+    headers: {
+      "Content-Type": uploadContentType(filename),
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+  });
+});
+
 app.post("/api/upload", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
@@ -261,21 +311,22 @@ app.post("/api/upload", async (c) => {
     return c.json({ error: "Invalid file type. Only JPEG, PNG, WebP, and GIF allowed." }, 400);
   }
 
-  const storageForm = new FormData();
-  storageForm.append("file", file);
+  await mkdir(uploadsDir, { recursive: true });
 
-  const response = await fetch("https://storage.vibecodeapp.com/v1/files/upload", {
-    method: "POST",
-    body: storageForm,
+  const id = randomUUID();
+  const storedFilename = `${id}${uploadExtension(file.name, file.type)}`;
+  const storedPath = path.join(uploadsDir, storedFilename);
+  await writeFile(storedPath, Buffer.from(await file.arrayBuffer()));
+
+  return c.json({
+    data: {
+      id,
+      url: managedUploadUrl(storedFilename),
+      filename: storedFilename,
+      contentType: file.type,
+      sizeBytes: file.size,
+    },
   });
-
-  if (!response.ok) {
-    const error = await response.json() as { error?: string };
-    return c.json({ error: error.error || "Upload failed" }, 500);
-  }
-
-  const result = await response.json() as { file: { id: string; url: string; filename: string; contentType: string; sizeBytes: number } };
-  return c.json({ data: result.file });
 });
 
 // Get current user endpoint
@@ -287,9 +338,6 @@ app.get("/api/me", (c) => {
 
 // Delete current user's account + all associated data. Required by Apple
 // App Store Guideline 5.1.1(v) for any app that allows account creation.
-// Known gap: Apple OAuth token revocation on appleid.apple.com/auth/revoke
-// is not yet wired — see lib/deleteAccount.ts. Must be closed before App
-// Store submission.
 app.delete("/api/me", async (c) => {
   const user = c.get("user");
   if (!user) {
@@ -335,6 +383,7 @@ app.route("/api/calibration", calibrationRouter);
 app.route("/api/ingestion", ingestionRouter);
 app.route("/api/shadow", shadowRouter);
 app.route("/api/webhooks", webhooksRouter);
+app.route("/api/verified-feeds", verifiedFeedsRouter);
 
 // Global error handler — safety net for anything Hono's per-request middleware
 // doesn't catch. Forwards to Sentry with route + request context, then returns

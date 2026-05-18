@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Image, Alert, Dimensions, ScrollView, Share,
+  View, Text, Pressable, ActivityIndicator, Image, Alert, ScrollView, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGradient, St
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
 import { useUserStats, useUserPicks } from '@/hooks/usePicks';
 import { useGames } from '@/hooks/useGames';
@@ -20,12 +21,9 @@ import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { displaySport } from '@/lib/display-confidence';
 import { authClient } from '@/lib/auth/auth-client';
-import { GameWithPrediction, GameStatus } from '@/types/sports';
 import { isRevenueCatEnabled, logoutUser } from '@/lib/revenuecatClient';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 
 // ─── COLORS ───
 const C = {
@@ -48,6 +46,19 @@ const C = {
   TEXT_SECONDARY: '#A1B3C9',
   TEXT_MUTED: '#6B7C94',
 } as const;
+
+const AUTH_STORAGE_KEYS = [
+  'vibecode_cookie',
+  'vibecode_session_data',
+  'vibecode_session_token',
+  'vibecode_refresh_token',
+  'vibecode_bearer_token',
+  'clutchpicks_cookie',
+  'clutchpicks_session_data',
+  'clutchpicks_session_token',
+  'clutchpicks_refresh_token',
+  'clutchpicks_bearer_token',
+] as const;
 
 // ─── SVG ICONS ───
 function GearIcon({ size = 16, color = C.TEXT_MUTED }: { size?: number; color?: string }) {
@@ -424,18 +435,18 @@ export default function ProfileScreen() {
 
   // Sign out
   const handleSignOut = useCallback(() => {
-    console.log('[profile] handleSignOut tapped, opening modal');
     setSignOutConfirmVisible(true);
   }, []);
 
   const handleConfirmSignOut = useCallback(async () => {
     setSignOutConfirmVisible(false);
     try {
+      await unregisterCurrentDeviceForPushNotifications();
       await authClient.signOut();
       if (isRevenueCatEnabled()) { try { await logoutUser(); } catch {} }
-      // Clear stale onboarding flag so next sign-in re-checks freshly.
-      await AsyncStorage.removeItem('clutch_onboarding_complete').catch(() => {});
-      await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
+      for (const key of AUTH_STORAGE_KEYS) {
+        await SecureStore.deleteItemAsync(key).catch(() => {});
+      }
       await invalidateSession();
       router.replace('/welcome');
     } catch {
@@ -455,7 +466,6 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
-      {signOutConfirmVisible && console.log('[profile] signOutConfirmVisible is true — modal should render')}
       <ConfirmModal
         visible={signOutConfirmVisible}
         title="Sign Out"
@@ -761,7 +771,7 @@ export default function ProfileScreen() {
           <Pressable onPress={handleSignOut}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
           </Pressable>
-          <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>Clutch Picks v2.1.0</Text>
+          <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>Clutch Picks v1.1.1</Text>
         </View>
 
       </Animated.ScrollView>

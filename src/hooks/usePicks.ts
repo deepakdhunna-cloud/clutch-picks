@@ -46,8 +46,8 @@ const DEFAULT_STATS: GamePickStats = {
   homePicks: 0,
   awayPicks: 0,
   totalPicks: 0,
-  homePercentage: 50,
-  awayPercentage: 50,
+  homePercentage: 0,
+  awayPercentage: 0,
 };
 
 // Hook to fetch all user picks with real-time updates

@@ -19,8 +19,9 @@ import { env } from "../env";
 interface RcEvent {
   type: string;            // INITIAL_PURCHASE | RENEWAL | CANCELLATION | …
   id: string;              // event id, used for idempotency
-  app_user_id: string;
+  app_user_id?: string;
   original_app_user_id?: string;
+  transferred_to?: string[];
   product_id?: string;
   period_type?: string;
   store?: string;
@@ -61,11 +62,25 @@ export function verifyRevenueCatAuth(
   return mismatch === 0 ? { ok: true } : { ok: false, reason: "bad_secret" };
 }
 
-// Decide whether a given RC event type means the user IS currently
-// entitled. This is intentionally generous on the active side and
-// strict on the inactive side — RC sends multiple terminal events
-// (CANCELLATION, EXPIRATION, REFUND) and any of them removes access.
-export function isActiveAfter(eventType: string): boolean | null {
+export type ApplyResult =
+  | { status: "applied"; userId: string }
+  | {
+      status: "skipped";
+      reason:
+        | "missing_user_identifier"
+        | "no_user"
+        | "duplicate_event"
+        | "metadata_only_event";
+    };
+
+export function revenueCatUserIdForEvent(evt: RcEvent): string | null {
+  return evt.app_user_id ?? evt.transferred_to?.[0] ?? evt.original_app_user_id ?? null;
+}
+
+export function subscriptionAccessStateAfterEvent(
+  evt: Pick<RcEvent, "type" | "expiration_at_ms">,
+  nowMs = Date.now(),
+): boolean | null {
   const ACTIVE = new Set([
     "INITIAL_PURCHASE",
     "RENEWAL",
@@ -74,23 +89,42 @@ export function isActiveAfter(eventType: string): boolean | null {
     "TRIAL_STARTED",
     "TRIAL_CONVERTED",
     "SUBSCRIPTION_EXTENDED",
+    "TEMPORARY_ENTITLEMENT_GRANT",
+    "REFUND_REVERSED",
   ]);
   const INACTIVE = new Set([
-    "CANCELLATION",
     "EXPIRATION",
-    "BILLING_ISSUE",
-    "SUBSCRIBER_ALIAS",  // alias-only, no state change really
-    "TRANSFER",
     "REFUND",
   ]);
-  if (ACTIVE.has(eventType)) return true;
-  if (INACTIVE.has(eventType)) return false;
-  return null;  // unknown event type — leave isActive untouched
+
+  if (ACTIVE.has(evt.type)) return true;
+  if (INACTIVE.has(evt.type)) return false;
+
+  // RevenueCat sends CANCELLATION when auto-renewal is turned off; access
+  // usually remains valid until expiration. Only end access if the payload's
+  // expiration is already in the past.
+  if (evt.type === "CANCELLATION") {
+    if (typeof evt.expiration_at_ms !== "number") return null;
+    return evt.expiration_at_ms > nowMs;
+  }
+
+  // BILLING_ISSUE is not an expiration. Keep access if the current period is
+  // still valid, otherwise wait for EXPIRATION to revoke access.
+  if (evt.type === "BILLING_ISSUE") {
+    if (typeof evt.expiration_at_ms === "number" && evt.expiration_at_ms > nowMs) {
+      return true;
+    }
+    return null;
+  }
+
+  // SUBSCRIPTION_PAUSED, TRANSFER, SUBSCRIBER_ALIAS, TEST, and future event
+  // types are metadata-only for this mirror unless an expiration arrives.
+  return null;
 }
 
-export type ApplyResult =
-  | { status: "applied"; userId: string }
-  | { status: "skipped"; reason: "no_user" | "duplicate_event" | "unknown_event_type" };
+export function isActiveAfter(eventType: string): boolean | null {
+  return subscriptionAccessStateAfterEvent({ type: eventType });
+}
 
 // Apply a parsed RC event to our DB. Idempotent: re-delivering the same
 // event_id is a no-op.
@@ -103,7 +137,9 @@ export async function applyRevenueCatEvent(
   // We use RC's app_user_id as our userId. If the row doesn't exist we
   // skip — RC will keep retrying and eventually the user will have
   // signed up through our auth flow.
-  const userId = evt.app_user_id;
+  const userId = revenueCatUserIdForEvent(evt);
+  if (!userId) return { status: "skipped", reason: "missing_user_identifier" };
+
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { status: "skipped", reason: "no_user" };
 
@@ -116,44 +152,66 @@ export async function applyRevenueCatEvent(
     return { status: "skipped", reason: "duplicate_event" };
   }
 
-  const active = isActiveAfter(evt.type);
+  const active = subscriptionAccessStateAfterEvent(evt);
+  const eventAt = evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : new Date();
+  const expiration = evt.expiration_at_ms ? new Date(evt.expiration_at_ms) : null;
+  const isCancellation = evt.type === "CANCELLATION";
+  const isUncancellation = evt.type === "UNCANCELLATION";
+
   if (active === null) {
-    // Unknown event — record we saw it but don't touch isActive.
+    // Metadata-only event — record we saw it but don't touch isActive.
     await prisma.subscription.upsert({
       where: { userId },
       create: {
         userId,
-        rcAppUserId: evt.app_user_id,
+        rcAppUserId: userId,
         isActive: false,
+        productId: evt.product_id ?? null,
+        periodType: evt.period_type ?? null,
+        store: evt.store ?? null,
+        environment: evt.environment ?? null,
+        purchasedAt: evt.purchased_at_ms ? new Date(evt.purchased_at_ms) : null,
+        expiresAt: expiration,
+        cancelledAt: isCancellation ? eventAt : null,
+        unsubscribeDetectedAt: isCancellation ? eventAt : null,
         lastEventId: evt.id,
         lastEventType: evt.type,
-        lastEventAt: evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : new Date(),
+        lastEventAt: eventAt,
       },
       update: {
+        productId: evt.product_id ?? undefined,
+        periodType: evt.period_type ?? undefined,
+        store: evt.store ?? undefined,
+        environment: evt.environment ?? undefined,
+        purchasedAt: evt.purchased_at_ms ? new Date(evt.purchased_at_ms) : undefined,
+        expiresAt: expiration ?? undefined,
+        cancelledAt: isCancellation ? eventAt : undefined,
+        unsubscribeDetectedAt: isCancellation ? eventAt : undefined,
         lastEventId: evt.id,
         lastEventType: evt.type,
-        lastEventAt: evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : new Date(),
+        lastEventAt: eventAt,
       },
     });
-    return { status: "skipped", reason: "unknown_event_type" };
+    return { status: "skipped", reason: "metadata_only_event" };
   }
 
   await prisma.subscription.upsert({
     where: { userId },
     create: {
       userId,
-      rcAppUserId: evt.app_user_id,
+      rcAppUserId: userId,
       isActive: active,
       productId: evt.product_id ?? null,
       periodType: evt.period_type ?? null,
       store: evt.store ?? null,
       environment: evt.environment ?? null,
       purchasedAt: evt.purchased_at_ms ? new Date(evt.purchased_at_ms) : null,
-      expiresAt: evt.expiration_at_ms ? new Date(evt.expiration_at_ms) : null,
-      cancelledAt: !active && evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : null,
+      expiresAt: expiration,
+      cancelledAt: isCancellation && evt.event_timestamp_ms ? eventAt : null,
+      unsubscribeDetectedAt: isCancellation && evt.event_timestamp_ms ? eventAt : null,
       lastEventId: evt.id,
       lastEventType: evt.type,
-      lastEventAt: evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : new Date(),
+      lastEventAt: eventAt,
     },
     update: {
       isActive: active,
@@ -162,11 +220,12 @@ export async function applyRevenueCatEvent(
       store: evt.store ?? undefined,
       environment: evt.environment ?? undefined,
       purchasedAt: evt.purchased_at_ms ? new Date(evt.purchased_at_ms) : undefined,
-      expiresAt: evt.expiration_at_ms ? new Date(evt.expiration_at_ms) : undefined,
-      cancelledAt: !active && evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : undefined,
+      expiresAt: expiration ?? undefined,
+      cancelledAt: isCancellation && evt.event_timestamp_ms ? eventAt : isUncancellation ? null : undefined,
+      unsubscribeDetectedAt: isCancellation && evt.event_timestamp_ms ? eventAt : isUncancellation ? null : undefined,
       lastEventId: evt.id,
       lastEventType: evt.type,
-      lastEventAt: evt.event_timestamp_ms ? new Date(evt.event_timestamp_ms) : new Date(),
+      lastEventAt: eventAt,
     },
   });
 

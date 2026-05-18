@@ -1,5 +1,5 @@
 import { fetch } from "expo/fetch";
-import { authClient } from "../auth/auth-client";
+import { getAuthHeaders } from "../auth/auth-client";
 
 // Response envelope type - all app routes return { data: T }
 interface ApiResponse<T> {
@@ -10,6 +10,13 @@ const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
 // Deduplicates concurrent GET requests to the same URL
 const inflightRequests = new Map<string, Promise<any>>();
+
+const apiErrorMessage = (json: any, status: number) => {
+  if (typeof json?.error === "string") return json.error;
+  if (typeof json?.error?.message === "string") return json.error.message;
+  if (typeof json?.message === "string") return json.message;
+  return `Request failed with status ${status}`;
+};
 
 // IMPORTANT: This sets the cookies/auth token in the headers
 const request = async <T>(
@@ -26,7 +33,7 @@ const request = async <T>(
       credentials: "include",
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
-        Cookie: authClient.getCookie(),
+        ...getAuthHeaders(),
       },
       signal: controller.signal,
     });
@@ -51,8 +58,7 @@ const request = async <T>(
 
     // Handle error responses from the API
     if (!response.ok) {
-      const errorMessage = json?.error?.message || `Request failed with status ${response.status}`;
-      throw new Error(errorMessage);
+      throw new Error(apiErrorMessage(json, response.status));
     }
 
     return (json as ApiResponse<T>).data;

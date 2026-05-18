@@ -1,10 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 import { revokeAppleToken } from "./appleAuth";
 import { features } from "../env";
+import { deleteManagedUploadUrl } from "./uploads";
 
 // Narrow prisma dependency — just the pieces we touch. Production callers
 // pass the real PrismaClient (satisfies structurally); tests cast a mock.
-export type DeleteAccountPrisma = Pick<PrismaClient, "$transaction" | "account">;
+export type DeleteAccountPrisma = Pick<PrismaClient, "$transaction" | "account" | "user">;
 
 // Hard-deletes a user and all identifiable data. App Store Guideline
 // 5.1.1(v) requires in-app account deletion for subscription apps.
@@ -25,16 +26,12 @@ export async function deleteUserAccount(
   prisma: DeleteAccountPrisma,
   user: { id: string; email: string },
 ): Promise<void> {
-  console.log(
-    `[delete-account] user=${user.id} email=${user.email} deleted at ${new Date().toISOString()}`,
-  );
+  console.log(`[delete-account] user=${user.id} requested deletion`);
+  const profileImageUrl = await lookupProfileImageUrl(prisma, user.id);
 
-  // Apple Guideline 5.1.1(v) also requires revoking the Apple OAuth
-  // token on the provider side when a user deletes their account.
-  // That needs a signed client_secret JWT (APPLE_TEAM_ID / APPLE_KEY_ID
-  // / APPLE_PRIVATE_KEY) which isn't wired yet — today's auth.ts uses
-  // the "native-ios-unused" placeholder. Log so we don't forget, but
-  // never let this block the DB deletion.
+  // Apple Guideline 5.1.1(v) requires revoking the Apple OAuth token on
+  // the provider side when a user deletes their account. Never let a
+  // transient Apple response leave the local account half-deleted.
   await maybeRevokeAppleTokens(prisma, user.id);
 
   await prisma.$transaction(async (tx) => {
@@ -43,6 +40,23 @@ export async function deleteUserAccount(
     await tx.teamFollow.deleteMany({ where: { userId: user.id } });
     await tx.user.delete({ where: { id: user.id } });
   });
+
+  await deleteManagedUploadUrl(profileImageUrl);
+}
+
+async function lookupProfileImageUrl(
+  prisma: DeleteAccountPrisma,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const row = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { image: true },
+    });
+    return row?.image ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function maybeRevokeAppleTokens(

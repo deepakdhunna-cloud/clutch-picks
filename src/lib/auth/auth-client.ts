@@ -10,11 +10,21 @@ import * as SecureStore from "expo-secure-store";
 // successful sign-in. The backend `bearer` plugin echoes the session
 // token back as `set-auth-token`, which we capture here and replay as
 // `Authorization: Bearer <token>` on subsequent requests.
+// Keep the existing SecureStore/app scheme identifiers for update
+// compatibility. These are local app identifiers, not external service
+// dependencies, and changing them would force existing users to sign in again.
 const TOKEN_KEY = "vibecode_bearer_token";
+const LEGACY_TOKEN_KEYS = ["clutchpicks_bearer_token"];
 
 function readToken(): string | null {
   try {
-    const v = SecureStore.getItem(TOKEN_KEY);
+    let v = SecureStore.getItem(TOKEN_KEY);
+    if (!v) {
+      for (const key of LEGACY_TOKEN_KEYS) {
+        v = SecureStore.getItem(key);
+        if (v) break;
+      }
+    }
     if (__DEV__) console.log('[auth] readToken', v ? `present (len=${v.length})` : 'null');
     return v;
   } catch (e) {
@@ -31,6 +41,9 @@ function writeToken(token: string | null) {
     } else {
       if (__DEV__) console.log('[auth] writeToken: clearing');
       void SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+      for (const key of LEGACY_TOKEN_KEYS) {
+        void SecureStore.deleteItemAsync(key).catch(() => {});
+      }
     }
   } catch (e) {
     if (__DEV__) console.log('[auth] writeToken threw', e);
@@ -46,8 +59,15 @@ export const authClient = createAuthClient({
     onRequest: (context) => {
       const token = readToken();
       const url = context.url?.toString() ?? '';
+      if (url.includes("/api/auth/")) {
+        // Native fetches do not reliably send browser-style Origin headers.
+        // Prefer bearer auth for Better Auth endpoints so stale cookies cannot
+        // trigger the server's CSRF origin check during sign-in/session calls.
+        context.headers.delete("cookie");
+      }
       if (token && !context.headers.has("authorization")) {
         context.headers.set("authorization", `Bearer ${token}`);
+        context.headers.delete("cookie");
         if (__DEV__) console.log('[auth] onRequest', url, 'sending Bearer');
       } else if (__DEV__) {
         console.log('[auth] onRequest', url, 'no token');
@@ -56,7 +76,6 @@ export const authClient = createAuthClient({
     },
     onSuccess: (context) => {
       const url = context.request?.url?.toString() ?? "";
-      console.log('[auth-client] onSuccess url:', context.request?.url?.toString(), 'has set-auth-token:', !!context.response.headers.get('set-auth-token'));
       const setAuthToken = context.response.headers.get("set-auth-token");
       if (__DEV__) {
         const headerNames: string[] = [];
@@ -80,3 +99,17 @@ export const authClient = createAuthClient({
     emailOTPClient(),
   ],
 });
+
+export const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  const cookie = authClient.getCookie();
+  const token = readToken();
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }
+  if (cookie) headers.Cookie = cookie;
+
+  return headers;
+};

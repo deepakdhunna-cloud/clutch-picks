@@ -21,12 +21,12 @@
 </typescript>
 
 <environment>
-  You are in Vibecode. The system manages git and the dev server (port 8081).
-  DO NOT: manage git, touch the dev server, or check its state.
-  The user views the app through Vibecode App.
+  You are in the local Clutch Picks workspace.
+  DO NOT: manage git, touch the dev server, or check its state unless the user explicitly asks.
+  The user views the app through the normal local/mobile development workflow.
   The user cannot see the code or interact with the terminal. Do not tell the user to do anything with the code or terminal.
   You can see logs in the expo.log file.
-  The Vibecode App has tabs like ENV tab, API tab, LOGS tab. You can ask the user to use these tabs to view the logs, add enviroment variables, or give instructions for APIs like OpenAI, Nanobanana, Grok, Elevenlabs, etc. but first try to implement the functionality yourself.
+  Ask the user to set production environment variables in the hosting provider dashboard only when they cannot be set from the local repo.
   The user is likely non-technical, communicate with them in an easy to understand manner.
   If the user's request is vague or ambitious, scope down to specific functionality. Do everything for them.
   For images, use URLs from unsplash.com. You can also tell the user they can use the IMAGES tab to generate and uplooad images.
@@ -106,7 +106,7 @@
 </safearea>
 
 <data>
-  Create realistic mock data when you lack access to real data.
+  Do not create, inject, or display mock/simulated/false runtime data. If real data is unavailable, show an empty/loading/unavailable state or disable that factor.
   For image analysis: actually send to LLM don't mock.
 </data>
 
@@ -159,8 +159,7 @@
 </mistakes>
 
 <appstore>
-  Cannot assist with App Store or Google Play submission processes (app.json, eas.json, EAS CLI commands).
-  For submission help, click "Share" on the top right corner on the Vibecode App and select "Submit to App Store".
+  Do not submit to App Store or Google Play on behalf of the user. You may keep local release metadata and config aligned with the project when asked.
 </appstore> 
 
 <backend>

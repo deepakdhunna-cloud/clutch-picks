@@ -23,6 +23,7 @@ import { useInvalidateSession } from '@/lib/auth/use-session';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
+import { setDisplayName as setRevenueCatDisplayName } from '@/lib/revenuecatClient';
 
 const { width: W } = Dimensions.get('window');
 
@@ -114,18 +115,20 @@ function FloatingParticle({ x, startY, size, color, dur, delay, drift }: typeof 
       withTiming(0.6, { duration: dur * 0.55, easing: Easing.inOut(Easing.ease) }),
       withTiming(0, { duration: dur * 0.20, easing: Easing.in(Easing.ease) }),
     );
-  }, [dur, startY, drift]);
+  }, [dur, drift]);
 
   useEffect(() => {
     // Initial delay then start seamless loop
+    let interval: ReturnType<typeof setInterval> | null = null;
     const timer = setTimeout(() => {
       runCycle();
-      const interval = setInterval(runCycle, dur);
-      // Cleanup
-      (FloatingParticle as any)._cleanup = () => clearInterval(interval);
+      interval = setInterval(runCycle, dur);
     }, delay);
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      if (interval) clearInterval(interval);
+    };
+  }, [delay, dur, runCycle]);
 
   const style = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }, { translateX: translateX.value }],
@@ -271,7 +274,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
             <Pressable onPress={() => doPick('home')}>
               <Animated.View style={[homeStyle, { alignItems: 'center', opacity: picked === 'away' ? 0.35 : 1 }]}>
                 <View style={picked === 'home' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
-                  <JerseyIcon teamCode="CHI" primaryColor={homeColors.primary} secondaryColor={homeColors.secondary} size={86} sport={jerseyType} />
+                  <JerseyIcon teamCode="CHI" teamName="Chicago Bulls" primaryColor={homeColors.primary} secondaryColor={homeColors.secondary} size={86} sport={jerseyType} />
                 </View>
                 {picked === 'home' ? (
                   <View style={{ position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11, backgroundColor: MAROON, borderWidth: 2.5, borderColor: BG, alignItems: 'center', justifyContent: 'center' }}>
@@ -295,7 +298,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
             <Pressable onPress={() => doPick('away')}>
               <Animated.View style={[awayStyle, { alignItems: 'center', opacity: picked === 'home' ? 0.35 : 1 }]}>
                 <View style={picked === 'away' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
-                  <JerseyIcon teamCode="MIN" primaryColor={awayColors.primary} secondaryColor={awayColors.secondary} size={86} sport={jerseyType} />
+                  <JerseyIcon teamCode="MIN" teamName="Minnesota Timberwolves" primaryColor={awayColors.primary} secondaryColor={awayColors.secondary} size={86} sport={jerseyType} />
                 </View>
                 {picked === 'away' ? (
                   <View style={{ position: 'absolute', bottom: -3, right: -3, width: 22, height: 22, borderRadius: 11, backgroundColor: MAROON, borderWidth: 2.5, borderColor: BG, alignItems: 'center', justifyContent: 'center' }}>
@@ -404,7 +407,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-                      <JerseyIcon teamCode={pickedCode} primaryColor={pickedColors.primary} secondaryColor={pickedColors.secondary} size={52} sport={jerseyType} />
+                      <JerseyIcon teamCode={pickedCode} teamName={pickedName} primaryColor={pickedColors.primary} secondaryColor={pickedColors.secondary} size={52} sport={jerseyType} />
                       <View>
                         <Text style={{ fontSize: 18, fontWeight: '800', color: WHITE }}>{pickedName}</Text>
                         <Text style={{ fontSize: 11, color: TEXT_MUT, marginTop: 2 }}>vs {opponentCode} {opponentName}</Text>
@@ -902,7 +905,7 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
         <Animated.View entering={FadeInDown.delay(500).duration(400)} style={{ width: '100%', gap: 16 }}>
           {[
             { title: 'AI Predictions', desc: 'Multi-factor analysis per game', accent: MAROON, bg: 'rgba(139,10,31,0.12)', border: 'rgba(139,10,31,0.15)' },
-            { title: 'Live Scores', desc: 'Real-time across 8 leagues', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
+            { title: 'Live Scores', desc: 'Real-time across 11 leagues', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
             { title: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: MAROON, bg: 'rgba(139,10,31,0.12)', border: 'rgba(139,10,31,0.15)' },
             { title: 'Where to Watch', desc: 'TV & streaming info', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
           ].map((f, i) => (
@@ -926,7 +929,7 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Free Trial</Text>
           </LinearGradient>
         </Pressable>
-        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>Free for 3 days, then $4.99/month. Cancel anytime.</Text>
+        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>3-day free trial for eligible users. Price shown before purchase.</Text>
         <Pressable onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 14 }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Maybe later</Text>
         </Pressable>
@@ -997,7 +1000,9 @@ export default function OnboardingScreen() {
   const saveProfile = async () => {
     try {
       if (displayName.trim().length > 0) {
-        await api.put('/api/profile', { name: displayName.trim() });
+        const name = displayName.trim();
+        await api.put('/api/profile', { name });
+        await setRevenueCatDisplayName(name);
       }
       // Invalidate caches so profile page picks up changes immediately
       queryClient.invalidateQueries({ queryKey: ['profile'] });

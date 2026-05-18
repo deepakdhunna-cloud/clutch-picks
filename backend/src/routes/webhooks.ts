@@ -29,7 +29,7 @@ webhooksRouter.post("/revenuecat", async (c) => {
     return c.json({ error: "invalid_json" }, 400);
   }
 
-  if (!body?.event?.type || !body?.event?.id || !body?.event?.app_user_id) {
+  if (!body?.event?.type || !body?.event?.id) {
     return c.json({ error: "missing_event_fields" }, 400);
   }
 

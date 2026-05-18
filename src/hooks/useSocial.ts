@@ -23,6 +23,10 @@ export interface IsFollowingResponse {
   isFollowing: boolean;
 }
 
+export interface IsBlockedResponse {
+  isBlocked: boolean;
+}
+
 // Hook to follow a user
 export function useFollowUser() {
   const queryClient = useQueryClient();
@@ -58,6 +62,27 @@ export function useUnfollowUser() {
       queryClient.invalidateQueries({ queryKey: ['social', 'is-following', userId] });
       queryClient.invalidateQueries({ queryKey: ['user-profile', userId] });
     },
+  });
+}
+
+export function useBlockUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api.post<{ blocked: boolean }>(`/api/social/block/${userId}`, {}),
+    onSuccess: (_, userId) => {
+      queryClient.invalidateQueries({ queryKey: ['social'] });
+      queryClient.invalidateQueries({ queryKey: ['user-profile', userId] });
+      queryClient.invalidateQueries({ queryKey: ['user-picks', userId] });
+    },
+  });
+}
+
+export function useReportUser() {
+  return useMutation({
+    mutationFn: ({ userId, reason, details }: { userId: string; reason: string; details?: string }) =>
+      api.post<{ reported: boolean }>(`/api/social/report/${userId}`, { reason, details }),
   });
 }
 
@@ -114,6 +139,19 @@ export function useIsFollowing(userId: string | undefined) {
     },
     enabled: !!userId,
     staleTime: 10000, // 10 seconds
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useIsBlocked(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['social', 'is-blocked', userId],
+    queryFn: async () => {
+      const result = await api.get<IsBlockedResponse>(`/api/social/is-blocked/${userId}`);
+      return result?.isBlocked ?? false;
+    },
+    enabled: !!userId,
+    staleTime: 10000,
     refetchIntervalInBackground: false,
   });
 }

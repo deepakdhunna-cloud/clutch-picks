@@ -1,8 +1,7 @@
 /**
  * UCL factor tests.
  *
- * Covers pedigree-based stage factor, continental travel, and the
- * weight-budget invariant.
+ * Covers unavailable verified-data factors and the weight-budget invariant.
  *
  * xG factor removed — Understat and FBRef are both Cloudflare-blocked
  * from Railway. Test verifies xg_differential is NOT present.
@@ -28,28 +27,12 @@ describe("UCL — xG factor removed", () => {
 });
 
 describe("UCL — pedigree", () => {
-  it("gives home a positive Elo edge when their UCL pedigree is >= 300pts above the opponent", () => {
+  it("is unavailable until verified pedigree data is loaded", () => {
     const ctx = makeSoccerContext("UCL", {
       game: {
         ...makeSoccerContext("UCL").game,
         homeTeam: { id: "1", name: "Real Madrid", abbreviation: "RMA", logo: "", record: { wins: 0, losses: 0 } },
         awayTeam: { id: "2", name: "Aston Villa",  abbreviation: "AVL", logo: "", record: { wins: 0, losses: 0 } },
-      },
-    });
-    const f = factor(ctx, "ucl_pedigree");
-    expect(f.available).toBe(true);
-    expect(f.homeDelta).toBeGreaterThan(20);
-    expect(f.homeDelta).toBeLessThanOrEqual(25);
-    expect(f.evidence).toContain("Real Madrid");
-    expect(f.evidence).toContain("pedigree");
-  });
-
-  it("is unavailable when either team is missing from the pedigree JSON", () => {
-    const ctx = makeSoccerContext("UCL", {
-      game: {
-        ...makeSoccerContext("UCL").game,
-        homeTeam: { id: "1", name: "Unknown FC", abbreviation: "UNK", logo: "", record: { wins: 0, losses: 0 } },
-        awayTeam: { id: "2", name: "Real Madrid", abbreviation: "RMA", logo: "", record: { wins: 0, losses: 0 } },
       },
     });
     const f = factor(ctx, "ucl_pedigree");
@@ -59,7 +42,7 @@ describe("UCL — pedigree", () => {
 });
 
 describe("UCL — continental travel", () => {
-  it("applies +15 Elo home when away traveled >1500km", () => {
+  it("is unavailable until verified city-coordinate data is loaded", () => {
     const ctx = makeSoccerContext("UCL", {
       game: {
         ...makeSoccerContext("UCL").game,
@@ -68,21 +51,7 @@ describe("UCL — continental travel", () => {
       },
     });
     const f = factor(ctx, "ucl_travel");
-    expect(f.available).toBe(true);
-    expect(f.homeDelta).toBe(15);
-    expect(f.evidence).toContain("traveled");
-  });
-
-  it("applies 0 Elo for a short intra-city / short-haul away trip", () => {
-    const ctx = makeSoccerContext("UCL", {
-      game: {
-        ...makeSoccerContext("UCL").game,
-        homeTeam: { id: "1", name: "Chelsea", abbreviation: "CHE", logo: "", record: { wins: 0, losses: 0 } },
-        awayTeam: { id: "2", name: "Arsenal", abbreviation: "ARS", logo: "", record: { wins: 0, losses: 0 } },
-      },
-    });
-    const f = factor(ctx, "ucl_travel");
-    expect(f.available).toBe(true);
+    expect(f.available).toBe(false);
     expect(f.homeDelta).toBe(0);
   });
 });

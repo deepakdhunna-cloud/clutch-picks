@@ -24,7 +24,11 @@ function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-const BANNED_REGEX = /lock|guaranteed|can't lose|easy money|slam dunk|smash|dominant|sharp play|hammer/i;
+function sentenceCount(text: string): number {
+  return text.trim().match(/[.!?](?=\s|$)/g)?.length ?? 0;
+}
+
+const BANNED_REGEX = /lock|guaranteed|can't lose|can’t lose|easy money|slam dunk|smash|dominant|sharp play|hammer|sure thing/i;
 
 function makeFactors(overrides: Partial<FactorContribution>[] = []): FactorContribution[] {
   const defaults: FactorContribution[] = [
@@ -80,6 +84,161 @@ describe("buildDeterministicNarrative", () => {
     expect(text.toLowerCase()).toContain("against the pick");
   });
 
+  it("includes structured injury context when provided", () => {
+    const input = buildNarrativeInput(
+      makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",
+      [
+        {
+          name: "Jayson Tatum",
+          team: "BOS",
+          position: "SF",
+          status: "Doubtful",
+          reason: "ankle soreness",
+        },
+      ],
+    );
+    const text = buildDeterministicNarrative(input);
+
+    expect(text).toContain("Jayson Tatum");
+    expect(text).toContain("BOS");
+    expect(text.toLowerCase()).toContain("doubtful");
+    expect(text.toLowerCase()).toContain("ankle soreness");
+  });
+
+  it("highlights playoff context when the game has it", () => {
+    const input = buildNarrativeInput(
+      makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",
+      [],
+      {
+        phase: "playoffs",
+        label: "NBA playoff window",
+        detail: "This falls in the NBA playoff window, so regular-season numbers are background and the pick should lean on repeatable matchup edges.",
+        source: "date",
+      },
+    );
+    const text = buildDeterministicNarrative(input);
+
+    expect(text.toLowerCase()).toContain("playoff");
+    expect(text.toLowerCase()).toContain("repeatable matchup edges");
+    expect(text.toLowerCase()).toContain("regular-season numbers are background");
+  });
+
+  it("makes NBA fallback copy conversational instead of dumping raw factor strings", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "rating_diff",
+        label: "Elo rating differential",
+        homeDelta: 97,
+        weight: 0.40,
+        available: true,
+        hasSignal: true,
+        evidence: "Home LAL Elo 1556 + 100 HFA vs Away OKC Elo 1560 = 97 pt differential",
+      },
+      {
+        key: "recent_form",
+        label: "Recent form (L10)",
+        homeDelta: -45,
+        weight: 0.10,
+        available: true,
+        hasSignal: true,
+        evidence: "Home L10: 4-5 (44%), Away L10: 7-0 (100%)",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors,
+      "clear edge",
+      59.0,
+      "LAL",
+      "OKC",
+      "LAL",
+      "NBA",
+      [],
+      {
+        phase: "playoffs",
+        label: "NBA playoff window",
+        detail: "This falls in the NBA playoff window, so regular-season numbers are background and the pick should lean on repeatable matchup edges.",
+        source: "date",
+      },
+      "Los Angeles Lakers",
+      "Oklahoma City Thunder",
+    );
+
+    const text = buildDeterministicNarrative(input);
+
+    expect(text).toContain("Los Angeles Lakers");
+    expect(text).toContain("Oklahoma City Thunder");
+    expect(text.toLowerCase()).toContain("playoff");
+    expect(text).not.toContain("The data points toward");
+    expect(text).not.toContain("Home LAL Elo");
+    expect(text).not.toContain("Away OKC Elo");
+    expect(text).not.toContain("Home L10");
+    expect(text.toLowerCase()).toContain("recent form");
+    expect(sentenceCount(text)).toBeLessThanOrEqual(10);
+  });
+
+  it("adds a fan-interest angle without inventing facts", () => {
+    const input = buildNarrativeInput(
+      makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",
+    );
+    const text = buildDeterministicNarrative(input).toLowerCase();
+
+    expect(text).toMatch(/fan angle|fun part|interesting|viewing hook|for fans/);
+    expect(text).not.toContain("game 7");
+    expect(text).not.toContain("series lead");
+  });
+
+  it("keeps deterministic game-card narratives to 10 sentences or fewer", () => {
+    const input = buildNarrativeInput(
+      makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",
+      [
+        { name: "Jayson Tatum", team: "BOS", position: "SF", status: "Doubtful", reason: "ankle soreness" },
+      ],
+      {
+        phase: "playoffs",
+        label: "NBA playoff window",
+        detail: "This falls in the NBA playoff window, so regular-season numbers are background and the pick should lean on repeatable matchup edges.",
+        source: "date",
+      },
+    );
+    const text = buildDeterministicNarrative(input);
+
+    expect(sentenceCount(text)).toBeLessThanOrEqual(10);
+  });
+
+  it("does not turn missing injury input into a fake clean injury report", () => {
+    const input = buildNarrativeInput(
+      makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NFL",
+      [],
+    );
+    const text = buildDeterministicNarrative(input).toLowerCase();
+
+    expect(text).not.toContain("healthy");
+    expect(text).not.toContain("no injuries");
+    expect(text).not.toContain("no significant injuries");
+  });
+
+  it("does not reuse the exact same fallback wording across different games", () => {
+    const bosInput = buildNarrativeInput(
+      makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",
+    );
+    const detInput = buildNarrativeInput(
+      [
+        { key: "starting_pitcher", label: "Starting pitcher matchup", homeDelta: 80, weight: 0.21, available: true, hasSignal: true, evidence: "Home starter has 3.12 ERA vs Away starter 4.20 ERA" },
+        { key: "recent_form", label: "Recent form (L10)", homeDelta: 50, weight: 0.10, available: true, hasSignal: true, evidence: "Home L10: 7-3, Away L10: 4-6" },
+        { key: "bullpen", label: "Bullpen form", homeDelta: 30, weight: 0.08, available: true, hasSignal: true, evidence: "Home bullpen 2.90 ERA last 7 days vs Away 4.50" },
+      ],
+      "clear edge", 62.0, "DET", "MIL", "DET", "MLB",
+    );
+
+    const bosText = buildDeterministicNarrative(bosInput);
+    const detText = buildDeterministicNarrative(detInput);
+
+    expect(detText).toContain("DET");
+    expect(detText).toContain("Starting pitcher matchup".toLowerCase());
+    expect(detText).not.toBe(bosText);
+    expect(detText.split(".")[0]).not.toBe(bosText.split(".")[0]);
+  });
+
   it("includes caveat for unavailable key factors", () => {
     const factors = makeFactors();
     // net_rating has weight 0.10 >= 0.05, so it should trigger caveat
@@ -128,12 +287,12 @@ describe("buildDeterministicNarrative", () => {
     expect(text.length).toBeGreaterThan(20);
   });
 
-  // ── Elo-only fallback ──
+  // ── Rating-only fallback ──
   // Light-data night: rating_diff has the only real signal; every other
   // factor was pooled to hasSignal=false with homeDelta=0. The narrative
-  // must still be populated with the Elo lead AND an explicit note that
+  // must still be populated with the rating lead AND an explicit note that
   // no supporting signals were available.
-  it("produces an Elo-only narrative when only rating_diff has real signal", () => {
+  it("produces a rating-only narrative when only rating_diff has real signal", () => {
     const factors: FactorContribution[] = [
       {
         key: "rating_diff",
@@ -152,13 +311,14 @@ describe("buildDeterministicNarrative", () => {
     const input = buildNarrativeInput(factors, "strong edge", 78.0, "BOS", "PHI", "BOS", "NBA");
     const text = buildDeterministicNarrative(input);
 
-    // Must reference the Elo evidence (the only signal).
-    expect(text).toContain("Elo");
+    // Must reference the rating evidence without dumping raw Elo language.
+    expect(text).toContain("220");
+    expect(text).not.toContain("Elo");
     expect(text).toContain("BOS");
 
     // Must explicitly flag the absence of supporting signals instead of
     // silently ending after the lead factor.
-    expect(text.toLowerCase()).toContain("no additional contextual signals available");
+    expect(text.toLowerCase()).toContain("not much supporting context available");
 
     // Non-empty, no banned words.
     expect(text.length).toBeGreaterThan(40);
@@ -346,7 +506,7 @@ describe("buildDeterministicNarrative — counterpoint framing", () => {
     expect(extractCounterpointSentence(text)).toBeNull();
   });
 
-  it("Case E (regression): Elo-only fallback still renders 'no additional contextual signals'", () => {
+  it("Case E (regression): rating-only fallback still renders the thin-context note", () => {
     const factors: FactorContribution[] = [
       {
         key: "rating_diff",
@@ -364,8 +524,8 @@ describe("buildDeterministicNarrative — counterpoint framing", () => {
     const input = buildNarrativeInput(factors, "strong edge", 78.0, "BOS", "PHI", "BOS", "NBA");
     const text = buildDeterministicNarrative(input);
 
-    expect(text.toLowerCase()).toContain("no additional contextual signals available");
-    expect(text).toContain("Elo");
+    expect(text.toLowerCase()).toContain("not much supporting context available");
+    expect(text).not.toContain("Elo");
     expect(text).toContain("BOS");
   });
 });

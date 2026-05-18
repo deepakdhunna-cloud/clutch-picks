@@ -109,7 +109,7 @@ describe("buildUserPrompt", () => {
     expect(prompt).toContain("MIL Milwaukee Brewers @ DET Detroit Tigers");
     expect(prompt).toContain("Pick: Detroit Tigers");
     expect(prompt).toContain("Confidence: moderate");
-    expect(prompt).toContain("Top factors favoring the pick:");
+    expect(prompt).toContain("Top factors favoring the pick, in priority order:");
     expect(prompt).toContain("Starting pitcher matchup");
     expect(prompt).toContain("Recent form (L10)");
   });
@@ -145,18 +145,43 @@ describe("buildUserPrompt", () => {
     expect(prompt).toContain("Anthony Davis (LAL, PF): Doubtful");
   });
 
+  it("includes season context when present", () => {
+    const prompt = buildUserPrompt(
+      makeInput({
+        seasonContext: {
+          phase: "playoffs",
+          label: "NBA playoff window",
+          detail: "This falls in the NBA playoff window, so the pick should lean on repeatable matchup edges instead of generic regular-season form.",
+          source: "date",
+        },
+      }),
+    );
+
+    expect(prompt).toContain("Season context: NBA playoff window");
+    expect(prompt).toContain("repeatable matchup edges");
+  });
+
+  it("omits season context when absent", () => {
+    const prompt = buildUserPrompt(makeInput({ seasonContext: null }));
+    expect(prompt).not.toContain("Season context:");
+  });
+
   it("ends with the analysis instruction", () => {
     const prompt = buildUserPrompt(makeInput());
-    expect(prompt.endsWith("Write the 5-6 sentence analysis now.")).toBe(true);
+    expect(prompt.endsWith("Write the 80-150 word analysis now.")).toBe(true);
   });
 });
 
 describe("ANALYST_SYSTEM_PROMPT", () => {
   it("bans numeric Elo, Vegas lines, and algorithm references", () => {
-    expect(ANALYST_SYSTEM_PROMPT).toContain("5-6 sentences");
+    expect(ANALYST_SYSTEM_PROMPT).toContain("80-150 words");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("never mention");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("vegas");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("elo");
+    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("lock");
+    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("season context");
+    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("fan perspective");
+    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("sure thing");
   });
 });
 
@@ -180,7 +205,7 @@ describe("mapConfidenceTier", () => {
 // ─── Validation ────────────────────────────────────────────────────────
 
 const SAMPLE_5 =
-  "Detroit's the pick here. Keider Montero has been dealing. The Tigers are rolling at 8-2. Milwaukee's been scuffling at 4-6. The home mound matchup flips the rating edge.";
+  "Detroit's the pick because the pitching matchup gives them the cleanest path into this game tonight. Keider Montero brings the better full profile with a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but 3.63 FIP. The Tigers also have the form edge, sitting 8-2 over their last 10 while Milwaukee is 4-6. The one concern is rest, since the Brewers come in with three days off against Detroit's one. Still, the main baseball reasons point to Detroit.";
 
 describe("validateAnalystNarrative", () => {
   it("accepts a clean 5-sentence blurb", () => {
@@ -228,6 +253,20 @@ describe("validateAnalystNarrative", () => {
     const text =
       "Detroit's the pick. Strong 7-3 ATS at home. Montero has been dealing. The Tigers are rolling. Milwaukee's been scuffling.";
     expect(validateAnalystNarrative(text).ok).toBe(false);
+  });
+
+  it("rejects additional hype/tout terms", () => {
+    const text =
+      "Detroit's the pick because the pitching matchup gives them the cleanest path into this game tonight. Keider Montero brings the better full profile with a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but 3.63 FIP. The Tigers also have the form edge, sitting 8-2 over their last 10 while Milwaukee is 4-6. The one concern is rest, since the Brewers come in with three days off against Detroit's one. This is a sure thing for Detroit.";
+    expect(validateAnalystNarrative(text).ok).toBe(false);
+  });
+
+  it("rejects more than 10 sentences even if word count is valid", () => {
+    const text =
+      "Detroit is the pick tonight. The pitching matchup points their way. Montero has a 3.12 ERA. His FIP sits at 1.70. Harrison's FIP is 3.63. Detroit is 8-2 over its last 10. Milwaukee is 4-6 over that same window. Rest is the counterpoint. The Brewers are fresher. The fan angle is the mound edge. That is enough detail.";
+    const result = validateAnalystNarrative(text);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain("sentence count");
   });
 });
 
@@ -453,6 +492,19 @@ describe("computeVersionHash", () => {
       { name: "Player A", team: "HOM", position: "", status: "Out" as const, reason: "" },
     ]);
     expect(noInj).not.toBe(withInj);
+  });
+
+  it("changes when season context is added", () => {
+    const pred = { predictedWinner: "home" as const, confidence: 62, factors: baseFactors };
+    const noContext = computeVersionHash(pred, []);
+    const withContext = computeVersionHash(pred, [], {
+      phase: "playoffs",
+      label: "NBA playoff window",
+      detail: "This falls in the NBA playoff window.",
+      source: "date",
+    });
+
+    expect(noContext).not.toBe(withContext);
   });
 
   it("ignores 1-pt confidence drift (5-pt bucket)", () => {

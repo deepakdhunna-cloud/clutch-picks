@@ -19,6 +19,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, GameWithPrediction } from '@/types/sports';
 import { useGames } from '@/hooks/useGames';
+import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { TEAL } from '@/lib/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -29,13 +30,13 @@ const ENTER_DURATION = 260;
 
 export default function LiveGamesScreen() {
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
 
   const translateX = useSharedValue(0);
   const isAnimating = useRef(false);
 
   const { data: todaysGames, refetch, isLoading } = useGames();
+  const { refreshing, onRefresh } = useSmoothRefresh(refetch);
 
   const liveGames = useMemo<GameWithPrediction[]>(
     () =>
@@ -44,12 +45,6 @@ export default function LiveGamesScreen() {
       ),
     [todaysGames]
   );
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
 
   const gamesBySport = useMemo(() => {
     const map = new Map<Sport, GameWithPrediction[]>();

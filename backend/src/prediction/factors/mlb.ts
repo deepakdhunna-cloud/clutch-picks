@@ -219,10 +219,9 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
   });
 
   // ── 6. Umpire strike zone ─────────────────────────────────────────────
-  // Live data via lib/mlbUmpireApi.ts:
+  // Live assignment data via lib/mlbUmpireApi.ts:
   //   - MLB Stats API schedule (hydrate=officials) → home-plate umpire name
-  //   - Cross-reference with lib/data/umpireZoneTendencies.json (seeded from
-  //     public UmpScorecards aggregates)
+  //   - Verified tendency rows only; when none exist, this factor is unavailable
   //
   // Sign semantics (fixed in Prompt-A follow-up):
   //   - favorsHome is the *directional* signal. Positive = this ump's zone
@@ -407,6 +406,11 @@ function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution
 
   const rawScore = (away.penalty - home.penalty) / 3.0;
   const score = Math.max(-1.0, Math.min(1.0, rawScore));
+  // Convert the normalized roster-hit score into the engine's canonical Elo
+  // unit. Three everyday bats missing from one side is a real but secondary
+  // baseball signal: enough to move the matchup, never enough to outrank the
+  // starters.
+  const injuryDelta = Math.round(score * 75);
   const anyInjuries = home.penalty > 0 || away.penalty > 0;
 
   let evidence: string;
@@ -419,7 +423,7 @@ function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution
   return {
     key: "injuries_mlb",
     label: "Position player injuries",
-    homeDelta: score,
+    homeDelta: injuryDelta,
     weight: 0.05,
     available: true,
     hasSignal: anyInjuries,

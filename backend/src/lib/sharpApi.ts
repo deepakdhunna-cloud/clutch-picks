@@ -2,15 +2,14 @@
  * SharpAPI market-lines client.
  *
  * Feature-flagged on SHARPAPI_KEY — when unset, every function returns null
- * and the app runs fine without market data. Market numbers are NEVER used
- * as a prediction input (that would just be copying Vegas); they're a
- * post-prediction calibration anchor surfaced for UI display.
+ * and the app runs fine without market data. The new engine uses market
+ * consensus as a small calibration anchor, never as the primary pick source.
  *
  * Free-tier rate limit: 12 req/min. We throttle at 10/min via a token
  * bucket so upstream hiccups don't blow the budget.
  *
- * All errors swallowed → null. 8s timeout. 5-minute LRU cache (line
- * movement matters — don't over-cache).
+ * All errors swallowed → null. 8s timeout. 5-minute LRU cache (line movement
+ * matters — don't over-cache).
  */
 
 import { LRUCache } from "lru-cache";

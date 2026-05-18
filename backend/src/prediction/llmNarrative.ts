@@ -15,6 +15,7 @@
 
 import type { FactorContribution } from "./types";
 import type { TeamInjuryReport } from "../lib/espnStats";
+import type { NarrativeSeasonContext } from "./seasonContext";
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export interface LLMNarrativeInput {
   counterpoint: FactorContribution | null;
   /** Out/Doubtful only. Empty array → prompt omits the injury section. */
   injuries: InjuryListEntry[];
+  seasonContext?: NarrativeSeasonContext | null;
 }
 
 export interface LLMNarrativeResult {
@@ -118,10 +120,19 @@ export function extractInjuryListForLLM(
 
 // ─── Prompt construction ───────────────────────────────────────────────
 
-export const ANALYST_SYSTEM_PROMPT = `You are a sports analyst who talks like a knowledgeable friend at a bar. You explain why a prediction model picked a team in 5-6 sentences.
+export const ANALYST_SYSTEM_PROMPT = `You are a sports analyst who talks like a knowledgeable friend at a bar. You explain why the listed team is the pick in 80-150 words and 4-6 sentences.
 
 VOICE
-Casual but informed. Contractions are fine. No preachiness, no hedging, no clichés. Talk like a person who actually watches the games, not a recap bot.
+Casual but informed. Contractions are fine. Confident, but never hypey. No preachiness, no clichés, no gambling tout energy. Talk like a person who actually watches the games, not a recap bot. A little wit is good when it fits, but the analysis still has to carry the room.
+
+MUST INCLUDE
+- The picked team, unless the input says pick'em.
+- A verbal version of how the pick was made: the top factor, expected-score projection when provided, injury/availability notes when provided, schedule/rest, form, ratings, and the best risk flag.
+- 2-3 supporting reasons from the factor data when available. Do not reduce the pick to only "home field" or "recent form" if other factors are present.
+- A meaningful counterpoint or risk when one is provided.
+- Out/Doubtful injuries when they are provided, especially if they affect the pick.
+- Season context when provided: playoff, tournament, stretch-run, bowl, or late-season games should sound different from ordinary regular-season games.
+- Why this game is interesting from a fan perspective, using only the provided matchup, factors, injury list, or season context.
 
 STRUCTURAL VARIETY (CRITICAL)
 Every analysis must open differently and follow a different shape. Do NOT settle into a formulaic intro. Vary which angle leads: sometimes the headline factor, sometimes a specific stat, sometimes the wildcard, sometimes a wry observation about the matchup, sometimes a player. Pick the angle that's most interesting for THIS game and lead with it — don't default to the same template.
@@ -138,9 +149,10 @@ FORBIDDEN OPENERS (do not start with any of these, in any casing):
 
 SPECIFICITY
 Reference at least one concrete, verifiable detail from the input — a record, a stat, a player name, or the venue. Don't lean on generic phrasing like "they've been rolling" or "scuffling a bit"; ground every claim in something real from the prompt.
+If the scoring projection is nearly level but the pick has a clear lean, explain that average scoring can be tight while the win lean comes from the whole factor stack.
 
 NEVER MENTION
-Spread, over/under, Vegas lines, numeric Elo values, the algorithm, the model, or generic hedges like "anything can happen."
+Spread, over/under, Vegas lines, numeric Elo values, the algorithm, the model, or generic hedges like "anything can happen." Do not use hype/tout terms: lock, guaranteed, can't lose, can’t lose, easy money, slam dunk, smash, dominant, sharp play, hammer, sure thing.
 
 End on the last real point — do not tack on a confidence call at the end.`;
 
@@ -158,8 +170,13 @@ export function buildUserPrompt(input: LLMNarrativeInput): string {
   );
   lines.push(`Pick: ${input.pickTeamName ?? "no edge (pick'em)"}`);
   lines.push(`Confidence: ${input.confidenceTier}`);
+  if (input.seasonContext) {
+    lines.push(
+      `Season context: ${input.seasonContext.label} — ${input.seasonContext.detail}`,
+    );
+  }
   lines.push("");
-  lines.push("Top factors favoring the pick:");
+  lines.push("Top factors favoring the pick, in priority order:");
   for (const f of input.topFactors) {
     lines.push(`- ${f.label}: ${f.evidence}`);
   }
@@ -180,7 +197,7 @@ export function buildUserPrompt(input: LLMNarrativeInput): string {
     }
     lines.push("");
   }
-  lines.push("Write the 5-6 sentence analysis now.");
+  lines.push("Write the 80-150 word analysis now.");
   return lines.join("\n");
 }
 
@@ -196,6 +213,16 @@ const BANNED_SUBSTRINGS = [
   "according to our",
   "anything can happen",
   "lock",
+  "guaranteed",
+  "can't lose",
+  "can’t lose",
+  "easy money",
+  "slam dunk",
+  "smash",
+  "dominant",
+  "sharp play",
+  "hammer",
+  "sure thing",
   "cover ",
   " ats",
   "alright, so",
@@ -214,6 +241,10 @@ function countSentences(text: string): number {
   return matches?.length ?? 0;
 }
 
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 export interface ValidationResult {
   ok: boolean;
   reason?: string;
@@ -226,6 +257,10 @@ export function validateAnalystNarrative(text: string): ValidationResult {
   const sentences = countSentences(text);
   if (sentences < 4 || sentences > 7) {
     return { ok: false, reason: `sentence count ${sentences} outside [4,7]` };
+  }
+  const words = countWords(text);
+  if (words < 80 || words > 150) {
+    return { ok: false, reason: `word count ${words} outside [80,150]` };
   }
   const lower = text.toLowerCase();
   for (const banned of BANNED_SUBSTRINGS) {

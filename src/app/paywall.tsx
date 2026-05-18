@@ -11,9 +11,13 @@ import { X } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import Purchases from 'react-native-purchases';
 import {
-  getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, getCustomerInfo,
+  getOfferings,
+  purchasePackage,
+  restorePurchases,
+  isRevenueCatEnabled,
+  getCustomerInfo,
+  REVENUECAT_MONTHLY_PACKAGE_ID,
 } from '@/lib/revenuecatClient';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGames } from '@/hooks/useGames';
@@ -113,6 +117,19 @@ function ShimmerButton({ onPress, loading, label }: {
   );
 }
 
+const isMonthlySubscription = (pkg: PurchasesPackage) => {
+  return pkg.identifier === REVENUECAT_MONTHLY_PACKAGE_ID &&
+    pkg.product.subscriptionPeriod === 'P1M';
+};
+
+const hasThreeDayFreeTrial = (pkg: PurchasesPackage) => {
+  const intro = pkg.product.introPrice;
+  if (!intro || intro.price !== 0) return false;
+  const periodUnit = intro.periodUnit?.toUpperCase?.() ?? '';
+  return intro.period === 'P3D' ||
+    (periodUnit === 'DAY' && intro.periodNumberOfUnits === 3);
+};
+
 // ═════════════════════════════════════════════════════════════════
 // MAIN
 // ═════════════════════════════════════════════════════════════════
@@ -163,7 +180,7 @@ export default function PaywallScreen() {
 
   useEffect(() => { loadOfferings(); }, []);
 
-  const loadOfferings = async () => {
+  const loadOfferings = async (): Promise<PurchasesPackage | null> => {
     setLoadError(false);
     setErrorDetail('');
 
@@ -175,7 +192,7 @@ export default function PaywallScreen() {
       setIsLoading(false);
       setLoadError(true);
       setErrorDetail('SDK not enabled - key missing');
-      return;
+      return null;
     }
 
     try {
@@ -188,7 +205,7 @@ export default function PaywallScreen() {
         setLoadError(true);
         setErrorDetail(`Offerings failed: ${result.reason} ${result.error || ''}`);
         setIsLoading(false);
-        return;
+        return null;
       }
 
       if (__DEV__) console.log('[Paywall] Has current offering:', !!result.data.current);
@@ -198,44 +215,60 @@ export default function PaywallScreen() {
         setLoadError(true);
         setErrorDetail('No current offering in RevenueCat');
         setIsLoading(false);
-        return;
+        return null;
       }
 
       const packages = result.data.current.availablePackages;
       if (__DEV__) console.log('[Paywall] Available packages:', packages.map(p => p.identifier));
 
-      const monthly = packages.find((pkg) => pkg.identifier === '$rc_monthly');
+      const monthly = packages.find((pkg) => pkg.identifier === REVENUECAT_MONTHLY_PACKAGE_ID);
       if (__DEV__) console.log('[Paywall] Found $rc_monthly:', !!monthly);
 
       if (!monthly) {
         setLoadError(true);
-        setErrorDetail(`No $rc_monthly package. Found: ${packages.map(p => p.identifier).join(', ') || 'none'}`);
+        setErrorDetail(`No ${REVENUECAT_MONTHLY_PACKAGE_ID} package. Found: ${packages.map(p => p.identifier).join(', ') || 'none'}`);
         setIsLoading(false);
-        return;
+        return null;
+      }
+
+      if (!isMonthlySubscription(monthly)) {
+        setLoadError(true);
+        setErrorDetail(`${REVENUECAT_MONTHLY_PACKAGE_ID} must be a monthly subscription. Found period: ${monthly.product.subscriptionPeriod || 'none'}`);
+        setIsLoading(false);
+        return null;
+      }
+
+      if (!hasThreeDayFreeTrial(monthly) && __DEV__) {
+        console.log('[Paywall] 3-day trial metadata was not returned by StoreKit. Continuing because App Store purchase sheet is the source of truth for eligibility.');
       }
 
       setMonthlyPackage(monthly);
       setLoadError(false);
+      setIsLoading(false);
+      return monthly;
     } catch (error: any) {
       if (__DEV__) console.log('[Paywall] Exception:', error?.message || error);
       setLoadError(true);
       setErrorDetail(`Exception: ${error?.message || String(error)}`);
     }
     setIsLoading(false);
+    return null;
   };
 
   const handlePurchase = async () => {
-    if (!monthlyPackage) {
+    let packageToPurchase = monthlyPackage;
+    if (!packageToPurchase) {
       setIsLoading(true);
-      await loadOfferings();
-      if (!monthlyPackage) {
+      packageToPurchase = await loadOfferings();
+      if (!packageToPurchase) {
         Alert.alert('Unable to Load', 'Could not load subscription. Check your connection and try again.');
+        setIsLoading(false);
+        return;
       }
-      return;
     }
     setIsPurchasing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const result = await purchasePackage(monthlyPackage);
+    const result = await purchasePackage(packageToPurchase);
     if (result.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await checkSubscription();
@@ -273,10 +306,13 @@ export default function PaywallScreen() {
   };
 
   const priceString = monthlyPackage?.product?.priceString || '$4.99';
+  const trialDisclosure = monthlyPackage
+    ? `Eligible users receive a 3-day free trial, then ${priceString}/month. App Store confirms final terms before purchase.`
+    : 'Subscription renews monthly. Cancel anytime.';
 
   const features = [
     { IconComponent: IconPredictions, label: 'AI Predictions', desc: 'Multi-factor analysis per game', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
-    { IconComponent: IconLiveScores, label: 'Live Scores', desc: 'Real-time across 8 leagues', accent: TEAL, bgColor: TEAL_DIM, borderColor: 'rgba(122,157,184,0.12)' },
+    { IconComponent: IconLiveScores, label: 'Live Scores', desc: 'Real-time across 11 leagues', accent: TEAL, bgColor: TEAL_DIM, borderColor: 'rgba(122,157,184,0.12)' },
     { IconComponent: IconBoxScores, label: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
     { IconComponent: IconWatch, label: 'Where to Watch', desc: 'TV & streaming info', accent: TEAL, bgColor: TEAL_DIM, borderColor: 'rgba(122,157,184,0.12)' },
   ] as const;
@@ -367,7 +403,7 @@ export default function PaywallScreen() {
               {(previewPicks ?? [
                 { teams: '— vs —', league: 'NBA', time: 'Tonight' },
                 { teams: '— vs —', league: 'NFL', time: 'Sunday' },
-                { teams: '— vs —', league: 'MLB', time: 'Tonight' },
+                { teams: '— vs —', league: 'Tennis', time: 'Today' },
               ]).map((p, i) => (
                 <View key={i} style={{
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -426,7 +462,7 @@ export default function PaywallScreen() {
           {/* ═══ STATS BAR — maroon for factors, teal for updates ═══ */}
           <Animated.View entering={FadeInDown.delay(280).duration(400)} style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 28, gap: 8 }}>
             {[
-              { value: '8', label: 'Leagues', color: '#FFF' },
+              { value: '10', label: 'Leagues', color: '#FFF' },
               { value: '20', label: 'Factors', color: MAROON },
               { value: '24/7', label: 'Updates', color: TEAL },
             ].map((s, i) => (
@@ -549,7 +585,7 @@ export default function PaywallScreen() {
                 )}
 
                 <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>
-                  Free for 3 days, then {priceString}/month. Cancel anytime.
+                  {trialDisclosure}
                 </Text>
                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 6, lineHeight: 15 }}>
                   Subscription provides access to AI-generated predictions for entertainment purposes only.

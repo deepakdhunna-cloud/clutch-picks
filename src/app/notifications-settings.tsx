@@ -5,7 +5,13 @@ import { ArrowLeft, Bell, Zap, TrendingUp, AlertTriangle, Activity } from 'lucid
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  type NotificationPreferences,
+  loadNotificationPreferences,
+  registerDeviceForPushNotifications,
+  saveNotificationPreferences,
+} from '@/hooks/useNotifications';
 
 interface SettingItemProps {
   icon: any;
@@ -85,26 +91,20 @@ function SettingSection({ title, children }: { title: string; children: React.Re
 export default function NotificationsSettingsScreen() {
   const router = useRouter();
 
-  // Notification preferences — stored in AsyncStorage
-  const [notifPrefs, setNotifPrefs] = useState({
-    gameLive: true,
-    pickResult: true,
-    predictionShift: true,
-    bigGame: true,
-    streak: true,
-  });
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFS);
 
   useEffect(() => {
-    AsyncStorage.getItem('clutch_notif_prefs').then(val => {
-      if (val) { try { setNotifPrefs(JSON.parse(val)); } catch {} }
-    });
+    loadNotificationPreferences().then(setNotifPrefs).catch(() => {});
   }, []);
 
   const toggleNotif = useCallback((key: keyof typeof notifPrefs) => {
     setNotifPrefs(prev => {
       const next = { ...prev, [key]: !prev[key] };
-      AsyncStorage.setItem('clutch_notif_prefs', JSON.stringify(next));
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void saveNotificationPreferences(next);
+      if (next[key]) {
+        void registerDeviceForPushNotifications(true);
+      }
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       return next;
     });
   }, []);

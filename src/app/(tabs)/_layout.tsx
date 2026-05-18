@@ -23,9 +23,8 @@ function FieldGoalIcon({ size = 24, color = '#FFFFFF', strokeWidth = 1.5 }: { si
 }
 
 export default function TabLayout() {
-  // NOTE: useLiveScores was removed — it called setLiveScores() on every SSE event
-  // which re-rendered the entire tab layout (all icons, nav bar, frozen tabs) and caused crashes.
-  // Live scores still work via polling in useGames().
+  // Live-score SSE is mounted once at the root so tab navigation stays quiet
+  // while every screen receives the same React Query cache update.
   return (
     <ScrollProvider>
       <Tabs

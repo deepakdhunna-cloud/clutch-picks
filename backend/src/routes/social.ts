@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { createNotification } from "./notifications";
@@ -9,6 +11,34 @@ const socialRouter = new Hono<{
     session: typeof auth.$Infer.Session.session | null;
   };
 }>();
+
+const reportSchema = z.object({
+  reason: z.string().min(1).max(80).default("objectionable_content"),
+  details: z.string().max(500).optional(),
+});
+
+export function blockedCounterpartIdsFor(
+  userId: string,
+  blocks: Array<{ blockerId: string; blockedId: string }>,
+): Set<string> {
+  return new Set(blocks.map((block) =>
+    block.blockerId === userId ? block.blockedId : block.blockerId,
+  ));
+}
+
+async function hiddenUserIdsFor(userId?: string | null): Promise<Set<string>> {
+  if (!userId) return new Set();
+  const blocks = await prisma.userBlock.findMany({
+    where: {
+      OR: [
+        { blockerId: userId },
+        { blockedId: userId },
+      ],
+    },
+    select: { blockerId: true, blockedId: true },
+  });
+  return blockedCounterpartIdsFor(userId, blocks);
+}
 
 // POST /api/social/follow/:userId - Follow a user
 socialRouter.post("/follow/:userId", async (c) => {
@@ -24,6 +54,18 @@ socialRouter.post("/follow/:userId", async (c) => {
   }
 
   try {
+    const block = await prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: currentUser.id, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: currentUser.id },
+        ],
+      },
+    });
+    if (block) {
+      return c.json({ error: { message: "This user cannot be followed", code: "BLOCKED" } }, 400);
+    }
+
     // Check if target user exists
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
@@ -61,6 +103,132 @@ socialRouter.post("/follow/:userId", async (c) => {
   }
 });
 
+// POST /api/social/block/:userId - Block a user and remove follow links
+socialRouter.post("/block/:userId", async (c) => {
+  const currentUser = c.get("user");
+  if (!currentUser) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const targetUserId = c.req.param("userId");
+  if (currentUser.id === targetUserId) {
+    return c.json({ error: { message: "Cannot block yourself", code: "INVALID_OPERATION" } }, 400);
+  }
+
+  try {
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
+    if (!targetUser) {
+      return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    await prisma.$transaction([
+      prisma.follow.deleteMany({
+        where: {
+          OR: [
+            { followerId: currentUser.id, followingId: targetUserId },
+            { followerId: targetUserId, followingId: currentUser.id },
+          ],
+        },
+      }),
+      prisma.userBlock.upsert({
+        where: {
+          blockerId_blockedId: {
+            blockerId: currentUser.id,
+            blockedId: targetUserId,
+          },
+        },
+        update: {},
+        create: {
+          blockerId: currentUser.id,
+          blockedId: targetUserId,
+        },
+      }),
+    ]);
+
+    return c.json({ data: { blocked: true } });
+  } catch (error) {
+    console.error("Error blocking user:", error);
+    return c.json({ error: { message: "Failed to block user", code: "BLOCK_FAILED" } }, 500);
+  }
+});
+
+// DELETE /api/social/block/:userId - Unblock a user
+socialRouter.delete("/block/:userId", async (c) => {
+  const currentUser = c.get("user");
+  if (!currentUser) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const targetUserId = c.req.param("userId");
+  try {
+    await prisma.userBlock.deleteMany({
+      where: { blockerId: currentUser.id, blockedId: targetUserId },
+    });
+    return c.json({ data: { blocked: false } });
+  } catch (error) {
+    console.error("Error unblocking user:", error);
+    return c.json({ error: { message: "Failed to unblock user", code: "UNBLOCK_FAILED" } }, 500);
+  }
+});
+
+// GET /api/social/is-blocked/:userId - Check if current user blocked target
+socialRouter.get("/is-blocked/:userId", async (c) => {
+  const currentUser = c.get("user");
+  if (!currentUser) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const targetUserId = c.req.param("userId");
+  try {
+    const block = await prisma.userBlock.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId: currentUser.id,
+          blockedId: targetUserId,
+        },
+      },
+    });
+    return c.json({ data: { isBlocked: !!block } });
+  } catch (error) {
+    console.error("Error checking block status:", error);
+    return c.json({ error: { message: "Failed to check block status", code: "CHECK_FAILED" } }, 500);
+  }
+});
+
+// POST /api/social/report/:userId - Report objectionable user content
+socialRouter.post("/report/:userId", zValidator("json", reportSchema), async (c) => {
+  const currentUser = c.get("user");
+  if (!currentUser) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const targetUserId = c.req.param("userId");
+  if (currentUser.id === targetUserId) {
+    return c.json({ error: { message: "Cannot report yourself", code: "INVALID_OPERATION" } }, 400);
+  }
+
+  const { reason, details } = c.req.valid("json");
+  try {
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
+    if (!targetUser) {
+      return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    await prisma.contentReport.create({
+      data: {
+        reporterId: currentUser.id,
+        reportedUserId: targetUserId,
+        reason,
+        details,
+      },
+    });
+    return c.json({ data: { reported: true } });
+  } catch (error) {
+    console.error("Error reporting user:", error);
+    return c.json({ error: { message: "Failed to report user", code: "REPORT_FAILED" } }, 500);
+  }
+});
+
 // DELETE /api/social/unfollow/:userId - Unfollow a user
 socialRouter.delete("/unfollow/:userId", async (c) => {
   const currentUser = c.get("user");
@@ -92,6 +260,7 @@ socialRouter.delete("/unfollow/:userId", async (c) => {
 // GET /api/social/followers/:userId - Get followers list
 socialRouter.get("/followers/:userId", async (c) => {
   const targetUserId = c.req.param("userId");
+  const currentUser = c.get("user");
   const page = Math.max(1, parseInt(c.req.query("page") || "1"));
   const limit = Math.min(parseInt(c.req.query("limit") || "20"), 50);
   const skip = (page - 1) * limit;
@@ -119,9 +288,14 @@ socialRouter.get("/followers/:userId", async (c) => {
       }),
     ]);
 
+    const hiddenIds = await hiddenUserIdsFor(currentUser?.id);
+    const visibleFollowers = followers
+      .map((f) => f.follower)
+      .filter((user) => !hiddenIds.has(user.id));
+
     return c.json({
       data: {
-        followers: followers.map((f) => f.follower),
+        followers: visibleFollowers,
         pagination: {
           page,
           limit,
@@ -139,6 +313,7 @@ socialRouter.get("/followers/:userId", async (c) => {
 // GET /api/social/following/:userId - Get following list
 socialRouter.get("/following/:userId", async (c) => {
   const targetUserId = c.req.param("userId");
+  const currentUser = c.get("user");
   const page = Math.max(1, parseInt(c.req.query("page") || "1"));
   const limit = Math.min(parseInt(c.req.query("limit") || "20"), 50);
   const skip = (page - 1) * limit;
@@ -166,9 +341,14 @@ socialRouter.get("/following/:userId", async (c) => {
       }),
     ]);
 
+    const hiddenIds = await hiddenUserIdsFor(currentUser?.id);
+    const visibleFollowing = following
+      .map((f) => f.following)
+      .filter((user) => !hiddenIds.has(user.id));
+
     return c.json({
       data: {
-        following: following.map((f) => f.following),
+        following: visibleFollowing,
         pagination: {
           page,
           limit,
@@ -215,6 +395,16 @@ socialRouter.get("/is-following/:userId", async (c) => {
   const targetUserId = c.req.param("userId");
 
   try {
+    const block = await prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: currentUser.id, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: currentUser.id },
+        ],
+      },
+    });
+    if (block) return c.json({ data: { isFollowing: false } });
+
     const follow = await prisma.follow.findUnique({
       where: {
         followerId_followingId: {

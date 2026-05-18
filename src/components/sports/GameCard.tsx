@@ -1,27 +1,27 @@
-import { View, Text, Pressable, Modal, Linking, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Linking, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
-  FadeInUp,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withTiming,
   Easing,
   interpolate,
-  cancelAnimation,
 } from 'react-native-reanimated';
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, GameStatus, SPORT_META, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
+import { displayPredictionAnalysis } from '@/lib/narrative-display';
+import { getProjectionDisplay } from '@/lib/projection-display';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
-import { Calendar, Clock, Tv, TrendingUp, ChevronRight, Check } from 'lucide-react-native';
+import { Calendar, Clock, Tv, TrendingUp, ChevronRight } from 'lucide-react-native';
 import { useMakePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
 import { usePrefetchGame } from '@/hooks/useGames';
+import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal';
 
 interface GameCardProps {
   game: GameWithPrediction;
@@ -30,49 +30,12 @@ interface GameCardProps {
 
 // Compact Pulsing Live Badge component
 const PulsingLiveBadge = memo(function PulsingLiveBadge() {
-  const opacity = useSharedValue(1);
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withTiming(0.6, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-    scale.value = withRepeat(
-      withTiming(1.05, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-    return () => {
-      cancelAnimation(opacity);
-      cancelAnimation(scale);
-    };
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
     <View style={{ position: 'relative' }}>
-      {/* Pulsing glow behind */}
-      <Animated.View
-        style={[
-          styles.pulsingGlow,
-          animatedStyle,
-        ]}
-      />
       {/* Main badge - white with red dot and text */}
       <View style={styles.liveBadgeContainer}>
         {/* Live dot - red */}
-        <Animated.View
-          style={[
-            styles.liveDot,
-            animatedStyle,
-          ]}
-        />
+        <View style={styles.liveDot} />
         <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>LIVE</Text>
       </View>
     </View>
@@ -240,6 +203,7 @@ const TappableJersey = memo(function TappableJersey({
           <Animated.View style={[shadowStyle, isLoser ? { opacity: 0.35 } : undefined, isWinner ? { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 14 } : undefined, jerseyLiftStyle]}>
             <JerseyIcon
               teamCode={team.abbreviation}
+              teamName={team.name}
               primaryColor={teamColors.primary}
               secondaryColor={teamColors.secondary}
               size={size}
@@ -270,176 +234,6 @@ const TappableJersey = memo(function TappableJersey({
         </View>
       </Animated.View>
     </Pressable>
-  );
-});
-
-// Premium confirmation modal component - black, centered on screen
-const SelectionConfirmModal = memo(function SelectionConfirmModal({
-  visible,
-  team,
-  teamColors,
-  sport,
-  onConfirm,
-  onCancel,
-}: {
-  visible: boolean;
-  team: { abbreviation: string; name: string; record: string } | null;
-  teamColors: { primary: string; secondary: string };
-  sport: Sport;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [showCheckmark, setShowCheckmark] = useState(false);
-  const modalScale = useSharedValue(0.9);
-  const jerseyScale = useSharedValue(1);
-  const checkmarkScale = useSharedValue(0);
-
-  useEffect(() => {
-    if (visible) {
-      modalScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
-      jerseyScale.value = 1;
-      setIsConfirming(false);
-      setShowCheckmark(false);
-      checkmarkScale.value = 0;
-    } else {
-      modalScale.value = 0.95;
-      jerseyScale.value = 1;
-      checkmarkScale.value = 0;
-    }
-  }, [visible]);
-
-  const modalStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: modalScale.value }],
-    opacity: interpolate(modalScale.value, [0.95, 1], [0, 1]),
-  }));
-
-  const jerseyStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: jerseyScale.value }],
-  }));
-
-  const checkmarkStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: checkmarkScale.value }],
-    opacity: checkmarkScale.value,
-  }));
-
-  const handleConfirm = useCallback(() => {
-    setIsConfirming(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Gentle scale up — smooth and slow
-    jerseyScale.value = withTiming(1.08, { duration: 400, easing: Easing.out(Easing.ease) }, () => {
-      jerseyScale.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) });
-    });
-
-    // Checkmark fades in after jersey peaks
-    setTimeout(() => {
-      setShowCheckmark(true);
-      checkmarkScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
-    }, 400);
-
-    // Success haptic at the peak
-    setTimeout(() => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 500);
-
-    // Hold for a moment so user sees the confirmation, then close
-    setTimeout(() => {
-      onConfirm();
-    }, 1100);
-  }, [onConfirm, jerseyScale, checkmarkScale]);
-
-  if (!team) return null;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onCancel}
-    >
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.85)' }}>
-        <Pressable onPress={isConfirming ? undefined : onCancel}>
-          <View style={styles.modalFullscreenOverlay} />
-        </Pressable>
-
-        <Animated.View style={[modalStyle]}>
-          <View style={{
-            backgroundColor: '#0C1018',
-            borderRadius: 24, padding: 28, paddingTop: 32,
-            width: 280, alignItems: 'center',
-            borderWidth: 1.5, borderColor: `${teamColors.primary}30`,
-            shadowColor: teamColors.primary, shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.2, shadowRadius: 30,
-          }}>
-            {/* Team color accent line at top */}
-            <View style={{ position: 'absolute', top: 0, left: 40, right: 40, height: 3, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 }}>
-              <LinearGradient
-                colors={['transparent', teamColors.primary, 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ flex: 1 }}
-              />
-            </View>
-
-            {/* Jersey */}
-            <View style={{ position: 'relative', alignItems: 'center', marginBottom: 20 }}>
-              <Animated.View style={[jerseyStyle, isConfirming ? { transform: [{ translateY: -6 }] } : undefined]}>
-                <JerseyIcon
-                  teamCode={team.abbreviation}
-                  primaryColor={teamColors.primary}
-                  secondaryColor={teamColors.secondary}
-                  size={85}
-                  sport={sportEnumToJersey(sport)}
-                />
-              </Animated.View>
-
-              {/* Confirmed checkmark */}
-              {showCheckmark ? (
-                <Animated.View style={[checkmarkStyle, {
-                  position: 'absolute', bottom: -6, right: 0,
-                  width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: '#7A9DB8', alignItems: 'center', justifyContent: 'center',
-                  borderWidth: 2, borderColor: '#0C1018',
-                }]}>
-                  <Check size={10} color="#FFF" strokeWidth={3} />
-                </Animated.View>
-              ) : null}
-            </View>
-
-            {/* Team name */}
-            <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 4, textAlign: 'center' }}>
-              {team.name}
-            </Text>
-            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginBottom: 4 }}>
-              {team.record}
-            </Text>
-            <Text style={{ color: isConfirming ? '#7A9DB8' : 'rgba(255,255,255,0.45)', fontSize: 14, fontWeight: '600', marginBottom: 24 }}>
-              {isConfirming ? 'Pick locked in' : 'Pick this team to win?'}
-            </Text>
-
-            {/* Buttons */}
-            {!isConfirming ? (
-              <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-                <Pressable
-                  onPress={onCancel}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center' }}
-                >
-                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleConfirm}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: teamColors.primary, alignItems: 'center' }}
-                >
-                  <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '700' }}>Lock It In</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
   );
 });
 
@@ -606,6 +400,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <JerseyIcon
                 teamCode={game.awayTeam.abbreviation}
+                teamName={game.awayTeam.name}
                 primaryColor={awayTeamColors.primary}
                 secondaryColor={awayTeamColors.secondary}
                 size={40}
@@ -646,6 +441,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
               <JerseyIcon
                 teamCode={game.homeTeam.abbreviation}
+                teamName={game.homeTeam.name}
                 primaryColor={homeTeamColors.primary}
                 secondaryColor={homeTeamColors.secondary}
                 size={40}
@@ -733,6 +529,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const sportMeta = useMemo(() => SPORT_META[game.sport], [game.sport]);
   const { date, time } = useMemo(() => formatScheduledTime(game.gameTime), [game.gameTime]);
   const statusBadge = useMemo(() => getStatusBadge(game.status), [game.status]);
+  const displayAnalysis = useMemo(() => displayPredictionAnalysis(game), [game]);
 
   // Get team colors - memoized, pass ESPN color as fallback
   const awayTeamColors = useMemo(() => getTeamColors(game.awayTeam.abbreviation, game.sport, game.awayTeam.color), [game.awayTeam.abbreviation, game.sport, game.awayTeam.color]);
@@ -743,13 +540,21 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const { data: userPrediction } = useGamePick(game.id);
   const { data: pickStatsData } = useGamePickStats(game.id);
 
-  // Calculate pick stats from real backend data, fallback to 50/50
+  // Calculate pick stats only from real backend data. Do not synthesize a
+  // 50/50 split when the backend has not reported enough picks.
   const pickStats = useMemo(() => {
-    const homePercentage = pickStatsData?.homePercentage ?? 50;
-    const awayPercentage = pickStatsData?.awayPercentage ?? 50;
     const totalPicks = pickStatsData?.totalPicks ?? 0;
-    const homeWinChance = pickStatsData?.homePercentage ?? 50;
-    const awayWinChance = pickStatsData?.awayPercentage ?? 50;
+    const homePercentage = pickStatsData?.homePercentage;
+    const awayPercentage = pickStatsData?.awayPercentage;
+    if (
+      totalPicks < 10 ||
+      typeof homePercentage !== 'number' ||
+      typeof awayPercentage !== 'number'
+    ) {
+      return null;
+    }
+    const homeWinChance = homePercentage;
+    const awayWinChance = awayPercentage;
     return { homePercentage, awayPercentage, totalPicks, homeWinChance, awayWinChance };
   }, [pickStatsData]);
 
@@ -864,6 +669,19 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
     };
   }, [game.prediction?.predictedWinner, game.homeTeam, game.awayTeam]);
 
+  const projectionDisplay = useMemo(() => {
+    if (!game.prediction?.projection) return null;
+    return getProjectionDisplay({
+      sport: game.sport,
+      homeAbbr: game.homeTeam.abbreviation,
+      awayAbbr: game.awayTeam.abbreviation,
+      predictedWinner: game.prediction.predictedWinner,
+      predictedOutcome: game.prediction.predictedOutcome,
+      confidence: game.prediction.confidence,
+      projection: game.prediction.projection,
+    });
+  }, [game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction]);
+
   // Get pending team for modal
   const pendingTeam = pendingSelection === 'home' ? game.homeTeam : pendingSelection === 'away' ? game.awayTeam : null;
   const pendingTeamColors = pendingSelection === 'home' ? homeTeamColors : awayTeamColors;
@@ -881,13 +699,10 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   }
 
   return (
-    <Animated.View
-      entering={index < 3 ? FadeInUp.duration(300) : undefined}
-      style={{ position: 'relative', marginBottom: 20 }}
-    >
+    <View style={{ position: 'relative', marginBottom: 20 }}>
       {/* Confirmation Modal */}
       {showConfirmModal === true && (
-        <SelectionConfirmModal
+        <PickConfirmationModal
           visible={true}
           team={pendingTeam}
           teamColors={pendingTeamColors}
@@ -1164,7 +979,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
           </View>
 
           {/* Community Picks — only show when enough data */}
-          {pickStats.totalPicks >= 10 ? (
+          {pickStats ? (
           <View style={styles.fanMomentumSection}>
               <>
                 {/* Header row: away % | label | home % */}
@@ -1296,6 +1111,59 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '600' }}>Models disagree</Text>
                   </View>
                 ) : null}
+                {game.prediction.projection ? (
+                  <View
+                    style={{
+                      marginTop: 8,
+                      paddingTop: 8,
+                      borderTopWidth: 1,
+                      borderTopColor: 'rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#7A9DB8', fontSize: 9, fontWeight: '800', letterSpacing: 0.8 }}>
+                          {projectionDisplay?.label.toUpperCase() ?? 'EXPECTED SCORE'}
+                        </Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', marginTop: 2 }}>
+                          {game.homeTeam.abbreviation} {projectionDisplay?.homeScore ?? Math.round(game.prediction.projection.projectedHomeScore)} · {game.awayTeam.abbreviation} {projectionDisplay?.awayScore ?? Math.round(game.prediction.projection.projectedAwayScore)}
+                        </Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.52)', fontSize: 10, fontWeight: '700', marginTop: 2 }}>
+                          {projectionDisplay?.leanText ?? `Pick lean ${predictedWinnerTeam.abbreviation} ${Math.round(game.prediction.confidence)}%`}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: '700' }}>
+                          Upset Risk
+                        </Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900', marginTop: 2 }}>
+                          {Math.round(game.prediction.projection.upsetRisk * 100)}%
+                        </Text>
+                      </View>
+                    </View>
+                    {projectionDisplay || game.prediction.projection.signals[0] ? (
+                      <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.48)', fontSize: 10, lineHeight: 14, marginTop: 5 }}>
+                        {game.prediction.projection.signals[0]
+                          ? `${game.prediction.projection.signals[0].label}: ${game.prediction.projection.signals[0].evidence}`
+                          : projectionDisplay?.contextText}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+                {displayAnalysis ? (
+                  <Text
+                    numberOfLines={3}
+                    style={{
+                      color: 'rgba(255,255,255,0.68)',
+                      fontSize: 11,
+                      lineHeight: 15,
+                      fontWeight: '500',
+                      marginTop: 8,
+                    }}
+                  >
+                    {displayAnalysis}
+                  </Text>
+                ) : null}
               </View>
             ) : (
               /* Locked prediction bar for free users */
@@ -1342,7 +1210,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         </View>
       </View>
       </Pressable>
-    </Animated.View>
+    </View>
   );
 });
 
@@ -1435,53 +1303,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.45)',
-  },
-  // SelectionConfirmModal
-  modalFullscreenOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  modalContainer: {
-    backgroundColor: '#000000',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    minWidth: 260,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  modalJerseyRelative: {
-    position: 'relative',
-    marginBottom: 20,
-  },
-  modalCheckmarkBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#8B0A1F',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalCancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  modalConfirmButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
   },
   // GameCard main card — hyper glass raised border
   cardShadowContainer: {

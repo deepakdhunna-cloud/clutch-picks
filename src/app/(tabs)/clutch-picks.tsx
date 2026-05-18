@@ -4,6 +4,7 @@ import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, wit
 import React, { useState, useCallback, memo, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -13,10 +14,12 @@ import { TeamJerseyCompact } from '@/components/sports';
 import { GameWithPrediction } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { useTopPicks } from '@/hooks/useGames';
-import GridBackground from '@/components/GridBackground';
+import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
+import ClutchPicksBackground from '@/components/ClutchPicksBackground';
 import { useSubscription } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { displayWinProbability, displaySport, getConfidenceTier } from '@/lib/display-confidence';
+import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { MAROON, TEAL } from '@/lib/theme';
 
 // Expandable analysis text — tap to show full, tap again to collapse
@@ -79,6 +82,8 @@ const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: strin
     </Svg>
   );
 });
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Helper to ensure two colors are visually distinct
 const hexToRgb = (hex: string) => {
@@ -167,28 +172,42 @@ const TopPickCard = memo(function TopPickCard({
   // Rotating shimmer border — traces around the card
   const rotation = useSharedValue(0);
   const glowPulse = useSharedValue(0);
+  const pressProgress = useSharedValue(0);
   React.useEffect(() => {
-    rotation.value = withRepeat(withTiming(360, { duration: 4500, easing: Easing.linear }), -1, false);
+    rotation.value = withRepeat(withTiming(360, { duration: 6800, easing: Easing.linear }), -1, false);
     glowPulse.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.ease) }),
       -1,
       true
     );
-    return () => { cancelAnimation(rotation); cancelAnimation(glowPulse); };
+    return () => { cancelAnimation(rotation); cancelAnimation(glowPulse); cancelAnimation(pressProgress); };
   }, []);
   const rotatingStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value % 360}deg` }],
   }));
   const glowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.25, 0.5]),
-    shadowRadius: interpolate(glowPulse.value, [0, 1], [10, 22]),
+    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.24, 0.48]),
+    shadowRadius: interpolate(glowPulse.value, [0, 1], [14, 30]),
+  }));
+  const pressStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pressProgress.value, [0, 1], [1, 0.96]),
+    transform: [
+      { translateY: interpolate(pressProgress.value, [0, 1], [0, 1.5]) },
+      { scale: interpolate(pressProgress.value, [0, 1], [1, 0.988]) },
+    ],
   }));
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 100).duration(400)} style={{ paddingBottom: 44 }}>
-      <Pressable
+    <Animated.View entering={FadeInDown.delay(index * 80).duration(650).easing(Easing.out(Easing.cubic))} style={{ paddingBottom: 44 }}>
+      <AnimatedPressable
         onPress={onPress}
-        style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}
+        onPressIn={() => {
+          pressProgress.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) });
+        }}
+        onPressOut={() => {
+          pressProgress.value = withTiming(0, { duration: 240, easing: Easing.out(Easing.cubic) });
+        }}
+        style={pressStyle}
       >
         {/* Outer glow — breathing silver pulse */}
         <Animated.View style={[glowStyle, {
@@ -209,7 +228,7 @@ const TopPickCard = memo(function TopPickCard({
           <View style={{ borderRadius: 24, overflow: 'hidden', position: 'relative' }}>
             {/* Static silver gradient base */}
             <LinearGradient
-              colors={['#C0C8D0', '#8A929A', '#D4D8DC', '#8A929A', '#C0C8D0']}
+              colors={['rgba(192,200,208,0.92)', 'rgba(122,157,184,0.5)', 'rgba(255,255,255,0.95)', 'rgba(139,10,31,0.58)', 'rgba(192,200,208,0.86)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -218,13 +237,13 @@ const TopPickCard = memo(function TopPickCard({
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
               <Animated.View style={[rotatingStyle, { width: 800, height: 800, position: 'absolute' }]}>
                 <LinearGradient
-                  colors={['transparent', 'transparent', '#7A9DB8', 'rgba(255,255,255,0.5)', '#7A9DB8', 'transparent', 'transparent']}
+                  colors={['transparent', 'transparent', 'rgba(122,157,184,0.9)', 'rgba(255,255,255,0.78)', 'rgba(122,157,184,0.9)', 'transparent', 'transparent']}
                   start={{ x: 0.3, y: 0 }}
                   end={{ x: 0.7, y: 0 }}
                   style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400 }}
                 />
                 <LinearGradient
-                  colors={['transparent', 'transparent', '#5A0614', '#8B0A1F', '#5A0614', 'transparent', 'transparent']}
+                  colors={['transparent', 'transparent', 'rgba(90,6,20,0.8)', 'rgba(139,10,31,0.98)', 'rgba(90,6,20,0.8)', 'transparent', 'transparent']}
                   start={{ x: 0.3, y: 0 }}
                   end={{ x: 0.7, y: 0 }}
                   style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 400 }}
@@ -233,14 +252,14 @@ const TopPickCard = memo(function TopPickCard({
             </View>
 
             {/* Card body — inset to reveal rotating border */}
-            <View style={{ margin: 3.5, borderRadius: 20.5, overflow: 'hidden', backgroundColor: '#182028' }}>
+            <View style={{ margin: 4.25, borderRadius: 19.75, overflow: 'hidden', backgroundColor: '#182028' }}>
               {/* Coral radial glow — top right */}
               <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
                 <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 100" preserveAspectRatio="none">
                   <Defs>
                     <RadialGradient id={`coral_${index}`} cx="85" cy="15" rx="50" ry="50" gradientUnits="userSpaceOnUse">
-                      <Stop offset="0%" stopColor="#8B0A1F" stopOpacity={0.5} />
-                      <Stop offset="60%" stopColor="#8B0A1F" stopOpacity={0.1} />
+                      <Stop offset="0%" stopColor="#8B0A1F" stopOpacity={0.56} />
+                      <Stop offset="60%" stopColor="#8B0A1F" stopOpacity={0.12} />
                       <Stop offset="100%" stopColor="#8B0A1F" stopOpacity={0} />
                     </RadialGradient>
                   </Defs>
@@ -252,7 +271,7 @@ const TopPickCard = memo(function TopPickCard({
                 <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 100" preserveAspectRatio="none">
                   <Defs>
                     <RadialGradient id={`blue_${index}`} cx="15" cy="85" rx="60" ry="60" gradientUnits="userSpaceOnUse">
-                      <Stop offset="0%" stopColor="#4E606F" stopOpacity={1} />
+                      <Stop offset="0%" stopColor="#4E606F" stopOpacity={0.96} />
                       <Stop offset="50%" stopColor="#4E606F" stopOpacity={0.3} />
                       <Stop offset="100%" stopColor="#4E606F" stopOpacity={0} />
                     </RadialGradient>
@@ -291,6 +310,7 @@ const TopPickCard = memo(function TopPickCard({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                   <TeamJerseyCompact
                     teamAbbreviation={game.awayTeam.abbreviation}
+                    teamName={game.awayTeam.name}
                     primaryColor={awayColors.primary}
                     secondaryColor={awayColors.secondary}
                     size={44}
@@ -321,6 +341,7 @@ const TopPickCard = memo(function TopPickCard({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <TeamJerseyCompact
                     teamAbbreviation={game.homeTeam.abbreviation}
+                    teamName={game.homeTeam.name}
                     primaryColor={homeColors.primary}
                     secondaryColor={homeColors.secondary}
                     size={44}
@@ -394,7 +415,7 @@ const TopPickCard = memo(function TopPickCard({
                   <View style={{ width: 3, height: 12, borderRadius: 1.5, backgroundColor: MAROON }} />
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>WHY THIS PICK</Text>
                 </View>
-                <ExpandableText text={game.prediction?.analysis ?? ''} />
+                <ExpandableText text={displayPredictionAnalysis(game)} />
 
                 {/* View details CTA */}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
@@ -410,20 +431,20 @@ const TopPickCard = memo(function TopPickCard({
           </View>
           </View>
         </Animated.View>
-      </Pressable>
+      </AnimatedPressable>
     </Animated.View>
   );
 });
 
 export default function ClutchPicksScreen() {
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
   const { isPremium } = useSubscription();
 
   // Get top picks with guaranteed predictions from dedicated endpoint
   const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks();
+  const { refreshing, onRefresh } = useSmoothRefresh(refetchPicks);
 
   // Filter out games with missing/TBD team names — these have no valid prediction
   const validPicks = useMemo(() => {
@@ -436,12 +457,6 @@ export default function ClutchPicksScreen() {
       return true;
     });
   }, [topPicks]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetchPicks();
-    setRefreshing(false);
-  }, [refetchPicks]);
 
   const handleGamePress = useCallback((gameId: string) => {
     router.push(`/game/${gameId}` as any);
@@ -476,7 +491,8 @@ export default function ClutchPicksScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#010101' }}>
-      <GridBackground />
+      <StatusBar hidden />
+      <ClutchPicksBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ErrorBoundary onGoBack={() => router.back()}>
 
@@ -554,7 +570,7 @@ export default function ClutchPicksScreen() {
                   </Svg>
                 </View>
 
-                <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>Unlock with Clutch Pro</Text>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>Unlock Clutch Picks Pro</Text>
                 <Text style={{ fontSize: 13, color: '#7A9DB8', textAlign: 'center', lineHeight: 20, marginBottom: 24, opacity: 0.8 }}>AI-powered picks ranked by confidence, updated daily across every sport.</Text>
 
                 {/* Feature bullets */}

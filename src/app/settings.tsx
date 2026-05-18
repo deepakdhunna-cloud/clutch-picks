@@ -15,6 +15,7 @@ import { useSubscription } from '@/lib/subscription-context';
 import { isRevenueCatEnabled, logoutUser, restorePurchases, getCustomerInfo } from '@/lib/revenuecatClient';
 import { api } from '@/lib/api/api';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 
 interface SettingItemProps {
   icon: any;
@@ -101,6 +102,19 @@ function SettingSection({ title, children }: { title: string; children: React.Re
   );
 }
 
+const AUTH_STORAGE_KEYS = [
+  'vibecode_cookie',
+  'vibecode_session_data',
+  'vibecode_session_token',
+  'vibecode_refresh_token',
+  'vibecode_bearer_token',
+  'clutchpicks_cookie',
+  'clutchpicks_session_data',
+  'clutchpicks_session_token',
+  'clutchpicks_refresh_token',
+  'clutchpicks_bearer_token',
+] as const;
+
 export default function SettingsScreen() {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -171,6 +185,8 @@ export default function SettingsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
+      await unregisterCurrentDeviceForPushNotifications();
+
       // Sign out from Better Auth
       try {
         if (__DEV__) console.log('[Settings] Calling authClient.signOut()...');
@@ -190,13 +206,7 @@ export default function SettingsScreen() {
       }
 
       // Clear auth cookies from SecureStore
-      const keysToDelete = [
-        'vibecode_cookie',
-        'vibecode_session_data',
-        'vibecode_session_token',
-        'vibecode_refresh_token',
-      ];
-      for (const key of keysToDelete) {
+      for (const key of AUTH_STORAGE_KEYS) {
         try {
           await SecureStore.deleteItemAsync(key);
         } catch (e) {
@@ -227,12 +237,14 @@ export default function SettingsScreen() {
   const handleConfirmDeleteAccount = async () => {
     setDeleteConfirmVisible(false);
     try {
+      await unregisterCurrentDeviceForPushNotifications();
       await api.delete('/api/profile/delete-account');
       if (isRevenueCatEnabled()) {
         await logoutUser();
       }
-      await SecureStore.deleteItemAsync('vibecode_session_token').catch(() => {});
-      await SecureStore.deleteItemAsync('vibecode_refresh_token').catch(() => {});
+      for (const key of AUTH_STORAGE_KEYS) {
+        await SecureStore.deleteItemAsync(key).catch(() => {});
+      }
       // Clear ALL stale local state so re-signin shows onboarding fresh.
       await AsyncStorage.removeItem('clutch_onboarding_complete').catch(() => {});
       await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
@@ -301,7 +313,13 @@ export default function SettingsScreen() {
                     try {
                       const result = await restorePurchases();
                       if (result.ok) {
-                        Alert.alert('Restored!', 'Your subscription has been restored.');
+                        await checkSubscription();
+                        const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;
+                        if (hasActive) {
+                          Alert.alert('Restored!', 'Your subscription has been restored.');
+                        } else {
+                          Alert.alert('No Subscription Found', 'No previous subscription was found for this account.');
+                        }
                       } else {
                         Alert.alert('No Subscription Found', 'No previous subscription was found for this account.');
                       }
@@ -446,7 +464,7 @@ export default function SettingsScreen() {
           {/* Version + Disclaimer */}
           <View style={{ alignItems: 'center', marginTop: 20, paddingHorizontal: 32 }}>
             <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
-              Clutch Picks v1.0.10
+              Clutch Picks v1.1.1
             </Text>
             <Text style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 15 }}>
               Predictions are for entertainment and informational purposes only. Clutch Picks does not facilitate, encourage, or enable gambling. Past prediction accuracy does not guarantee future results.

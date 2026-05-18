@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { deleteUserAccount } from "../lib/deleteAccount";
+import { deleteManagedUploadUrl, isManagedUploadUrl } from "../lib/uploads";
 
 const profileRouter = new Hono<{
   Variables: {
@@ -14,7 +15,9 @@ const profileRouter = new Hono<{
 
 // Validation schema for profile image update
 const updateImageSchema = z.object({
-  imageUrl: z.string().url(),
+  imageUrl: z.string().url().refine(isManagedUploadUrl, {
+    message: "Profile image must be uploaded through Clutch Picks",
+  }),
 });
 
 // Validation schema for profile update (name, bio, isPrivate)
@@ -139,6 +142,20 @@ profileRouter.get("/:userId", async (c) => {
       return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
     }
 
+    if (currentUser && currentUser.id !== userId) {
+      const block = await prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: currentUser.id, blockedId: userId },
+            { blockerId: userId, blockedId: currentUser.id },
+          ],
+        },
+      });
+      if (block) {
+        return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+      }
+    }
+
     // Check if current user follows this user (for private profile access)
     let isFollowing = false;
     if (currentUser && currentUser.id !== userId) {
@@ -196,10 +213,19 @@ profileRouter.put("/image", zValidator("json", updateImageSchema), async (c) => 
   const { imageUrl } = c.req.valid("json");
 
   try {
+    const existing = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { image: true },
+    });
+
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { image: imageUrl },
     });
+
+    if (existing?.image && existing.image !== imageUrl) {
+      void deleteManagedUploadUrl(existing.image);
+    }
 
     const [followersCount, followingCount] = await Promise.all([
       prisma.follow.count({ where: { followingId: user.id } }),

@@ -5,16 +5,17 @@ import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 
 // Polling intervals for different contexts
-const LIVE_POLLING_INTERVAL = 5000; // 5 seconds — fast fallback when SSE drops
+const LIVE_POLLING_INTERVAL = 2000; // 2 seconds — fast fallback when SSE drops
 const DEFAULT_POLLING_INTERVAL = 20000; // 20 seconds — keeps cards fresh even without live games
-// Burst-poll while ANY visible game is missing its prediction. The backend
-// generates predictions in the background and returns games without them on
-// first request, so we poll fast (~1.5s) to pick them up the moment they
-// finish — instead of waiting up to 20s for the next default poll. As soon as
-// every game has a prediction we drop back to LIVE/DEFAULT cadence.
-const PREDICTION_BURST_INTERVAL = 1500;
+// Burst-poll while ANY visible game is missing its prediction. Keep this
+// responsive without creating a startup/network storm on large slates.
+const PREDICTION_BURST_INTERVAL = 3000;
 const STALE_TIME = 5000; // 5 seconds — quick staleness for snappy tab switches
 const GAME_DETAIL_STALE_TIME = 3000; // 3 seconds — game detail stays very fresh
+
+function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 // Prefetch news for a game's teams
 async function prefetchNewsForGame(queryClient: ReturnType<typeof useQueryClient>, game: GameWithPrediction) {
@@ -54,16 +55,18 @@ export function useGames() {
   const query = useQuery({
     queryKey: ['games'],
     queryFn: async () => {
-      // Workaround: /api/games aggregator was silently dropping today's
-      // non-LIVE games + EPL. Fetch today + tomorrow + day-after via the
-      // date-specific endpoint (which returns full slates) and merge here
-      // until the aggregator bug is root-caused.
-      const fmt = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      // Home needs today's board plus the next two scheduled slates. Pull
+      // yesterday only so late-night games still show live after midnight.
       const today = new Date();
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
       const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
       const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
-      const dates = [fmt(today), fmt(tomorrow), fmt(dayAfter)];
+      const dates = [
+        formatLocalDate(yesterday),
+        formatLocalDate(today),
+        formatLocalDate(tomorrow),
+        formatLocalDate(dayAfter),
+      ];
       const results = await Promise.all(
         dates.map((d) =>
           api.get<GameWithPrediction[]>(`/api/games/date/${d}`).catch(() => [] as GameWithPrediction[])
@@ -84,7 +87,8 @@ export function useGames() {
       // changes — without it the user stares at empty cards for up to 20s.
       const hasMissingPredictions = games?.some((g) => !g.prediction);
       if (hasMissingPredictions) return PREDICTION_BURST_INTERVAL;
-      // When SSE is connected it pushes live scores, so no need for aggressive polling.
+      // When SSE is connected globally it pushes live scores into every game cache,
+      // so no need for aggressive polling.
       // Fall back to fast polling only when SSE is disconnected and there are live games.
       if (sseConnectedRef.current) return DEFAULT_POLLING_INTERVAL;
       const hasLive = games?.some((g) => g.status === GameStatus.LIVE);
@@ -203,11 +207,8 @@ export function useGame(gameId: string) {
       // hard so it appears the moment background generation finishes.
       if (game && !game.prediction) return PREDICTION_BURST_INTERVAL;
       if (game?.status === GameStatus.LIVE) {
-        // Always poll fast for live games. SSE only fires when the user is on
-        // a tab that mounts useLiveScores (currently the search tab), and
-        // even then the cache-merge guard at useLiveScores.ts can drop the
-        // first update. Polling every 5s is the only reliable update path
-        // for the detail page right now.
+        // SSE is global now, but detail keeps a fast fallback in case the
+        // stream disconnects or the server is between score pushes.
         return LIVE_POLLING_INTERVAL;
       }
       return DEFAULT_POLLING_INTERVAL;

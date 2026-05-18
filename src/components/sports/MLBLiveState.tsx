@@ -3,29 +3,18 @@
  *
  * Components for rendering live MLB game state in the jersey hero area.
  *
- * Exports two pieces because the live state spans two different parts of
+ * Exports two pieces because the live state can span two different parts of
  * the existing layout:
  *
- *   1. <MLBTeamRoleBlock />  — nests UNDER each team name in the team info
- *      columns. Shows "PITCHING" or "AT BAT" + the player name. The team
- *      name itself stays locked in position; only this block's contents
- *      swap based on which team is currently batting.
+ *   1. <MLBTeamRoleBlock />  — standalone role helper for "PITCHING" or
+ *      "AT BAT" + the player name. The center stack now places this context
+ *      under the jerseys.
  *
  *   2. <MLBLiveCenterStack /> — replaces the existing score row for live
- *      MLB games. Shows the B/S/O dot count, then the jersey + score +
- *      diamond row, then the inning ordinal caption under the diamond.
+ *      MLB games. Shows the LED scoreboard, then jersey + base field +
+ *      jersey, with B/S/O and inning context below the field.
  *
  * INTEGRATION (in src/app/game/[id].tsx, inside TappableJerseyHero):
- *
- *   // In each team info column, beneath the team name + record:
- *   {isLiveMLB && game.liveState && (
- *     <MLBTeamRoleBlock
- *       liveState={game.liveState}
- *       teamAbbr={game.homeTeam.abbreviation}
- *       isHome={true}
- *       align="left"
- *     />
- *   )}
  *
  *   // Replace the existing score row for live MLB games:
  *   {isLiveMLB && game.liveState ? (
@@ -55,7 +44,7 @@ import Svg, {
   LinearGradient,
   Stop,
   Polygon,
-  Polyline,
+  Path,
   G,
   Filter,
   FeGaussianBlur,
@@ -63,7 +52,7 @@ import Svg, {
   FeMergeNode,
 } from 'react-native-svg';
 import { getTeamColors } from '../../lib/team-colors';
-import { ScorePop } from './ScorePop';
+import { ArenaScoreboard } from './ArenaScoreboard';
 
 // ============================================================================
 // Types
@@ -80,6 +69,7 @@ export type MLBLiveState = {
   inning?: number;
   inningNumber?: number | null;
   betweenInnings?: boolean;
+  inningTransition?: 'mid' | 'end' | null;
   pitcher: { name: string | null; teamAbbr: string } | null;
   batter: { name: string | null; teamAbbr: string } | null;
 };
@@ -194,9 +184,9 @@ export function MLBTeamRoleBlock({
 // MLBLiveCenterStack
 // ----------------------------------------------------------------------------
 // Replaces the score row for live MLB games. Renders:
-//   1. B/S/O dot count row (above)
-//   2. Jersey + score + diamond + score + jersey row
-//   3. Inning ordinal caption directly under the diamond
+//   1. The same realistic LED scoreboard used by live cards
+//   2. Jersey + base field + jersey
+//   3. B/S/O under the field and inning context below the jerseys
 // ============================================================================
 
 type MLBLiveCenterStackProps = {
@@ -222,9 +212,13 @@ export function MLBLiveCenterStack({
   const battingTeamAbbr = homeBatting ? homeTeamAbbr : awayTeamAbbr;
 
   const battingColor = teamPrimary(battingTeamAbbr);
+  const homeColor = teamPrimary(homeTeamAbbr);
+  const awayColor = teamPrimary(awayTeamAbbr);
   const battingBright = shiftColor(battingColor, 60);
   const battingDark = shiftColor(battingColor, -90);
   const battingStroke = shiftColor(battingColor, 30);
+  const scoreTextLength = `${homeScore}-${awayScore}`.length;
+  const scoreboardScale = scoreTextLength >= 7 ? 1.14 : scoreTextLength >= 6 ? 1.26 : 1.42;
 
   // Clamp counts to baseball maxes (defensive — ESPN can briefly emit
   // transient values during the moment between events)
@@ -241,7 +235,11 @@ export function MLBLiveCenterStack({
       : '';
   const inningText = liveState.betweenInnings
     ? inningNum
-      ? `END OF ${ordinal(inningNum)}`
+      ? liveState.inningTransition === 'mid'
+        ? `MID ${ordinal(inningNum)}`
+        : liveState.inningTransition === 'end'
+        ? `END ${ordinal(inningNum)}`
+        : `BETWEEN ${ordinal(inningNum)}`
       : 'BETWEEN INNINGS'
     : halfLabel
     ? inningNum
@@ -250,21 +248,32 @@ export function MLBLiveCenterStack({
     : '';
 
   return (
-    <View>
-      {/* B/S/O dot count row */}
-      <View style={styles.dotRow}>
-        <DotGroup label="B" total={4} lit={balls} type="b" />
-        <DotGroup label="S" total={3} lit={strikes} type="s" />
-        <DotGroup label="O" total={3} lit={outs} type="o" />
+    <View style={styles.liveStack}>
+      <View style={styles.scoreboardWrap}>
+        <ArenaScoreboard
+          homeScore={homeScore}
+          awayScore={awayScore}
+          homeColor={homeColor}
+          awayColor={awayColor}
+          scale={scoreboardScale}
+        />
       </View>
 
-      {/* Jersey + score + diamond + score + jersey */}
-      <View style={styles.jerseyRow}>
-        {homeJersey}
+      {inningText !== '' && (
+        <Text style={styles.scoreboardInningCaption}>{inningText}</Text>
+      )}
 
-        <ScorePop value={homeScore} textStyle={styles.score} badgeAlign="right" />
+      <View style={styles.fieldRow}>
+        <View style={styles.teamJerseyColumn}>
+          {homeJersey}
+          <TeamRoleUnderJersey
+            liveState={liveState}
+            teamAbbr={homeTeamAbbr}
+            isHome={true}
+          />
+        </View>
 
-        <View style={styles.diamondColumn}>
+        <View style={styles.fieldColumn}>
           <Diamond
             onFirst={liveState.onFirst}
             onSecond={liveState.onSecond}
@@ -274,15 +283,62 @@ export function MLBLiveCenterStack({
             battingDark={battingDark}
             battingStroke={battingStroke}
           />
-          {inningText !== '' && (
-            <Text style={styles.inningCaption}>{inningText}</Text>
-          )}
+          <View style={styles.dotRow}>
+            <DotGroup label="B" total={4} lit={balls} type="b" />
+            <DotGroup label="S" total={3} lit={strikes} type="s" />
+            <DotGroup label="O" total={3} lit={outs} type="o" />
+          </View>
         </View>
 
-        <ScorePop value={awayScore} textStyle={styles.score} badgeAlign="left" />
-
-        {awayJersey}
+        <View style={styles.teamJerseyColumn}>
+          {awayJersey}
+          <TeamRoleUnderJersey
+            liveState={liveState}
+            teamAbbr={awayTeamAbbr}
+            isHome={false}
+          />
+        </View>
       </View>
+    </View>
+  );
+}
+
+type TeamRoleUnderJerseyProps = Omit<MLBTeamRoleBlockProps, 'align'>;
+
+function TeamRoleUnderJersey({
+  liveState,
+  teamAbbr,
+  isHome,
+}: TeamRoleUnderJerseyProps) {
+  if (liveState.betweenInnings) {
+    return (
+      <View style={styles.jerseyRoleBlock}>
+        <Text style={styles.jerseyRoleLabel}>
+          ON DECK
+        </Text>
+        <Text style={styles.jerseyPlayerName}>
+          —
+        </Text>
+      </View>
+    );
+  }
+
+  const isBatting = teamIsBatting(liveState.inningHalf, isHome);
+  const role = isBatting ? 'AT BAT' : 'PITCHING';
+  const player = isBatting ? liveState.batter : liveState.pitcher;
+  const playerName = player?.name ?? teamAbbr;
+
+  return (
+    <View style={styles.jerseyRoleBlock}>
+      <Text style={styles.jerseyRoleLabel}>
+        {role}
+      </Text>
+      <Text
+        style={styles.jerseyPlayerName}
+        numberOfLines={2}
+      >
+        {playerName}
+      </Text>
     </View>
   );
 }
@@ -321,10 +377,9 @@ function DotGroup({ label, total, lit, type }: DotGroupProps) {
 // ============================================================================
 // Diamond
 // ----------------------------------------------------------------------------
-// Three bases in a flat perspective layout (3rd left, 2nd top center,
-// 1st right). Each base has a vertical gradient + bevel highlight on the
-// upper edges. Occupied bases fill with the batting team's primary color.
-// All three bases share a soft Gaussian blur filter for the glow.
+// Three bases in a premium perspective layout (3rd left, 2nd top center,
+// 1st right). Occupied bases fill with the batting team's primary color,
+// while the next advancing base gets a subtle color outline.
 // ============================================================================
 
 type DiamondProps = {
@@ -343,24 +398,41 @@ function Diamond({
   onThird,
   battingBright,
   battingMid,
-  battingDark,
   battingStroke,
 }: DiamondProps) {
+  const nextOutlinedBase =
+    !onFirst && !onSecond && !onThird
+      ? 'first'
+      : onSecond && !onThird
+      ? 'third'
+      : onFirst && !onSecond
+      ? 'second'
+      : null;
+
   return (
-    <Svg width={110} height={42} viewBox="0 0 84 32">
+    <Svg width={128} height={54} viewBox="0 0 112 48">
       <Defs>
         <LinearGradient id="emptyBaseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="white" stopOpacity={0.3} />
-          <Stop offset="55%" stopColor="white" stopOpacity={0.12} />
-          <Stop offset="100%" stopColor="white" stopOpacity={0.02} />
+          <Stop offset="0%" stopColor="#edf5f8" stopOpacity={0.68} />
+          <Stop offset="48%" stopColor="#7f8b91" stopOpacity={0.34} />
+          <Stop offset="100%" stopColor="#12191d" stopOpacity={0.78} />
         </LinearGradient>
-        <LinearGradient id="battingBaseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor={battingBright} />
-          <Stop offset="55%" stopColor={battingMid} />
-          <Stop offset="100%" stopColor={battingDark} />
+        <LinearGradient id="emptySideGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <Stop offset="0%" stopColor="#76838a" stopOpacity={0.32} />
+          <Stop offset="100%" stopColor="#020405" stopOpacity={0.88} />
         </LinearGradient>
-        <Filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <FeGaussianBlur stdDeviation="1.4" result="blur" />
+        <LinearGradient id="occupiedBaseFlushGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%" stopColor="#ffffff" stopOpacity={0.38} />
+          <Stop offset="42%" stopColor={battingBright} stopOpacity={0.3} />
+          <Stop offset="100%" stopColor={battingMid} stopOpacity={0.46} />
+        </LinearGradient>
+        <LinearGradient id="nextBaseFlushGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%" stopColor="#ffffff" stopOpacity={0.56} />
+          <Stop offset="58%" stopColor="#f5fbff" stopOpacity={0.26} />
+          <Stop offset="100%" stopColor="#c8d7df" stopOpacity={0.12} />
+        </LinearGradient>
+        <Filter id="premiumBaseGlow" x="-55%" y="-55%" width="210%" height="210%">
+          <FeGaussianBlur stdDeviation="1.1" result="blur" />
           <FeMerge>
             <FeMergeNode in="blur" />
             <FeMergeNode in="SourceGraphic" />
@@ -368,23 +440,32 @@ function Diamond({
         </Filter>
       </Defs>
 
-      <G filter="url(#softGlow)">
+      <G filter="url(#premiumBaseGlow)">
         <Base
-          points="16,16 28,22 16,28 4,22"
-          highlightPoints="4,22 16,16 28,22"
+          left={{ x: 16, y: 30 }}
+          top={{ x: 32, y: 21 }}
+          right={{ x: 48, y: 30 }}
+          bottom={{ x: 32, y: 39 }}
           occupied={onThird}
+          outlined={nextOutlinedBase === 'third'}
           battingStroke={battingStroke}
         />
         <Base
-          points="42,2 54,8 42,14 30,8"
-          highlightPoints="30,8 42,2 54,8"
+          left={{ x: 40, y: 18 }}
+          top={{ x: 56, y: 9 }}
+          right={{ x: 72, y: 18 }}
+          bottom={{ x: 56, y: 27 }}
           occupied={onSecond}
+          outlined={nextOutlinedBase === 'second'}
           battingStroke={battingStroke}
         />
         <Base
-          points="68,16 80,22 68,28 56,22"
-          highlightPoints="56,22 68,16 80,22"
+          left={{ x: 64, y: 30 }}
+          top={{ x: 80, y: 21 }}
+          right={{ x: 96, y: 30 }}
+          bottom={{ x: 80, y: 39 }}
           occupied={onFirst}
+          outlined={nextOutlinedBase === 'first'}
           battingStroke={battingStroke}
         />
       </G>
@@ -397,29 +478,174 @@ function Diamond({
 // ============================================================================
 
 type BaseProps = {
-  points: string;
-  highlightPoints: string;
+  left: { x: number; y: number };
+  top: { x: number; y: number };
+  right: { x: number; y: number };
+  bottom: { x: number; y: number };
   occupied: boolean;
+  outlined: boolean;
   battingStroke: string;
 };
 
-function Base({ points, highlightPoints, occupied, battingStroke }: BaseProps) {
+function pointList(points: { x: number; y: number }[]): string {
+  return points.map((point) => `${point.x},${point.y}`).join(' ');
+}
+
+function pointToward(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  amount: number
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.sqrt(dx * dx + dy * dy) || 1;
+  return {
+    x: from.x + (dx / length) * amount,
+    y: from.y + (dy / length) * amount,
+  };
+}
+
+function roundedDiamondPath(
+  left: { x: number; y: number },
+  top: { x: number; y: number },
+  right: { x: number; y: number },
+  bottom: { x: number; y: number },
+  radius: number
+): string {
+  const corners = [left, top, right, bottom];
+  const commands: string[] = [];
+
+  corners.forEach((corner, index) => {
+    const prev = corners[(index + corners.length - 1) % corners.length];
+    const next = corners[(index + 1) % corners.length];
+    const start = pointToward(corner, prev, radius);
+    const end = pointToward(corner, next, radius);
+
+    if (index === 0) {
+      commands.push(`M ${start.x.toFixed(2)} ${start.y.toFixed(2)}`);
+    } else {
+      commands.push(`L ${start.x.toFixed(2)} ${start.y.toFixed(2)}`);
+    }
+
+    commands.push(`Q ${corner.x.toFixed(2)} ${corner.y.toFixed(2)} ${end.x.toFixed(2)} ${end.y.toFixed(2)}`);
+  });
+
+  commands.push('Z');
+  return commands.join(' ');
+}
+
+function lower(point: { x: number; y: number }, amount: number): { x: number; y: number } {
+  return { x: point.x, y: point.y + amount };
+}
+
+function Base({
+  left,
+  top,
+  right,
+  bottom,
+  occupied,
+  outlined,
+  battingStroke,
+}: BaseProps) {
+  const depth = 3.6;
+  const topFacePath = roundedDiamondPath(left, top, right, bottom, 3.6);
+  const shadowFacePath = roundedDiamondPath(
+    lower(left, 5.3),
+    lower(top, 5.3),
+    lower(right, 5.3),
+    lower(bottom, 5.3),
+    3.3
+  );
+  const sideFace = pointList([left, bottom, right, lower(right, depth), lower(bottom, depth + 1.25), lower(left, depth)]);
+  const frontLip = pointList([
+    lower(left, depth - 0.15),
+    lower(bottom, depth + 0.8),
+    lower(right, depth - 0.15),
+    lower(right, depth + 0.75),
+    lower(bottom, depth + 1.55),
+    lower(left, depth + 0.75),
+  ]);
+  const active = occupied || outlined;
+  const glowColor = occupied ? battingStroke : '#F4FAFF';
+
   return (
     <>
+      <Path
+        d={shadowFacePath}
+        fill="#000000"
+        opacity={active ? 0.26 : 0.2}
+      />
+      {active ? (
+        <>
+          <Path
+            d={shadowFacePath}
+            fill={glowColor}
+            opacity={occupied ? 0.18 : 0.14}
+          />
+          <Path
+            d={topFacePath}
+            fill="none"
+            stroke={glowColor}
+            strokeWidth={occupied ? 2.55 : 2.35}
+            strokeOpacity={occupied ? 0.42 : 0.5}
+            strokeLinejoin="round"
+          />
+        </>
+      ) : null}
       <Polygon
-        points={points}
-        fill={occupied ? 'url(#battingBaseGrad)' : 'url(#emptyBaseGrad)'}
-        stroke={occupied ? battingStroke : 'rgba(255,255,255,0.6)'}
-        strokeWidth={1}
+        points={sideFace}
+        fill="url(#emptySideGrad)"
+        opacity={active ? 0.64 : 0.56}
+        stroke="rgba(255,255,255,0.16)"
+        strokeWidth={0.34}
         strokeLinejoin="round"
       />
-      <Polyline
-        points={highlightPoints}
+      <Polygon
+        points={frontLip}
+        fill={active ? glowColor : '#e3edf2'}
+        opacity={active ? 0.16 : 0.09}
+        stroke="rgba(255,255,255,0.12)"
+        strokeWidth={0.28}
+      />
+      <Path
+        d={topFacePath}
+        fill="url(#emptyBaseGrad)"
+        stroke="rgba(247,252,255,0.84)"
+        strokeWidth={0.72}
+        strokeOpacity={1}
+        strokeLinejoin="round"
+      />
+      {occupied ? (
+        <Path
+          d={topFacePath}
+          fill="url(#occupiedBaseFlushGrad)"
+          strokeLinejoin="round"
+        />
+      ) : null}
+      {!occupied && outlined ? (
+        <Path
+          d={topFacePath}
+          fill="url(#nextBaseFlushGrad)"
+          strokeLinejoin="round"
+        />
+      ) : null}
+      <Path
+        d={topFacePath}
         fill="none"
-        stroke={occupied ? 'rgba(255,200,210,0.8)' : 'rgba(255,255,255,0.55)'}
-        strokeWidth={occupied ? 1.2 : 1}
+        stroke="rgba(255,255,255,0.94)"
+        strokeWidth={0.72}
         strokeLinejoin="round"
       />
+      {active ? (
+        <Path
+          d={topFacePath}
+          fill="none"
+          stroke={glowColor}
+          strokeWidth={occupied ? 1.08 : 1.16}
+          strokeOpacity={occupied ? 0.62 : 0.74}
+          strokeLinejoin="round"
+        />
+      ) : null}
     </>
   );
 }
@@ -453,14 +679,68 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
+  // ---- Live field stack ----
+  liveStack: {
+    alignItems: 'center',
+    paddingTop: 6,
+    paddingHorizontal: 10,
+  },
+  scoreboardWrap: {
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  scoreboardInningCaption: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.58)',
+    letterSpacing: 2.2,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+  fieldRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginTop: 0,
+  },
+  teamJerseyColumn: {
+    width: 104,
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  fieldColumn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 14,
+  },
+  jerseyRoleBlock: {
+    width: 104,
+    marginTop: -12,
+    alignItems: 'center',
+  },
+  jerseyRoleLabel: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.42)',
+    letterSpacing: 1.4,
+    fontWeight: '800',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  jerseyPlayerName: {
+    fontSize: 11,
+    color: 'white',
+    fontWeight: '700',
+    lineHeight: 13,
+    textAlign: 'center',
+  },
+
   // ---- Dot row ----
   dotRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 8,
-    gap: 18,
+    marginTop: 4,
+    gap: 14,
   },
   dotGroup: {
     flexDirection: 'row',
@@ -474,9 +754,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   dotOff: {
     backgroundColor: 'rgba(255,255,255,0.16)',
@@ -504,33 +784,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 4,
     elevation: 3,
-  },
-
-  // ---- Jersey + score + diamond row ----
-  jerseyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-  },
-  score: {
-    fontFamily: 'VT323_400Regular',
-    fontSize: 44,
-    color: 'white',
-    lineHeight: 44,
-    textShadowColor: 'rgba(255,255,255,0.2)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  diamondColumn: {
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  inningCaption: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginTop: 6,
   },
 });

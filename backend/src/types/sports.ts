@@ -13,6 +13,8 @@ export enum Sport {
   MLS = "MLS",
   EPL = "EPL",
   UCL = "UCL",
+  IPL = "IPL",
+  TENNIS = "TENNIS",
 }
 
 // League categories
@@ -43,6 +45,7 @@ export interface Team {
   abbreviation: string;
   logo: string;
   record: TeamRecord;
+  rank?: number;
 }
 
 // Game definition
@@ -56,6 +59,12 @@ export interface Game {
   venue: string;
   tvChannel: string;
   status: GameStatus;
+  seasonContext?: {
+    phase: string;
+    label: string;
+    detail: string;
+    source: string;
+  } | null;
   homeScore?: number;
   awayScore?: number;
   liveState?: {
@@ -68,6 +77,7 @@ export interface Game {
     inningHalf: "top" | "bottom" | null;
     inningNumber: number | null;
     betweenInnings: boolean;
+    inningTransition: "mid" | "end" | null;
     pitcher: { name: string | null; teamAbbr: string } | null;
     batter: { name: string | null; teamAbbr: string } | null;
   };

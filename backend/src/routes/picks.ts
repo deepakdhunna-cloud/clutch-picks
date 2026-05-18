@@ -20,6 +20,43 @@ const createPickSchema = z.object({
   sport: z.string().optional(),
 });
 
+function summarizePickStats(picks: Array<{ result: string | null }>) {
+  const picksMade = picks.length;
+  const wins = picks.filter((p) => p.result === "win").length;
+  const losses = picks.filter((p) => p.result === "loss").length;
+  const winRate = picksMade > 0 && (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
+
+  let currentStreak = 0;
+  let streakType: "win" | "loss" | null = null;
+
+  for (const pick of picks) {
+    if (pick.result === null) continue;
+
+    if (streakType === null) {
+      streakType = pick.result as "win" | "loss";
+      currentStreak = 1;
+    } else if (pick.result === streakType) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+
+  if (streakType === "loss") {
+    currentStreak = -currentStreak;
+  }
+
+  return {
+    picksMade,
+    wins,
+    losses,
+    winRate: Math.round(winRate * 100) / 100,
+    currentStreak,
+  };
+}
+
+const EMPTY_PICK_STATS = summarizePickStats([]);
+
 // POST /api/picks - Create or update a pick
 picksRouter.post("/", zValidator("json", createPickSchema), async (c) => {
   const user = c.get("user");
@@ -87,44 +124,67 @@ picksRouter.get("/stats", async (c) => {
       orderBy: { createdAt: "desc" },
     });
 
-    const picksMade = picks.length;
-    const wins = picks.filter((p) => p.result === "win").length;
-    const losses = picks.filter((p) => p.result === "loss").length;
-    const winRate = picksMade > 0 && (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
+    return c.json({ data: summarizePickStats(picks) });
+  } catch (error) {
+    console.error("Error fetching stats:", error);
+    return c.json({ error: { message: "Failed to fetch stats", code: "FETCH_FAILED" } }, 500);
+  }
+});
 
-    // Calculate current streak
-    let currentStreak = 0;
-    let streakType: "win" | "loss" | null = null;
+// GET /api/picks/stats/:userId - Get privacy-aware pick stats for a profile
+picksRouter.get("/stats/:userId", async (c) => {
+  const userId = c.req.param("userId");
+  const currentUser = c.get("user");
 
-    for (const pick of picks) {
-      if (pick.result === null) continue; // Skip unresolved picks
+  try {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, isPrivate: true },
+    });
 
-      if (streakType === null) {
-        streakType = pick.result as "win" | "loss";
-        currentStreak = 1;
-      } else if (pick.result === streakType) {
-        currentStreak++;
-      } else {
-        break; // Streak ended
+    if (!targetUser) {
+      return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    if (currentUser && currentUser.id !== userId) {
+      const block = await prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: currentUser.id, blockedId: userId },
+            { blockerId: userId, blockedId: currentUser.id },
+          ],
+        },
+      });
+      if (block) {
+        return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
       }
     }
 
-    // Negative streak for losses
-    if (streakType === "loss") {
-      currentStreak = -currentStreak;
+    let canViewPicks = !targetUser.isPrivate || currentUser?.id === userId;
+    if (!canViewPicks && currentUser) {
+      const follow = await prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: currentUser.id,
+            followingId: userId,
+          },
+        },
+      });
+      canViewPicks = !!follow;
     }
 
-    return c.json({
-      data: {
-        picksMade,
-        wins,
-        losses,
-        winRate: Math.round(winRate * 100) / 100,
-        currentStreak,
-      },
+    if (!canViewPicks) {
+      return c.json({ data: EMPTY_PICK_STATS });
+    }
+
+    const picks = await prisma.userPick.findMany({
+      where: { odId: userId },
+      orderBy: { createdAt: "desc" },
     });
+
+    return c.json({ data: summarizePickStats(picks) });
   } catch (error) {
-    console.error("Error fetching stats:", error);
+    console.error("Error fetching user stats:", error);
     return c.json({ error: { message: "Failed to fetch stats", code: "FETCH_FAILED" } }, 500);
   }
 });
@@ -135,6 +195,18 @@ picksRouter.get("/user/:userId", async (c) => {
   const currentUser = c.get("user");
 
   try {
+    if (currentUser && currentUser.id !== userId) {
+      const block = await prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: currentUser.id, blockedId: userId },
+            { blockerId: userId, blockedId: currentUser.id },
+          ],
+        },
+      });
+      if (block) return c.json({ data: [] });
+    }
+
     // Check if profile is private
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },

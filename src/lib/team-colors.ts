@@ -260,6 +260,29 @@ export const EPL_TEAM_COLORS: Record<string, TeamColors> = {
   'WOL': { primary: '#FDB913', secondary: '#231F20' }, // Wolves
 };
 
+// IPL Teams (Indian Premier League)
+export const IPL_TEAM_COLORS: Record<string, TeamColors> = {
+  'CSK': { primary: '#F6D51F', secondary: '#1D5FA7' }, // Chennai Super Kings
+  'DC': { primary: '#004C93', secondary: '#EF1B23' }, // Delhi Capitals
+  'GT': { primary: '#1B2133', secondary: '#D8B56D' }, // Gujarat Titans
+  'KKR': { primary: '#573F82', secondary: '#D4AF37' }, // Kolkata Knight Riders
+  'LSG': { primary: '#00AEEF', secondary: '#F37021' }, // Lucknow Super Giants
+  'MI': { primary: '#004BA0', secondary: '#D1AB3E' }, // Mumbai Indians
+  'PBKS': { primary: '#D71920', secondary: '#B6B6B6' }, // Punjab Kings
+  'RCB': { primary: '#F10920', secondary: '#111111' }, // Royal Challengers Bengaluru
+  'RR': { primary: '#EA1A85', secondary: '#254AA5' }, // Rajasthan Royals
+  'SRH': { primary: '#F26522', secondary: '#111111' }, // Sunrisers Hyderabad
+};
+
+// Tennis uses player/country-driven ESPN colors when available. These are
+// only fallbacks for generic tennis abbreviations that do not carry feed color.
+export const TENNIS_TEAM_COLORS: Record<string, TeamColors> = {
+  'TEN': { primary: '#2E7D5B', secondary: '#D7FF4A' },
+  'TBA': { primary: '#2E7D5B', secondary: '#D7FF4A' },
+  'ATP': { primary: '#1F6F8B', secondary: '#FFFFFF' },
+  'WTA': { primary: '#C0266F', secondary: '#FFFFFF' },
+};
+
 // NCAAB Teams (NCAA Men's Basketball)
 export const NCAAB_TEAM_COLORS: Record<string, TeamColors> = {
   // ACC
@@ -819,6 +842,12 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
       break;
     case Sport.UCL:
       colors = UCL_TEAM_COLORS[abbreviation];
+      break;
+    case Sport.IPL:
+      colors = IPL_TEAM_COLORS[abbreviation];
+      break;
+    case Sport.TENNIS:
+      colors = TENNIS_TEAM_COLORS[abbreviation];
       break;
     default:
       colors = undefined;

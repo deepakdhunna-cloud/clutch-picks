@@ -77,16 +77,19 @@ export default function VerifyOTP() {
   }, [code]);
 
   const handleVerifyCode = async (otpCode: string) => {
-    if (otpCode.length !== CODE_LENGTH || !email) return;
+    if (otpCode.length !== CODE_LENGTH || !email || isLoading) return;
     setIsLoading(true);
     setError(null);
-    const result = await authClient.signIn.emailOtp({ email: email.trim(), otp: otpCode });
-    setIsLoading(false);
-    if (result.error) {
-      setError(result.error.message ?? 'Invalid verification code');
-      setCode('');
-      setTimeout(() => inputRef.current?.focus(), 100);
-    } else {
+
+    try {
+      const result = await authClient.signIn.emailOtp({ email: email.trim(), otp: otpCode });
+      if (result.error) {
+        setError(result.error.message ?? 'Invalid verification code');
+        setCode('');
+        setTimeout(() => inputRef.current?.focus(), 100);
+        return;
+      }
+
       // Persist the bearer token from the response body as a fallback —
       // the auth-client also captures `set-auth-token` from the response
       // headers, but storing this directly removes any chance of a missed
@@ -94,16 +97,27 @@ export default function VerifyOTP() {
       const sessionToken = (result.data as any)?.token;
       if (__DEV__) console.log('[auth] otp verify result.data keys:', Object.keys(result.data || {}), 'token?', !!sessionToken);
       if (sessionToken) setBearerToken(sessionToken);
-      const userId = result.data?.user?.id;
-      if (userId) {
-        await setUserId(userId);
+
+      try {
+        const userId = result.data?.user?.id;
+        if (userId) {
+          await setUserId(userId);
+        }
+        // Also push the email to RC so the customer dashboard shows it.
+        const userEmail = result.data?.user?.email ?? email.trim();
+        if (userEmail) {
+          await setEmail(userEmail);
+        }
+      } catch (identityError) {
+        if (__DEV__) console.log('[auth] RevenueCat identity sync failed:', identityError);
       }
-      // Also push the email to RC so the customer dashboard shows it.
-      const userEmail = result.data?.user?.email ?? email.trim();
-      if (userEmail) {
-        await setEmail(userEmail);
+
+      try {
+        await invalidateSession();
+      } catch (sessionError) {
+        if (__DEV__) console.log('[auth] Session cache invalidation failed:', sessionError);
       }
-      await invalidateSession();
+
       const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
       // Sign-in for an already-onboarded device skips onboarding straight
       // to the app. Sign-up always routes to onboarding so a brand-new
@@ -114,6 +128,12 @@ export default function VerifyOTP() {
       } else {
         router.replace('/onboarding');
       }
+    } catch {
+      setError('Could not verify this code. Check your connection and try again.');
+      setCode('');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -123,14 +143,19 @@ export default function VerifyOTP() {
     if (!email) return;
     setIsResending(true);
     setError(null);
-    const result = await authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: 'sign-in' });
-    setIsResending(false);
-    if (result.error) {
-      setError(result.error.message ?? 'Failed to resend code');
-    } else {
-      setCode('');
-      setSeconds(300);
-      inputRef.current?.focus();
+    try {
+      const result = await authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: 'sign-in' });
+      if (result.error) {
+        setError(result.error.message ?? 'Failed to resend code');
+      } else {
+        setCode('');
+        setSeconds(300);
+        inputRef.current?.focus();
+      }
+    } catch {
+      setError('Could not resend the code. Check your connection and try again.');
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -175,7 +200,6 @@ export default function VerifyOTP() {
               ref={inputRef}
               value={code}
               onChangeText={(text) => {
-                console.log('[otp] onChangeText fired with:', JSON.stringify(text));
                 const cleaned = text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH);
                 setCode(cleaned);
                 setError(null);
