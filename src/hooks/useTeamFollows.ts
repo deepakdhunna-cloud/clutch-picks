@@ -12,10 +12,11 @@ export interface TeamFollow {
 }
 
 /** Fetch all teams the current user follows */
-export function useTeamFollows() {
+export function useTeamFollows(enabled = true) {
   return useQuery({
     queryKey: ['teamFollows'],
     queryFn: () => api.get<TeamFollow[]>('/api/team-follows'),
+    enabled,
     staleTime: 60_000,
   });
 }

@@ -1,5 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, StyleSheet, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -7,13 +6,11 @@ import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
 } from 'react-native-reanimated';
-import React, { useState, useCallback, useEffect, useMemo, memo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useDeferredValue, memo, useRef } from 'react';
 import { ChevronRight, X, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
-import { PicksBadge } from '@/components/shared/PicksBadge';
-import { SportCard, GameCard, getTicketColor, getSportIcon, LedBarPanel, LedMiniPanel } from '@/components/sports';
-import CompactLiveCard from '@/components/sports/CompactLiveCard';
+import { SportCard, GameCard, LedBarPanel, LedMiniPanel } from '@/components/sports';
+import { CompactLiveCard } from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
 import { Sport, SPORT_META, GameStatus, GameWithPrediction } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
@@ -25,51 +22,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { MAROON, TEAL, TEAL_DARK } from '@/lib/theme';
-
-
-// Field goal post to replace "U" - with football going through - memoized
-const FieldGoalU = memo(function FieldGoalU({ color, size = 42 }: { color: string; size?: number }) {
-  const isBlack = color === '#000000';
-  return (
-    <Svg width={size * 0.65} height={size} viewBox="0 0 26 40" fill="none">
-      {/* Left upright */}
-      <Path d="M4 0 L4 30" stroke={color} strokeWidth="5" strokeLinecap="round" />
-      {/* Right upright */}
-      <Path d="M22 0 L22 30" stroke={color} strokeWidth="5" strokeLinecap="round" />
-      {/* Crossbar */}
-      <Path d="M4 30 L22 30" stroke={color} strokeWidth="5" strokeLinecap="round" />
-      {/* Center post going down */}
-      <Path d="M13 30 L13 40" stroke={color} strokeWidth="4" strokeLinecap="round" />
-      {/* Football going through - pointed oval shape */}
-      <Path
-        d="M8 15 Q13 10 18 15 Q13 20 8 15"
-        fill={color}
-        transform="rotate(-35 13 15)"
-      />
-      {/* Football laces - vertical line */}
-      <Path
-        d="M13 13 L13 17"
-        stroke={isBlack ? '#000000' : '#0D0D0D'}
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        transform="rotate(-35 13 15)"
-      />
-      {/* Football laces - horizontal lines */}
-      <Path
-        d="M11.5 14 L14.5 14"
-        stroke={isBlack ? '#000000' : '#0D0D0D'}
-        strokeWidth="0.8"
-        transform="rotate(-35 13 15)"
-      />
-      <Path
-        d="M11.5 16 L14.5 16"
-        stroke={isBlack ? '#000000' : '#0D0D0D'}
-        strokeWidth="0.8"
-        transform="rotate(-35 13 15)"
-      />
-    </Svg>
-  );
-});
 
 // Memoize all sports array
 const allSports = Object.values(Sport);
@@ -125,12 +77,21 @@ const SportTileCarousel = memo(function SportTileCarousel({
         keyExtractor={(_, i) => `sportpage-${i}`}
         horizontal
         pagingEnabled
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={2}
+        removeClippedSubviews
+        getItemLayout={(_, index) => ({
+          length: pageWidth,
+          offset: pageWidth * index,
+          index,
+        })}
         showsHorizontalScrollIndicator={false}
         snapToAlignment="start"
         snapToInterval={pageWidth}
         decelerationRate="fast"
         onScroll={scrollHandler}
-        scrollEventThrottle={16}
+        scrollEventThrottle={32}
         renderItem={({ item }) => (
           <View
             style={{
@@ -301,6 +262,11 @@ const HomeHeader = React.memo(function HomeHeader({
   responsive,
   statusFilter,
 }: HomeHeaderProps) {
+  const sortedSports = useMemo(
+    () => [...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0)),
+    [gameCounts]
+  );
+
   return (
     <>
       {/* TODAY'S GAMES bar — real-LED panel (same renderer as the sport tiles below) */}
@@ -340,15 +306,17 @@ const HomeHeader = React.memo(function HomeHeader({
       </View>
 
       {/* Sports Categories — paginated carousel of square LED tiles */}
-      <View style={{ paddingTop: 0, paddingBottom: 24 }}>
-        <SportTileCarousel
-          sports={[...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0))}
-          gameCounts={gameCounts}
-          selectedSportFilter={selectedSportFilter}
-          setSelectedSportFilter={setSelectedSportFilter}
-          responsive={responsive}
-        />
-      </View>
+      {!isLoadingGames || Object.keys(gameCounts).length > 0 ? (
+        <View style={{ paddingTop: 0, paddingBottom: 24 }}>
+          <SportTileCarousel
+            sports={sortedSports}
+            gameCounts={gameCounts}
+            selectedSportFilter={selectedSportFilter}
+            setSelectedSportFilter={setSelectedSportFilter}
+            responsive={responsive}
+          />
+        </View>
+      ) : null}
 
       {/* Live Games Section — header always shows */}
       <View style={{ marginBottom: 24, marginTop: 0 }}>
@@ -665,6 +633,9 @@ export default function HomeScreen() {
   const [showAllLive, setShowAllLive] = useState(false);
   const [selectedLiveSportFilter, setSelectedLiveSportFilter] = useState<Sport | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'upcoming' | 'final'>('all');
+  const deferredSelectedSportFilter = useDeferredValue(selectedSportFilter);
+  const deferredSelectedLiveSportFilter = useDeferredValue(selectedLiveSportFilter);
+  const deferredStatusFilter = useDeferredValue(statusFilter);
 
   // Scroll to top when sport filter changes
   useEffect(() => {
@@ -703,15 +674,15 @@ export default function HomeScreen() {
   const filteredLiveGames = useMemo(() => {
     let games = liveGamesPreview;
     // Top sport filter applies to live games too
-    if (selectedSportFilter) {
-      games = games.filter((game) => game.sport === selectedSportFilter);
+    if (deferredSelectedSportFilter) {
+      games = games.filter((game) => game.sport === deferredSelectedSportFilter);
     }
     // Live-specific sport filter (pills inside Live Now section)
-    if (selectedLiveSportFilter) {
-      games = games.filter((game) => game.sport === selectedLiveSportFilter);
+    if (deferredSelectedLiveSportFilter) {
+      games = games.filter((game) => game.sport === deferredSelectedLiveSportFilter);
     }
     return games;
-  }, [liveGamesPreview, selectedLiveSportFilter, selectedSportFilter]);
+  }, [liveGamesPreview, deferredSelectedLiveSportFilter, deferredSelectedSportFilter]);
 
   // Compute game counts by sport from the games data
   // ─── Date helpers (local timezone) ───
@@ -744,12 +715,12 @@ export default function HomeScreen() {
       const sport = game.sport as Sport;
       const dateStr = getLocalDateStr(game.gameTime);
       let include = false;
-      if (statusFilter === 'all') {
+      if (deferredStatusFilter === 'all') {
         // Today tab: SCHEDULED only
         include = game.status === GameStatus.SCHEDULED && dateStr === todayStr;
-      } else if (statusFilter === 'final') {
+      } else if (deferredStatusFilter === 'final') {
         include = game.status === GameStatus.FINAL && dateStr === todayStr;
-      } else if (statusFilter === 'upcoming') {
+      } else if (deferredStatusFilter === 'upcoming') {
         include = game.status === GameStatus.SCHEDULED && scheduledDateKeys.has(dateStr);
       }
       if (include) {
@@ -757,7 +728,7 @@ export default function HomeScreen() {
       }
     });
     return counts;
-  }, [todaysGames, statusFilter, todayStr, scheduledDateKeys, getLocalDateStr]);
+  }, [todaysGames, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr]);
 
   // Search results: filter todaysGames by query — includes FINAL, excludes POSTPONED/CANCELLED
   // Order: LIVE first, then SCHEDULED, then FINAL at the bottom
@@ -827,19 +798,19 @@ export default function HomeScreen() {
     // Step 1: Filter by tab (date + status)
     let tabGames: GameWithPrediction[] = [];
 
-    if (statusFilter === 'all') {
+    if (deferredStatusFilter === 'all') {
       // Today tab: SCHEDULED only, current day (LIVE games are in Live Now section)
       tabGames = todaysGames.filter(g => {
         const dateStr = getLocalDateStr(g.gameTime);
         return dateStr === todayStr && g.status === GameStatus.SCHEDULED;
       });
-    } else if (statusFilter === 'final') {
+    } else if (deferredStatusFilter === 'final') {
       // Final tab: FINAL games from today only
       tabGames = todaysGames.filter(g => {
         const dateStr = getLocalDateStr(g.gameTime);
         return dateStr === todayStr && g.status === GameStatus.FINAL;
       });
-    } else if (statusFilter === 'upcoming') {
+    } else if (deferredStatusFilter === 'upcoming') {
       tabGames = todaysGames.filter(g => {
         const dateStr = getLocalDateStr(g.gameTime);
         return scheduledDateKeys.has(dateStr) && g.status === GameStatus.SCHEDULED;
@@ -847,8 +818,8 @@ export default function HomeScreen() {
     }
 
     // Step 2: Apply sport filter on top
-    if (selectedSportFilter) {
-      tabGames = tabGames.filter(g => g.sport === selectedSportFilter);
+    if (deferredSelectedSportFilter) {
+      tabGames = tabGames.filter(g => g.sport === deferredSelectedSportFilter);
     }
 
     tabGames = Array.from(new Map(tabGames.map((game) => [game.id, game])).values());
@@ -859,7 +830,7 @@ export default function HomeScreen() {
     // Step 4: Build FlatList items
     const items: FlatListItem[] = [];
 
-    if (selectedSportFilter) {
+    if (deferredSelectedSportFilter) {
       // Sport filter active — no section headers, just games
       tabGames.forEach((game, idx) => {
         items.push({ type: 'game', game, index: idx, key: game.id });
@@ -887,7 +858,7 @@ export default function HomeScreen() {
     }
 
     return items;
-  }, [todaysGames, selectedSportFilter, isLoadingGames, statusFilter, todayStr, scheduledDateKeys, getLocalDateStr]);
+  }, [todaysGames, deferredSelectedSportFilter, isLoadingGames, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr]);
 
 
   // Render item for FlatList
@@ -948,7 +919,7 @@ export default function HomeScreen() {
     }
 
     return null;
-  }, [numColumns, responsive.contentPadding, router]);
+  }, [numColumns, responsive.contentPadding]);
 
   const getItemKey = useCallback((item: FlatListItem) => item.key, []);
 

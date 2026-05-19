@@ -1,7 +1,6 @@
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import React, { memo, useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import Animated, {
   withSpring,
   useSharedValue,
@@ -26,44 +25,44 @@ const JB = {
 
 // ─── DOT MATRIX CHARACTER MAP (5x7 grids) ─────────────────────
 const DOT_MATRIX: Record<string, number[][]> = {
-  'A': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1]],
-  'B': [[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,0]],
-  'C': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,1],[0,1,1,1,0]],
-  'D': [[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,0]],
-  'E': [[1,1,1,1,1],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,1]],
-  'F': [[1,1,1,1,1],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0]],
-  'G': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,0],[1,0,1,1,1],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  'H': [[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1]],
-  'I': [[0,1,1,1,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,1,1,1,0]],
-  'J': [[0,0,1,1,1],[0,0,0,1,0],[0,0,0,1,0],[0,0,0,1,0],[0,0,0,1,0],[1,0,0,1,0],[0,1,1,0,0]],
-  'K': [[1,0,0,0,1],[1,0,0,1,0],[1,0,1,0,0],[1,1,0,0,0],[1,0,1,0,0],[1,0,0,1,0],[1,0,0,0,1]],
-  'L': [[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,1]],
-  'M': [[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1]],
-  'N': [[1,0,0,0,1],[1,1,0,0,1],[1,0,1,0,1],[1,0,0,1,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1]],
-  'O': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  'P': [[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0]],
-  'R': [[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,0],[1,0,1,0,0],[1,0,0,1,0],[1,0,0,0,1]],
-  'S': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,0],[0,1,1,1,0],[0,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  'T': [[1,1,1,1,1],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
-  'U': [[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  'V': [[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[0,1,0,1,0],[0,1,0,1,0],[0,0,1,0,0]],
-  'W': [[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],
-  'X': [[1,0,0,0,1],[1,0,0,0,1],[0,1,0,1,0],[0,0,1,0,0],[0,1,0,1,0],[1,0,0,0,1],[1,0,0,0,1]],
-  'Y': [[1,0,0,0,1],[1,0,0,0,1],[0,1,0,1,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
-  'Z': [[1,1,1,1,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[1,0,0,0,0],[1,1,1,1,1]],
-  '0': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,1,1],[1,0,1,0,1],[1,1,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '1': [[0,0,1,0,0],[0,1,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,1,1,1,0]],
-  '2': [[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[1,1,1,1,1]],
-  '3': [[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,1,1,0],[0,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '4': [[0,0,0,1,0],[0,0,1,1,0],[0,1,0,1,0],[1,0,0,1,0],[1,1,1,1,1],[0,0,0,1,0],[0,0,0,1,0]],
-  '5': [[1,1,1,1,1],[1,0,0,0,0],[1,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '6': [[0,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '7': [[1,1,1,1,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
-  '8': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '9': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,1],[0,0,0,0,1],[0,0,0,0,1],[0,1,1,1,0]],
-  '\'': [[0,0,1,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
-  '-': [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,1,1,1,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
-  ' ': [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]],
+  'A': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
+  'B': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
+  'C': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  'D': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
+  'E': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 1]],
+  'F': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0]],
+  'G': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 0], [1, 0, 1, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  'H': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
+  'I': [[0, 1, 1, 1, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 1, 1, 1, 0]],
+  'J': [[0, 0, 1, 1, 1], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0], [1, 0, 0, 1, 0], [0, 1, 1, 0, 0]],
+  'K': [[1, 0, 0, 0, 1], [1, 0, 0, 1, 0], [1, 0, 1, 0, 0], [1, 1, 0, 0, 0], [1, 0, 1, 0, 0], [1, 0, 0, 1, 0], [1, 0, 0, 0, 1]],
+  'L': [[1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 1]],
+  'M': [[1, 0, 0, 0, 1], [1, 1, 0, 1, 1], [1, 0, 1, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
+  'N': [[1, 0, 0, 0, 1], [1, 1, 0, 0, 1], [1, 0, 1, 0, 1], [1, 0, 0, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
+  'O': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  'P': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0]],
+  'R': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0], [1, 0, 1, 0, 0], [1, 0, 0, 1, 0], [1, 0, 0, 0, 1]],
+  'S': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  'T': [[1, 1, 1, 1, 1], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0]],
+  'U': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  'V': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0], [0, 1, 0, 1, 0], [0, 0, 1, 0, 0]],
+  'W': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 1, 0, 1], [1, 0, 1, 0, 1], [1, 1, 0, 1, 1], [1, 0, 0, 0, 1]],
+  'X': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
+  'Y': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 0, 1, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0]],
+  'Z': [[1, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 1]],
+  '0': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 1, 1], [1, 0, 1, 0, 1], [1, 1, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '1': [[0, 0, 1, 0, 0], [0, 1, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 1, 1, 1, 0]],
+  '2': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [1, 1, 1, 1, 1]],
+  '3': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 1, 1, 0], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '4': [[0, 0, 0, 1, 0], [0, 0, 1, 1, 0], [0, 1, 0, 1, 0], [1, 0, 0, 1, 0], [1, 1, 1, 1, 1], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0]],
+  '5': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '6': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '7': [[1, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0]],
+  '8': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '9': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '\'': [[0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+  '-': [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+  ' ': [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
 };
 
 // ─── PIXEL ART SPORT ICONS ────────────────────────────────────
@@ -375,6 +374,9 @@ export type LedPalette = 'blue' | 'white';
 function LedDefs() {
   return (
     <Defs>
+      <Pattern id="led-off-pattern" width={PITCH} height={PITCH} patternUnits="userSpaceOnUse">
+        <Circle cx={PITCH / 2} cy={PITCH / 2} r={DOT_RADIUS} fill={LED_OFF} />
+      </Pattern>
       {(['blue', 'white'] as const).map((p) => (
         <RadialGradient key={`core-${p}`} id={`led-core-${p}`} cx="50%" cy="50%" r="50%">
           {CORE_STOPS[p].map(([offset, color]) => (
@@ -407,50 +409,45 @@ function ledLitHalo(cx: number, cy: number, palette: LedPalette, key: string | n
   );
 }
 
-// Draw a real LED board cell-by-cell: halo glow first, then one physical dot at
-// every grid position. A lit glyph cell replaces the off dot at that same
-// coordinate; it does not sit on top of a separate random-looking texture.
+// Draw the off LED lattice as one SVG pattern, then render only lit glyph cells.
+// The old cell-by-cell renderer created thousands of native SVG nodes per panel.
 function renderLedBoardDots(width: number, height: number, litCells: LitPos[]) {
   const cols = Math.max(0, Math.floor(width / PITCH));
   const rows = Math.max(0, Math.floor(height / PITCH));
-  const litByCoord = new Map<string, LedPalette>();
+  const litByCoord = new Map<string, LitPos>();
 
   for (const cell of litCells) {
     if (cell.col >= 0 && cell.col < cols && cell.row >= 0 && cell.row < rows) {
-      litByCoord.set(`${cell.col}:${cell.row}`, cell.palette);
+      litByCoord.set(`${cell.col}:${cell.row}`, cell);
     }
   }
 
   const halos: React.ReactNode[] = [];
   const dots: React.ReactNode[] = [];
 
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const coord = `${col}:${row}`;
-      const cx = gridX(col);
-      const cy = gridY(row);
-      const palette = litByCoord.get(coord);
+  for (const [coord, cell] of litByCoord) {
+    const cx = gridX(cell.col);
+    const cy = gridY(cell.row);
+    halos.push(ledLitHalo(cx, cy, cell.palette, `halo-${coord}`));
+    dots.push(
+      <Circle
+        key={`dot-${coord}`}
+        cx={cx}
+        cy={cy}
+        r={LIT_CORE_RADIUS}
+        fill={`url(#led-core-${cell.palette})`}
+      />,
+    );
+  }
 
-      if (palette) {
-        halos.push(ledLitHalo(cx, cy, palette, `halo-${coord}`));
-        dots.push(
-          <Circle
-            key={`dot-${coord}`}
-            cx={cx}
-            cy={cy}
-            r={LIT_CORE_RADIUS}
-            fill={`url(#led-core-${palette})`}
-          />,
-        );
-      } else {
-        dots.push(<Circle key={`dot-${coord}`} cx={cx} cy={cy} r={DOT_RADIUS} fill={LED_OFF} />);
-      }
-    }
+  if (cols === 0 || rows === 0) {
+    return null;
   }
 
   return (
     <>
       {halos}
+      <Rect width={width} height={height} fill="url(#led-off-pattern)" />
       {dots}
     </>
   );
@@ -508,9 +505,9 @@ const LED_CALENDAR_MATRIX = [
 // ─── LED TILE PANEL ─────────────────────────────────────────────
 // 86×86 square, vertical stack: icon (blue) → abbreviation (white) → count (blue).
 // Layout is computed in GRID COLUMNS/ROWS so every lit core lands on the same
-// lattice as every off-pixel. The panel is drawn cell-by-cell so the glyphs are
-// made from the same dot board as the dim surrounding LEDs.
-export function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; gameCount: number; size?: number }) {
+// lattice as every off-pixel. The dim board is one pattern; only lit glyphs are
+// individual nodes.
+export const LedTilePanel = memo(function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; gameCount: number; size?: number }) {
   const GAP_ICON_ROWS = 3;   // ~7.2 px — must be an integer number of grid rows
   const GAP_TEXT_ROWS = 3;   // ~7.2 px
   const ICON_ROW_SPAN = 11;  // accommodate the larger, more recognizable sport pictographs
@@ -540,10 +537,13 @@ export function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; ga
   const countStartRow = abbrStartRow + TEXT_ROWS + GAP_TEXT_ROWS;
   const countStartCol = Math.floor((cols - cnt.colCount) / 2);
 
-  const cells: LitPos[] = [];
-  emitMatrixCells(iconMatrix, iconStartCol, iconStartRow, 'blue', cells);
-  emitTextCells(abbrText, abbrStartCol, abbrStartRow, 'white', cells);
-  emitTextCells(countText, countStartCol, countStartRow, 'blue', cells);
+  const cells = useMemo(() => {
+    const next: LitPos[] = [];
+    emitMatrixCells(iconMatrix, iconStartCol, iconStartRow, 'blue', next);
+    emitTextCells(abbrText, abbrStartCol, abbrStartRow, 'white', next);
+    emitTextCells(countText, countStartCol, countStartRow, 'blue', next);
+    return next;
+  }, [abbrStartCol, abbrStartRow, abbrText, countStartCol, countStartRow, countText, iconMatrix, iconStartCol, iconStartRow]);
 
   return (
     <Svg width={size} height={size}>
@@ -551,12 +551,12 @@ export function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; ga
       {renderLedBoardDots(size, size, cells)}
     </Svg>
   );
-}
+});
 
 // ─── LED BAR PANEL ──────────────────────────────────────────────
 // Width-flexible horizontal panel: icon left, label centered-left, count right-aligned.
 // Width is captured via onLayout so the count's grid column can be computed.
-export function LedBarPanel({
+export const LedBarPanel = memo(function LedBarPanel({
   label,
   count,
   leftSport,
@@ -601,12 +601,15 @@ export function LedBarPanel({
     cols - countM.colCount - RIGHT_GAP_COLS,
   );
 
-  const cells: LitPos[] = [];
-  if (cols > 0) {
-    emitMatrixCells(leftMatrix, leftStartCol, leftStartRow, 'blue', cells);
-    emitTextCells(label, labelStartCol, labelStartRow, 'white', cells);
-    emitTextCells(countText, countStartCol, countStartRow, 'blue', cells);
-  }
+  const cells = useMemo(() => {
+    const next: LitPos[] = [];
+    if (cols > 0) {
+      emitMatrixCells(leftMatrix, leftStartCol, leftStartRow, 'blue', next);
+      emitTextCells(label, labelStartCol, labelStartRow, 'white', next);
+      emitTextCells(countText, countStartCol, countStartRow, 'blue', next);
+    }
+    return next;
+  }, [cols, countStartCol, countStartRow, countText, label, labelStartCol, labelStartRow, leftMatrix, leftStartCol, leftStartRow]);
 
   return (
     <View
@@ -620,7 +623,7 @@ export function LedBarPanel({
         borderColor: LED_BORDER,
       }}
       onLayout={(e) => {
-        const w = e.nativeEvent.layout.width;
+        const w = Math.round(e.nativeEvent.layout.width);
         if (w !== width) setWidth(w);
       }}
     >
@@ -632,12 +635,12 @@ export function LedBarPanel({
       ) : null}
     </View>
   );
-}
+});
 
 // ─── LED MINI PANEL ─────────────────────────────────────────────
-// Small selected-filter pill used on the homepage. Same cell-by-cell renderer
-// as the big tiles/bar, with an optional blue rail kept as the physical marker.
-export function LedMiniPanel({
+// Small selected-filter pill used on the homepage, with an optional blue rail
+// kept as the physical marker.
+export const LedMiniPanel = memo(function LedMiniPanel({
   label,
   count,
   leftSport,
@@ -673,17 +676,20 @@ export function LedMiniPanel({
   const rows = Math.max(0, Math.floor(height / PITCH));
   const width = Math.ceil(cols * PITCH);
 
-  const cells: LitPos[] = [];
-  let cursorCol = LEFT_PAD_COLS;
-  if (matrix) {
-    emitMatrixCells(matrix, cursorCol, Math.floor((rows - iconRows) / 2), 'blue', cells);
-    cursorCol += iconCols + ICON_LABEL_GAP_COLS;
-  }
-  emitTextCells(label, cursorCol, Math.floor((rows - labelM.rowCount) / 2), 'white', cells);
-  cursorCol += labelM.colCount + LABEL_COUNT_GAP_COLS;
-  if (countText && countM) {
-    emitTextCells(countText, cursorCol, Math.floor((rows - countM.rowCount) / 2), 'blue', cells);
-  }
+  const cells = useMemo(() => {
+    const next: LitPos[] = [];
+    let cursorCol = LEFT_PAD_COLS;
+    if (matrix) {
+      emitMatrixCells(matrix, cursorCol, Math.floor((rows - iconRows) / 2), 'blue', next);
+      cursorCol += iconCols + ICON_LABEL_GAP_COLS;
+    }
+    emitTextCells(label, cursorCol, Math.floor((rows - labelM.rowCount) / 2), 'white', next);
+    cursorCol += labelM.colCount + LABEL_COUNT_GAP_COLS;
+    if (countText && countM) {
+      emitTextCells(countText, cursorCol, Math.floor((rows - countM.rowCount) / 2), 'blue', next);
+    }
+    return next;
+  }, [ICON_LABEL_GAP_COLS, LABEL_COUNT_GAP_COLS, LEFT_PAD_COLS, countM, countText, iconCols, iconRows, label, labelM.colCount, labelM.rowCount, matrix, rows]);
 
   return (
     <View
@@ -718,7 +724,7 @@ export function LedMiniPanel({
       ) : null}
     </View>
   );
-}
+});
 
 // ─── LED SCORE PANEL ────────────────────────────────────────────
 // Inline LED scoreboard for the live card on My Arena. Reuses the same dot-matrix
@@ -1030,100 +1036,6 @@ export function LedScorePanel({ awayScore, homeScore }: { awayScore: number; hom
   );
 }
 
-// ─── JUMBOTRON SPORT ICONS (kept for full-size cards & getSportIcon) ──
-interface JBIconProps { color: string; size?: number }
-
-const createJBIcon = (displayName: string, IconComponent: React.FC<JBIconProps>) => {
-  const Icon = memo(IconComponent);
-  Icon.displayName = displayName;
-  return Icon;
-};
-
-const JBIcons: Record<string, React.FC<JBIconProps>> = {
-  NFL: createJBIcon('JBIconNFL', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Path d="M14.5 3.5C12 1 6 1 3.5 3.5S1 12 3.5 14.5 12 17 14.5 14.5 17 6 14.5 3.5z" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <Path d="M6.5 11.5l5-5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <Path d="M7.5 8.5l-1 1M9.5 6.5l-1 1M9.5 10.5l-1 1" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-    </Svg>
-  )),
-  NBA: createJBIcon('JBIconNBA', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
-      <Path d="M2 9h14M9 2v14" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-      <Path d="M4.2 3.5C6.5 6.5 6.5 11.5 4.2 14.5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-      <Path d="M13.8 3.5C11.5 6.5 11.5 11.5 13.8 14.5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-    </Svg>
-  )),
-  MLB: createJBIcon('JBIconMLB', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Path d="M9 2.5L15 9l-6 6.5L3 9z" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
-      <Path d="M9 11L6.5 9 9 7l2.5 2z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" />
-      <Circle cx={9} cy={14} r={0.8} fill={color} />
-    </Svg>
-  )),
-  NHL: createJBIcon('JBIconNHL', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Path d="M5 3l5.5 8.5H14" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M14 11.5c0 1-0.8 1.5-2 1.5h-1.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <Rect x={5} y={14} width={5} height={2} rx={1} stroke={color} strokeWidth={1.2} />
-    </Svg>
-  )),
-  MLS: createJBIcon('JBIconMLS', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
-      <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
-      <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
-    </Svg>
-  )),
-  EPL: createJBIcon('JBIconEPL', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
-      <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
-      <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
-    </Svg>
-  )),
-  UCL: createJBIcon('JBIconUCL', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
-      <Path d="M9 4.5l2.5 1.8-.9 3H7.4l-.9-3z" stroke={color} strokeWidth={1} strokeLinejoin="round" />
-      <Path d="M9 4.5V2.2M11.5 6.3l2-1.2M10.6 9.3l1.8 1.5M7.4 9.3l-1.8 1.5M6.5 6.3l-2-1.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
-    </Svg>
-  )),
-  IPL: createJBIcon('JBIconIPL', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Path d="M4 15l8.8-8.8c0.9-0.9 2.2-0.9 3 0 0.8 0.8 0.8 2.1 0 3L7 18" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M2.5 11.5l4 4" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
-      <Circle cx={4.2} cy={4.2} r={2.1} stroke={color} strokeWidth={1.3} />
-      <Path d="M2.7 2.8c1.1 1.2 2 2.1 3 3" stroke={color} strokeWidth={0.8} strokeLinecap="round" />
-    </Svg>
-  )),
-  TENNIS: createJBIcon('JBIconTennis', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Circle cx={7.2} cy={6.2} r={4.1} stroke={color} strokeWidth={1.4} />
-      <Path d="M4.5 3.7c1.9 1.9 3.4 3.4 5.4 5.4M9.9 3.8L4.7 9" stroke={color} strokeWidth={0.8} strokeLinecap="round" strokeOpacity={0.72} />
-      <Path d="M10.2 9.2l5.1 5.1" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <Path d="M13.7 13.8l1.9 1.9" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Circle cx={13.8} cy={4.2} r={1.7} stroke={color} strokeWidth={1.2} />
-    </Svg>
-  )),
-  NCAAF: createJBIcon('JBIconNCAAF', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Path d="M4 12c0-4 2-8 6.5-8 3 0 4.5 2 4.5 5s-1.5 5-5 5H6.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M4 12h3c1.2 0 2-.8 2-2" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-      <Path d="M9.5 4v5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-    </Svg>
-  )),
-  NCAAB: createJBIcon('JBIconNCAAB', ({ color, size = 16 }: JBIconProps) => (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Circle cx={9} cy={9} r={7} stroke={color} strokeWidth={1.5} />
-      <Path d="M2 9h14M9 2v14" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-      <Path d="M4.2 3.5C6.5 6.5 6.5 11.5 4.2 14.5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-      <Path d="M13.8 3.5C11.5 6.5 11.5 11.5 13.8 14.5" stroke={color} strokeWidth={1.2} strokeLinecap="round" />
-    </Svg>
-  )),
-};
-
 // ─── PIXEL GRID OVERLAY ────────────────────────────────────────
 // Off-state pixels for the entire panel: same circle shape & size as the lit pixel cores.
 // Only color differs — these are dim (#0d1825) versus the bright lit core.
@@ -1142,38 +1054,6 @@ export const PixelGrid = memo(function PixelGrid() {
     </View>
   );
 });
-
-// ─── DEAD PIXELS ───────────────────────────────────────────────
-const DeadPixels = memo(function DeadPixels({ visible }: { visible: boolean }) {
-  const pixels = useRef([
-    { left: 14, top: 24, opacity: 0.32 },
-    { left: 38, top: 62, opacity: 0.25 },
-    { left: 69, top: 31, opacity: 0.44 },
-    { left: 84, top: 54, opacity: 0.29 },
-  ]).current;
-
-  if (!visible) return null;
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {pixels.map((px, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            left: `${px.left}%` as any,
-            top: `${px.top}%` as any,
-            width: 2,
-            height: 2,
-            borderRadius: 1,
-            backgroundColor: 'rgba(255,255,255,0.04)',
-          }}
-        />
-      ))}
-    </View>
-  );
-});
-
 
 // ─── ORIGINAL LARGE 3D SPORT ICONS (kept for full-size cards & getSportIcon) ──
 

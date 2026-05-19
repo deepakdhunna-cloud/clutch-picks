@@ -5,16 +5,105 @@ import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 
 // Polling intervals for different contexts
-const LIVE_POLLING_INTERVAL = 2000; // 2 seconds — fast fallback when SSE drops
-const DEFAULT_POLLING_INTERVAL = 20000; // 20 seconds — keeps cards fresh even without live games
+const LIVE_POLLING_INTERVAL = 5000; // fast fallback when SSE drops, without hammering JS/network
+const DEFAULT_POLLING_INTERVAL = 60000; // background freshness; SSE handles live score pushes
 // Burst-poll while ANY visible game is missing its prediction. Keep this
 // responsive without creating a startup/network storm on large slates.
-const PREDICTION_BURST_INTERVAL = 3000;
-const STALE_TIME = 5000; // 5 seconds — quick staleness for snappy tab switches
-const GAME_DETAIL_STALE_TIME = 3000; // 3 seconds — game detail stays very fresh
+const PREDICTION_BURST_INTERVAL = 8000;
+const STALE_TIME = 30000; // avoid refetching the whole board on every fast tab/screen hop
+const GAME_DETAIL_STALE_TIME = 10000;
+
+function runAfterNavigationStart(task: () => void) {
+  const run = () => setTimeout(task, 0);
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(run);
+    return;
+  }
+  run();
+}
+
+function findGameInData(data: unknown, gameId: string): GameWithPrediction | undefined {
+  if (!data) return undefined;
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const found = findGameInData(item, gameId);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof data !== 'object') return undefined;
+
+  const record = data as Record<string, unknown>;
+  if (record.id === gameId && record.homeTeam && record.awayTeam) {
+    return data as GameWithPrediction;
+  }
+
+  const nestedGames = record.games;
+  if (Array.isArray(nestedGames)) return findGameInData(nestedGames, gameId);
+
+  const nestedGame = record.game;
+  if (nestedGame) return findGameInData(nestedGame, gameId);
+
+  return undefined;
+}
+
+function findCachedGame(queryClient: ReturnType<typeof useQueryClient>, gameId: string): GameWithPrediction | undefined {
+  const direct = findGameInData(queryClient.getQueryData<GameWithPrediction[]>(['games']), gameId);
+  if (direct) return direct;
+
+  const queries = queryClient.getQueryCache().findAll();
+  for (const query of queries) {
+    const found = findGameInData(query.state.data, gameId);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function seedGameDetailCache(queryClient: ReturnType<typeof useQueryClient>, gameId: string, game?: GameWithPrediction) {
+  if (!game) return;
+  queryClient.setQueryData<GameWithPrediction | null>(['game', gameId], (current) => current ?? game);
+}
 
 function formatLocalDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function boardDates() {
+  const today = new Date();
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
+  return {
+    priority: [formatLocalDate(yesterday), formatLocalDate(today)],
+    deferred: [formatLocalDate(tomorrow), formatLocalDate(dayAfter)],
+  };
+}
+
+async function fetchGamesForDates(dates: string[]): Promise<GameWithPrediction[]> {
+  const results = await Promise.all(
+    dates.map((d) =>
+      api.get<GameWithPrediction[]>(`/api/games/date/${d}`).catch(() => [] as GameWithPrediction[])
+    )
+  );
+  return results.flat();
+}
+
+function dedupeGames(games: GameWithPrediction[]): GameWithPrediction[] {
+  const byId = new Map<string, GameWithPrediction>();
+  for (const game of games) byId.set(game.id, game);
+  return Array.from(byId.values());
+}
+
+function gamesOutsideDates(games: GameWithPrediction[] | undefined, dates: Set<string>): GameWithPrediction[] {
+  if (!games) return [];
+  return games.filter((game) => !dates.has(formatLocalDate(new Date(game.gameTime))));
+}
+
+function shouldBurstForMissingPrediction(game: GameWithPrediction): boolean {
+  if (game.prediction) return false;
+  if (game.status === GameStatus.LIVE) return true;
+  if (game.status !== GameStatus.SCHEDULED) return false;
+  return formatLocalDate(new Date(game.gameTime)) === formatLocalDate(new Date());
 }
 
 // Prefetch news for a game's teams
@@ -55,28 +144,31 @@ export function useGames() {
   const query = useQuery({
     queryKey: ['games'],
     queryFn: async () => {
-      // Home needs today's board plus the next two scheduled slates. Pull
-      // yesterday only so late-night games still show live after midnight.
-      const today = new Date();
-      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-      const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
-      const dates = [
-        formatLocalDate(yesterday),
-        formatLocalDate(today),
-        formatLocalDate(tomorrow),
-        formatLocalDate(dayAfter),
-      ];
-      const results = await Promise.all(
-        dates.map((d) =>
-          api.get<GameWithPrediction[]>(`/api/games/date/${d}`).catch(() => [] as GameWithPrediction[])
-        )
-      );
-      const merged = results.flat();
-      // Dedupe by id (last write wins, matches backend dedupe semantics)
-      const byId = new Map<string, GameWithPrediction>();
-      for (const g of merged) byId.set(g.id, g);
-      return Array.from(byId.values());
+      // Render the first screen from yesterday/today first; future slates are
+      // filled in after first paint so cold starts don't wait on four endpoints.
+      const dates = boardDates();
+      const priorityGames = dedupeGames(await fetchGamesForDates(dates.priority));
+      const priorityDateSet = new Set(dates.priority);
+      const deferredDateSet = new Set(dates.deferred);
+      const currentGames = queryClient.getQueryData<GameWithPrediction[]>(['games']);
+      const firstPaintGames = dedupeGames([
+        ...priorityGames,
+        ...gamesOutsideDates(currentGames, priorityDateSet),
+      ]);
+
+      void fetchGamesForDates(dates.deferred)
+        .then((futureGames) => {
+          queryClient.setQueryData<GameWithPrediction[]>(['games'], (current) => {
+            const currentSlate = Array.isArray(current) ? current : firstPaintGames;
+            return dedupeGames([
+              ...gamesOutsideDates(currentSlate, deferredDateSet),
+              ...futureGames,
+            ]);
+          });
+        })
+        .catch(() => {});
+
+      return firstPaintGames;
     },
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
@@ -85,7 +177,7 @@ export function useGames() {
       // Burst-poll while predictions are still being generated server-side.
       // This is the dominant case right after first paint / sport-filter
       // changes — without it the user stares at empty cards for up to 20s.
-      const hasMissingPredictions = games?.some((g) => !g.prediction);
+      const hasMissingPredictions = games?.some(shouldBurstForMissingPrediction);
       if (hasMissingPredictions) return PREDICTION_BURST_INTERVAL;
       // When SSE is connected globally it pushes live scores into every game cache,
       // so no need for aggressive polling.
@@ -98,33 +190,58 @@ export function useGames() {
   });
 
   // Prefetch game details and news for visible games to make navigation instant
-  const prefetchGame = useCallback((gameId: string) => {
+  const prefetchGame = useCallback((gameId: string, sourceGame?: GameWithPrediction) => {
     // First check if we have game data in cache to get team IDs
-    const games = queryClient.getQueryData<GameWithPrediction[]>(['games']);
-    const cachedGame = games?.find(g => g.id === gameId);
+    const cachedGame = sourceGame ?? findCachedGame(queryClient, gameId);
+    seedGameDetailCache(queryClient, gameId, cachedGame);
 
-    // Prefetch game details with prediction eagerly
-    queryClient.prefetchQuery({
-      queryKey: ['game', gameId],
-      queryFn: async () => {
-        const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-        return result ?? null;
-      },
-      staleTime: GAME_DETAIL_STALE_TIME,
+    runAfterNavigationStart(() => {
+      void queryClient.prefetchQuery({
+        queryKey: ['game', gameId],
+        queryFn: async () => {
+          const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
+          return result ?? null;
+        },
+        staleTime: GAME_DETAIL_STALE_TIME,
+      });
+
+      if (cachedGame) {
+        void prefetchNewsForGame(queryClient, cachedGame);
+      }
     });
-
-    // If we already have cached game data, prefetch news immediately
-    if (cachedGame) {
-      prefetchNewsForGame(queryClient, cachedGame);
-    }
   }, [queryClient]);
 
-  return { ...query, prefetchGame };
+  return {
+    data: query.data,
+    dataUpdatedAt: query.dataUpdatedAt,
+    error: query.error,
+    errorUpdatedAt: query.errorUpdatedAt,
+    failureCount: query.failureCount,
+    failureReason: query.failureReason,
+    fetchStatus: query.fetchStatus,
+    isError: query.isError,
+    isFetched: query.isFetched,
+    isFetchedAfterMount: query.isFetchedAfterMount,
+    isFetching: query.isFetching,
+    isInitialLoading: query.isInitialLoading,
+    isLoading: query.isLoading,
+    isLoadingError: query.isLoadingError,
+    isPaused: query.isPaused,
+    isPending: query.isPending,
+    isPlaceholderData: query.isPlaceholderData,
+    isRefetchError: query.isRefetchError,
+    isRefetching: query.isRefetching,
+    isStale: query.isStale,
+    isSuccess: query.isSuccess,
+    prefetchGame,
+    refetch: query.refetch,
+    status: query.status,
+  };
 }
 
 // Shared adaptive interval — burst while predictions are missing, otherwise default.
 function predictionAwareInterval(games: GameWithPrediction[] | undefined): number {
-  if (games?.some((g) => !g.prediction)) return PREDICTION_BURST_INTERVAL;
+  if (games?.some(shouldBurstForMissingPrediction)) return PREDICTION_BURST_INTERVAL;
   return DEFAULT_POLLING_INTERVAL;
 }
 
@@ -165,7 +282,33 @@ export function useGamesByDate(date: string) {
 
 // Hook to filter to only LIVE status games - polling is handled by useGames
 export function useLiveGames() {
-  const { data: games, prefetchGame, ...rest } = useGames();
+  const gamesQuery = useGames();
+  const {
+    data: games,
+    prefetchGame,
+    dataUpdatedAt,
+    error,
+    errorUpdatedAt,
+    failureCount,
+    failureReason,
+    fetchStatus,
+    isError,
+    isFetched,
+    isFetchedAfterMount,
+    isFetching,
+    isInitialLoading,
+    isLoading,
+    isLoadingError,
+    isPaused,
+    isPending,
+    isPlaceholderData,
+    isRefetchError,
+    isRefetching,
+    isStale,
+    isSuccess,
+    refetch,
+    status,
+  } = gamesQuery;
 
   const liveGames = useMemo(() =>
     games?.filter((game) => game.status === GameStatus.LIVE) ?? [],
@@ -175,7 +318,28 @@ export function useLiveGames() {
   return {
     data: liveGames,
     prefetchGame,
-    ...rest,
+    dataUpdatedAt,
+    error,
+    errorUpdatedAt,
+    failureCount,
+    failureReason,
+    fetchStatus,
+    isError,
+    isFetched,
+    isFetchedAfterMount,
+    isFetching,
+    isInitialLoading,
+    isLoading,
+    isLoadingError,
+    isPaused,
+    isPending,
+    isPlaceholderData,
+    isRefetchError,
+    isRefetching,
+    isStale,
+    isSuccess,
+    refetch,
+    status,
   };
 }
 
@@ -194,11 +358,12 @@ export function useGame(gameId: string) {
     placeholderData: keepPreviousData,
     // Seed from list cache for instant navigation
     initialData: () => {
-      const games = queryClient.getQueryData<GameWithPrediction[]>(['games']);
-      return games?.find(g => g.id === gameId) ?? undefined;
+      return findCachedGame(queryClient, gameId) ?? undefined;
     },
     initialDataUpdatedAt: () => {
-      return queryClient.getQueryState(['games'])?.dataUpdatedAt;
+      return queryClient.getQueryState(['game', gameId])?.dataUpdatedAt
+        ?? queryClient.getQueryState(['games'])?.dataUpdatedAt
+        ?? Date.now();
     },
     // Adaptive polling: burst when prediction missing, faster for live games
     refetchInterval: (query) => {
@@ -214,14 +379,11 @@ export function useGame(gameId: string) {
       return DEFAULT_POLLING_INTERVAL;
     },
     refetchIntervalInBackground: false,
-    // Refetch immediately on mount if no prediction yet, skip if data is fresh
+    // Paint cached game data first. Detail refreshes are scheduled by the
+    // screen after the navigation interaction has cleared.
     refetchOnMount: (query) => {
       const data = query.state.data;
-      // If we have cached data but no prediction, refetch immediately
-      if (data && !data.prediction) return true;
-      // If data is fresh (< 15s old), skip refetch — home screen already has it
-      if (data && Date.now() - (query.state.dataUpdatedAt || 0) < 15000) return false;
-      return true;
+      return !data;
     },
   });
 
@@ -266,22 +428,24 @@ export function useWeekGamesBySport(sport: string) {
 export function usePrefetchGame() {
   const queryClient = useQueryClient();
 
-  return useCallback((gameId: string) => {
-    const games = queryClient.getQueryData<GameWithPrediction[]>(['games']);
-    const cachedGame = games?.find(g => g.id === gameId);
+  return useCallback((gameId: string, sourceGame?: GameWithPrediction) => {
+    const cachedGame = sourceGame ?? findCachedGame(queryClient, gameId);
+    seedGameDetailCache(queryClient, gameId, cachedGame);
 
-    queryClient.prefetchQuery({
-      queryKey: ['game', gameId],
-      queryFn: async () => {
-        const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-        return result ?? null;
-      },
-      staleTime: GAME_DETAIL_STALE_TIME,
+    runAfterNavigationStart(() => {
+      void queryClient.prefetchQuery({
+        queryKey: ['game', gameId],
+        queryFn: async () => {
+          const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
+          return result ?? null;
+        },
+        staleTime: GAME_DETAIL_STALE_TIME,
+      });
+
+      if (cachedGame) {
+        void prefetchNewsForGame(queryClient, cachedGame);
+      }
     });
-
-    if (cachedGame) {
-      prefetchNewsForGame(queryClient, cachedGame);
-    }
   }, [queryClient]);
 }
 

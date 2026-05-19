@@ -48,12 +48,12 @@ function makeMLBContext(overrides: Partial<GameContext> = {}): GameContext {
     homeElo: 1500,
     awayElo: 1500,
     homeForm: {
-      results: ["W","L","W","L","W","L","W","L","W","L"],
+      results: ["W", "L", "W", "L", "W", "L", "W", "L", "W", "L"],
       formString: "W-L-W-L-W-L-W-L-W-L",
       streak: 0, avgScore: 4.5, avgAllowed: 4.0, wins: 5, losses: 5,
     },
     awayForm: {
-      results: ["L","W","L","W","L","W","L","W","L","W"],
+      results: ["L", "W", "L", "W", "L", "W", "L", "W", "L", "W"],
       formString: "L-W-L-W-L-W-L-W-L-W",
       streak: 0, avgScore: 4.0, avgAllowed: 4.5, wins: 5, losses: 5,
     },

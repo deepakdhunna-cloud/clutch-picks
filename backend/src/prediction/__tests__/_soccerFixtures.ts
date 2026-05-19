@@ -51,12 +51,12 @@ export function makeSoccerContext(
     homeElo: 1500,
     awayElo: 1500,
     homeForm: {
-      results: ["W","L","D","W","L","D","W","L","W","D"],
+      results: ["W", "L", "D", "W", "L", "D", "W", "L", "W", "D"],
       formString: "W-L-D-W-L-D-W-L-W-D",
       streak: 0, avgScore: 1.5, avgAllowed: 1.2, wins: 4, losses: 3,
     },
     awayForm: {
-      results: ["L","W","D","L","W","L","D","W","L","W"],
+      results: ["L", "W", "D", "L", "W", "L", "D", "W", "L", "W"],
       formString: "L-W-D-L-W-L-D-W-L-W",
       streak: 0, avgScore: 1.3, avgAllowed: 1.5, wins: 4, losses: 4,
     },

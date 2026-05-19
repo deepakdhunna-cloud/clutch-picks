@@ -118,7 +118,7 @@ Recommended screens:
 
 ## Backend/Environment Checklist
 
-- Run `cd backend && bun run release:check` against the production environment before submitting. The command only reports which keys are present/missing and does not print secret values.
+- Run `cd backend && bun run release:check:production` before submitting. It verifies the Railway production environment and only reports which keys are present/missing; it does not print secret values.
 - Deploy database migrations before release.
 - Production has `DATABASE_URL` and `BETTER_AUTH_SECRET` set.
 - Production has `RESEND_API_KEY` and `EMAIL_FROM` set for OTP email.

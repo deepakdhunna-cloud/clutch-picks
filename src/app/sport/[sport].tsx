@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useDeferredValue, memo } from 'react';
 import Animated, {
   FadeInDown,
   FadeInRight,
@@ -133,6 +133,7 @@ export default function SportDetailScreen() {
   const { sport } = useLocalSearchParams<{ sport: string }>();
   const router = useRouter();
   const [filter, setFilter] = useState<FilterStatus>('today');
+  const deferredFilter = useDeferredValue(filter);
 
   const sportEnum = sport as Sport;
   const sportMeta = SPORT_META[sportEnum];
@@ -154,12 +155,22 @@ export default function SportDetailScreen() {
   // Calculate counts for each filter
   const filterCounts = useMemo(() => {
     if (!allGames.length) return { live: 0, today: 0, tomorrow: 0, results: 0 };
-    return {
-      live: allGames.filter(g => g.status === 'LIVE').length,
-      today: allGames.filter(g => g.status === 'SCHEDULED' && new Date(g.gameTime).toDateString() === todayStr).length,
-      tomorrow: allGames.filter(g => g.status === 'SCHEDULED' && new Date(g.gameTime).toDateString() === tomorrowStr).length,
-      results: allGames.filter(g => g.status === 'FINAL').length,
-    };
+    const counts = { live: 0, today: 0, tomorrow: 0, results: 0 };
+    for (const game of allGames) {
+      if (game.status === 'LIVE') {
+        counts.live += 1;
+        continue;
+      }
+      if (game.status === 'FINAL') {
+        counts.results += 1;
+        continue;
+      }
+      if (game.status !== 'SCHEDULED') continue;
+      const gameDate = new Date(game.gameTime).toDateString();
+      if (gameDate === todayStr) counts.today += 1;
+      if (gameDate === tomorrowStr) counts.tomorrow += 1;
+    }
+    return counts;
   }, [allGames, todayStr, tomorrowStr]);
 
   // Filter games by status
@@ -167,13 +178,13 @@ export default function SportDetailScreen() {
     if (!allGames.length) return [];
     return allGames.filter(game => {
       const gameDate = new Date(game.gameTime).toDateString();
-      if (filter === 'live') return game.status === 'LIVE';
-      if (filter === 'today') return game.status === 'SCHEDULED' && gameDate === todayStr;
-      if (filter === 'tomorrow') return game.status === 'SCHEDULED' && gameDate === tomorrowStr;
-      if (filter === 'results') return game.status === 'FINAL';
+      if (deferredFilter === 'live') return game.status === 'LIVE';
+      if (deferredFilter === 'today') return game.status === 'SCHEDULED' && gameDate === todayStr;
+      if (deferredFilter === 'tomorrow') return game.status === 'SCHEDULED' && gameDate === tomorrowStr;
+      if (deferredFilter === 'results') return game.status === 'FINAL';
       return true;
     }).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
-  }, [allGames, filter, todayStr, tomorrowStr]);
+  }, [allGames, deferredFilter, todayStr, tomorrowStr]);
 
   // Filters with icons
   const filters: { key: FilterStatus; label: string; icon: React.ReactNode }[] = [

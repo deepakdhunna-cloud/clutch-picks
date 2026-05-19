@@ -7,11 +7,12 @@ import Animated, {
   Easing,
   interpolate,
 } from 'react-native-reanimated';
-import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, GameStatus, SPORT_META, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
+import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { getProjectionDisplay } from '@/lib/projection-display';
 import { PredictionBadge } from './PredictionBadge';
@@ -29,14 +30,14 @@ interface GameCardProps {
 }
 
 // Compact Pulsing Live Badge component
-const PulsingLiveBadge = memo(function PulsingLiveBadge() {
+const PulsingLiveBadge = memo(function PulsingLiveBadge({ label = 'LIVE' }: { label?: string }) {
   return (
     <View style={{ position: 'relative' }}>
       {/* Main badge - white with red dot and text */}
       <View style={styles.liveBadgeContainer}>
         {/* Live dot - red */}
         <View style={styles.liveDot} />
-        <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>LIVE</Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>{label}</Text>
       </View>
     </View>
   );
@@ -251,16 +252,25 @@ const LiveGameLayout = memo(function LiveGameLayout({
 }) {
   const router = useRouter();
   const prefetchGame = usePrefetchGame();
+  const isNavigatingRef = useRef(false);
 
   const awayScore = game.awayScore ?? 0;
   const homeScore = game.homeScore ?? 0;
   const awayWinning = awayScore > homeScore;
   const homeWinning = homeScore > awayScore;
+  const suspended = isSuspendedGame(game);
+  const suspensionTime = suspendedResumeText(game);
+  const suspensionReason = suspendedReasonText(game);
 
   const handlePress = useCallback(() => {
-    prefetchGame(game.id);
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    prefetchGame(game.id, game);
     router.push(`/game/${game.id}` as any);
-  }, [game.id, router, prefetchGame]);
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 700);
+  }, [game, router, prefetchGame]);
 
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
@@ -363,7 +373,19 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     {displaySport(game.sport)}
                   </Text>
                 </View>
-                <PulsingLiveBadge />
+                <View style={{ alignItems: 'flex-start' }}>
+                  <PulsingLiveBadge label={suspended ? suspendedLabel(game).toUpperCase() : 'LIVE'} />
+                  {suspended ? (
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.72}
+                      style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800', marginTop: 4, maxWidth: 150 }}
+                    >
+                      {suspensionReason}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
 
               {game.tvChannel ? (
@@ -431,7 +453,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
-                opacity: awayWinning ? 1 : 0.35,
+                opacity: suspended ? 0.55 : awayWinning ? 1 : 0.35,
               }}>
                 {awayScore}
               </Text>
@@ -472,7 +494,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
-                opacity: homeWinning ? 1 : 0.35,
+                opacity: suspended ? 0.55 : homeWinning ? 1 : 0.35,
               }}>
                 {homeScore}
               </Text>
@@ -483,18 +505,18 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {(() => {
-                    const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                    const timeStr = suspended ? suspensionTime : formatGameTime(game.sport, game.quarter, game.clock);
                     if (timeStr) {
                       return (
                         <View style={{
-                          backgroundColor: 'rgba(255,255,255,0.12)',
+                          backgroundColor: suspended ? 'rgba(220,38,38,0.13)' : 'rgba(255,255,255,0.12)',
                           paddingHorizontal: 8,
-                          paddingVertical: 3,
+                          paddingVertical: suspended ? 4 : 3,
                           borderRadius: 5,
                           borderWidth: 1,
-                          borderColor: 'rgba(255,255,255,0.18)',
+                          borderColor: suspended ? 'rgba(220,38,38,0.28)' : 'rgba(255,255,255,0.18)',
                         }}>
-                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{timeStr}</Text>
+                          <Text style={{ color: suspended ? '#DC2626' : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{timeStr}</Text>
                         </View>
                       );
                     }
@@ -522,6 +544,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
 export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProps) {
   const router = useRouter();
   const prefetchGame = usePrefetchGame();
+  const isNavigatingRef = useRef(false);
   const { isPremium } = useSubscription();
   const isLive = game.status === GameStatus.LIVE;
 
@@ -629,10 +652,14 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const [pendingSelection, setPendingSelection] = useState<'home' | 'away' | null>(null);
 
   const handlePress = useCallback(() => {
-    // Prefetch data immediately on tap for faster loading
-    prefetchGame(game.id);
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    prefetchGame(game.id, game);
     router.push(`/game/${game.id}` as any);
-  }, [game.id, router, prefetchGame]);
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 700);
+  }, [game, router, prefetchGame]);
 
   const handleJerseyTap = useCallback((selectedTeam: 'home' | 'away') => {
     if (userPrediction?.pickedTeam === selectedTeam) {

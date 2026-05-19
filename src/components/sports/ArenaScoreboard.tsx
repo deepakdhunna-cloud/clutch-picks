@@ -1,20 +1,27 @@
 import React, { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, G, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 const SCORE_FACE_MATRIX: Record<string, number[][]> = {
-  '0': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,1,1],[1,0,1,0,1],[1,1,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '1': [[0,0,1,0,0],[0,1,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,1,1,1,0]],
-  '2': [[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[1,1,1,1,1]],
-  '3': [[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,1,1,0],[0,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '4': [[0,0,0,1,0],[0,0,1,1,0],[0,1,0,1,0],[1,0,0,1,0],[1,1,1,1,1],[0,0,0,1,0],[0,0,0,1,0]],
-  '5': [[1,1,1,1,1],[1,0,0,0,0],[1,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '6': [[0,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '7': [[1,1,1,1,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
-  '8': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
-  '9': [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,1],[0,0,0,0,1],[0,0,0,0,1],[0,1,1,1,0]],
-  '-': [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,1,1,1,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
+  '0': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 1, 1], [1, 0, 1, 0, 1], [1, 1, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '1': [[0, 0, 1, 0, 0], [0, 1, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 1, 1, 1, 0]],
+  '2': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [1, 1, 1, 1, 1]],
+  '3': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 1, 1, 0], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '4': [[0, 0, 0, 1, 0], [0, 0, 1, 1, 0], [0, 1, 0, 1, 0], [1, 0, 0, 1, 0], [1, 1, 1, 1, 1], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0]],
+  '5': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '6': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '7': [[1, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0]],
+  '8': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '9': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
+  '-': [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+  ' ': [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
+  'D': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
+  'E': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 1]],
+  'N': [[1, 0, 0, 0, 1], [1, 1, 0, 0, 1], [1, 0, 1, 0, 1], [1, 0, 0, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
+  'P': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0]],
+  'S': [[0, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
+  'U': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
 };
 
 const SCORE_FACE_SCALE = 2;
@@ -22,7 +29,6 @@ const SCORE_FACE_PITCH = 1.62;
 const SCORE_FACE_PAD_X = 6;
 const SCORE_FACE_PAD_Y = 5;
 const SCORE_FACE_GAP = 2;
-const SCORE_FACE_ROWS = 7 * SCORE_FACE_SCALE;
 
 function hexWithAlpha(hex: string | undefined, alpha: number): string {
   if (!hex) return 'rgba(31,41,55,0)';
@@ -36,13 +42,13 @@ function hexWithAlpha(hex: string | undefined, alpha: number): string {
   return hex;
 }
 
-function scoreFaceTextWidth(text: string): number {
+function scoreFaceTextWidth(text: string, glyphScale = SCORE_FACE_SCALE): number {
   let cols = 0;
   for (let i = 0; i < text.length; i++) {
     const matrix = SCORE_FACE_MATRIX[text[i]];
     if (!matrix) continue;
     if (cols > 0) cols += SCORE_FACE_GAP;
-    cols += matrix[0].length * SCORE_FACE_SCALE;
+    cols += matrix[0].length * glyphScale;
   }
   return cols;
 }
@@ -51,15 +57,18 @@ const ArenaScoreFace = memo(function ArenaScoreFace({
   homeScore,
   awayScore,
   scale,
+  label,
 }: {
   homeScore: number;
   awayScore: number;
   scale: number;
+  label?: string;
 }) {
-  const text = `${homeScore}-${awayScore}`;
-  const textCols = scoreFaceTextWidth(text);
+  const text = label ? label.toUpperCase() : `${homeScore}-${awayScore}`;
+  const glyphScale = label ? 1 : SCORE_FACE_SCALE;
+  const textCols = scoreFaceTextWidth(text, glyphScale);
   const cols = textCols + 4;
-  const rows = SCORE_FACE_ROWS + 4;
+  const rows = 7 * glyphScale + 4;
   const pitch = SCORE_FACE_PITCH * scale;
   const padX = SCORE_FACE_PAD_X * scale;
   const padY = SCORE_FACE_PAD_Y * scale;
@@ -75,14 +84,14 @@ const ArenaScoreFace = memo(function ArenaScoreFace({
     for (let row = 0; row < matrix.length; row++) {
       for (let col = 0; col < matrix[row].length; col++) {
         if (matrix[row][col] !== 1) continue;
-        for (let sy = 0; sy < SCORE_FACE_SCALE; sy++) {
-          for (let sx = 0; sx < SCORE_FACE_SCALE; sx++) {
-            lit.add(`${cursor + col * SCORE_FACE_SCALE + sx},${row * SCORE_FACE_SCALE + sy + 2}`);
+        for (let sy = 0; sy < glyphScale; sy++) {
+          for (let sx = 0; sx < glyphScale; sx++) {
+            lit.add(`${cursor + col * glyphScale + sx},${row * glyphScale + sy + 2}`);
           }
         }
       }
     }
-    cursor += matrix[0].length * SCORE_FACE_SCALE;
+    cursor += matrix[0].length * glyphScale;
   }
 
   const cells: { x: number; y: number; lit: boolean }[] = [];
@@ -151,13 +160,20 @@ export const ArenaScoreboard = memo(function ArenaScoreboard({
   awayColor,
   homeColor,
   scale = 1,
+  label,
+  subLabel,
+  detailLabel,
 }: {
   awayScore: number;
   homeScore: number;
   awayColor: string;
   homeColor: string;
   scale?: number;
+  label?: string;
+  subLabel?: string;
+  detailLabel?: string;
 }) {
+  const hasStatusDetail = Boolean(label && (subLabel || detailLabel));
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
       <View
@@ -229,8 +245,43 @@ export const ArenaScoreboard = memo(function ArenaScoreboard({
             />
           ))}
           <View style={{ borderRadius: 12 * scale, padding: 2 * scale, backgroundColor: 'rgba(255,255,255,0.04)' }}>
-            <ArenaScoreFace awayScore={awayScore} homeScore={homeScore} scale={scale} />
+            <ArenaScoreFace awayScore={awayScore} homeScore={homeScore} scale={scale} label={label} />
           </View>
+          {hasStatusDetail ? (
+            <View style={{ alignItems: 'center', paddingTop: 5 * scale, paddingHorizontal: 5 * scale, minWidth: 98 * scale, maxWidth: 150 * scale }}>
+              {subLabel ? (
+                <Text
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  numberOfLines={1}
+                  style={{
+                    color: '#f8fafc',
+                    fontSize: 10 * scale,
+                    fontWeight: '900',
+                    textAlign: 'center',
+                  }}
+                >
+                  {subLabel}
+                </Text>
+              ) : null}
+              {detailLabel ? (
+                <Text
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  numberOfLines={1}
+                  style={{
+                    color: 'rgba(248,250,252,0.66)',
+                    fontSize: 8.5 * scale,
+                    fontWeight: '800',
+                    marginTop: 1 * scale,
+                    textAlign: 'center',
+                  }}
+                >
+                  {detailLabel}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           <LinearGradient
             colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.08)']}
             start={{ x: 0, y: 0 }}

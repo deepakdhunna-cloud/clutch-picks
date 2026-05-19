@@ -47,6 +47,14 @@ export interface Team {
   record: string; // e.g., "10-3" or "45-20"
   color: string; // Primary team color
   rank?: number;
+  seed?: number;
+  rankingPoints?: number;
+  tour?: 'ATP' | 'WTA';
+  tennisRankSource?: 'espn-rankings';
+  standingsRank?: number;
+  standingsPoints?: number;
+  netRunRate?: number;
+  matchesPlayed?: number;
 }
 
 export interface Game {
@@ -66,6 +74,14 @@ export interface Game {
   marketFavorite?: 'home' | 'away';
   quarter?: string; // For live games: "Q1", "Q2", "3rd Period", etc.
   clock?: string; // Time remaining in period
+  statusLabel?: string;
+  statusDetail?: string;
+  suspension?: {
+    display: string;
+    resumeText: string;
+    reasonText: string;
+    source?: string;
+  };
   seasonContext?: {
     phase: string;
     label: string;

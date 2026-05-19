@@ -56,12 +56,12 @@ function makeContext(overrides: Partial<GameContext> = {}): GameContext {
     homeElo: 1550,
     awayElo: 1450,
     homeForm: {
-      results: ["W","W","W","L","W","W","W","L","W","W"],
+      results: ["W", "W", "W", "L", "W", "W", "W", "L", "W", "W"],
       formString: "W-W-W-L-W-W-W-L-W-W",
       streak: 2, avgScore: 110, avgAllowed: 102, wins: 8, losses: 2,
     },
     awayForm: {
-      results: ["L","W","L","L","W","L","W","L","L","W"],
+      results: ["L", "W", "L", "L", "W", "L", "W", "L", "L", "W"],
       formString: "L-W-L-L-W-L-W-L-L-W",
       streak: 1, avgScore: 100, avgAllowed: 108, wins: 4, losses: 6,
     },
@@ -300,12 +300,12 @@ describe("predictGame — weight redistribution", () => {
       homeElo: 1500,
       awayElo: 1500,
       homeForm: {
-        results: ["W","L","W","L","W","L","W","L","W","L"],
+        results: ["W", "L", "W", "L", "W", "L", "W", "L", "W", "L"],
         formString: "W-L-W-L-W-L-W-L-W-L",
         streak: 0, avgScore: 100, avgAllowed: 100, wins: 5, losses: 5,
       },
       awayForm: {
-        results: ["W","L","W","L","W","L","W","L","W","L"],
+        results: ["W", "L", "W", "L", "W", "L", "W", "L", "W", "L"],
         formString: "W-L-W-L-W-L-W-L-W-L",
         streak: 0, avgScore: 100, avgAllowed: 100, wins: 5, losses: 5,
       },

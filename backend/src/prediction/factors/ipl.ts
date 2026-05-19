@@ -3,11 +3,12 @@
  *
  * Weight budget: 0.42 (remaining after 0.58 base).
  * Breakdown:
- *   - Batting run trend: 0.12
- *   - Bowling / fielding trend: 0.10
- *   - Venue split: 0.08
- *   - Head-to-head matchup: 0.06
- *   - Weather / conditions volatility: 0.06
+ *   - Table strength / net run rate: 0.14
+ *   - Batting run trend: 0.08
+ *   - Bowling / fielding trend: 0.08
+ *   - Venue split: 0.06
+ *   - Head-to-head matchup: 0.03
+ *   - Weather / conditions volatility: 0.03
  *
  * ESPN's cricket feed has lighter team-level data than the US leagues, so
  * these factors intentionally use only already-fetched schedule/form context.
@@ -27,8 +28,45 @@ function splitWinPct(record: { wins: number; losses: number }): number | null {
   return record.wins / games;
 }
 
+function numericTeamField(team: GameContext["game"]["homeTeam"], field: "standingsRank" | "standingsPoints" | "netRunRate" | "matchesPlayed"): number | null {
+  const value = (team as unknown as Record<string, unknown>)[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
+
+  const homeRank = numericTeamField(ctx.game.homeTeam, "standingsRank");
+  const awayRank = numericTeamField(ctx.game.awayTeam, "standingsRank");
+  const homePoints = numericTeamField(ctx.game.homeTeam, "standingsPoints");
+  const awayPoints = numericTeamField(ctx.game.awayTeam, "standingsPoints");
+  const homePlayed = numericTeamField(ctx.game.homeTeam, "matchesPlayed");
+  const awayPlayed = numericTeamField(ctx.game.awayTeam, "matchesPlayed");
+  const homeNrr = numericTeamField(ctx.game.homeTeam, "netRunRate");
+  const awayNrr = numericTeamField(ctx.game.awayTeam, "netRunRate");
+  const pointsAvailable = homePoints !== null && awayPoints !== null && homePlayed !== null && awayPlayed !== null && homePlayed > 0 && awayPlayed > 0;
+  const rankAvailable = homeRank !== null && awayRank !== null;
+  const nrrAvailable = homeNrr !== null && awayNrr !== null;
+  const tableAvailable = pointsAvailable || rankAvailable || nrrAvailable;
+  const pointsPerMatchDelta = pointsAvailable
+    ? clamp(((homePoints! / homePlayed!) - (awayPoints! / awayPlayed!)) * 55, -55, 55)
+    : 0;
+  const rankDelta = rankAvailable ? clamp((awayRank! - homeRank!) * 7, -45, 45) : 0;
+  const nrrDelta = nrrAvailable ? clamp((homeNrr! - awayNrr!) * 28, -45, 45) : 0;
+  const tableDelta = tableAvailable
+    ? clamp(pointsPerMatchDelta * 0.5 + rankDelta * 0.25 + nrrDelta * 0.25, -75, 75)
+    : 0;
+  factors.push({
+    key: "ipl_table_strength",
+    label: "IPL table strength",
+    homeDelta: tableDelta,
+    weight: 0.14,
+    available: tableAvailable,
+    hasSignal: tableAvailable && tableDelta !== 0,
+    evidence: tableAvailable
+      ? `${ctx.game.homeTeam.abbreviation} rank ${homeRank ?? "n/a"}, ${homePoints ?? "n/a"} pts, NRR ${homeNrr ?? "n/a"} vs ${ctx.game.awayTeam.abbreviation} rank ${awayRank ?? "n/a"}, ${awayPoints ?? "n/a"} pts, NRR ${awayNrr ?? "n/a"}`
+      : "IPL standings unavailable for table-strength factor",
+  });
 
   const homeBattingTrend = ctx.homeExtended.scoringTrend;
   const awayBattingTrend = ctx.awayExtended.scoringTrend;
@@ -37,7 +75,7 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     key: "ipl_batting_trend",
     label: "Batting run trend",
     homeDelta: battingDelta,
-    weight: 0.12,
+    weight: 0.08,
     available: true,
     hasSignal: battingDelta !== 0,
     evidence: `Home batting trend ${homeBattingTrend >= 0 ? "+" : ""}${homeBattingTrend.toFixed(2)} vs Away ${awayBattingTrend >= 0 ? "+" : ""}${awayBattingTrend.toFixed(2)}`,
@@ -50,7 +88,7 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     key: "ipl_bowling_trend",
     label: "Bowling / fielding trend",
     homeDelta: bowlingDelta,
-    weight: 0.10,
+    weight: 0.08,
     available: true,
     hasSignal: bowlingDelta !== 0,
     evidence: `Home run-prevention trend ${homeBowlingTrend >= 0 ? "+" : ""}${homeBowlingTrend.toFixed(2)} vs Away ${awayBowlingTrend >= 0 ? "+" : ""}${awayBowlingTrend.toFixed(2)}`,
@@ -66,7 +104,7 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     key: "ipl_venue_split",
     label: "Venue split",
     homeDelta: venueDelta,
-    weight: 0.08,
+    weight: 0.06,
     available: venueAvailable,
     hasSignal: venueAvailable && venueDelta !== 0,
     evidence: venueAvailable
@@ -83,7 +121,7 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     key: "ipl_head_to_head",
     label: "Recent head-to-head",
     homeDelta: h2hDelta,
-    weight: 0.06,
+    weight: 0.03,
     available: h2hAvailable,
     hasSignal: h2hAvailable && h2hDelta !== 0,
     evidence: h2hAvailable
@@ -118,7 +156,7 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     key: "ipl_conditions",
     label: "Weather / conditions volatility",
     homeDelta: conditionsDelta,
-    weight: 0.06,
+    weight: 0.03,
     available: conditionsAvailable,
     hasSignal: conditionsAvailable && conditionsDelta !== 0,
     evidence: conditionsEvidence,

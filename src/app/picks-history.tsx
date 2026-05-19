@@ -1,4 +1,4 @@
-import React, { useMemo, useState, memo } from 'react';
+import React, { useDeferredValue, useMemo, useState, memo } from 'react';
 import { View, Text, Pressable, SectionList, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -49,7 +49,7 @@ interface PickTile {
 interface PickSection {
   title: string;
   subtitle: string;
-  record: { w: number; l: number };
+  record: { w: number; l: number; pending: number };
   data: PickTile[];
 }
 
@@ -187,6 +187,7 @@ export default function PicksHistoryScreen() {
   const router = useRouter();
   const { data: picks, isLoading } = useUserPicks();
   const [filter, setFilter] = useState<'all' | 'win' | 'loss' | 'pending'>('all');
+  const deferredFilter = useDeferredValue(filter);
 
   const allTiles = useMemo<PickTile[]>(() => {
     if (!picks || picks.length === 0) return [];
@@ -205,23 +206,24 @@ export default function PicksHistoryScreen() {
   }, [picks]);
 
   const sections = useMemo<PickSection[]>(() => {
-    const filtered = filter === 'all' ? allTiles : allTiles.filter(t => t.result === filter);
+    const filtered = deferredFilter === 'all' ? allTiles : allTiles.filter(t => t.result === deferredFilter);
     const grouped = new Map<string, PickSection>();
 
     for (const t of filtered) {
       const key = getDateKey(t.createdAt);
       if (!grouped.has(key)) {
         const { title, subtitle } = formatDateHeader(t.createdAt);
-        grouped.set(key, { title, subtitle, record: { w: 0, l: 0 }, data: [] });
+        grouped.set(key, { title, subtitle, record: { w: 0, l: 0, pending: 0 }, data: [] });
       }
       const section = grouped.get(key)!;
       section.data.push(t);
       if (t.result === 'win') section.record.w++;
       if (t.result === 'loss') section.record.l++;
+      if (t.result === 'pending') section.record.pending++;
     }
 
     return Array.from(grouped.values());
-  }, [allTiles, filter]);
+  }, [allTiles, deferredFilter]);
 
   const summary = useMemo(() => {
     if (!picks) return { total: 0, wins: 0, losses: 0, pending: 0, rate: 0 };
@@ -355,8 +357,8 @@ export default function PicksHistoryScreen() {
                 <View style={s.sectionRecord}>
                   {section.record.w > 0 ? <Text style={[s.sectionRecordText, { color: C.TEAL }]}>{section.record.w}W</Text> : null}
                   {section.record.l > 0 ? <Text style={[s.sectionRecordText, { color: C.MAROON }]}>{section.record.l}L</Text> : null}
-                  {section.data.filter(d => d.result === 'pending').length > 0 ? (
-                    <Text style={[s.sectionRecordText, { color: C.MUTED }]}>{section.data.filter(d => d.result === 'pending').length} TBD</Text>
+                  {section.record.pending > 0 ? (
+                    <Text style={[s.sectionRecordText, { color: C.MUTED }]}>{section.record.pending} TBD</Text>
                   ) : null}
                 </View>
               </View>

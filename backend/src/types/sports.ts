@@ -46,6 +46,13 @@ export interface Team {
   logo: string;
   record: TeamRecord;
   rank?: number;
+  seed?: number;
+  rankingPoints?: number;
+  tour?: "ATP" | "WTA";
+  standingsRank?: number;
+  standingsPoints?: number;
+  netRunRate?: number;
+  matchesPlayed?: number;
 }
 
 // Game definition
@@ -59,6 +66,14 @@ export interface Game {
   venue: string;
   tvChannel: string;
   status: GameStatus;
+  statusLabel?: string;
+  statusDetail?: string;
+  suspension?: {
+    display: string;
+    resumeText: string;
+    reasonText: string;
+    source?: string;
+  };
   seasonContext?: {
     phase: string;
     label: string;

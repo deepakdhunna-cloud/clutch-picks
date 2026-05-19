@@ -19,6 +19,21 @@ function playerRank(team: GameContext["game"]["homeTeam"]): number | null {
   return typeof rank === "number" && Number.isFinite(rank) && rank > 0 ? rank : null;
 }
 
+function playerSeed(team: GameContext["game"]["homeTeam"]): number | null {
+  const seed = (team as { seed?: number }).seed;
+  return typeof seed === "number" && Number.isFinite(seed) && seed > 0 ? seed : null;
+}
+
+function rankingPoints(team: GameContext["game"]["homeTeam"]): number | null {
+  const points = (team as { rankingPoints?: number }).rankingPoints;
+  return typeof points === "number" && Number.isFinite(points) && points > 0 ? points : null;
+}
+
+function tourName(team: GameContext["game"]["homeTeam"]): string {
+  const tour = (team as { tour?: string }).tour;
+  return tour === "ATP" || tour === "WTA" ? tour : "Tennis";
+}
+
 function recentWinPct(results: Array<"W" | "L" | "D">): number | null {
   const decisive = results.filter((result) => result === "W" || result === "L");
   if (decisive.length < 3) return null;
@@ -52,18 +67,37 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
 
   const homeRank = playerRank(ctx.game.homeTeam);
   const awayRank = playerRank(ctx.game.awayTeam);
-  const rankingAvailable = homeRank !== null || awayRank !== null;
-  const rankingDelta = rankingAvailable ? tennisRankDelta(homeRank, awayRank) : 0;
+  const homeSeed = playerSeed(ctx.game.homeTeam);
+  const awaySeed = playerSeed(ctx.game.awayTeam);
+  const homePoints = rankingPoints(ctx.game.homeTeam);
+  const awayPoints = rankingPoints(ctx.game.awayTeam);
+  const worldRankingAvailable = homeRank !== null || awayRank !== null;
+  const seedAvailable = homeSeed !== null || awaySeed !== null;
+  const rankingAvailable = worldRankingAvailable || seedAvailable;
+  const worldRankDelta = worldRankingAvailable ? tennisRankDelta(homeRank, awayRank) : 0;
+  const seedDelta = !worldRankingAvailable && seedAvailable ? tennisRankDelta(homeSeed, awaySeed) * 0.45 : 0;
+  const pointsDelta =
+    homePoints !== null && awayPoints !== null
+      ? clamp(Math.log(homePoints / awayPoints) * 42, -34, 34)
+      : 0;
+  const rankingDelta = worldRankingAvailable
+    ? clamp(worldRankDelta * 0.82 + pointsDelta * 0.18, -155, 155)
+    : seedDelta;
+
+  const rankingEvidence = worldRankingAvailable
+    ? `${tourName(ctx.game.homeTeam)} ranking: ${ctx.game.homeTeam.abbreviation} #${homeRank ?? "unranked"} (${homePoints ?? "n/a"} pts) vs ${ctx.game.awayTeam.abbreviation} #${awayRank ?? "unranked"} (${awayPoints ?? "n/a"} pts)`
+    : seedAvailable
+      ? `Tournament seed fallback: ${ctx.game.homeTeam.abbreviation} seed ${homeSeed ?? "unseeded"} vs ${ctx.game.awayTeam.abbreviation} seed ${awaySeed ?? "unseeded"}`
+      : "ATP/WTA ranking unavailable for both sides";
+
   factors.push({
     key: "tennis_ranking_edge",
-    label: "Ranking edge",
+    label: worldRankingAvailable ? "ATP/WTA ranking edge" : "Tournament seed edge",
     homeDelta: rankingDelta,
     weight: 0.16,
     available: rankingAvailable,
     hasSignal: rankingAvailable && rankingDelta !== 0,
-    evidence: rankingAvailable
-      ? `${ctx.game.homeTeam.abbreviation} rank ${homeRank ?? "unranked"} vs ${ctx.game.awayTeam.abbreviation} rank ${awayRank ?? "unranked"}`
-      : "Ranking unavailable for both sides",
+    evidence: rankingEvidence,
   });
 
   const homeFormPct = recentWinPct(ctx.homeForm.results);

@@ -39,6 +39,12 @@ export function displaySport(sport: string): string {
  */
 export function formatGameTime(sport: string, quarter?: string, clock?: string): string | null {
   if (!quarter && !clock) return null;
+  const isSuspended = [quarter, clock].filter(Boolean).join(' ').toLowerCase().includes('suspended');
+  if (isSuspended) {
+    return clock && !clock.toLowerCase().includes('suspended')
+      ? `Suspended · ${clock}`
+      : 'Suspended · No time announced';
+  }
 
   switch (sport) {
     case 'MLB':

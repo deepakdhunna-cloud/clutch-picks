@@ -17,6 +17,9 @@ export interface LiveScore {
   period: number | null;
   quarter: string | null;
   status: GameStatus.LIVE | GameStatus.FINAL;
+  statusLabel?: string;
+  statusDetail?: string;
+  suspension?: GameWithPrediction['suspension'];
   liveState?: GameWithPrediction['liveState'];
 }
 
@@ -62,6 +65,11 @@ function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScor
     (game.clock ?? null) === live.clock &&
     (game.quarter ?? null) === live.quarter &&
     game.status === live.status &&
+    (game.statusLabel ?? null) === (live.statusLabel ?? null) &&
+    (game.statusDetail ?? null) === (live.statusDetail ?? null) &&
+    (game.suspension?.display ?? null) === (live.suspension?.display ?? null) &&
+    (game.suspension?.resumeText ?? null) === (live.suspension?.resumeText ?? null) &&
+    (game.suspension?.reasonText ?? null) === (live.suspension?.reasonText ?? null) &&
     sameLiveState(game.liveState, nextLiveState)
   ) {
     return game;
@@ -73,6 +81,9 @@ function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScor
     clock: live.clock ?? undefined,
     quarter: live.quarter ?? undefined,
     status: live.status,
+    statusLabel: live.statusLabel,
+    statusDetail: live.statusDetail,
+    suspension: live.suspension,
     liveState: nextLiveState,
   };
 }

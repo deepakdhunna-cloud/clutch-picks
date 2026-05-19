@@ -5,6 +5,7 @@ import { GameWithPrediction, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { TeamJerseyCompact } from './TeamJersey';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
+import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 165;
@@ -16,16 +17,19 @@ interface CompactLiveCardProps {
 
 export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPress }: CompactLiveCardProps) {
   const awayColors = useMemo(
-    () => getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, (game.awayTeam as any).color),
-    [game.awayTeam.abbreviation, game.sport, (game.awayTeam as any).color]
+    () => getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color),
+    [game.awayTeam.abbreviation, game.awayTeam.color, game.sport]
   );
   const homeColors = useMemo(
-    () => getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, (game.homeTeam as any).color),
-    [game.homeTeam.abbreviation, game.sport, (game.homeTeam as any).color]
+    () => getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color),
+    [game.homeTeam.abbreviation, game.homeTeam.color, game.sport]
   );
 
   const awayScore = game.awayScore ?? 0;
   const homeScore = game.homeScore ?? 0;
+  const suspended = isSuspendedGame(game);
+  const suspensionTime = suspendedResumeText(game);
+  const suspensionReason = suspendedReasonText(game);
   const awayWinning = awayScore > homeScore;
   const homeWinning = homeScore > awayScore;
 
@@ -110,9 +114,23 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
 
         {/* Top section: LIVE badge + sport */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 9, paddingBottom: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#DC2626', marginRight: 4 }} />
-            <Text style={{ color: '#DC2626', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>LIVE</Text>
+          <View style={{ alignItems: 'flex-start', flexShrink: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#DC2626', marginRight: 4 }} />
+              <Text style={{ color: '#DC2626', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>
+                {suspended ? suspendedLabel(game).toUpperCase() : 'LIVE'}
+              </Text>
+            </View>
+            {suspended ? (
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800', marginTop: 2, maxWidth: 170 }}
+              >
+                {suspensionReason}
+              </Text>
+            ) : null}
           </View>
           <View style={{
             backgroundColor: 'rgba(122,157,184,0.15)',
@@ -142,7 +160,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             />
             <View style={{ marginLeft: 8, flex: 1 }}>
               <Text style={{
-                color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+              color: suspended || awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                 fontSize: 13,
                 fontWeight: awayWinning ? '800' : '500',
                 letterSpacing: 0.4,
@@ -160,7 +178,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               fontSize: 20,
               fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
-              opacity: awayWinning ? 1 : 0.35,
+              opacity: suspended ? 0.55 : awayWinning ? 1 : 0.35,
             }}>
               {awayScore}
             </Text>
@@ -179,7 +197,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             />
             <View style={{ marginLeft: 8, flex: 1 }}>
               <Text style={{
-                color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+              color: suspended || homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                 fontSize: 13,
                 fontWeight: homeWinning ? '800' : '500',
                 letterSpacing: 0.4,
@@ -197,7 +215,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               fontSize: 20,
               fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
-              opacity: homeWinning ? 1 : 0.35,
+              opacity: suspended ? 0.55 : homeWinning ? 1 : 0.35,
             }}>
               {homeScore}
             </Text>
@@ -212,18 +230,18 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             {/* Left: game time */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {(() => {
-                const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                const timeStr = suspended ? suspensionTime : formatGameTime(game.sport, game.quarter, game.clock);
                 if (timeStr) {
                   return (
                     <View style={{
-                      backgroundColor: 'rgba(255,255,255,0.12)',
+                      backgroundColor: suspended ? 'rgba(220,38,38,0.13)' : 'rgba(255,255,255,0.12)',
                       paddingHorizontal: 7,
                       paddingVertical: 2,
                       borderRadius: 5,
                       borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.22)',
+                      borderColor: suspended ? 'rgba(220,38,38,0.28)' : 'rgba(255,255,255,0.22)',
                     }}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{timeStr}</Text>
+                      <Text style={{ color: suspended ? '#DC2626' : '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{timeStr}</Text>
                     </View>
                   );
                 }

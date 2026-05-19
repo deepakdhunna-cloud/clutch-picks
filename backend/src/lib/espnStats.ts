@@ -6,6 +6,7 @@
 // ESPN sport path mappings
 import { LRUCache } from "lru-cache";
 import { fetchMLBDailyProbables, type MLBPitcherQuality } from "./mlbStatsApi";
+import { fetchTennisRecentForm } from "./tennisStats";
 
 const ESPN_SPORT_PATHS: Record<string, string> = {
   NFL: "football/nfl",
@@ -163,6 +164,10 @@ export async function fetchTeamRecentForm(
   sport: string,
   limit = 10
 ): Promise<TeamRecentForm> {
+  if (sport === "TENNIS") {
+    return fetchTennisRecentForm(teamId, limit);
+  }
+
   const cacheKey = `team-${teamId}-${sport}`;
   const cached = getCachedForm(cacheKey);
   if (cached) return cached;

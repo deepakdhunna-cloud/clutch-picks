@@ -132,6 +132,8 @@ for (const check of checks) {
 console.log("");
 if (failures > 0) {
   console.log(`${failures} required production setting(s) still need attention.`);
+  console.log("If this was run from a local shell, production secrets may simply be absent locally.");
+  console.log("To verify Railway production without printing secret values, run: bun run release:check:production");
   process.exitCode = 1;
 } else {
   console.log("Required production settings are present.");

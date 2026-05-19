@@ -13,6 +13,14 @@ import { buildDeterministicNarrative, buildNarrativeInput } from "../prediction/
 import { getConfidenceBand, type FactorContribution } from "../prediction/types";
 import { notifyWinnerFlip } from "../lib/notification-jobs";
 import { fetchMarketConsensus } from "../lib/sharpApi";
+import {
+  extractTennisAthleteId,
+  fetchTennisRankings,
+  type TennisRankingEntry,
+  type TennisTour,
+} from "../lib/tennisStats";
+import { fetchTennisExplorerLiveMatches, type TennisExplorerLiveMatch } from "../lib/tennisExplorer";
+import { fetchIPLStandings, type IPLStandingEntry } from "../lib/iplStandings";
 
 // ESPN API base URLs for each sport
 const ESPN_ENDPOINTS = {
@@ -52,6 +60,14 @@ export interface GameTeam {
   color: string;
   logo?: string;
   rank?: number;
+  seed?: number;
+  rankingPoints?: number;
+  tour?: TennisTour;
+  tennisRankSource?: "espn-rankings";
+  standingsRank?: number;
+  standingsPoints?: number;
+  netRunRate?: number;
+  matchesPlayed?: number;
 }
 
 export interface PredictionFactor {
@@ -134,6 +150,14 @@ export interface Game {
   marketFavorite?: "home" | "away";
   quarter?: string;
   clock?: string;
+  statusLabel?: string;
+  statusDetail?: string;
+  suspension?: {
+    display: string;
+    resumeText: string;
+    reasonText: string;
+    source?: string;
+  };
   seasonContext?: NarrativeSeasonContext | null;
   homeLinescores?: number[];
   awayLinescores?: number[];
@@ -364,27 +388,6 @@ interface ESPNScoreboardResponse {
   events: ESPNEvent[];
 }
 
-interface ESPNStandingsResponse {
-  children?: Array<{
-    standings?: {
-      entries?: ESPNStandingEntry[];
-    };
-  }>;
-}
-
-interface ESPNStandingEntry {
-  team?: {
-    id?: string;
-    abbreviation?: string;
-  };
-  stats?: Array<{
-    name?: string;
-    type?: string;
-    value?: number;
-    displayValue?: string;
-  }>;
-}
-
 interface ESPNFitTennisState {
   page?: {
     content?: {
@@ -437,7 +440,7 @@ interface TennisCompetitor {
   homeAway?: "home" | "away";
   logo?: string;
   nm?: string;
-  rnk?: number;
+  rnk?: number; // tournament seed from ESPN scoreboard, not world rank
   wnr?: boolean;
   srv?: boolean;
   lnescrs?: TennisLineScore[];
@@ -462,9 +465,6 @@ interface CacheEntry {
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds — used when no games in entry are live
 const LIVE_CACHE_TTL_MS = 3 * 1000; // 3 seconds — used when ≥1 game in entry is live
 const cache = new LRUCache<string, CacheEntry>({ max: 100 });
-const IPL_STANDINGS_URL = "https://site.web.api.espn.com/apis/v2/sports/cricket/8048/standings";
-const IPL_STANDINGS_CACHE_TTL_MS = 10 * 60 * 1000;
-let iplStandingsRecordCache: { data: Map<string, string>; timestamp: number } | null = null;
 // Secondary index: gameId → Game, for O(1) lookups in /id/:id
 const gameById = new Map<string, Game>();
 // In-flight request deduplication: prevents parallel requests for the same key
@@ -1130,15 +1130,70 @@ function mapGameStatus(
   status: ESPNStatus
 ): "SCHEDULED" | "LIVE" | "FINAL" | "POSTPONED" | "CANCELLED" {
   const state = status.type.state.toLowerCase();
-  const name = (status.type.name ?? status.type.description ?? status.type.detail ?? "").toLowerCase();
+  const name = [
+    status.type.name,
+    status.type.description,
+    status.type.detail,
+    status.type.shortDetail,
+    status.summary,
+  ].filter(Boolean).join(" ").toLowerCase();
   if (name.includes("postponed")) return "POSTPONED";
   if (name.includes("canceled") || name.includes("cancelled")) return "CANCELLED";
+  if (isSuspendedStatusText(name)) return "LIVE";
   if (state === "in") return "LIVE";
   if (state === "post" || status.type.completed) return "FINAL";
   return "SCHEDULED";
 }
 
+function isSuspendedStatusText(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes("suspended") ||
+    normalized.includes("interrupted") ||
+    normalized.includes("weather delay") ||
+    normalized.includes("rain delay") ||
+    normalized.includes("lightning delay") ||
+    normalized.includes("delayed")
+  );
+}
+
+function parseResumeAnnouncement(text: string): string {
+  const match = text.match(/\b(?:resume|resumes|restart|restarts|play|scheduled|start)\b[^0-9]{0,40}(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)?(?:\s*[A-Z]{2,4})?)/i);
+  return match?.[1] ? `Est. ${match[1].trim()}` : "No time announced";
+}
+
+function parseSuspensionReason(text: string): string {
+  const normalized = text.toLowerCase();
+  if (/\blightning\b/.test(normalized)) return "Lightning delay";
+  if (/\brain\b|\brained\b/.test(normalized)) return "Rain delay";
+  if (/\bweather\b/.test(normalized)) return "Weather delay";
+  if (/\bbad light\b/.test(normalized)) return "Bad light";
+  if (/\bdarkness\b/.test(normalized)) return "Darkness";
+  if (/\bcourt\b/.test(normalized) && /\bcondition/.test(normalized)) return "Court conditions";
+  if (/\bmedical\b/.test(normalized)) return "Medical delay";
+  return "Reason not reported";
+}
+
+function getSuspensionInfoFromESPN(status: ESPNStatus): Game["suspension"] | undefined {
+  const text = [
+    status.type.shortDetail,
+    status.type.detail,
+    status.type.description,
+    status.type.name,
+    status.summary,
+  ].filter(Boolean).join(" ");
+  if (!isSuspendedStatusText(text)) return undefined;
+  return {
+    display: "Suspended",
+    resumeText: parseResumeAnnouncement(text),
+    reasonText: parseSuspensionReason(text),
+    source: "espn",
+  };
+}
+
 function getPeriodDisplay(status: ESPNStatus, sport: SportKey): string | undefined {
+  const suspension = getSuspensionInfoFromESPN(status);
+  if (suspension) return suspension.display;
   if (status.type.state.toLowerCase() !== "in") return undefined;
   if (sport === "IPL") {
     return status.type.shortDetail || status.type.detail || status.summary || undefined;
@@ -1209,57 +1264,6 @@ function getMlbPeriodDisplay(liveState: Game["liveState"] | undefined): string |
   if (liveState.inningHalf === "top") return `Top ${ordinalInning(inning)}`;
   if (liveState.inningHalf === "bottom") return `Bot ${ordinalInning(inning)}`;
   return undefined;
-}
-
-function standingsStat(entry: ESPNStandingEntry, names: string[]): number | null {
-  const targets = new Set(names.map((name) => name.toLowerCase()));
-  const stat = entry.stats?.find((candidate) =>
-    targets.has((candidate.name ?? "").toLowerCase()) ||
-    targets.has((candidate.type ?? "").toLowerCase()),
-  );
-  if (typeof stat?.value === "number" && Number.isFinite(stat.value)) {
-    return stat.value;
-  }
-  const parsed = Number(stat?.displayValue);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-async function fetchIPLStandingsRecords(): Promise<Map<string, string>> {
-  if (
-    iplStandingsRecordCache &&
-    Date.now() - iplStandingsRecordCache.timestamp < IPL_STANDINGS_CACHE_TTL_MS
-  ) {
-    return iplStandingsRecordCache.data;
-  }
-
-  try {
-    const response = await fetch(IPL_STANDINGS_URL, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return new Map();
-    const data = (await response.json()) as ESPNStandingsResponse;
-    const entries = data.children?.flatMap((child) => child.standings?.entries ?? []) ?? [];
-    const records = new Map<string, string>();
-
-    for (const entry of entries) {
-      const wins = standingsStat(entry, ["matchesWon", "matcheswon", "wins"]);
-      const losses = standingsStat(entry, ["matchesLost", "matcheslost", "losses"]);
-      const tied = standingsStat(entry, ["matchesTied", "matchestied", "ties"]) ?? 0;
-      const noResult = standingsStat(entry, ["noresult", "noResult"]) ?? 0;
-      if (wins === null || losses === null) continue;
-
-      const extra = tied + noResult;
-      const record = extra > 0 ? `${wins}-${losses}-${extra}` : `${wins}-${losses}`;
-      const keys = [entry.team?.id, entry.team?.abbreviation].filter(Boolean) as string[];
-      for (const key of keys) {
-        records.set(key.toUpperCase(), record);
-      }
-    }
-
-    iplStandingsRecordCache = { data: records, timestamp: Date.now() };
-    return records;
-  } catch (error) {
-    console.warn("[ipl-standings] failed to fetch standings records:", error instanceof Error ? error.message : error);
-    return iplStandingsRecordCache?.data ?? new Map();
-  }
 }
 
 function parseMlbLiveState({
@@ -1345,7 +1349,14 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
 
   const homeTeam = homeCompetitor.team;
   const awayTeam = awayCompetitor.team;
-  const iplRecords = sport === "IPL" ? await fetchIPLStandingsRecords() : null;
+  const iplStandings = sport === "IPL" ? await fetchIPLStandings() : null;
+
+  const getStanding = (competitor: ESPNCompetitor): IPLStandingEntry | undefined => {
+    if (sport !== "IPL") return undefined;
+    const teamId = competitor.team.id.toUpperCase();
+    const abbr = competitor.team.abbreviation.toUpperCase();
+    return iplStandings?.get(teamId) ?? iplStandings?.get(abbr);
+  };
 
   const getRecord = (competitor: ESPNCompetitor): string => {
     const overallRecord = competitor.records?.find(
@@ -1354,9 +1365,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     const feedRecord = overallRecord?.summary?.trim();
     if (feedRecord) return feedRecord;
     if (sport === "IPL") {
-      const teamId = competitor.team.id.toUpperCase();
-      const abbr = competitor.team.abbreviation.toUpperCase();
-      return iplRecords?.get(teamId) ?? iplRecords?.get(abbr) ?? "0-0";
+      return getStanding(competitor)?.record ?? "0-0";
     }
     return "0-0";
   };
@@ -1391,8 +1400,11 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   );
   const tvChannel = watchSources[0];
   const gameStatus = mapGameStatus(competition.status);
+  const suspension = getSuspensionInfoFromESPN(competition.status);
   const rawQuarter = getPeriodDisplay(competition.status, sport);
-  const clock = gameStatus === "LIVE" ? competition.status.displayClock : undefined;
+  const clock = gameStatus === "LIVE"
+    ? suspension?.resumeText ?? competition.status.displayClock
+    : undefined;
   const seasonContext = deriveSeasonContext({
     sport,
     gameTime: event.date,
@@ -1426,6 +1438,8 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
   const quarter = sport === "MLB" ? getMlbPeriodDisplay(liveState) ?? rawQuarter : rawQuarter;
   const normalizeTeamColor = (color: string | undefined): string =>
     color ? (color.startsWith("#") ? color : `#${color}`) : "#333333";
+  const homeStanding = getStanding(homeCompetitor);
+  const awayStanding = getStanding(awayCompetitor);
 
   const game: Game = {
     id: event.id,
@@ -1438,6 +1452,10 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
       record: getRecord(homeCompetitor),
       color: normalizeTeamColor(homeTeam.color),
       logo: getTeamLogo(homeTeam),
+      standingsRank: homeStanding?.rank ?? undefined,
+      standingsPoints: homeStanding?.matchPoints ?? undefined,
+      netRunRate: homeStanding?.netRunRate ?? undefined,
+      matchesPlayed: homeStanding?.matchesPlayed ?? undefined,
     },
     awayTeam: {
       id: awayTeam.id,
@@ -1447,6 +1465,10 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
       record: getRecord(awayCompetitor),
       color: normalizeTeamColor(awayTeam.color),
       logo: getTeamLogo(awayTeam),
+      standingsRank: awayStanding?.rank ?? undefined,
+      standingsPoints: awayStanding?.matchPoints ?? undefined,
+      netRunRate: awayStanding?.netRunRate ?? undefined,
+      matchesPlayed: awayStanding?.matchesPlayed ?? undefined,
     },
     gameTime: event.date,
     status: gameStatus,
@@ -1460,6 +1482,9 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     marketFavorite,
     quarter,
     clock,
+    statusLabel: suspension?.display,
+    statusDetail: suspension?.resumeText,
+    suspension,
     seasonContext,
     homeLinescores,
     awayLinescores,
@@ -1550,11 +1575,23 @@ function buildTennisTournamentIndex(scoreboard: TennisScoreboard): Map<string, {
 function mapTennisStatus(status?: TennisStatus): Game["status"] {
   const state = (status?.state ?? "").toLowerCase();
   const text = [status?.description, status?.detail].filter(Boolean).join(" ").toLowerCase();
-  if (text.includes("postponed") || text.includes("suspended")) return "POSTPONED";
+  if (text.includes("postponed")) return "POSTPONED";
   if (text.includes("canceled") || text.includes("cancelled")) return "CANCELLED";
+  if (isSuspendedStatusText(text)) return "LIVE";
   if (state === "in") return "LIVE";
   if (state === "post" || status?.completed) return "FINAL";
   return "SCHEDULED";
+}
+
+function getSuspensionInfoFromTennis(status?: TennisStatus): Game["suspension"] | undefined {
+  const text = [status?.description, status?.detail].filter(Boolean).join(" ");
+  if (!isSuspendedStatusText(text)) return undefined;
+  return {
+    display: "Suspended",
+    resumeText: parseResumeAnnouncement(text),
+    reasonText: parseSuspensionReason(text),
+    source: "espn",
+  };
 }
 
 function countryCodeFromLogo(logo?: string): string | undefined {
@@ -1646,21 +1683,86 @@ function tennisSetsWon(competitor: TennisCompetitor, opponent: TennisCompetitor)
   return sets;
 }
 
-function tennisTeamFromCompetitor(competitor: TennisCompetitor, isDoubles: boolean): GameTeam {
+function tennisTeamFromCompetitor(
+  competitor: TennisCompetitor,
+  isDoubles: boolean,
+  rankings: Map<string, TennisRankingEntry>,
+): GameTeam {
   const name = tennisCompetitorName(competitor, isDoubles);
   const logo = tennisCompetitorLogo(competitor);
   const country = countryCodeFromLogo(logo);
-  const rank = typeof competitor.rnk === "number" ? competitor.rnk : undefined;
+  const athleteId = extractTennisAthleteId(competitor.id) ?? extractTennisAthleteId(competitor.uid);
+  const ranking = !isDoubles && athleteId ? rankings.get(athleteId) : undefined;
+  const seed = typeof competitor.rnk === "number" ? competitor.rnk : undefined;
+  const rank = ranking?.rank;
   return {
-    id: competitor.uid ?? competitor.id ?? name,
+    id: athleteId ?? competitor.uid ?? competitor.id ?? name,
     name,
     abbreviation: tennisAbbreviation(name, competitor.rstr),
     city: name,
-    record: rank ? `Rank #${rank}` : isDoubles ? "Doubles" : "Singles",
+    record: rank ? `${ranking.tour} Rank #${rank}` : seed ? `Seed #${seed}` : isDoubles ? "Doubles" : "Singles",
     color: country ? TENNIS_COUNTRY_COLORS[country] ?? "#2E7D5B" : "#2E7D5B",
     logo,
     rank,
+    seed,
+    rankingPoints: ranking?.points,
+    tour: ranking?.tour,
+    tennisRankSource: ranking ? "espn-rankings" : undefined,
   };
+}
+
+function tennisTeamFromExplorer(match: TennisExplorerLiveMatch, side: "home" | "away"): GameTeam {
+  const isHome = side === "home";
+  const name = isHome ? match.homeName : match.awayName;
+  const rank = isHome ? match.homeRank : match.awayRank;
+  const seed = isHome ? match.homeSeed : match.awaySeed;
+  return {
+    id: `${match.id}-${side}`,
+    name,
+    abbreviation: isHome ? match.homeAbbreviation : match.awayAbbreviation,
+    city: name,
+    record: rank ? `${match.tour} Rank #${rank}` : seed ? `Seed #${seed}` : "Singles",
+    color: "#2E7D5B",
+    rank,
+    seed,
+    tour: match.tour,
+  };
+}
+
+function transformTennisExplorerMatch(match: TennisExplorerLiveMatch): Game {
+  const game: Game = {
+    id: match.id,
+    sport: "TENNIS",
+    homeTeam: tennisTeamFromExplorer(match, "home"),
+    awayTeam: tennisTeamFromExplorer(match, "away"),
+    gameTime: match.gameTime,
+    status: "LIVE",
+    venue: match.venue,
+    homeScore: match.homeSets,
+    awayScore: match.awaySets,
+    quarter: match.quarter,
+    clock: match.clock,
+    statusLabel: match.suspension?.display,
+    statusDetail: match.suspension?.resumeText,
+    suspension: match.suspension,
+    seasonContext: deriveSeasonContext({
+      sport: "TENNIS",
+      gameTime: match.gameTime,
+      eventName: match.venue,
+      competitionNotes: [match.quarter].filter(Boolean),
+    }),
+    homeLinescores: match.homeLinescores,
+    awayLinescores: match.awayLinescores,
+  };
+  const cachedPrediction = pickFreshestPrediction(game.id, true);
+  return cachedPrediction ? attachPredictionToGame(game, cachedPrediction) : game;
+}
+
+function tennisGameSignature(game: Game): string {
+  const names = [game.homeTeam.name, game.awayTeam.name]
+    .map((name) => name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean).sort().join(" "))
+    .sort();
+  return names.join("|");
 }
 
 function tennisVenueText(meta: { tournament: string; grouping?: string } | undefined, competition: TennisCompetition): string {
@@ -1675,6 +1777,7 @@ function tennisVenueText(meta: { tournament: string; grouping?: string } | undef
 function transformTennisCompetition(
   competition: TennisCompetition,
   meta: { tournament: string; grouping?: string } | undefined,
+  rankings: Map<string, TennisRankingEntry>,
 ): Game | null {
   const competitors = competition.competitors ?? [];
   const homeCompetitor = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
@@ -1682,8 +1785,9 @@ function transformTennisCompetition(
   if (!competition.id || !competition.date || !homeCompetitor || !awayCompetitor) return null;
 
   const gameStatus = mapTennisStatus(competition.status);
-  const homeTeam = tennisTeamFromCompetitor(homeCompetitor, competition.dbls === true);
-  const awayTeam = tennisTeamFromCompetitor(awayCompetitor, competition.dbls === true);
+  const suspension = getSuspensionInfoFromTennis(competition.status);
+  const homeTeam = tennisTeamFromCompetitor(homeCompetitor, competition.dbls === true, rankings);
+  const awayTeam = tennisTeamFromCompetitor(awayCompetitor, competition.dbls === true, rankings);
   const homeLinescores = tennisSetScores(homeCompetitor);
   const awayLinescores = tennisSetScores(awayCompetitor);
   const hasSetScores = Boolean(homeLinescores?.length || awayLinescores?.length || gameStatus === "LIVE" || gameStatus === "FINAL");
@@ -1691,7 +1795,7 @@ function transformTennisCompetition(
   const awayScore = hasSetScores ? tennisSetsWon(awayCompetitor, homeCompetitor) : undefined;
   const statusDetail = competition.status?.detail || competition.status?.description;
   const quarter = gameStatus === "LIVE"
-    ? statusDetail
+    ? suspension?.display ?? statusDetail
     : gameStatus === "FINAL"
       ? competition.status?.description ?? "Final"
       : undefined;
@@ -1708,7 +1812,10 @@ function transformTennisCompetition(
     homeScore,
     awayScore,
     quarter,
-    clock: gameStatus === "LIVE" ? statusDetail : undefined,
+    clock: gameStatus === "LIVE" ? suspension?.resumeText ?? statusDetail : undefined,
+    statusLabel: suspension?.display,
+    statusDetail: suspension?.resumeText,
+    suspension,
     seasonContext: deriveSeasonContext({
       sport: "TENNIS",
       gameTime: competition.date,
@@ -1753,13 +1860,21 @@ async function fetchTennisGamesFromESPN(date?: string): Promise<Game[]> {
     }
 
     recordESPNSuccess();
+    const rankings = await fetchTennisRankings().catch(() => new Map<string, TennisRankingEntry>());
     const tournamentIndex = buildTennisTournamentIndex(scoreboard);
-    const games = Object.values(scoreboard.competitions)
+    const espnGames = Object.values(scoreboard.competitions)
       .map((competition) => transformTennisCompetition(
         competition,
         competition.id ? tournamentIndex.get(competition.id) : undefined,
+        rankings,
       ))
       .filter((game): game is Game => game !== null)
+      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
+    const espnSignatures = new Set(espnGames.map(tennisGameSignature));
+    const supplementalGames = (await fetchTennisExplorerLiveMatches(date).catch(() => []))
+      .map(transformTennisExplorerMatch)
+      .filter((game) => !espnSignatures.has(tennisGameSignature(game)));
+    const games = [...espnGames, ...supplementalGames]
       .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
 
     for (const game of games) {
@@ -2392,6 +2507,9 @@ interface LiveScore {
   period: number | null;
   quarter: string | null;
   status: "LIVE" | "FINAL";
+  statusLabel?: string;
+  statusDetail?: string;
+  suspension?: Game["suspension"];
   liveState?: Game["liveState"];
 }
 
@@ -2453,6 +2571,9 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
               period: parsePeriodNumber(game.quarter ?? "") ?? null,
               quarter: game.quarter ?? null,
               status: game.status === "FINAL" ? "FINAL" : "LIVE",
+              statusLabel: game.statusLabel,
+              statusDetail: game.statusDetail,
+              suspension: game.suspension,
             }));
         }
 
@@ -2484,6 +2605,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
               return null;
             }
             const liveStatus: LiveScore["status"] = status === "FINAL" ? "FINAL" : "LIVE";
+            const suspension = getSuspensionInfoFromESPN(comp.status);
             const home = comp.competitors.find((c) => c.homeAway === "home");
             const away = comp.competitors.find((c) => c.homeAway === "away");
             if (!home || !away) return null;
@@ -2510,10 +2632,13 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
               },
               homeScore: parseInt(home.score ?? "0", 10),
               awayScore: parseInt(away.score ?? "0", 10),
-              clock: comp.status.displayClock ?? null,
+              clock: suspension?.resumeText ?? comp.status.displayClock ?? null,
               period: comp.status.period ?? null,
               quarter: sport === "MLB" ? getMlbPeriodDisplay(liveState) ?? rawQuarter : rawQuarter,
               status: liveStatus,
+              statusLabel: suspension?.display,
+              statusDetail: suspension?.resumeText,
+              suspension,
               liveState,
             };
           })

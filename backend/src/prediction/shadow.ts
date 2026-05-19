@@ -276,6 +276,13 @@ export async function buildGameContext(
       abbreviation: game.homeTeam.abbreviation,
       logo: game.homeTeam.logo || "",
       rank: game.homeTeam.rank,
+      seed: game.homeTeam.seed,
+      rankingPoints: game.homeTeam.rankingPoints,
+      tour: game.homeTeam.tour,
+      standingsRank: game.homeTeam.standingsRank,
+      standingsPoints: game.homeTeam.standingsPoints,
+      netRunRate: game.homeTeam.netRunRate,
+      matchesPlayed: game.homeTeam.matchesPlayed,
       record: {
         wins: typeof game.homeTeam.record === "string"
           ? parseInt(game.homeTeam.record.split("-")[0] ?? "0")
@@ -291,6 +298,13 @@ export async function buildGameContext(
       abbreviation: game.awayTeam.abbreviation,
       logo: game.awayTeam.logo || "",
       rank: game.awayTeam.rank,
+      seed: game.awayTeam.seed,
+      rankingPoints: game.awayTeam.rankingPoints,
+      tour: game.awayTeam.tour,
+      standingsRank: game.awayTeam.standingsRank,
+      standingsPoints: game.awayTeam.standingsPoints,
+      netRunRate: game.awayTeam.netRunRate,
+      matchesPlayed: game.awayTeam.matchesPlayed,
       record: {
         wins: typeof game.awayTeam.record === "string"
           ? parseInt(game.awayTeam.record.split("-")[0] ?? "0")

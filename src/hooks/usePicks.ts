@@ -51,13 +51,14 @@ const DEFAULT_STATS: GamePickStats = {
 };
 
 // Hook to fetch all user picks with real-time updates
-export function useUserPicks() {
+export function useUserPicks(enabled = true) {
   return useQuery({
     queryKey: ['picks'],
     queryFn: async () => {
       const result = await api.get<Pick[]>('/api/picks');
       return result ?? [];
     },
+    enabled,
     staleTime: 30000,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
@@ -65,7 +66,7 @@ export function useUserPicks() {
 }
 
 // Hook to fetch user stats with real-time updates
-export function useUserStats() {
+export function useUserStats(enabled = true) {
   return useQuery({
     queryKey: ['stats'],
     queryFn: async () => {
@@ -78,6 +79,7 @@ export function useUserStats() {
         currentStreak: 0,
       };
     },
+    enabled,
     staleTime: 30000,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
@@ -134,20 +136,6 @@ export function useRefreshPicks() {
 }
 
 // ─── BATCH PICK STATS (single query for ALL games, replaces per-card queries) ───
-
-// Single query that fetches stats for ALL games at once
-function useAllPickStats() {
-  return useQuery({
-    queryKey: ['allPickStats'],
-    queryFn: async () => {
-      const result = await api.get<AllPickStatsMap>('/api/picks/all-stats');
-      return result ?? {};
-    },
-    staleTime: 60000, // 1 minute — pick stats don't change fast
-    refetchInterval: 120000, // 2 minutes
-    refetchIntervalInBackground: false,
-  });
-}
 
 // Per-card hook: reads from the single batch query via selector (no extra network calls)
 export function useGamePickStats(gameId: string) {

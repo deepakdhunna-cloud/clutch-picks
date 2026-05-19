@@ -101,8 +101,20 @@ function makeNBAContext(overrides: Partial<GameContext> = {}): GameContext {
 }
 
 function makeIPLContext(overrides: Partial<GameContext> = {}): GameContext {
-  const home = makeTeam("101", "RCB", 8, 4);
-  const away = makeTeam("102", "KKR", 6, 6);
+  const home = {
+    ...makeTeam("101", "RCB", 8, 4),
+    standingsRank: 1,
+    standingsPoints: 18,
+    netRunRate: 1.065,
+    matchesPlayed: 13,
+  };
+  const away = {
+    ...makeTeam("102", "KKR", 6, 6),
+    standingsRank: 7,
+    standingsPoints: 12,
+    netRunRate: -0.32,
+    matchesPlayed: 13,
+  };
   const game: Game = {
     id: "ipl-sim-1",
     sport: Sport.IPL,
@@ -384,6 +396,7 @@ describe("game-script simulation", () => {
     const prediction = predictGame(makeIPLContext());
 
     expect(prediction.league).toBe("IPL");
+    expect(prediction.factors.some((factor) => factor.key === "ipl_table_strength")).toBe(true);
     expect(prediction.factors.some((factor) => factor.key === "ipl_batting_trend")).toBe(true);
     expect(prediction.factors.some((factor) => factor.key === "ipl_bowling_trend")).toBe(true);
     expect(prediction.projection).toBeDefined();

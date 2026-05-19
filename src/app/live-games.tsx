@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -31,6 +31,7 @@ const ENTER_DURATION = 260;
 export default function LiveGamesScreen() {
   const router = useRouter();
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
+  const deferredSelectedSport = useDeferredValue(selectedSport);
 
   const translateX = useSharedValue(0);
   const isAnimating = useRef(false);
@@ -60,9 +61,9 @@ export default function LiveGamesScreen() {
   const availableSports = useMemo(() => Array.from(gamesBySport.keys()), [gamesBySport]);
 
   const filteredGames = useMemo(() => {
-    if (!selectedSport) return liveGames;
-    return gamesBySport.get(selectedSport) ?? [];
-  }, [liveGames, selectedSport, gamesBySport]);
+    if (!deferredSelectedSport) return liveGames;
+    return gamesBySport.get(deferredSelectedSport) ?? [];
+  }, [liveGames, deferredSelectedSport, gamesBySport]);
 
   // Order for swipe cycling
   const filterOrder = useMemo<(Sport | null)[]>(
@@ -293,7 +294,7 @@ export default function LiveGamesScreen() {
               <Animated.View style={[styles.swipeContent, animatedListStyle]}>
                 <View style={styles.gamesList}>
                   {filteredGames.map((game, index) => (
-                    <GameCard key={`${selectedSport ?? 'all'}-${game.id}`} game={game} index={index} />
+                    <GameCard key={game.id} game={game} index={index} />
                   ))}
 
                   {filteredGames.length === 0 ? (

@@ -4,19 +4,19 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Image,
   ActivityIndicator,
   Linking,
   StyleSheet,
   Modal,
   RefreshControl,
   Alert,
+  InteractionManager,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
-import { displayConfidence, displayWinProbability, displayEdgeRating, getConfidenceTierLabel, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
+import { displayWinProbability, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -28,7 +28,6 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import Svg, { Path } from 'react-native-svg';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Sport, type Prediction } from '@/types/sports';
 import { useGamePick, useMakePick } from '@/hooks/usePicks';
@@ -41,6 +40,7 @@ import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { getProjectionDisplay } from '@/lib/projection-display';
+import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Tv, X } from 'lucide-react-native';
 
@@ -375,22 +375,6 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   );
 });
 
-const FieldGoalU = React.memo(function FieldGoalU({ color, size = 42 }: { color: string; size?: number }) {
-  const isBlack = color === '#000000';
-  return (
-    <Svg width={size * 0.65} height={size} viewBox="0 0 26 40" fill="none">
-      <Path d="M4 0 L4 30" stroke={color} strokeWidth="5" strokeLinecap="round" />
-      <Path d="M22 0 L22 30" stroke={color} strokeWidth="5" strokeLinecap="round" />
-      <Path d="M4 30 L22 30" stroke={color} strokeWidth="5" strokeLinecap="round" />
-      <Path d="M13 30 L13 40" stroke={color} strokeWidth="4" strokeLinecap="round" />
-      <Path d="M8 15 Q13 10 18 15 Q13 20 8 15" fill={color} transform="rotate(-35 13 15)" />
-      <Path d="M13 13 L13 17" stroke={isBlack ? '#000000' : '#0D0D0D'} strokeWidth="1.2" strokeLinecap="round" transform="rotate(-35 13 15)" />
-      <Path d="M11.5 14 L14.5 14" stroke={isBlack ? '#000000' : '#0D0D0D'} strokeWidth="0.8" transform="rotate(-35 13 15)" />
-      <Path d="M11.5 16 L14.5 16" stroke={isBlack ? '#000000' : '#0D0D0D'} strokeWidth="0.8" transform="rotate(-35 13 15)" />
-    </Svg>
-  );
-});
-
 interface GameTeam {
   id: string;
   name: string;
@@ -445,12 +429,12 @@ interface GamePrediction {
     projectedTotal: number;
     volatility: number;
     upsetRisk: number;
-    signals: Array<{
+    signals: {
       key: string;
       label: string;
       value: number;
       evidence: string;
-    }>;
+    }[];
   };
 }
 
@@ -791,7 +775,7 @@ function RedactedSection({ title, height, onUnlock }: {
             </View>
             {height > 130 ? (
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                {[1,2,3,4,5,6].map(n => (
+                {[1, 2, 3, 4, 5, 6].map(n => (
                   <View key={n} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.03)' }} />
                 ))}
               </View>
@@ -1430,13 +1414,6 @@ function useSecondsUntil(gameTime: string): number {
   return Math.max(0, Math.floor((target - now) / 1000));
 }
 
-// Scoreboard-style mm:ss formatter (e.g. 9:05, 0:42)
-function formatCountdown(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 // In-flow pre-game countdown. Renders inside the score-panel slot during the
 // pre-game window; sport-aware label, VT323 pixel digits, ticking colon.
 function PreGameCountdown({ secondsLeft, sport }: { secondsLeft: number; sport?: string | null }) {
@@ -1490,6 +1467,24 @@ export default function GameDetailScreen() {
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
   const [followed, setFollowed] = useState(false);
+  const [deferredContentReady, setDeferredContentReady] = useState(false);
+
+  useEffect(() => {
+    setDeferredContentReady(false);
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (!cancelled) setDeferredContentReady(true);
+    });
+    const fallback = setTimeout(() => {
+      if (!cancelled) setDeferredContentReady(true);
+    }, 650);
+
+    return () => {
+      cancelled = true;
+      task.cancel?.();
+      clearTimeout(fallback);
+    };
+  }, [id]);
 
   // Load follow state from AsyncStorage on mount
   useEffect(() => {
@@ -1520,7 +1515,6 @@ export default function GameDetailScreen() {
       setFollowed(updated.includes(id));
     } catch {}
   }, [id]);
-  const [screenWidth, setScreenWidth] = useState(375);
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
   const { data: userPick } = useGamePick(id ?? '');
   const makePick = useMakePick();
@@ -1529,6 +1523,15 @@ export default function GameDetailScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     return refetch();
   });
+  const hasGameData = !!game;
+
+  useEffect(() => {
+    if (!id || !hasGameData || !deferredContentReady) return;
+    const timeout = setTimeout(() => {
+      void refetch();
+    }, 120);
+    return () => clearTimeout(timeout);
+  }, [deferredContentReady, hasGameData, id, refetch]);
   // Tick the pre-game countdown clock — called unconditionally to respect
   // the rules of hooks. Returns +Infinity until we have a valid gameTime
   // and 0 once tip-off has passed.
@@ -1542,6 +1545,9 @@ export default function GameDetailScreen() {
   );
   const { homeTeam, awayTeam, prediction } = game;
   const isLive = game.status === 'LIVE';
+  const suspended = isSuspendedGame(game);
+  const suspensionTime = suspendedResumeText(game);
+  const suspensionReason = suspendedReasonText(game);
   const isLiveMLB = isLive && game.sport === 'MLB' && !!game.liveState;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
   // Pre-game countdown state — true while the game is SCHEDULED and tip-off
@@ -1552,10 +1558,10 @@ export default function GameDetailScreen() {
   const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
   const scoreTextLength = `${game.homeScore ?? 0}-${game.awayScore ?? 0}`.length;
-  const detailScoreboardScale = scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
+  const detailScoreboardScale = suspended ? 0.7 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
   return (
-    <View style={{ flex: 1, backgroundColor: '#040608' }} onLayout={e => setScreenWidth(e.nativeEvent.layout.width)}>
-      <SilkThreads />
+    <View style={{ flex: 1, backgroundColor: '#040608' }}>
+      {deferredContentReady ? <SilkThreads /> : null}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} removeClippedSubviews={true} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressViewOffset={insets.top + 40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
@@ -1656,10 +1662,13 @@ export default function GameDetailScreen() {
                       homeColor={homeColors.primary}
                       awayColor={awayColors.primary}
                       scale={detailScoreboardScale}
+                      label={suspended ? 'SUSPENDED' : undefined}
+                      subLabel={suspended ? suspensionReason : undefined}
+                      detailLabel={suspended ? suspensionTime : undefined}
                     />
                   ) : null}
                   {(() => {
-                    const timeStr = isLive ? formatGameTime(game.sport, game.quarter, game.clock) : null;
+                    const timeStr = isLive && !suspended ? formatGameTime(game.sport, game.quarter, game.clock) : null;
                     if (timeStr) {
                       return <Text style={styles.scoreClock}>{timeStr}</Text>;
                     }
@@ -1704,11 +1713,17 @@ export default function GameDetailScreen() {
           />
         </View>
         <View style={styles.content}>
-          <View style={{ marginBottom: 40 }}>
-            <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
-            <QuarterTable game={game} />
-          </View>
-          {prediction && isPremium ? (
+          {deferredContentReady ? (
+            <View style={{ marginBottom: 40 }}>
+              <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
+              <QuarterTable game={game} />
+            </View>
+          ) : (
+            <View style={styles.detailWarmup}>
+              <ActivityIndicator color="#7A9DB8" />
+            </View>
+          )}
+          {deferredContentReady && prediction && isPremium ? (
             <>
               {prediction.projection ? (
                 <View style={{ marginBottom: 28 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Projection Center</Text><ProjectionEngineBlock game={game} /></View>
@@ -1726,7 +1741,7 @@ export default function GameDetailScreen() {
                 <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', fontWeight: '600' }}>›</Text>
               </Pressable>
             </>
-          ) : prediction && !isPremium ? (
+          ) : deferredContentReady && prediction && !isPremium ? (
             <>
               {/* ═══ WIN PROBABILITY ═══ */}
               <View style={{ paddingTop: 20 }}>
@@ -1765,11 +1780,13 @@ export default function GameDetailScreen() {
               </Pressable>
             </>
           ) : null}
-          <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>
-            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', lineHeight: 15 }}>
-              AI predictions are for entertainment purposes only. Not financial advice.
-            </Text>
-          </View>
+          {deferredContentReady ? (
+            <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>
+              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', lineHeight: 15 }}>
+                AI predictions are for entertainment purposes only. Not financial advice.
+              </Text>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
       <PickConfirmationModal
@@ -1811,6 +1828,7 @@ const styles = StyleSheet.create({
   followBtn: { height: 36, borderRadius: 10, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   followIcon: { fontSize: 13 },
   followText: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.9)' },
+  detailWarmup: { minHeight: 160, alignItems: 'center', justifyContent: 'center' },
   teamNamesRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 12, gap: 12 },
   teamName: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: -0.3, lineHeight: 22 },
   teamRecord: { fontSize: 12, color: '#ffffff', marginTop: 2 },
