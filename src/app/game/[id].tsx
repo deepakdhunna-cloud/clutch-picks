@@ -957,51 +957,6 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
   );
 }
 
-// ─── REDACTED WIN PROB — shows the bar shape but hides who's winning ──────
-function RedactedWinProb({ homeTeam, awayTeam, onUnlock }: {
-  homeTeam: GameTeam; awayTeam: GameTeam; onUnlock: () => void;
-}) {
-  return (
-    <Pressable onPress={onUnlock}>
-      <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-        <LinearGradient
-          colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 16, padding: 1 }}
-        >
-          <View style={{ borderRadius: 15, backgroundColor: 'rgba(5,8,13,0.92)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', padding: 12, overflow: 'hidden' }}>
-            <LinearGradient
-              pointerEvents="none"
-              colors={['rgba(122,157,184,0.11)', 'rgba(255,255,255,0.02)', 'rgba(139,10,31,0.06)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: '#9AB8CC', letterSpacing: 0.6 }}>{homeTeam.abbreviation}</Text>
-              <Text style={{ fontSize: 8, fontWeight: '900', color: 'rgba(180,211,235,0.56)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(224,234,240,0.66)', letterSpacing: 0.6 }}>{awayTeam.abbreviation}</Text>
-            </View>
-            <View style={{ height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden', position: 'relative' }}>
-              <LinearGradient
-                colors={['rgba(122,157,184,0.36)', 'rgba(139,10,31,0.18)', 'rgba(224,234,240,0.10)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ width: '72%', height: '100%', borderRadius: 5 }}
-              />
-              <View style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, backgroundColor: 'rgba(255,255,255,0.12)' }} />
-            </View>
-            <View style={{ alignSelf: 'center', marginTop: 8, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: 'rgba(139,10,31,0.14)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.30)' }}>
-              <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: '900', color: 'rgba(255,255,255,0.82)', letterSpacing: 1.1 }}>PRO</Text>
-            </View>
-          </View>
-        </LinearGradient>
-      </View>
-    </Pressable>
-  );
-}
-
 // ─── REDACTED SECTION — generic blurred section with visible header ───────
 function RedactedSection({ title, height, onUnlock }: {
   title: string; height: number; onUnlock: () => void;
@@ -1086,16 +1041,25 @@ function WinProbBar({ prediction, homeTeam, awayTeam }: { prediction: GamePredic
   const hColor = safeTeamColor(homeTeam.color);
   const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
   return (
-    <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <Text style={{ fontSize: 9, fontWeight: '800', color: hColor, letterSpacing: 0.4 }}>{homeTeam.abbreviation} {dp.home}%</Text>
-        <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
-        <Text style={{ fontSize: 9, fontWeight: '800', color: aColor, letterSpacing: 0.4 }}>{dp.away}% {awayTeam.abbreviation}</Text>
-      </View>
-      <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', overflow: 'hidden' }}>
-        <View style={{ flex: dp.home, backgroundColor: hColor, borderRadius: 5 }} />
-        <View style={{ flex: dp.away, backgroundColor: aColor, borderRadius: 5 }} />
-      </View>
+    <View style={styles.winProbShell}>
+      <LinearGradient
+        colors={['rgba(122,157,184,0.20)', 'rgba(255,255,255,0.06)', 'rgba(139,10,31,0.16)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.winProbBorder}
+      >
+        <View style={styles.winProbCard}>
+          <View style={styles.winProbHeader}>
+            <Text style={[styles.winProbTeamLabel, { color: hColor }]} numberOfLines={1}>{homeTeam.abbreviation} {dp.home}%</Text>
+            <Text style={styles.winProbTitle}>Win Probability</Text>
+            <Text style={[styles.winProbTeamLabel, { color: aColor, textAlign: 'right' }]} numberOfLines={1}>{dp.away}% {awayTeam.abbreviation}</Text>
+          </View>
+          <View style={styles.winProbTrack}>
+            <View style={[styles.winProbFill, { flex: dp.home, backgroundColor: hColor }]} />
+            <View style={[styles.winProbFill, { flex: dp.away, backgroundColor: aColor }]} />
+          </View>
+        </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -2078,7 +2042,7 @@ export default function GameDetailScreen() {
               context={cricketContext}
             />
           ) : null}
-          {prediction ? <View style={{ paddingTop: 20 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}
+          {prediction && isPremium ? <View style={{ paddingTop: 18 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}
           <WhereToWatchRow
             primaryChannel={game.tvChannel}
             watchSources={[game.watchSources, game.broadcasts, game.tvChannels]}
@@ -2116,21 +2080,11 @@ export default function GameDetailScreen() {
             </>
           ) : deferredContentReady && prediction && !isPremium ? (
             <>
-              {/* ═══ WIN PROBABILITY ═══ */}
-              <View style={{ paddingTop: 20 }}>
-                <RedactedWinProb homeTeam={homeTeam} awayTeam={awayTeam} onUnlock={() => router.push('/paywall')} />
-              </View>
-
               {/* ═══ OUR PREDICTION ═══ */}
-              <View style={{ marginBottom: 40 }}>
+              <View style={{ marginBottom: 28 }}>
                 <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text>
                 <RedactedPrediction homeTeam={homeTeam} awayTeam={awayTeam} prediction={prediction} onUnlock={() => router.push('/paywall')} />
               </View>
-
-              {/* Disclaimer */}
-              <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, textAlign: 'center', marginTop: 8, marginBottom: 4 }}>
-                AI prediction for entertainment only. Not gambling advice.
-              </Text>
 
               {/* ═══ RECENT PERFORMANCE ═══ */}
               <RedactedSection title="Recent Performance" height={160} onUnlock={() => router.push('/paywall')} />
@@ -2238,6 +2192,58 @@ const styles = StyleSheet.create({
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
   cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },
+  winProbShell: {
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+  },
+  winProbBorder: {
+    borderRadius: 15,
+    padding: 1,
+  },
+  winProbCard: {
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 11,
+    backgroundColor: 'rgba(4,7,12,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(180,211,235,0.10)',
+    overflow: 'hidden',
+  },
+  winProbHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 7,
+  },
+  winProbTeamLabel: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 9.5,
+    lineHeight: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  winProbTitle: {
+    flexShrink: 0,
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '900',
+    color: 'rgba(224,234,240,0.62)',
+    letterSpacing: 1.25,
+    textTransform: 'uppercase',
+  },
+  winProbTrack: {
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  winProbFill: {
+    minWidth: 1,
+  },
   projectionSectionShell: {
     borderRadius: 18,
     overflow: 'hidden',

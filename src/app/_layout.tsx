@@ -268,12 +268,12 @@ function RootLayoutNav({
     >
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         {splashAnimationComplete && session?.user ? <LiveScoreSync /> : null}
-        <Stack screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 200, gestureEnabled: true, fullScreenGestureEnabled: true }}>
-          <Stack.Screen name="welcome" options={{ freezeOnBlur: true }} />
+        <Stack screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 200, gestureEnabled: true, fullScreenGestureEnabled: false }}>
+          <Stack.Screen name="welcome" options={{ freezeOnBlur: true, gestureEnabled: false }} />
           <Stack.Screen name="sign-in" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="sign-up" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="verify-otp" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="(tabs)" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="(tabs)" options={{ freezeOnBlur: true, gestureEnabled: false, fullScreenGestureEnabled: false }} />
           <Stack.Screen name="game/[id]" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="user/[id]" options={{ freezeOnBlur: true }} />

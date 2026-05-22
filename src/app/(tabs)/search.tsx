@@ -662,7 +662,7 @@ const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction
         </View>
       </View>
       <Pressable
-        onPress={() => { fireLightHaptic(); router.push('/(tabs)'); }}
+        onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
         style={{
           borderRadius: 30,
           overflow: 'hidden',
@@ -713,7 +713,7 @@ const YourGames = memo(function YourGames({ games }: { games: GameWithPrediction
           </View>
         </View>
         <Pressable
-          onPress={() => { fireLightHaptic(); router.push('/(tabs)'); }}
+          onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
           style={{
             flexDirection: 'row',
             alignItems: 'center',

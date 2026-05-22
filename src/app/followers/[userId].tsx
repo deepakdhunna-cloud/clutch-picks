@@ -164,7 +164,7 @@ export default function FollowersScreen() {
 
   const handleNavigateToProfile = (id: string) => {
     if (id === currentUserId) {
-      router.push('/(tabs)/profile' as any);
+      router.replace('/(tabs)/profile' as any);
     } else {
       router.push(`/user/${id}` as any);
     }
