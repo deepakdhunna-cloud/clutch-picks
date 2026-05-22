@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, TextInput, Image, ActivityIndicator, Alert, ActionSheetIOS, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -11,6 +11,8 @@ import { api } from '@/lib/api/api';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { setDisplayName } from '@/lib/revenuecatClient';
+import { FeedbackModal } from '@/components/FeedbackModal';
+import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 
 // Match profile card palette
 import {
@@ -34,6 +36,8 @@ export default function EditProfileScreen() {
   const [name, setName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
+  const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
 
   const user = session?.user;
 
@@ -64,13 +68,21 @@ export default function EditProfileScreen() {
       router.back();
     },
     onError: () => {
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      setFeedback({
+        title: 'Update Failed',
+        message: 'Failed to update profile. Please try again.',
+        variant: 'error',
+      });
     },
   });
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name cannot be empty');
+      setFeedback({
+        title: 'Name Required',
+        message: 'Name cannot be empty.',
+        variant: 'error',
+      });
       return;
     }
     updateProfileMutation.mutate({
@@ -89,7 +101,11 @@ export default function EditProfileScreen() {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       await invalidateSession();
     } catch (error) {
-      Alert.alert('Upload Failed', 'There was an error uploading your photo. Please try again.');
+      setFeedback({
+        title: 'Upload Failed',
+        message: 'There was an error uploading your photo. Please try again.',
+        variant: 'error',
+      });
       if (__DEV__) console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
@@ -97,45 +113,17 @@ export default function EditProfileScreen() {
   };
 
   const handleAvatarPress = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take Photo', 'Choose from Library'],
-          cancelButtonIndex: 0,
-        },
-        async (buttonIndex) => {
-          if (buttonIndex === 1) {
-            const photo = await takePhoto();
-            handleImageUpload(photo);
-          } else if (buttonIndex === 2) {
-            const image = await pickImage();
-            handleImageUpload(image);
-          }
-        }
-      );
-    } else {
-      Alert.alert(
-        'Change Profile Photo',
-        'Choose an option',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Take Photo',
-            onPress: async () => {
-              const photo = await takePhoto();
-              handleImageUpload(photo);
-            },
-          },
-          {
-            text: 'Choose from Library',
-            onPress: async () => {
-              const image = await pickImage();
-              handleImageUpload(image);
-            },
-          },
-        ]
-      );
-    }
+    setPhotoSourceVisible(true);
+  };
+
+  const handleTakePhoto = async () => {
+    setPhotoSourceVisible(false);
+    await handleImageUpload(await takePhoto());
+  };
+
+  const handleChooseLibrary = async () => {
+    setPhotoSourceVisible(false);
+    await handleImageUpload(await pickImage());
   };
 
   const displayImage = profileImage || user?.image || null;
@@ -152,6 +140,20 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }} edges={['top']}>
+      <PhotoSourceModal
+        visible={photoSourceVisible}
+        title="Profile Photo"
+        onTakePhoto={handleTakePhoto}
+        onChooseLibrary={handleChooseLibrary}
+        onCancel={() => setPhotoSourceVisible(false)}
+      />
+      <FeedbackModal
+        visible={!!feedback}
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+        variant={feedback?.variant}
+        onDismiss={() => setFeedback(null)}
+      />
       {/* Header */}
       <Animated.View
         entering={FadeInDown.duration(400)}

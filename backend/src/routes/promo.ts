@@ -5,6 +5,11 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { fetchWithTimeout } from "../lib/fetch-with-timeout";
 
+export const CLUTCH_FNF_PROMO_CODE = "CLUTCHFNF";
+export const BUILT_IN_LIFETIME_PROMO_MAX_USES = 10000;
+const LIFETIME_PROMO_TYPE = "lifetime";
+const REVENUECAT_PRO_ENTITLEMENT_ID = "Clutch Picks Pro";
+
 const promoRouter = new Hono<{
   Variables: {
     user: typeof auth.$Infer.Session.user | null;
@@ -13,9 +18,64 @@ const promoRouter = new Hono<{
 }>();
 
 const redeemSchema = z.object({
-  code: z.string().min(1).max(50),
-  rcUserId: z.string().optional(),
+  code: z.string().trim().min(1).max(50),
+  rcUserId: z.string().trim().min(1).max(200).optional(),
 });
+
+export function normalizePromoCode(code: string): string {
+  return code.trim().toUpperCase();
+}
+
+function getLifetimePromoMaxUses(): number {
+  const configuredMaxUses = Number.parseInt(process.env.CLUTCH_FNF_MAX_USES ?? "", 10);
+  return Number.isFinite(configuredMaxUses) && configuredMaxUses > 0
+    ? configuredMaxUses
+    : BUILT_IN_LIFETIME_PROMO_MAX_USES;
+}
+
+export function getBuiltInPromoCodeConfig(normalizedCode: string) {
+  if (normalizedCode !== CLUTCH_FNF_PROMO_CODE) return null;
+
+  return {
+    code: CLUTCH_FNF_PROMO_CODE,
+    type: LIFETIME_PROMO_TYPE,
+    maxUses: getLifetimePromoMaxUses(),
+    createdBy: "system",
+    note: "Friends and family lifetime access",
+  } as const;
+}
+
+async function findPromoForRedemption(normalizedCode: string) {
+  const builtInPromo = getBuiltInPromoCodeConfig(normalizedCode);
+  if (builtInPromo) {
+    return prisma.promoCode.upsert({
+      where: { code: builtInPromo.code },
+      update: {
+        type: builtInPromo.type,
+        maxUses: builtInPromo.maxUses,
+        expiresAt: null,
+        isActive: true,
+        note: builtInPromo.note,
+      },
+      create: {
+        code: builtInPromo.code,
+        type: builtInPromo.type,
+        maxUses: builtInPromo.maxUses,
+        currentUses: 0,
+        expiresAt: null,
+        isActive: true,
+        createdBy: builtInPromo.createdBy,
+        note: builtInPromo.note,
+      },
+      include: { redemptions: true },
+    });
+  }
+
+  return prisma.promoCode.findUnique({
+    where: { code: normalizedCode },
+    include: { redemptions: true },
+  });
+}
 
 // POST /api/promo/redeem — Redeem a promo code
 promoRouter.post("/redeem", zValidator("json", redeemSchema), async (c) => {
@@ -24,15 +84,13 @@ promoRouter.post("/redeem", zValidator("json", redeemSchema), async (c) => {
     return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   }
 
-  const { code, rcUserId } = c.req.valid("json");
-  const normalizedCode = code.trim().toUpperCase();
-  const subscriberId = rcUserId || user.id;
+  const { code } = c.req.valid("json");
+  const normalizedCode = normalizePromoCode(code);
+  // RevenueCat identity is synced to the authenticated app user. Do not trust
+  // a client-supplied subscriber id for a server-side lifetime entitlement.
+  const subscriberId = user.id;
 
-  // Look up the promo code
-  const promo = await prisma.promoCode.findUnique({
-    where: { code: normalizedCode },
-    include: { redemptions: true },
-  });
+  const promo = await findPromoForRedemption(normalizedCode);
 
   if (!promo) {
     return c.json({ error: { message: "Invalid promo code", code: "INVALID_CODE" } }, 404);
@@ -68,7 +126,7 @@ promoRouter.post("/redeem", zValidator("json", redeemSchema), async (c) => {
 
   try {
     const rcResponse = await fetchWithTimeout(
-      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(subscriberId)}/entitlements/${encodeURIComponent('Clutch Picks Pro')}/promotional`,
+      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(subscriberId)}/entitlements/${encodeURIComponent(REVENUECAT_PRO_ENTITLEMENT_ID)}/promotional`,
       {
         method: "POST",
         headers: {

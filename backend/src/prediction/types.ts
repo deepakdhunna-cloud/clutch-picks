@@ -72,6 +72,71 @@ export type SimulationProjection = {
   signals: ProjectionSignal[];
 };
 
+// ─── Canonical result object ───────────────────────────────────────────────
+// One user-facing final answer for every event/market. Prediction factors,
+// game-script simulation, projection, and market calibration can disagree
+// internally, but every API/UI card should read this object for the final pick,
+// final probability, and confidence.
+
+export type CanonicalMarketType = "moneyline" | "three_way_result";
+export type CanonicalFinalPick = "home" | "away" | "draw" | "none";
+
+export type CanonicalProbabilities = {
+  home: number; // 0..1
+  away: number; // 0..1
+  draw?: number; // 0..1, three-way sports only
+};
+
+export type CanonicalEngineRead = {
+  engine: string;
+  pick: CanonicalFinalPick;
+  probability: number; // 0..1 probability for pick
+  confidence?: number; // 0..100 display confidence for this read
+  weight?: number;
+  probabilities?: CanonicalProbabilities;
+  inputs?: Record<string, string | number | boolean | null>;
+  warnings?: string[];
+};
+
+export type CanonicalPredictionResult = {
+  eventId: string;
+  marketType: CanonicalMarketType;
+  finalPick: CanonicalFinalPick;
+  finalProbability: number; // 0..1
+  confidence: number; // 0..100, rounded to one decimal
+  probabilities: CanonicalProbabilities;
+  projectedScore?: {
+    home: number;
+    away: number;
+    spread: number;
+    total: number;
+  };
+  simulationSummary?: {
+    engine: string;
+    iterations: number;
+    probabilities: CanonicalProbabilities;
+    volatility: number;
+    upsetRisk: number;
+  };
+  modelInputs: {
+    sport: string;
+    homeTeamId: string;
+    awayTeamId: string;
+    gameTime: string;
+    factorCount: number;
+    availableFactorCount: number;
+    marketConsensusIncluded: boolean;
+  };
+  engineBreakdown: CanonicalEngineRead[];
+  reconciliation: {
+    method: string;
+    notes: string[];
+  };
+  timestamp: string;
+  dataVersion: string;
+  warnings: string[];
+};
+
 // ─── Game Context ───────────────────────────────────────────────────────────
 // Everything a factor function needs to compute its contribution.
 // Assembled once from ESPN data, passed to every factor function.
@@ -179,6 +244,7 @@ export function getConfidenceBand(winnerProb: number): ConfidenceBand {
 export type HonestPrediction = {
   gameId: string;
   league: string;
+  canonicalResult: CanonicalPredictionResult;
   predictedWinner: { teamId: string; abbr: string } | null; // null = true 50/50
   homeWinProbability: number;   // 0..1
   awayWinProbability: number;   // 0..1

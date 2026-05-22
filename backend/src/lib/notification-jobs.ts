@@ -22,10 +22,88 @@ const ESPN_ENDPOINTS: Record<string, string> = {
   NCAAF: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
   NCAAB: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
   EPL: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+  UCL: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+  IPL: "https://site.api.espn.com/apis/site/v2/sports/cricket/8048/scoreboard",
 };
 
+type ESPNNotificationTeam = {
+  abbreviation?: string;
+  displayName?: string;
+  shortDisplayName?: string;
+  name?: string;
+  logo?: string;
+  logos?: Array<{ href?: string }>;
+};
+
+type ESPNNotificationCompetitor = {
+  homeAway: string;
+  team?: ESPNNotificationTeam;
+};
+
+type ESPNNotificationCompetition = {
+  competitors: ESPNNotificationCompetitor[];
+  odds?: Array<{
+    homeTeamOdds?: { favorite?: boolean };
+    awayTeamOdds?: { favorite?: boolean };
+  }>;
+  status: { type: { state: string } };
+};
+
+function logoForTeam(team?: ESPNNotificationTeam): string | undefined {
+  return team?.logo ?? team?.logos?.find((logo) => logo.href)?.href;
+}
+
+function displayForTeam(team?: ESPNNotificationTeam, fallback = "Team"): string {
+  return team?.displayName ?? team?.shortDisplayName ?? team?.name ?? team?.abbreviation ?? fallback;
+}
+
+function gamePayload(args: {
+  type: string;
+  gameId: string;
+  sport: string;
+  home?: ESPNNotificationCompetitor;
+  away?: ESPNNotificationCompetitor;
+  highlightSide?: "home" | "away";
+}) {
+  const highlight = args.highlightSide === "home" ? args.home : args.highlightSide === "away" ? args.away : undefined;
+  return {
+    type: args.type,
+    gameId: args.gameId,
+    screen: "game",
+    sport: args.sport,
+    homeTeam: displayForTeam(args.home?.team, "Home"),
+    awayTeam: displayForTeam(args.away?.team, "Away"),
+    homeAbbr: args.home?.team?.abbreviation,
+    awayAbbr: args.away?.team?.abbreviation,
+    homeLogo: logoForTeam(args.home?.team),
+    awayLogo: logoForTeam(args.away?.team),
+    highlightTeam: highlight ? displayForTeam(highlight.team) : undefined,
+    highlightLogo: logoForTeam(highlight?.team),
+  };
+}
+
+function eventTeams(comp: ESPNNotificationCompetition) {
+  return {
+    home: comp.competitors.find(c => c.homeAway === "home"),
+    away: comp.competitors.find(c => c.homeAway === "away"),
+  };
+}
+
+function marketFavoriteSide(comp: ESPNNotificationCompetition): "home" | "away" | null {
+  const odds = comp.odds?.[0];
+  if (odds?.homeTeamOdds?.favorite) return "home";
+  if (odds?.awayTeamOdds?.favorite) return "away";
+  return null;
+}
+
 // ─── GAME GOING LIVE — notify users who picked this game ─────
-export async function notifyGameLive(gameId: string, homeAbbr: string, awayAbbr: string, sport: string) {
+export async function notifyGameLive(
+  gameId: string,
+  homeAbbr: string,
+  awayAbbr: string,
+  sport: string,
+  meta: Record<string, any> = {},
+) {
   try {
     // Find all users who picked this game
     const picks = await prisma.userPick.findMany({
@@ -43,9 +121,9 @@ export async function notifyGameLive(gameId: string, homeAbbr: string, awayAbbr:
       if (already) continue;
 
       await sendPushToUser(userId,
-        `🔴 ${awayAbbr} vs ${homeAbbr} is LIVE`,
-        `Your ${sport} pick is in play. Tap to watch.`,
-        { type: 'game_live', gameId, screen: 'game' }
+        `${awayAbbr} vs ${homeAbbr} is live`,
+        `Your ${sport} pick is moving now. Jump in for the live board.`,
+        { type: 'game_live', gameId, screen: 'game', sport, ...meta }
       );
     }
   } catch (err) {
@@ -64,14 +142,14 @@ export async function notifyPickResult(userId: string, gameId: string, result: '
 
     if (result === 'win') {
       await sendPushToUser(userId,
-        `✅ Your pick was correct!`,
-        `${awayAbbr} vs ${homeAbbr} — you called it. Check your updated record.`,
+        `You called it`,
+        `${awayAbbr} vs ${homeAbbr} landed your way. Your record just got brighter.`,
         { type: 'pick_result', gameId, screen: 'profile' }
       );
     } else {
       await sendPushToUser(userId,
         `${awayAbbr} vs ${homeAbbr} — Final`,
-        `This one didn't go your way. Check the breakdown.`,
+        `The board gets another data point. Open the breakdown and reset for the next pick.`,
         { type: 'pick_result', gameId, screen: 'game' }
       );
     }
@@ -116,7 +194,7 @@ export async function checkLiveGamesAndNotify() {
         const data = await res.json() as { events?: Array<{
           id: string;
           competitions: Array<{
-            competitors: Array<{ homeAway: string; team?: { abbreviation?: string } }>;
+            competitors: ESPNNotificationCompetitor[];
             status: { type: { state: string } };
           }>;
         }> };
@@ -132,15 +210,20 @@ export async function checkLiveGamesAndNotify() {
           const state = comp.status.type.state.toLowerCase();
           if (state !== 'in') continue; // 'in' = in progress
 
-          const home = comp.competitors.find(c => c.homeAway === 'home');
-          const away = comp.competitors.find(c => c.homeAway === 'away');
+          const { home, away } = eventTeams(comp);
           const info = gameInfo.get(event.id);
 
           const homeAbbr = home?.team?.abbreviation ?? info?.home ?? 'HOME';
           const awayAbbr = away?.team?.abbreviation ?? info?.away ?? 'AWAY';
           const sportName = info?.sport ?? sport;
 
-          await notifyGameLive(event.id, homeAbbr, awayAbbr, sportName);
+          await notifyGameLive(event.id, homeAbbr, awayAbbr, sportName, gamePayload({
+            type: 'game_live',
+            gameId: event.id,
+            sport: sportName,
+            home,
+            away,
+          }));
         }
       } catch {
         // Skip this sport and continue
@@ -156,32 +239,46 @@ export async function checkLiveGamesAndNotify() {
 // ─── BIG GAME ALERTS — 3 hours before high-interest games ────
 export async function checkBigGameAlerts() {
   try {
-    // Check NotificationLog to avoid spamming
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const sentBigGames = await prisma.notificationLog.findMany({
-      where: {
-        type: 'big_game',
-        sentAt: { gte: todayStart },
-        gameId: { not: null },
-      },
-      select: { gameId: true },
-      distinct: ['gameId'],
-    });
-    const sentBigGameIds = new Set(sentBigGames.map((log) => log.gameId).filter(Boolean));
-    let bigGamesSentToday = sentBigGameIds.size;
 
-    // Max 2 big game alerts per day
-    if (bigGamesSentToday >= 2) return;
+    const [sentBigGames, sentSpotlights, sentUnderdogs] = await Promise.all([
+      prisma.notificationLog.findMany({
+        where: { type: 'big_game', sentAt: { gte: todayStart }, gameId: { not: null } },
+        select: { gameId: true },
+        distinct: ['gameId'],
+      }),
+      prisma.notificationLog.findMany({
+        where: { type: 'game_spotlight', sentAt: { gte: todayStart }, gameId: { not: null } },
+        select: { gameId: true },
+        distinct: ['gameId'],
+      }),
+      prisma.notificationLog.findMany({
+        where: { type: 'underdog_alert', sentAt: { gte: todayStart }, gameId: { not: null } },
+        select: { gameId: true },
+        distinct: ['gameId'],
+      }),
+    ]);
+
+    const sentBigGameIds = new Set(sentBigGames.map((log) => log.gameId).filter(Boolean));
+    const sentSpotlightIds = new Set(sentSpotlights.map((log) => log.gameId).filter(Boolean));
+    const sentUnderdogIds = new Set(sentUnderdogs.map((log) => log.gameId).filter(Boolean));
+    let bigGamesSentToday = sentBigGameIds.size;
+    let spotlightsSentToday = sentSpotlightIds.size;
+    let underdogsSentToday = sentUnderdogIds.size;
 
     const now = new Date();
     const threeHoursLater = new Date(now.getTime() + 3 * 60 * 60 * 1000);
     const threeHoursThirtyLater = new Date(now.getTime() + 3.5 * 60 * 60 * 1000);
+    const fortyFiveMinutesLater = new Date(now.getTime() + 45 * 60 * 1000);
+    const twoHoursThirtyLater = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
+    const fourHoursLater = new Date(now.getTime() + 4 * 60 * 60 * 1000);
     const today = now.toISOString().split("T")[0]!.replace(/-/g, "");
 
-    // Scan each sport for upcoming games with high confidence predictions
+    // Scan each sport for upcoming games with high-confidence, spotlight, and
+    // underdog notification opportunities.
     for (const [sport, url] of Object.entries(ESPN_ENDPOINTS)) {
-      if (bigGamesSentToday >= 2) break;
+      if (bigGamesSentToday >= 2 && spotlightsSentToday >= 1 && underdogsSentToday >= 2) break;
 
       try {
         const params = new URLSearchParams({ dates: today });
@@ -195,10 +292,7 @@ export async function checkBigGameAlerts() {
           id: string;
           date: string;
           name: string;
-          competitions: Array<{
-            competitors: Array<{ homeAway: string; team?: { abbreviation?: string; displayName?: string } }>;
-            status: { type: { state: string } };
-          }>;
+          competitions: ESPNNotificationCompetition[];
         }> };
 
         if (!data.events) continue;
@@ -211,33 +305,87 @@ export async function checkBigGameAlerts() {
           if (state !== 'pre') continue; // Only upcoming games
 
           const gameTime = new Date(event.date);
-          // Check if game starts in the 3h–3.5h window
-          if (gameTime < threeHoursLater || gameTime > threeHoursThirtyLater) continue;
 
-          // Check if we have a high-confidence prediction for this game
           const prediction = await prisma.predictionResult.findFirst({
-            where: { gameId: event.id, confidence: { gte: 70 } },
+            where: { gameId: event.id, confidence: { gte: 55 } },
           });
           if (!prediction) continue;
 
-          // Already sent alert for this game?
-          if (sentBigGameIds.has(event.id)) continue;
-
-          const home = comp.competitors.find(c => c.homeAway === 'home');
-          const away = comp.competitors.find(c => c.homeAway === 'away');
+          const { home, away } = eventTeams(comp);
           const homeAbbr = home?.team?.abbreviation ?? 'HOME';
           const awayAbbr = away?.team?.abbreviation ?? 'AWAY';
+          const predictedSide = prediction.predictedWinner === 'home' ? 'home' : 'away';
+          const pick = predictedSide === 'home' ? home : away;
+          const favoriteSide = marketFavoriteSide(comp);
+          const favorite = favoriteSide === 'home' ? home : favoriteSide === 'away' ? away : undefined;
+          const pickAbbr = pick?.team?.abbreviation ?? (predictedSide === 'home' ? homeAbbr : awayAbbr);
+          const favoriteAbbr = favorite?.team?.abbreviation;
+          const baseData = gamePayload({
+            type: 'big_game',
+            gameId: event.id,
+            sport,
+            home,
+            away,
+            highlightSide: predictedSide,
+          });
 
-          await sendPushToAll(
-            `🏆 Big Game Alert: ${awayAbbr} vs ${homeAbbr}`,
-            `${sport} kicks off in 3 hours — our model has ${prediction.confidence}% confidence. Make your pick!`,
-            { type: 'big_game', gameId: event.id, screen: 'game' }
-          );
-          sentBigGameIds.add(event.id);
-          bigGamesSentToday = sentBigGameIds.size;
+          let sentForEvent = false;
 
-          console.log(`[NotifyJobs] Big game alert sent: ${awayAbbr} vs ${homeAbbr} (${sport})`);
-          break; // One alert per sport check cycle
+          if (
+            bigGamesSentToday < 2 &&
+            !sentBigGameIds.has(event.id) &&
+            prediction.confidence >= 70 &&
+            gameTime >= threeHoursLater &&
+            gameTime <= threeHoursThirtyLater
+          ) {
+            await sendPushToAll(
+              `Prime pick warming up: ${awayAbbr} vs ${homeAbbr}`,
+              `${sport} starts in about 3 hours. Clutch Picks likes ${pickAbbr} at ${prediction.confidence}% confidence.`,
+              { ...baseData, type: 'big_game' }
+            );
+            sentBigGameIds.add(event.id);
+            bigGamesSentToday = sentBigGameIds.size;
+            sentForEvent = true;
+            console.log(`[NotifyJobs] Big game alert sent: ${awayAbbr} vs ${homeAbbr} (${sport})`);
+          }
+
+          if (
+            !sentForEvent &&
+            underdogsSentToday < 2 &&
+            favoriteSide &&
+            favoriteSide !== predictedSide &&
+            !sentUnderdogIds.has(event.id) &&
+            gameTime >= fortyFiveMinutesLater &&
+            gameTime <= fourHoursLater
+          ) {
+            await sendPushToAll(
+              `Underdog watch: ${pickAbbr} has a real path`,
+              `${favoriteAbbr ? `The market leans ${favoriteAbbr}, but ` : ''}Clutch Picks gives ${pickAbbr} the edge at ${prediction.confidence}%. This is worth a look.`,
+              { ...baseData, type: 'underdog_alert' },
+            );
+            sentUnderdogIds.add(event.id);
+            underdogsSentToday = sentUnderdogIds.size;
+            sentForEvent = true;
+            console.log(`[NotifyJobs] Underdog alert sent: ${pickAbbr} in ${awayAbbr} vs ${homeAbbr} (${sport})`);
+          }
+
+          if (
+            !sentForEvent &&
+            spotlightsSentToday < 1 &&
+            !sentSpotlightIds.has(event.id) &&
+            prediction.confidence >= 58 &&
+            gameTime >= fortyFiveMinutesLater &&
+            gameTime <= twoHoursThirtyLater
+          ) {
+            await sendPushToAll(
+              `Spotlight game: ${awayAbbr} vs ${homeAbbr}`,
+              `The board is heating up: ${pickAbbr} is the current model lean at ${prediction.confidence}%. Open the matchup read.`,
+              { ...baseData, type: 'game_spotlight' },
+            );
+            sentSpotlightIds.add(event.id);
+            spotlightsSentToday = sentSpotlightIds.size;
+            console.log(`[NotifyJobs] Game spotlight sent: ${awayAbbr} vs ${homeAbbr} (${sport})`);
+          }
         }
       } catch {
         // Skip sport
@@ -269,17 +417,17 @@ export async function notifyWinnerFlip(gameId: string, homeAbbr: string, awayAbb
       if (already) continue;
 
       await sendPushToUser(userId,
-        `Prediction Update: ${awayAbbr} vs ${homeAbbr}`,
-        `Our model now favors ${newWinnerAbbr} at ${confidence}%. Updated data shifted the pick.`,
-        { type: 'winner_flip', gameId, screen: 'game' }
+        `New edge: ${newWinnerAbbr} is now the lean`,
+        `${awayAbbr} vs ${homeAbbr} just shifted. Updated data moved the pick to ${confidence}%.`,
+        { type: 'winner_flip', gameId, screen: 'game', sport }
       );
     }
 
     // Also notify all users (not just pickers) since this is a significant event
     await sendPushToAll(
-      `Prediction Shift: ${awayAbbr} vs ${homeAbbr}`,
-      `${sport} — Model now picks ${newWinnerAbbr} (${confidence}%). New data changed the call.`,
-      { type: 'winner_flip', gameId, screen: 'game' },
+      `Board shift: ${awayAbbr} vs ${homeAbbr}`,
+      `${sport} just got interesting: Clutch Picks now leans ${newWinnerAbbr} at ${confidence}%.`,
+      { type: 'winner_flip', gameId, screen: 'game', sport, highlightTeam: newWinnerAbbr },
       2,
       userIds,
     );
@@ -303,8 +451,8 @@ export async function checkStreakMilestone(userId: string, currentStreak: number
     if (already) return;
 
     await sendPushToUser(userId,
-      `🔥 ${currentStreak}-pick win streak!`,
-      `You're on fire — ${currentStreak} correct in a row. Keep it going.`,
+      `${currentStreak}-pick win streak`,
+      `That run is getting loud: ${currentStreak} correct in a row. Your board is rolling.`,
       { type: 'streak', screen: 'profile' }
     );
   } catch (err) {

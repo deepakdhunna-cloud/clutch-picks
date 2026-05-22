@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useState, useCallback, useMemo, useEffect, useDeferredValue, memo } from 'react';
 import Animated, {
@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Filter, Calendar, Trophy, Layers, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { GameCard } from '@/components/sports';
-import { Sport, SPORT_META, GameStatus } from '@/types/sports';
+import { Sport, SPORT_META, GameStatus, type GameWithPrediction } from '@/types/sports';
 import { useWeekGamesBySport } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 
@@ -202,6 +202,84 @@ export default function SportDetailScreen() {
     );
   }
 
+  const renderGame = ({ item, index }: { item: GameWithPrediction; index: number }) => (
+    <View style={styles.gameItem}>
+      <GameCard game={item} index={index} />
+    </View>
+  );
+
+  const renderEmpty = () => (
+    <View style={styles.emptyState}>
+      {isLoading ? (
+        <>
+          <ActivityIndicator size="large" color={sportMeta.color} />
+          <Text style={styles.emptyText}>
+            Loading games...
+          </Text>
+        </>
+      ) : (
+        <>
+          <Filter size={32} color="#71717a" />
+          <Text style={styles.emptyText}>
+            No {filter} games found
+          </Text>
+        </>
+      )}
+    </View>
+  );
+
+  const listHeader = (
+    <>
+      {/* Header */}
+      <Animated.View
+        entering={FadeInDown.duration(500)}
+        style={styles.header}
+      >
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <ChevronLeft size={28} color="#fff" />
+          </Pressable>
+          <View
+            style={[styles.sportIcon, { backgroundColor: sportMeta.color }]}
+          >
+            <Text style={[styles.sportIconText, { color: sportMeta.accentColor }]}>
+              {sportEnum.substring(0, 2)}
+            </Text>
+          </View>
+          <View>
+            <Text style={styles.sportName}>{sportMeta.name}</Text>
+            <Text style={styles.gameCount}>
+              {allGames.length} game{allGames.length !== 1 ? 's' : null}
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Filters - Horizontal Scrollable */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterScrollContent}
+      >
+        {filters.map((f, index) => (
+          <FilterButton
+            key={f.key}
+            filter={f}
+            isSelected={filter === f.key}
+            onSelect={() => setFilter(f.key)}
+            index={index}
+            sportColor={sportMeta.color}
+            count={filterCounts[f.key]}
+          />
+        ))}
+      </ScrollView>
+    </>
+  );
+
   return (
     <>
       <Stack.Screen
@@ -210,9 +288,22 @@ export default function SportDetailScreen() {
         }}
       />
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
+        <FlatList
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          data={filteredGames}
+          renderItem={renderGame}
+          keyExtractor={(game) => game.id}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={[
+            styles.scrollContent,
+            filteredGames.length === 0 ? styles.emptyScrollContent : null,
+          ]}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={7}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -220,85 +311,7 @@ export default function SportDetailScreen() {
               tintColor="#fff"
             />
           }
-        >
-          {/* Header */}
-          <Animated.View
-            entering={FadeInDown.duration(500)}
-            style={styles.header}
-          >
-            <View style={styles.headerRow}>
-              <Pressable
-                onPress={() => router.back()}
-                style={styles.backButton}
-              >
-                <ChevronLeft size={28} color="#fff" />
-              </Pressable>
-              <View
-                style={[styles.sportIcon, { backgroundColor: sportMeta.color }]}
-              >
-                <Text style={[styles.sportIconText, { color: sportMeta.accentColor }]}>
-                  {sportEnum.substring(0, 2)}
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.sportName}>{sportMeta.name}</Text>
-                <Text style={styles.gameCount}>
-                  {allGames.length} game{allGames.length !== 1 ? 's' : null}
-                </Text>
-              </View>
-            </View>
-          </Animated.View>
-
-          {/* Filters - Horizontal Scrollable */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterScroll}
-            contentContainerStyle={styles.filterScrollContent}
-          >
-            {filters.map((f, index) => (
-              <FilterButton
-                key={f.key}
-                filter={f}
-                isSelected={filter === f.key}
-                onSelect={() => setFilter(f.key)}
-                index={index}
-                sportColor={sportMeta.color}
-                count={filterCounts[f.key]}
-              />
-            ))}
-          </ScrollView>
-
-          {/* Games List */}
-          <Animated.View
-            entering={FadeInDown.delay(100).duration(500)}
-            style={styles.gamesList}
-          >
-            {filteredGames.map((game, index) => (
-              <GameCard key={game.id} game={game} index={index} />
-            ))}
-
-            {filteredGames.length === 0 ? (
-              <View style={styles.emptyState}>
-                {isLoading ? (
-                  <>
-                    <ActivityIndicator size="large" color={sportMeta.color} />
-                    <Text style={styles.emptyText}>
-                      Loading games...
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Filter size={32} color="#71717a" />
-                    <Text style={styles.emptyText}>
-                      No {filter} games found
-                    </Text>
-                  </>
-                )}
-              </View>
-            ) : null}
-          </Animated.View>
-        </ScrollView>
+        />
       </SafeAreaView>
     </>
   );
@@ -314,6 +327,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
+  },
+  emptyScrollContent: {
+    flexGrow: 1,
   },
   notFoundContainer: {
     flex: 1,
@@ -422,14 +438,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
 
-  // Games List
-  gamesList: {
+  gameItem: {
     paddingHorizontal: 20,
   },
   emptyState: {
     backgroundColor: 'rgba(39, 39, 42, 0.5)',
     borderRadius: 16,
     padding: 32,
+    marginHorizontal: 20,
     alignItems: 'center',
   },
   emptyText: {

@@ -10,8 +10,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { GameWithPrediction, GameStatus, Sport, SPORT_META } from '@/types/sports';
 import { displayConfidence, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
+import {
+  getCanonicalConfidence,
+  getCanonicalFinalPick,
+} from '@/lib/canonical-result';
+import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { getTeamColors } from '@/lib/team-colors';
 import { TeamJersey } from '@/components/sports/TeamJersey';
+import { useSubscription } from '@/lib/subscription-context';
 import {
   MAROON, MAROON_DIM, TEAL, LIVE_RED, BG, PANEL_DARK, BORDER_MED,
   WHITE, TEXT_SECONDARY, TEXT_MUTED,
@@ -50,7 +56,7 @@ const SPORT_BADGE_LABELS: Record<string, string> = {
   NCAAF: 'CFB',
   NCAAB: 'CBB',
 };
-type StoryTone = 'live' | 'upset' | 'tossup' | 'soon' | 'model';
+type StoryTone = 'live' | 'upset' | 'tossup' | 'soon' | 'final' | 'model';
 
 // ─── LIVE DOT ───
 const LiveDot = memo(function LiveDot() {
@@ -89,7 +95,7 @@ const SportCard = memo(function SportCard({ sport, count, onPress }: { sport: st
 });
 
 // ─── GAME CARD BAR ───
-const GameBar = memo(function GameBar({ game, onPress, onPressIn }: { game: GameWithPrediction; onPress: () => void; onPressIn?: () => void }) {
+const GameBar = memo(function GameBar({ game, onPress, onPressIn, showModelSignals = false }: { game: GameWithPrediction; onPress: () => void; onPressIn?: () => void; showModelSignals?: boolean }) {
   const live = game.status === GameStatus.LIVE;
   const final = game.status === GameStatus.FINAL;
   const awayC = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color);
@@ -97,10 +103,9 @@ const GameBar = memo(function GameBar({ game, onPress, onPressIn }: { game: Game
   const sportMeta = SPORT_META[game.sport as Sport];
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
   const timeStr = live ? null : final ? null : fmtTime(game.gameTime);
-  const pickSide = game.prediction?.predictedWinner;
-  const pickTeam = pickSide === 'home' ? game.homeTeam : pickSide === 'away' ? game.awayTeam : null;
-  const confidence = game.prediction ? Math.round(displayConfidence(game.prediction.confidence ?? 50)) : null;
-  const tier = game.prediction ? getConfidenceTier(confidence ?? 50, game.prediction.isTossUp) : null;
+  const predictionDisplay = showModelSignals ? getGamePredictionDisplay(game) : null;
+  const confidence = showModelSignals && game.prediction ? Math.round(displayConfidence(getCanonicalConfidence(game.prediction))) : null;
+  const tier = showModelSignals && game.prediction ? getConfidenceTier(confidence ?? 50, predictionDisplay?.isTossUp) : null;
   const statusLabel = live ? (formatGameTime(game.sport, game.quarter, game.clock) ?? 'Live') : final ? 'Final' : timeStr;
   const scoreLabel = live || final ? `${game.awayScore ?? 0} - ${game.homeScore ?? 0}` : 'vs';
 
@@ -141,9 +146,9 @@ const GameBar = memo(function GameBar({ game, onPress, onPressIn }: { game: Game
             </View>
             <View style={{ width: 76, alignItems: 'center' }}>
               <Text style={{ fontSize: live || final ? 22 : 13, lineHeight: live || final ? 24 : 16, fontWeight: '900', color: WHITE, fontFamily: live || final ? 'VT323_400Regular' : undefined, letterSpacing: live || final ? 1 : 0 }}>{scoreLabel}</Text>
-              {pickTeam && confidence !== null ? (
+              {predictionDisplay && predictionDisplay.outcome !== 'none' && confidence !== null ? (
                 <View style={{ marginTop: 7, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: hexWithAlpha(tier?.color ?? TEAL, 0.12), borderWidth: 1, borderColor: hexWithAlpha(tier?.color ?? TEAL, 0.2) }}>
-                  <Text style={{ fontSize: 8, fontWeight: '900', color: tier?.color ?? TEAL }}>{pickTeam.abbreviation} {confidence}%</Text>
+                  <Text style={{ fontSize: 8, fontWeight: '900', color: tier?.color ?? TEAL }}>{predictionDisplay.badgeLabel} {confidence}%</Text>
                 </View>
               ) : null}
             </View>
@@ -173,7 +178,7 @@ const SectionHeader = memo(function SectionHeader({ label, title, icon }: { labe
 
 const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress, onPressIn }: { game: GameWithPrediction; tone: StoryTone; title: string; subtitle: string; onPress: () => void; onPressIn?: () => void }) {
   const live = game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
-  const accent = tone === 'live' ? LIVE_RED : tone === 'upset' ? MAROON : tone === 'soon' ? TEAL : tone === 'tossup' ? '#94a3b8' : TEAL;
+  const accent = tone === 'live' ? LIVE_RED : tone === 'upset' ? MAROON : tone === 'soon' ? TEAL : tone === 'final' ? '#94a3b8' : tone === 'tossup' ? '#94a3b8' : TEAL;
   return (
     <Pressable onPressIn={onPressIn} onPress={onPress} style={({ pressed }) => ({ width: 172, opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.986 : 1 }] })}>
       <LinearGradient
@@ -208,6 +213,7 @@ export default function SearchExploreScreen() {
   const inputRef = useRef<TextInput>(null);
   const { data: allGames } = useGames();
   const prefetchGame = usePrefetchGame();
+  const { isPremium } = useSubscription();
 
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -267,16 +273,27 @@ export default function SearchExploreScreen() {
     return Array.from(m.entries()).map(([s, c]) => ({ sport: s, count: c })).sort((a, b) => b.count - a.count);
   }, [allGames]);
 
+  const todayKey = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const localDateKey = useCallback((iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
   const trendingGames = useMemo(() => {
+    if (!isPremium) return [];
     if (!allGames) return [];
     return [...allGames]
       .filter(g => g.prediction && g.status !== GameStatus.CANCELLED)
       .sort((a, b) => {
-        const sa = ((a.prediction?.edgeRating ?? 5) * 10) + (a.prediction?.confidence ?? 50);
-        const sb = ((b.prediction?.edgeRating ?? 5) * 10) + (b.prediction?.confidence ?? 50);
+        const sa = ((a.prediction?.edgeRating ?? 5) * 10) + getCanonicalConfidence(a.prediction);
+        const sb = ((b.prediction?.edgeRating ?? 5) * 10) + getCanonicalConfidence(b.prediction);
         return sb - sa;
       }).slice(0, 5);
-  }, [allGames]);
+  }, [allGames, isPremium]);
 
   const liveGames = useMemo(() => {
     if (!allGames) return [];
@@ -285,29 +302,50 @@ export default function SearchExploreScreen() {
       .slice(0, 6);
   }, [allGames]);
 
+  const todaySchedule = useMemo(() => {
+    if (!allGames) return [];
+    return [...allGames]
+      .filter(g => g.status === GameStatus.SCHEDULED && localDateKey(g.gameTime) === todayKey)
+      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+      .slice(0, 8);
+  }, [allGames, localDateKey, todayKey]);
+
+  const finalGames = useMemo(() => {
+    if (!allGames) return [];
+    return [...allGames]
+      .filter(g => g.status === GameStatus.FINAL)
+      .sort((a, b) => new Date(b.gameTime).getTime() - new Date(a.gameTime).getTime())
+      .slice(0, 6);
+  }, [allGames]);
+
   const startingSoon = useMemo(() => {
     if (!allGames) return [];
     return [...allGames]
-      .filter(g => g.status === GameStatus.SCHEDULED)
+      .filter(g => g.status === GameStatus.SCHEDULED && localDateKey(g.gameTime) !== todayKey)
       .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
       .slice(0, 6);
-  }, [allGames]);
+  }, [allGames, localDateKey, todayKey]);
 
   const upsetWatch = useMemo(() => {
+    if (!isPremium) return [];
     if (!allGames) return [];
     return [...allGames]
-      .filter(g => g.prediction?.predictedWinner && g.marketFavorite && g.prediction.predictedWinner !== g.marketFavorite)
-      .sort((a, b) => (b.prediction?.confidence ?? 50) - (a.prediction?.confidence ?? 50))
+      .filter(g => {
+        const pick = getCanonicalFinalPick(g.prediction);
+        return (pick === 'home' || pick === 'away') && g.marketFavorite && pick !== g.marketFavorite;
+      })
+      .sort((a, b) => getCanonicalConfidence(b.prediction) - getCanonicalConfidence(a.prediction))
       .slice(0, 6);
-  }, [allGames]);
+  }, [allGames, isPremium]);
 
   const tossUpGames = useMemo(() => {
+    if (!isPremium) return [];
     if (!allGames) return [];
     return [...allGames]
       .filter(g => g.prediction?.isTossUp || ((g.prediction?.confidence ?? 100) >= 48 && (g.prediction?.confidence ?? 0) <= 53))
       .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
       .slice(0, 6);
-  }, [allGames]);
+  }, [allGames, isPremium]);
 
   const baseFilteredGames = useMemo(() => {
     if (!allGames) return [];
@@ -423,7 +461,7 @@ export default function SearchExploreScreen() {
 
             {liveGames.length > 0 ? (
               <View style={{ marginBottom: 24 }}>
-                <SectionHeader icon={<Radio size={14} color={LIVE_RED} />} label="HAPPENING NOW" title="Live board" />
+                <SectionHeader icon={<Radio size={14} color={LIVE_RED} />} label="HAPPENING NOW" title="Live games" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
                   {liveGames.map(game => (
                     <StoryCard
@@ -449,14 +487,53 @@ export default function SearchExploreScreen() {
               </View>
             ) : null}
 
+            {todaySchedule.length > 0 ? (
+              <View style={{ marginBottom: 24 }}>
+                <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="TODAY" title="Scheduled games" />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
+                  {todaySchedule.map(game => (
+                    <StoryCard
+                      key={`today-${game.id}`}
+                      game={game}
+                      tone="soon"
+                      title={fmtTime(game.gameTime)}
+                      subtitle={`${displaySport(game.sport)} · ${game.venue && game.venue !== 'TBD' ? game.venue : 'Scheduled'}`}
+                      onPressIn={() => warmGame(game)}
+                      onPress={() => navGame(game)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            {finalGames.length > 0 ? (
+              <View style={{ marginBottom: 24 }}>
+                <SectionHeader icon={<Clock size={14} color="#94a3b8" />} label="RECENT" title="Final scores" />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
+                  {finalGames.map(game => (
+                    <StoryCard
+                      key={`final-${game.id}`}
+                      game={game}
+                      tone="final"
+                      title="Final"
+                      subtitle={`${game.awayTeam.abbreviation} ${game.awayScore ?? 0} · ${game.homeTeam.abbreviation} ${game.homeScore ?? 0}`}
+                      onPressIn={() => warmGame(game)}
+                      onPress={() => navGame(game)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
             {upsetWatch.length > 0 ? (
               <View style={{ marginBottom: 24 }}>
                 <SectionHeader icon={<ShieldAlert size={14} color={MAROON} />} label="MARKET DISAGREEMENT" title="Upset watch" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
                   {upsetWatch.map(game => {
-                    const dog = game.prediction?.predictedWinner === 'home' ? game.homeTeam : game.awayTeam;
-                    const fav = game.prediction?.predictedWinner === 'home' ? game.awayTeam : game.homeTeam;
-                    const conf = Math.round(displayConfidence(game.prediction?.confidence ?? 50));
+                    const pick = getCanonicalFinalPick(game.prediction);
+                    const dog = pick === 'home' ? game.homeTeam : game.awayTeam;
+                    const fav = pick === 'home' ? game.awayTeam : game.homeTeam;
+                    const conf = Math.round(displayConfidence(getCanonicalConfidence(game.prediction)));
                     return (
                       <StoryCard
                         key={`upset-${game.id}`}
@@ -515,7 +592,7 @@ export default function SearchExploreScreen() {
               <View style={{ marginBottom: 20 }}>
                 <SectionHeader icon={<Trophy size={14} color={TEAL} />} label="MODEL BOARD" title="Top grades" />
                 <View style={{ paddingHorizontal: 20 }}>
-                  {trendingGames.map(game => <GameBar key={game.id} game={game} onPressIn={() => warmGame(game)} onPress={() => navGame(game)} />)}
+                  {trendingGames.map(game => <GameBar key={game.id} game={game} showModelSignals={isPremium} onPressIn={() => warmGame(game)} onPress={() => navGame(game)} />)}
                 </View>
               </View>
             ) : null}
@@ -550,7 +627,7 @@ export default function SearchExploreScreen() {
 
             {filteredGames.length > 0 ? (
               <View style={{ paddingHorizontal: 20 }}>
-                {filteredGames.map(game => <GameBar key={game.id} game={game} onPressIn={() => warmGame(game)} onPress={() => navGame(game)} />)}
+                {filteredGames.map(game => <GameBar key={game.id} game={game} showModelSignals={isPremium} onPressIn={() => warmGame(game)} onPress={() => navGame(game)} />)}
               </View>
             ) : (
               <View style={{ marginHorizontal: 20, borderRadius: 18, padding: 18, alignItems: 'center', backgroundColor: PANEL_DARK, borderWidth: 1, borderColor: BORDER_MED }}>

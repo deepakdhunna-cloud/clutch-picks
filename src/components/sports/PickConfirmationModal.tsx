@@ -36,7 +36,7 @@ type PickConfirmationModalProps = {
   teamColor?: string | null;
   sport: Sport;
   isChanging?: boolean;
-  onConfirm: () => void;
+  onConfirm: () => Promise<boolean | void> | boolean | void;
   onCancel: () => void;
 };
 
@@ -53,6 +53,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
   const { width } = useWindowDimensions();
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const cardScale = useSharedValue(0.92);
   const cardOpacity = useSharedValue(0);
   const jerseyScale = useSharedValue(1);
@@ -87,6 +88,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       successScale.value = 0;
       setIsConfirming(false);
       setShowSuccess(false);
+      setErrorMessage(null);
     } else {
       cardOpacity.value = 0;
       cardScale.value = 0.92;
@@ -126,9 +128,11 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
     transform: [{ scale: successScale.value }],
   }));
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     if (isConfirming) return;
     setIsConfirming(true);
+    setShowSuccess(false);
+    setErrorMessage(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     jerseyScale.value = withSequence(
@@ -136,26 +140,40 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       withSpring(1, { damping: 12, stiffness: 180 })
     );
 
-    setTimeout(() => {
+    try {
+      const [result] = await Promise.all([
+        Promise.resolve(onConfirm()),
+        new Promise((resolve) => setTimeout(resolve, 260)),
+      ]);
+      if (result === false) {
+        throw new Error('Pick save failed');
+      }
       setShowSuccess(true);
       successScale.value = withSpring(1, { damping: 12, stiffness: 180 });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 260);
-
-    setTimeout(() => {
-      onConfirm();
-    }, 1150);
-  }, [isConfirming, jerseyScale, onConfirm, successScale]);
+      setTimeout(() => {
+        onCancel();
+      }, 560);
+    } catch {
+      setIsConfirming(false);
+      setShowSuccess(false);
+      successScale.value = 0;
+      setErrorMessage('Pick not saved. Check your connection and try again.');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [isConfirming, jerseyScale, onCancel, onConfirm, successScale]);
 
   if (!team) return null;
 
   const cardWidth = Math.min(width - 38, 360);
   const titleText = showSuccess
     ? 'Pick Locked'
-    : isChanging
-      ? 'Switch your pick?'
-      : 'Lock in your pick?';
-  const bodyText = showSuccess ? 'Saved to your game board.' : 'Confirm this selection before it goes on your board.';
+    : errorMessage
+      ? 'Pick Not Saved'
+      : isChanging
+        ? 'Switch your pick?'
+        : 'Lock in your pick?';
+  const bodyText = showSuccess ? 'Saved to your game board.' : errorMessage ?? 'Confirm this selection before it goes on your board.';
   const recordText = team.record?.trim() ? team.record.trim() : 'Season record';
 
   return (
@@ -245,7 +263,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
               <View style={styles.recordPill}>
                 <Text style={styles.recordText}>{recordText}</Text>
               </View>
-              <Text style={styles.body}>{bodyText}</Text>
+              <Text style={[styles.body, errorMessage ? styles.errorBody : null]}>{bodyText}</Text>
 
               {!isConfirming ? (
                 <View style={styles.actionsRow}>
@@ -273,7 +291,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
               ) : (
                 <View style={styles.lockedState}>
                   <ShieldCheck size={18} color="#DAEEFB" strokeWidth={2.6} />
-                  <Text style={styles.lockedText}>{showSuccess ? 'Locked In' : 'Locking Pick'}</Text>
+                  <Text style={styles.lockedText}>{showSuccess ? 'Locked In' : 'Saving Pick'}</Text>
                 </View>
               )}
             </LinearGradient>
@@ -457,6 +475,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 0,
+  },
+  errorBody: {
+    color: '#FCA5A5',
   },
   actionsRow: {
     width: '100%',

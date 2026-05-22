@@ -14,10 +14,17 @@ import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { getProjectionDisplay } from '@/lib/projection-display';
+import { cleanProjectionCopy, getProjectionDisplay } from '@/lib/projection-display';
+import {
+  getCanonicalConfidence,
+  getCanonicalResult,
+  traceCanonicalUiConsumption,
+} from '@/lib/canonical-result';
+import { getGamePredictionDisplay } from '@/lib/prediction-display';
+import { cricketRequiredText, cricketRoleText, cricketStatusText, scorePairText, teamScoreText } from '@/lib/cricket-score';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
-import { Calendar, Clock, Tv, TrendingUp, ChevronRight } from 'lucide-react-native';
+import { Calendar, Clock, Tv, TrendingUp, ChevronRight, Lock } from 'lucide-react-native';
 import { useMakePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
@@ -256,6 +263,15 @@ const LiveGameLayout = memo(function LiveGameLayout({
 
   const awayScore = game.awayScore ?? 0;
   const homeScore = game.homeScore ?? 0;
+  const awayScoreLabel = teamScoreText(game, 'away');
+  const homeScoreLabel = teamScoreText(game, 'home');
+  const cricketStatus = cricketStatusText(game);
+  const cricketRequired = cricketRequiredText(game);
+  const isCricket = game.sport === Sport.IPL;
+  const awayCricketRole = isCricket ? cricketRoleText(game, 'away') : null;
+  const homeCricketRole = isCricket ? cricketRoleText(game, 'home') : null;
+  const awayBatting = awayCricketRole === 'BATTING';
+  const homeBatting = homeCricketRole === 'BATTING';
   const awayWinning = awayScore > homeScore;
   const homeWinning = homeScore > awayScore;
   const suspended = isSuspendedGame(game);
@@ -431,9 +447,11 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ marginLeft: 10, flex: 1 }}>
                 <Text
                   style={{
-                    color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+                    color: isCricket
+                      ? awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.66)'
+                      : awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                     fontSize: 14,
-                    fontWeight: awayWinning ? '800' : '500',
+                    fontWeight: awayWinning || awayBatting ? '800' : '500',
                     letterSpacing: 0.3,
                   }}
                   numberOfLines={1}
@@ -445,17 +463,27 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     {game.awayTeam.record}
                   </Text>
                 ) : null}
+                {awayCricketRole ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayTeamColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                    <Text style={{ color: awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 8, fontWeight: '900', letterSpacing: 1 }}>
+                      {awayCricketRole}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
               <Text style={{
-                color: awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
+                color: isCricket
+                  ? awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.74)'
+                  : awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.25)',
                 fontSize: 22,
                 fontFamily: 'VT323_400Regular',
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
-                opacity: suspended ? 0.55 : awayWinning ? 1 : 0.35,
+                opacity: suspended ? 0.55 : isCricket ? awayBatting ? 1 : 0.72 : awayWinning ? 1 : 0.35,
               }}>
-                {awayScore}
+                {awayScoreLabel}
               </Text>
             </View>
 
@@ -472,9 +500,11 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ marginLeft: 10, flex: 1 }}>
                 <Text
                   style={{
-                    color: homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+                    color: isCricket
+                      ? homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.66)'
+                      : homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
                     fontSize: 14,
-                    fontWeight: homeWinning ? '800' : '500',
+                    fontWeight: homeWinning || homeBatting ? '800' : '500',
                     letterSpacing: 0.3,
                   }}
                   numberOfLines={1}
@@ -486,17 +516,27 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     {game.homeTeam.record}
                   </Text>
                 ) : null}
+                {homeCricketRole ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeTeamColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                    <Text style={{ color: homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 8, fontWeight: '900', letterSpacing: 1 }}>
+                      {homeCricketRole}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
               <Text style={{
-                color: '#FFFFFF',
+                color: isCricket
+                  ? homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.74)'
+                  : '#FFFFFF',
                 fontSize: 22,
                 fontFamily: 'VT323_400Regular',
                 letterSpacing: -0.5,
                 minWidth: 30,
                 textAlign: 'right',
-                opacity: suspended ? 0.55 : homeWinning ? 1 : 0.35,
+                opacity: suspended ? 0.55 : isCricket ? homeBatting ? 1 : 0.72 : homeWinning ? 1 : 0.35,
               }}>
-                {homeScore}
+                {homeScoreLabel}
               </Text>
             </View>
 
@@ -505,7 +545,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {(() => {
-                    const timeStr = suspended ? suspensionTime : formatGameTime(game.sport, game.quarter, game.clock);
+                    const timeStr = suspended ? suspensionTime : cricketRequired ?? cricketStatus ?? formatGameTime(game.sport, game.quarter, game.clock);
                     if (timeStr) {
                       return (
                         <View style={{
@@ -559,7 +599,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const homeTeamColors = useMemo(() => getTeamColors(game.homeTeam.abbreviation, game.sport, game.homeTeam.color), [game.homeTeam.abbreviation, game.sport, game.homeTeam.color]);
 
   // Use backend hooks for picks
-  const { mutate: makePick } = useMakePick();
+  const { mutateAsync: makePick } = useMakePick();
   const { data: userPrediction } = useGamePick(game.id);
   const { data: pickStatsData } = useGamePickStats(game.id);
 
@@ -669,18 +709,20 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
     setShowConfirmModal(true);
   }, [userPrediction?.pickedTeam]);
 
-  const handleConfirmSelection = useCallback(() => {
-    if (pendingSelection) {
-      makePick({
+  const handleConfirmSelection = useCallback(async () => {
+    if (!pendingSelection) return false;
+    try {
+      await makePick({
         gameId: game.id,
         pickedTeam: pendingSelection,
         homeTeam: game.homeTeam.abbreviation,
         awayTeam: game.awayTeam.abbreviation,
         sport: game.sport,
       });
+      return true;
+    } catch {
+      return false;
     }
-    setShowConfirmModal(false);
-    setPendingSelection(null);
   }, [pendingSelection, game.id, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.sport, makePick]);
 
   const handleCancelSelection = useCallback(() => {
@@ -689,12 +731,14 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   }, []);
 
   // Memoized derived team values
-  const { predictedWinnerTeam, hasPrediction } = useMemo(() => {
-    return {
-      predictedWinnerTeam: game.prediction?.predictedWinner === 'home' ? game.homeTeam : game.awayTeam,
-      hasPrediction: game.prediction?.predictedWinner != null,
-    };
-  }, [game.prediction?.predictedWinner, game.homeTeam, game.awayTeam]);
+  const canonicalResult = useMemo(() => getCanonicalResult(game.prediction), [game.prediction]);
+  const canonicalConfidence = getCanonicalConfidence(game.prediction);
+  const predictionDisplay = useMemo(() => getGamePredictionDisplay(game), [game]);
+  const hasPrediction = Boolean(game.prediction);
+
+  useEffect(() => {
+    traceCanonicalUiConsumption('GameCard', game);
+  }, [game]);
 
   const projectionDisplay = useMemo(() => {
     if (!game.prediction?.projection) return null;
@@ -702,12 +746,14 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       sport: game.sport,
       homeAbbr: game.homeTeam.abbreviation,
       awayAbbr: game.awayTeam.abbreviation,
+      canonicalResult,
       predictedWinner: game.prediction.predictedWinner,
       predictedOutcome: game.prediction.predictedOutcome,
-      confidence: game.prediction.confidence,
+      confidence: canonicalConfidence,
+      isTossUp: predictionDisplay.isTossUp,
       projection: game.prediction.projection,
     });
-  }, [game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction]);
+  }, [game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction, canonicalResult, canonicalConfidence, predictionDisplay.isTossUp]);
 
   // Get pending team for modal
   const pendingTeam = pendingSelection === 'home' ? game.homeTeam : pendingSelection === 'away' ? game.awayTeam : null;
@@ -834,7 +880,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
               </View>
               {/* Pick Badge — shows the app's predicted winner so the chip
                   matches the Strong/Solid/Lock tier and the detail page. */}
-              {hasPrediction ? (
+              {isPremium && hasPrediction ? (
                 <View
                   style={{
                     backgroundColor: 'rgba(139,10,31,0.25)',
@@ -850,7 +896,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 >
                   <TrendingUp size={8} color="#FFFFFF" />
                   <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', marginLeft: 3 }}>
-                    {predictedWinnerTeam.abbreviation}
+                    {predictionDisplay.badgeLabel}
                   </Text>
                 </View>
               ) : null}
@@ -933,7 +979,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
               {game.status === GameStatus.FINAL ? (
                 <View style={{ alignItems: 'center', backgroundColor: 'rgba(2,3,8,0.88)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 8 }}>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF' }}>
-                    {game.awayScore} - {game.homeScore}
+                    {scorePairText(game)}
                   </Text>
                   {game.quarter ? (
                     <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '600', marginTop: 2 }}>
@@ -944,10 +990,10 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
               ) : game.status === GameStatus.LIVE ? (
                 <View style={{ alignItems: 'center', backgroundColor: 'rgba(2,3,8,0.88)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(220,38,38,0.3)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 8 }}>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF' }}>
-                    {game.awayScore ?? 0} - {game.homeScore ?? 0}
+                    {scorePairText(game)}
                   </Text>
                   {(() => {
-                    const timeStr = formatGameTime(game.sport, game.quarter, game.clock);
+                    const timeStr = cricketStatusText(game) ?? formatGameTime(game.sport, game.quarter, game.clock);
                     return timeStr ? (
                       <Text style={{ color: '#DC2626', fontSize: 9, fontWeight: '700', marginTop: 2 }}>
                         {timeStr}
@@ -1077,9 +1123,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   borderRadius: 10,
                   padding: 8,
                   borderWidth: 1,
-                  borderColor: game.prediction.isTossUp
+                  borderColor: predictionDisplay.isTossUp
                     ? 'rgba(255,255,255,0.14)'
-                    : game.prediction.confidence >= 75 ? 'rgba(139,10,31,0.35)' : 'rgba(255,255,255,0.16)',
+                    : canonicalConfidence >= 75 ? 'rgba(139,10,31,0.35)' : 'rgba(255,255,255,0.16)',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.6,
@@ -1087,7 +1133,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  {game.prediction.isTossUp ? (
+                  {predictionDisplay.isTossUp || predictionDisplay.outcome === 'draw' ? (
                     <View
                       style={{
                         backgroundColor: 'rgba(255,255,255,0.07)',
@@ -1099,15 +1145,16 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                       }}
                     >
                       <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 }}>
-                        TOSS-UP
+                        {predictionDisplay.badgeLabel}
                       </Text>
                     </View>
                   ) : (
                     <PredictionBadge
-                      confidence={game.prediction.confidence}
-                      predictedWinner={predictedWinnerTeam.abbreviation}
+                      confidence={canonicalConfidence}
+                      predictedWinner={predictionDisplay.badgeLabel}
                       size="small"
                       showBar={false}
+                      isTossUp={predictionDisplay.isTossUp}
                     />
                   )}
 
@@ -1156,7 +1203,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                           {game.homeTeam.abbreviation} {projectionDisplay?.homeScore ?? Math.round(game.prediction.projection.projectedHomeScore)} · {game.awayTeam.abbreviation} {projectionDisplay?.awayScore ?? Math.round(game.prediction.projection.projectedAwayScore)}
                         </Text>
                         <Text style={{ color: 'rgba(255,255,255,0.52)', fontSize: 10, fontWeight: '700', marginTop: 2 }}>
-                          {projectionDisplay?.leanText ?? `Pick lean ${predictedWinnerTeam.abbreviation} ${Math.round(game.prediction.confidence)}%`}
+                          {projectionDisplay?.leanText ?? predictionDisplay.leanLabel}
                         </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
@@ -1171,7 +1218,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     {projectionDisplay || game.prediction.projection.signals[0] ? (
                       <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.48)', fontSize: 10, lineHeight: 14, marginTop: 5 }}>
                         {game.prediction.projection.signals[0]
-                          ? `${game.prediction.projection.signals[0].label}: ${game.prediction.projection.signals[0].evidence}`
+                          ? `${game.prediction.projection.signals[0].label}: ${cleanProjectionCopy(game.prediction.projection.signals[0].evidence)}`
                           : projectionDisplay?.contextText}
                       </Text>
                     ) : null}
@@ -1199,25 +1246,65 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 style={{
                   position: 'relative',
                   zIndex: 2,
-                  backgroundColor: 'rgba(2,3,8,0.92)',
-                  borderRadius: 10,
-                  padding: 12,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.08)',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  borderRadius: 12,
+                  overflow: 'hidden',
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(139,10,31,0.10)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 14 }}>🔒</Text>
+                <LinearGradient
+                  colors={['rgba(180,211,235,0.24)', 'rgba(255,255,255,0.12)', 'rgba(122,157,184,0.18)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ borderRadius: 14, padding: 1 }}
+                >
+                  <View
+                    style={{
+                      minHeight: 70,
+                      backgroundColor: 'rgba(5,8,13,0.94)',
+                      borderRadius: 13,
+                      paddingHorizontal: 13,
+                      paddingVertical: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      overflow: 'hidden',
+                    }}
+                    >
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={['rgba(180,211,235,0.12)', 'rgba(255,255,255,0.035)', 'rgba(5,8,13,0.72)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 1 }}
+                      />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: 10 }}>
+                      <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.28)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Lock size={16} color="#9AB8CC" strokeWidth={2.6} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0, marginLeft: 11 }}>
+                        <Text numberOfLines={1} style={{ color: '#B4D3EB', fontSize: 8.5, lineHeight: 11, fontWeight: '900', letterSpacing: 1.5 }}>CLUTCH PRO</Text>
+                        <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 13.5, lineHeight: 17, fontWeight: '900', marginTop: 2 }}>Full matchup read</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 7 }}>
+                          <View style={{ width: 46, height: 5, borderRadius: 3, backgroundColor: 'rgba(180,211,235,0.48)', marginRight: 5 }} />
+                          <View style={{ width: 30, height: 5, borderRadius: 3, backgroundColor: 'rgba(224,234,240,0.28)', marginRight: 5 }} />
+                          <View style={{ width: 38, height: 5, borderRadius: 3, backgroundColor: 'rgba(122,157,184,0.32)' }} />
+                        </View>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                      <View style={{ backgroundColor: 'rgba(122,157,184,0.12)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(180,211,235,0.28)' }}>
+                        <Text style={{ color: 'rgba(238,247,255,0.90)', fontSize: 9, lineHeight: 11, fontWeight: '900', letterSpacing: 1.2 }}>PRO</Text>
+                      </View>
+                      <ChevronRight size={15} color="#9AB8CC" strokeWidth={2.8} style={{ marginTop: 7, marginRight: 2 }} />
+                    </View>
                   </View>
-                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' }}>AI Pick Available</Text>
-                </View>
-                <View style={{ backgroundColor: '#8B0A1F', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>PRO</Text>
-                </View>
+                </LinearGradient>
               </Pressable>
             )
           ) : null}

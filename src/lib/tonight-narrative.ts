@@ -1,6 +1,7 @@
 import type { GameWithPrediction } from '@/types/sports';
 import { GameStatus } from '@/types/sports';
 import { displaySport } from './display-confidence';
+import { getCanonicalConfidence, getCanonicalWinProbabilities } from './canonical-result';
 
 const HIGH_CONVICTION_THRESHOLD = 65;
 const TOSSUP_HIGH_PCT = 0.25;
@@ -52,13 +53,14 @@ export function generateTonightNarrative(games: GameWithPrediction[]): string {
   const sportCount = sportCounts.size;
 
   const highConv = slate.filter(
-    g => (g.prediction?.confidence ?? 0) >= HIGH_CONVICTION_THRESHOLD
+    g => getCanonicalConfidence(g.prediction) >= HIGH_CONVICTION_THRESHOLD
   );
   const tossups = slate.filter(g => g.prediction?.isTossUp === true);
   const underdogsOnForm = slate.filter(g => {
     const p = g.prediction;
-    if (!p || p.homeWinProbability == null) return false;
-    const underdogIsHome = p.homeWinProbability < 50;
+    if (!p) return false;
+    const probabilities = getCanonicalWinProbabilities(p);
+    const underdogIsHome = probabilities.home < 50;
     const form = underdogIsHome ? p.recentFormHome : p.recentFormAway;
     const streak = underdogIsHome ? p.homeStreak : p.awayStreak;
     return isWinningForm(form, streak);

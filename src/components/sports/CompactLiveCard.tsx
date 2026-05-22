@@ -6,6 +6,7 @@ import { getTeamColors } from '@/lib/team-colors';
 import { TeamJerseyCompact } from './TeamJersey';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { cricketRequiredText, cricketRoleText, cricketStatusText, teamScoreText } from '@/lib/cricket-score';
 
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 165;
@@ -27,6 +28,15 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
 
   const awayScore = game.awayScore ?? 0;
   const homeScore = game.homeScore ?? 0;
+  const awayScoreLabel = teamScoreText(game, 'away');
+  const homeScoreLabel = teamScoreText(game, 'home');
+  const cricketStatus = cricketStatusText(game);
+  const cricketRequired = cricketRequiredText(game);
+  const isCricket = game.sport === Sport.IPL;
+  const awayCricketRole = isCricket ? cricketRoleText(game, 'away') : null;
+  const homeCricketRole = isCricket ? cricketRoleText(game, 'home') : null;
+  const awayBatting = awayCricketRole === 'BATTING';
+  const homeBatting = homeCricketRole === 'BATTING';
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
@@ -160,9 +170,11 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             />
             <View style={{ marginLeft: 8, flex: 1 }}>
               <Text style={{
-              color: suspended || awayWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+              color: suspended || awayWinning || awayBatting
+                ? '#FFFFFF'
+                : isCricket ? 'rgba(255,255,255,0.66)' : 'rgba(255,255,255,0.35)',
                 fontSize: 13,
-                fontWeight: awayWinning ? '800' : '500',
+                fontWeight: awayWinning || awayBatting ? '800' : '500',
                 letterSpacing: 0.4,
               }}>
                 {game.awayTeam.city || game.awayTeam.abbreviation}
@@ -172,15 +184,25 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                   {game.awayTeam.record}
                 </Text>
               ) : null}
+              {awayCricketRole ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                  <Text style={{ color: awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 0.9 }}>
+                    {awayCricketRole}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Text style={{
-              color: '#FFFFFF',
+              color: isCricket
+                ? awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.74)'
+                : '#FFFFFF',
               fontSize: 20,
               fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
-              opacity: suspended ? 0.55 : awayWinning ? 1 : 0.35,
+              opacity: suspended ? 0.55 : isCricket ? awayBatting ? 1 : 0.72 : awayWinning ? 1 : 0.35,
             }}>
-              {awayScore}
+              {awayScoreLabel}
             </Text>
           </View>
 
@@ -197,9 +219,11 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             />
             <View style={{ marginLeft: 8, flex: 1 }}>
               <Text style={{
-              color: suspended || homeWinning ? '#FFFFFF' : 'rgba(255,255,255,0.35)',
+              color: suspended || homeWinning || homeBatting
+                ? '#FFFFFF'
+                : isCricket ? 'rgba(255,255,255,0.66)' : 'rgba(255,255,255,0.35)',
                 fontSize: 13,
-                fontWeight: homeWinning ? '800' : '500',
+                fontWeight: homeWinning || homeBatting ? '800' : '500',
                 letterSpacing: 0.4,
               }}>
                 {game.homeTeam.city || game.homeTeam.abbreviation}
@@ -209,15 +233,25 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                   {game.homeTeam.record}
                 </Text>
               ) : null}
+              {homeCricketRole ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                  <Text style={{ color: homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 0.9 }}>
+                    {homeCricketRole}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Text style={{
-              color: '#FFFFFF',
+              color: isCricket
+                ? homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.74)'
+                : '#FFFFFF',
               fontSize: 20,
               fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
-              opacity: suspended ? 0.55 : homeWinning ? 1 : 0.35,
+              opacity: suspended ? 0.55 : isCricket ? homeBatting ? 1 : 0.72 : homeWinning ? 1 : 0.35,
             }}>
-              {homeScore}
+              {homeScoreLabel}
             </Text>
           </View>
         </View>
@@ -230,7 +264,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
             {/* Left: game time */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {(() => {
-                const timeStr = suspended ? suspensionTime : formatGameTime(game.sport, game.quarter, game.clock);
+                const timeStr = suspended ? suspensionTime : cricketRequired ?? cricketStatus ?? formatGameTime(game.sport, game.quarter, game.clock);
                 if (timeStr) {
                   return (
                     <View style={{

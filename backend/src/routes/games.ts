@@ -10,8 +10,13 @@ import { cleanOldShadowLogs } from "../prediction/shadow";
 import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "../prediction/seasonContext";
 import { buildDeterministicNarrative, buildNarrativeInput } from "../prediction/narrative";
-import { getConfidenceBand, type FactorContribution } from "../prediction/types";
-import { notifyWinnerFlip } from "../lib/notification-jobs";
+import { getConfidenceBand, type CanonicalEngineRead, type CanonicalPredictionResult, type FactorContribution } from "../prediction/types";
+import {
+  canonicalFromLegacyPrediction,
+  canonicalPickFromProbabilities,
+  normalizeCanonicalProbabilities,
+  probabilityForPick,
+} from "../prediction/canonical";
 import { fetchMarketConsensus } from "../lib/sharpApi";
 import {
   extractTennisAthleteId,
@@ -70,6 +75,26 @@ export interface GameTeam {
   matchesPlayed?: number;
 }
 
+export interface CricketInningsScore {
+  runs?: number;
+  wickets?: number;
+  overs?: number;
+  maxOvers?: number;
+  isBatting?: boolean;
+  description?: string;
+  scoreText: string;
+  detailText?: string;
+}
+
+export interface CricketScoreState {
+  home?: CricketInningsScore;
+  away?: CricketInningsScore;
+  battingSide?: "home" | "away";
+  innings?: number | null;
+  summary?: string;
+  target?: number;
+}
+
 export interface PredictionFactor {
   name: string;
   weight: number;
@@ -81,6 +106,7 @@ export interface PredictionFactor {
 export interface GamePrediction {
   id: string;
   gameId: string;
+  canonicalResult?: CanonicalPredictionResult;
   predictedWinner: "home" | "away";
   predictedOutcome?: "home" | "away" | "draw";
   confidence: number;
@@ -145,6 +171,8 @@ export interface Game {
   watchSources?: string[];
   homeScore?: number;
   awayScore?: number;
+  homeScoreDisplay?: string;
+  awayScoreDisplay?: string;
   spread?: number;
   overUnder?: number;
   marketFavorite?: "home" | "away";
@@ -161,6 +189,7 @@ export interface Game {
   seasonContext?: NarrativeSeasonContext | null;
   homeLinescores?: number[];
   awayLinescores?: number[];
+  cricketState?: CricketScoreState;
   liveState?: {
     balls: number;
     strikes: number;
@@ -197,7 +226,18 @@ interface ESPNCompetitor {
   team: ESPNTeam;
   score?: string;
   records?: Array<{ summary: string; type: string }>;
-  linescores?: Array<{ value?: number; displayValue?: string; period?: number }>;
+  linescores?: Array<{
+    value?: number;
+    displayValue?: string;
+    period?: number;
+    runs?: number;
+    wickets?: number;
+    overs?: number;
+    maxOvers?: number;
+    isBatting?: boolean | number;
+    isCurrent?: boolean | number;
+    description?: string;
+  }>;
 }
 
 interface ESPNOdds {
@@ -495,19 +535,30 @@ function setCacheData(cacheKey: string, data: Game[]): void {
 
 // Prediction cache - predictions don't change as often as scores
 const PREDICTION_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const PREDICTION_NARRATIVE_VERSION = "bar-friend-v9-projection-consensus";
-const predictionCache = new LRUCache<string, { prediction: GamePrediction; timestamp: number }>({ max: 500 });
+const PREDICTION_NARRATIVE_VERSION = "bar-friend-v10-stable-50k-simulation";
+type PredictionCacheEntry = { prediction: GamePrediction; timestamp: number };
+const predictionCache = new LRUCache<string, PredictionCacheEntry>({ max: 500 });
 
 function predictionCacheKey(gameId: string): string {
   return `${gameId}:${PREDICTION_NARRATIVE_VERSION}`;
 }
 
-function getCachedPrediction(gameId: string): GamePrediction | null {
-  const key = predictionCacheKey(gameId);
-  const entry = predictionCache.get(key);
+function readCachedPredictionEntry(gameId: string): PredictionCacheEntry | null {
+  return predictionCache.get(predictionCacheKey(gameId)) ?? null;
+}
+
+function isPredictionCacheEntryFresh(entry: PredictionCacheEntry): boolean {
+  return Date.now() - entry.timestamp <= PREDICTION_CACHE_TTL_MS;
+}
+
+function getCachedPrediction(
+  gameId: string,
+  opts: { allowExpired?: boolean } = {},
+): GamePrediction | null {
+  const entry = readCachedPredictionEntry(gameId);
   if (!entry) return null;
-  if (Date.now() - entry.timestamp > PREDICTION_CACHE_TTL_MS) {
-    predictionCache.delete(key);
+  if (!isPredictionCacheEntryFresh(entry)) {
+    if (opts.allowExpired) return entry.prediction;
     return null;
   }
   return entry.prediction;
@@ -577,7 +628,10 @@ export function sanitizePredictionForGame(game: Game, prediction: GamePrediction
 }
 
 function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
-  const displayPrediction = sanitizePredictionForGame(game, prediction);
+  const displayPrediction = sanitizePredictionForGame(
+    game,
+    ensureCanonicalPredictionResult(game, prediction),
+  );
   return {
     ...game,
     spread: game.spread ?? displayPrediction.spread,
@@ -623,9 +677,9 @@ function setCachedLivePrediction(gameId: string, prediction: GamePrediction): vo
 
 /**
  * Single source of truth for reading the freshest cached prediction for a game.
- * For LIVE games, prefers the live-adjusted cache (which reflects mid-game
- * win-probability shifts) and falls back to the pregame cache. For non-live
- * games, only the pregame cache is used.
+ * For LIVE games, keep using the pregame model call. Live score should update
+ * the scoreboard, not rewrite the betting-facing prediction every time the
+ * score moves.
  *
  * Every place that reads cached predictions (transformESPNEvent, the list
  * endpoint, the detail endpoint, etc.) MUST go through this helper. Any
@@ -634,10 +688,7 @@ function setCachedLivePrediction(gameId: string, prediction: GamePrediction): vo
  * favored), which is exactly the bug this helper exists to prevent.
  */
 function pickFreshestPrediction(gameId: string, isLive: boolean): GamePrediction | null {
-  if (isLive) {
-    return getCachedLivePrediction(gameId) ?? getCachedPrediction(gameId);
-  }
-  return getCachedPrediction(gameId);
+  return getCachedPrediction(gameId, { allowExpired: isLive });
 }
 
 // Clear all prediction caches — forces regeneration with current engine parameters
@@ -676,6 +727,124 @@ function clampNumber(value: number, min: number, max: number): number {
 
 function roundPercentTenth(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+function legacyProbabilitiesForCanonical(prediction: GamePrediction) {
+  const includeDraw =
+    prediction.predictedOutcome === "draw" ||
+    typeof prediction.drawProbability === "number" ||
+    prediction.canonicalResult?.marketType === "three_way_result";
+  return normalizeCanonicalProbabilities({
+    home: (prediction.homeWinProbability ?? 50) / 100,
+    away: (prediction.awayWinProbability ?? 50) / 100,
+    draw: includeDraw ? (prediction.drawProbability ?? 0) / 100 : undefined,
+  });
+}
+
+function canonicalSignalValue(pick: "home" | "away" | "draw" | "none"): number {
+  if (pick === "home") return 1;
+  if (pick === "away") return -1;
+  return 0;
+}
+
+function alignProjectionToCanonical(
+  prediction: GamePrediction,
+  signal: {
+    key: string;
+    label: string;
+    evidence: string;
+  },
+): GamePrediction["projection"] {
+  if (!prediction.projection) return undefined;
+
+  const canonicalProbabilities = legacyProbabilitiesForCanonical(prediction);
+  const pick = canonicalPickFromProbabilities(canonicalProbabilities);
+  const nextSignal = {
+    key: signal.key,
+    label: signal.label,
+    value: canonicalSignalValue(pick),
+    evidence: signal.evidence,
+  };
+
+  return {
+    ...prediction.projection,
+    homeWinProbability: roundPercentTenth(canonicalProbabilities.home * 100),
+    awayWinProbability: roundPercentTenth(canonicalProbabilities.away * 100),
+    drawProbability:
+      canonicalProbabilities.draw !== undefined
+        ? roundPercentTenth(canonicalProbabilities.draw * 100)
+        : undefined,
+    signals: [
+      nextSignal,
+      ...prediction.projection.signals.filter((s) => s.key !== signal.key && s.key !== "engine-consensus"),
+    ].slice(0, 5),
+  };
+}
+
+function withCanonicalPredictionResult(
+  prediction: GamePrediction,
+  sport: string,
+  opts: {
+    liveEngineRead?: CanonicalEngineRead;
+    warning?: string;
+    projectionSignal?: {
+      key: string;
+      label: string;
+      evidence: string;
+    };
+  } = {},
+): GamePrediction {
+  const projection = alignProjectionToCanonical(
+    prediction,
+    opts.projectionSignal ?? {
+      key: "canonical-consensus",
+      label: "Canonical consensus",
+      evidence: "Prediction, projection, and display cards consume the same canonical final answer",
+    },
+  );
+  const next = { ...prediction, projection };
+  return {
+    ...next,
+    canonicalResult: canonicalFromLegacyPrediction(next, sport, {
+      timestamp: new Date().toISOString(),
+      liveEngineRead: opts.liveEngineRead,
+      warning: opts.warning,
+    }),
+  };
+}
+
+function ensureCanonicalPredictionResult(game: Game, prediction: GamePrediction): GamePrediction {
+  if (prediction.canonicalResult) return prediction;
+  return withCanonicalPredictionResult(prediction, game.sport);
+}
+
+function buildLiveEngineRead(args: {
+  live: LiveGameData;
+  sport: string;
+  gameProgress: number;
+  probabilities: ReturnType<typeof legacyProbabilitiesForCanonical>;
+  liveHomeWinProb: number;
+  liveAwayWinProb: number;
+}): CanonicalEngineRead {
+  const pick = canonicalPickFromProbabilities(args.probabilities);
+  const probability = probabilityForPick(args.probabilities, pick);
+  return {
+    engine: "live-score-v1",
+    pick,
+    probability,
+    confidence: roundPercentTenth(probability * 100),
+    probabilities: args.probabilities,
+    weight: args.gameProgress,
+    inputs: {
+      sport: args.sport,
+      homeScore: args.live.currentHomeScore,
+      awayScore: args.live.currentAwayScore,
+      period: args.live.period,
+      elapsedShare: Math.round(args.gameProgress * 1000) / 1000,
+      liveHomeWinProb: Math.round(args.liveHomeWinProb * 1000) / 1000,
+      liveAwayWinProb: Math.round(args.liveAwayWinProb * 1000) / 1000,
+    },
+  };
 }
 
 /**
@@ -803,111 +972,18 @@ function formatLivePredictionLabel(live: LiveGameData, sport: string): string {
 }
 
 /**
- * Apply live game state to a pregame prediction.
+ * Keep the betting-facing prediction stable once the game is live.
  *
- * Blend formula:
- *   liveConfidence = pregameConf * (1 - progress) + liveScoreImplied * progress
- *
- * - If the live score leader matches the pregame pick, confidence is boosted.
- * - If the live score leader is the opposite team, confidence is reduced and
- *   predictedWinner may flip once the live signal is dominant enough.
- * - If it's a blowout (>2× expected margin), the live model takes over fully.
- *
- * This function does NOT modify the factors array — it annotates the returned
- * prediction with `isLiveAdjusted: true` so the client can display it.
+ * The model answer is the pregame simulation/projection result. Live score
+ * movement belongs in the scoreboard surface; it should not cause the app to
+ * flip the pick or confidence as a team trails/leads in-game.
  */
 export function updateLivePrediction(
   pregame: GamePrediction,
-  live: LiveGameData,
-  sport: string
+  _live: LiveGameData,
+  _sport: string
 ): GamePrediction {
-  const gameProgress = computeGameProgress(live, sport);
-
-  // Very early in the game (< 5% elapsed) — don't adjust yet, score is noise
-  if (gameProgress < 0.05) return pregame;
-
-  const liveHomeWinProb = computeLiveScoreImpliedProb(
-    live.currentHomeScore,
-    live.currentAwayScore,
-    gameProgress,
-    sport
-  );
-  const liveAwayWinProb = 1 - liveHomeWinProb;
-
-  // Pregame probabilities on 0–1 scale
-  const pregameHomeProb = pregame.homeWinProbability / 100;
-  const pregameAwayProb = pregame.awayWinProbability / 100;
-
-  if (LIVE_SOCCER_SPORTS.has(sport)) {
-    const pregameDrawProb =
-      typeof pregame.drawProbability === "number" && Number.isFinite(pregame.drawProbability)
-        ? pregame.drawProbability / 100
-        : 0.25;
-    const liveDrawProb = computeLiveSoccerDrawProb(
-      live.currentHomeScore - live.currentAwayScore,
-      gameProgress,
-    );
-    const liveNonDrawProb = 1 - liveDrawProb;
-    const liveHomeThreeWay = liveHomeWinProb * liveNonDrawProb;
-    const liveAwayThreeWay = liveAwayWinProb * liveNonDrawProb;
-
-    const blendedHomeProb = pregameHomeProb * (1 - gameProgress) + liveHomeThreeWay * gameProgress;
-    const blendedAwayProb = pregameAwayProb * (1 - gameProgress) + liveAwayThreeWay * gameProgress;
-    const blendedDrawProb = pregameDrawProb * (1 - gameProgress) + liveDrawProb * gameProgress;
-    const total = blendedHomeProb + blendedAwayProb + blendedDrawProb;
-
-    const newHomeProb = roundPercentTenth((blendedHomeProb / total) * 100);
-    const newAwayProb = roundPercentTenth((blendedAwayProb / total) * 100);
-    const newDrawProb = Math.max(0, roundPercentTenth(100 - newHomeProb - newAwayProb));
-    const maxProb = Math.max(newHomeProb, newAwayProb, newDrawProb);
-    const predictedOutcome: "home" | "away" | "draw" =
-      newDrawProb >= newHomeProb && newDrawProb >= newAwayProb
-        ? "draw"
-        : newHomeProb >= newAwayProb
-          ? "home"
-          : "away";
-    const newPredictedWinner: "home" | "away" =
-      predictedOutcome === "away" ? "away" : newHomeProb >= newAwayProb ? "home" : "away";
-
-    return {
-      ...pregame,
-      predictedWinner: newPredictedWinner,
-      predictedOutcome,
-      confidence: maxProb,
-      homeWinProbability: newHomeProb,
-      awayWinProbability: newAwayProb,
-      drawProbability: newDrawProb,
-      isTossUp: maxProb < 53 || Math.abs(newHomeProb - newAwayProb) < 5,
-      analysis: pregame.analysis +
-        ` [LIVE ${formatLivePredictionLabel(live, sport)}: ${live.currentHomeScore}-${live.currentAwayScore}, ${Math.round(gameProgress * 100)}% elapsed]`,
-    };
-  }
-
-  // Blend: more game elapsed = more weight on live score signal
-  const blendedHomeProb = pregameHomeProb * (1 - gameProgress) + liveHomeWinProb * gameProgress;
-  const blendedAwayProb = pregameAwayProb * (1 - gameProgress) + liveAwayWinProb * gameProgress;
-
-  // Normalize to sum to 100
-  const total = blendedHomeProb + blendedAwayProb;
-  const newHomeProb = Math.round((blendedHomeProb / total) * 100);
-  const newAwayProb = 100 - newHomeProb;
-
-  // Derive new winner and confidence
-  const newPredictedWinner: "home" | "away" = newHomeProb >= 50 ? "home" : "away";
-  const newWinnerProb = newPredictedWinner === "home" ? newHomeProb : newAwayProb;
-  // Confidence: clamp to [50, 95] — live model can be more aggressive than pregame
-  const newConfidence = Math.max(50, Math.min(95, newWinnerProb));
-
-  return {
-    ...pregame,
-    predictedWinner: newPredictedWinner,
-    confidence: newConfidence,
-    homeWinProbability: newHomeProb,
-    awayWinProbability: newAwayProb,
-    // Surface live context in analysis suffix
-    analysis: pregame.analysis +
-      ` [LIVE ${formatLivePredictionLabel(live, sport)}: ${live.currentHomeScore}–${live.currentAwayScore}, ${Math.round(gameProgress * 100)}% elapsed]`,
-  };
+  return pregame;
 }
 
 // ─── Live helper utilities ────────────────────────────────────────────────────
@@ -981,46 +1057,8 @@ function parseSoccerPeriod(display: string): number {
 }
 
 function applyLiveAdjustmentIfNeeded(game: Game, pregamePrediction: GamePrediction): GamePrediction {
-  if (game.status !== "LIVE" || game.homeScore === undefined || game.awayScore === undefined) {
-    return pregamePrediction;
-  }
-
-  const isSoccer = LIVE_SOCCER_SPORTS.has(game.sport);
-  const soccerElapsedSeconds = isSoccer
-    ? parseSoccerElapsedSeconds(game.clock ?? game.quarter ?? "")
-    : null;
-
-  const liveData: LiveGameData = {
-    currentHomeScore: game.homeScore,
-    currentAwayScore: game.awayScore,
-    period: isSoccer
-      ? parseSoccerPeriod(game.clock ?? game.quarter ?? "")
-      : parsePeriodNumber(game.quarter ?? "") ?? 1,
-    clockSeconds: isSoccer ? null : parseClockSeconds(game.clock ?? ""),
-    elapsedSeconds: soccerElapsedSeconds,
-    totalPeriods: SPORT_TOTAL_PERIODS[game.sport] ?? 4,
-  };
-
-  const finalPrediction = updateLivePrediction(pregamePrediction, liveData, game.sport);
-  if (finalPrediction === pregamePrediction) {
-    return pregamePrediction;
-  }
-  if (pregamePrediction.predictedWinner !== finalPrediction.predictedWinner) {
-    console.log(
-      `[LiveFlip] ${game.id}: ${pregamePrediction.predictedWinner} -> ${finalPrediction.predictedWinner} (live score shift)`,
-    );
-    notifyWinnerFlip(
-      game.id,
-      game.homeTeam.abbreviation,
-      game.awayTeam.abbreviation,
-      game.sport,
-      finalPrediction.predictedWinner,
-      finalPrediction.confidence,
-    ).catch((err) => console.error("[LiveFlip] Notify failed:", err));
-  }
-
-  setCachedLivePrediction(game.id, finalPrediction);
-  return finalPrediction;
+  void game;
+  return pregamePrediction;
 }
 
 async function annotateMarketComparison(game: Game, prediction: GamePrediction): Promise<void> {
@@ -1061,36 +1099,147 @@ async function annotateMarketComparison(game: Game, prediction: GamePrediction):
   }
 }
 
-// Generate prediction for an ESPN game, with live adjustment when in-progress.
+type PredictionOutcome = "home" | "away" | "draw";
+
+const MATERIAL_PREDICTION_PROBABILITY_MOVE_PP = 3;
+const MATERIAL_CONFIDENCE_MOVE_PP = 4;
+const MATERIAL_PICK_FLIP_LEAD_PP = 5;
+const MATERIAL_MARKET_DIVERGENCE_MOVE_PP = 7;
+
+function predictionOutcome(prediction: GamePrediction): PredictionOutcome {
+  const canonicalPick = prediction.canonicalResult?.finalPick;
+  if (canonicalPick === "home" || canonicalPick === "away" || canonicalPick === "draw") {
+    return canonicalPick;
+  }
+  if (prediction.predictedOutcome === "draw") return "draw";
+  return prediction.predictedWinner;
+}
+
+function predictionOutcomeLead(prediction: GamePrediction): number {
+  const values = [
+    prediction.homeWinProbability ?? 0,
+    prediction.awayWinProbability ?? 0,
+  ];
+  if (prediction.drawProbability !== undefined || prediction.predictedOutcome === "draw") {
+    values.push(prediction.drawProbability ?? 0);
+  }
+  const sorted = values.sort((a, b) => b - a);
+  return (sorted[0] ?? 0) - (sorted[1] ?? 0);
+}
+
+function maxProbabilityMove(previous: GamePrediction, candidate: GamePrediction): number {
+  return Math.max(
+    Math.abs((candidate.homeWinProbability ?? 0) - (previous.homeWinProbability ?? 0)),
+    Math.abs((candidate.awayWinProbability ?? 0) - (previous.awayWinProbability ?? 0)),
+    Math.abs((candidate.drawProbability ?? 0) - (previous.drawProbability ?? 0)),
+  );
+}
+
+function projectionProbabilityMove(previous: GamePrediction, candidate: GamePrediction): number {
+  if (!previous.projection || !candidate.projection) return 0;
+  return Math.max(
+    Math.abs(candidate.projection.homeWinProbability - previous.projection.homeWinProbability),
+    Math.abs(candidate.projection.awayWinProbability - previous.projection.awayWinProbability),
+    Math.abs((candidate.projection.drawProbability ?? 0) - (previous.projection.drawProbability ?? 0)),
+  );
+}
+
+function projectionSpreadMoveThreshold(sport: string): number {
+  if (sport === "NBA" || sport === "NCAAB") return 2.5;
+  if (sport === "NFL" || sport === "NCAAF") return 1.5;
+  if (sport === "IPL") return 8;
+  if (sport === "MLB" || sport === "NHL" || sport === "MLS" || sport === "EPL" || sport === "UCL") return 0.5;
+  if (sport === "TENNIS") return 0.25;
+  return 1;
+}
+
+function projectionTotalMoveThreshold(sport: string): number {
+  if (sport === "NBA" || sport === "NCAAB") return 4;
+  if (sport === "NFL" || sport === "NCAAF") return 3;
+  if (sport === "IPL") return 15;
+  if (sport === "MLB") return 1;
+  if (sport === "NHL" || sport === "MLS" || sport === "EPL" || sport === "UCL") return 0.75;
+  if (sport === "TENNIS") return 0.25;
+  return 2;
+}
+
+function projectionMovedMaterially(game: Game, previous: GamePrediction, candidate: GamePrediction): boolean {
+  if (!previous.projection || !candidate.projection) return Boolean(candidate.projection && !previous.projection);
+  return (
+    projectionProbabilityMove(previous, candidate) >= MATERIAL_PREDICTION_PROBABILITY_MOVE_PP ||
+    Math.abs(candidate.projection.projectedSpread - previous.projection.projectedSpread) >=
+      projectionSpreadMoveThreshold(game.sport) ||
+    Math.abs(candidate.projection.projectedTotal - previous.projection.projectedTotal) >=
+      projectionTotalMoveThreshold(game.sport)
+  );
+}
+
+function marketMovedMaterially(previous: GamePrediction, candidate: GamePrediction): boolean {
+  if (!candidate.marketComparison) return false;
+  if (!previous.marketComparison) return candidate.marketComparison.isDivergent;
+  if (candidate.marketComparison.isDivergent !== previous.marketComparison.isDivergent) return true;
+  return (
+    Math.abs(candidate.marketComparison.divergence - previous.marketComparison.divergence) * 100 >=
+    MATERIAL_MARKET_DIVERGENCE_MOVE_PP
+  );
+}
+
+/**
+ * Bettor-safe update gate.
+ *
+ * A fresh model run is allowed to replace the visible prediction only when the
+ * output moved enough to matter. That lets new injury/lineup/market information
+ * through, while suppressing tiny simulation/cache jitter that makes users feel
+ * like the app is chasing noise.
+ */
+export function shouldPromotePredictionUpdate(
+  game: Game,
+  previous: GamePrediction | null,
+  candidate: GamePrediction,
+): boolean {
+  if (!previous) return true;
+
+  const previousOutcome = predictionOutcome(previous);
+  const candidateOutcome = predictionOutcome(candidate);
+  if (candidateOutcome !== previousOutcome) {
+    return predictionOutcomeLead(candidate) >= MATERIAL_PICK_FLIP_LEAD_PP;
+  }
+
+  return (
+    maxProbabilityMove(previous, candidate) >= MATERIAL_PREDICTION_PROBABILITY_MOVE_PP ||
+    Math.abs(candidate.confidence - previous.confidence) >= MATERIAL_CONFIDENCE_MOVE_PP ||
+    projectionMovedMaterially(game, previous, candidate) ||
+    marketMovedMaterially(previous, candidate)
+  );
+}
+
+function choosePredictionUpdate(
+  game: Game,
+  previous: GamePrediction | null,
+  candidate: GamePrediction,
+): GamePrediction {
+  if (shouldPromotePredictionUpdate(game, previous, candidate)) return candidate;
+  return sanitizePredictionForGame(game, ensureCanonicalPredictionResult(game, previous!));
+}
+
+// Generate prediction for an ESPN game. The prediction remains the stable
+// model/simulation call even when the game is in progress.
 async function addPredictionToGame(game: Game): Promise<Game> {
-  const isLive = game.status === "LIVE";
-
-  if (isLive) {
-    const cachedLive = getCachedLivePrediction(game.id);
-    if (cachedLive) {
-      return attachPredictionToGame(game, cachedLive);
-    }
-  }
-
-  const cachedPrediction = getCachedPrediction(game.id);
-  if (cachedPrediction && !isLive) {
+  const cachedPrediction = pickFreshestPrediction(game.id, game.status === "LIVE");
+  if (cachedPrediction) {
     return attachPredictionToGame(game, cachedPrediction);
-  }
-
-  if (cachedPrediction && isLive) {
-    const finalPrediction = applyLiveAdjustmentIfNeeded(game, cachedPrediction);
-    return attachPredictionToGame(game, finalPrediction);
   }
 
   try {
     const newPrediction = await runNewEnginePrediction(game);
     await annotateMarketComparison(game, newPrediction);
 
-    const displayPrediction = sanitizePredictionForGame(game, newPrediction);
+    const candidatePrediction = sanitizePredictionForGame(game, newPrediction);
+    const previousPrediction = getCachedPrediction(game.id, { allowExpired: true });
+    const displayPrediction = choosePredictionUpdate(game, previousPrediction, candidatePrediction);
     setCachedPrediction(game.id, displayPrediction);
-    const finalPrediction = applyLiveAdjustmentIfNeeded(game, displayPrediction);
 
-    return attachPredictionToGame(game, finalPrediction);
+    return attachPredictionToGame(game, displayPrediction);
   } catch (err) {
     console.error(
       `[engine] New engine failed for ${game.id} (${game.sport}); no legacy fallback served:`,
@@ -1266,6 +1415,141 @@ function getMlbPeriodDisplay(liveState: Game["liveState"] | undefined): string |
   return undefined;
 }
 
+type ParsedCricketScore = {
+  runs?: number;
+  wickets?: number;
+  overs?: number;
+  maxOvers?: number;
+  target?: number;
+};
+
+function parseCricketScoreText(raw: string | undefined): ParsedCricketScore {
+  if (!raw) return {};
+  const result: ParsedCricketScore = {};
+
+  const scoreMatch = raw.match(/(\d+)\s*\/\s*(\d+)/);
+  if (scoreMatch) {
+    const runs = Number(scoreMatch[1]);
+    const wickets = Number(scoreMatch[2]);
+    if (Number.isFinite(runs)) result.runs = runs;
+    if (Number.isFinite(wickets)) result.wickets = wickets;
+  } else {
+    const runs = Number.parseInt(raw, 10);
+    if (Number.isFinite(runs)) result.runs = runs;
+  }
+
+  const oversMatch = raw.match(/(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+(?:\.\d+)?))?\s*ov/i);
+  if (oversMatch) {
+    const overs = Number(oversMatch[1]);
+    const maxOvers = oversMatch[2] !== undefined ? Number(oversMatch[2]) : undefined;
+    if (Number.isFinite(overs)) result.overs = overs;
+    if (maxOvers !== undefined && Number.isFinite(maxOvers)) result.maxOvers = maxOvers;
+  }
+
+  const targetMatch = raw.match(/target\s+(\d+)/i);
+  if (targetMatch) {
+    const target = Number(targetMatch[1]);
+    if (Number.isFinite(target)) result.target = target;
+  }
+
+  return result;
+}
+
+function formatCricketNumber(value: number | undefined): string | undefined {
+  if (value === undefined || !Number.isFinite(value)) return undefined;
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function cricketBool(value: boolean | number | undefined): boolean {
+  return value === true || value === 1;
+}
+
+function extractCricketInnings(competitor: ESPNCompetitor): CricketInningsScore | undefined {
+  const parsed = parseCricketScoreText(competitor.score);
+  const lines = competitor.linescores ?? [];
+  const line =
+    lines.find((ls) => cricketBool(ls.isCurrent) || cricketBool(ls.isBatting)) ??
+    [...lines].reverse().find((ls) =>
+      typeof ls.runs === "number" ||
+      typeof ls.wickets === "number" ||
+      typeof ls.overs === "number" ||
+      typeof ls.value === "number" ||
+      typeof ls.displayValue === "string",
+    );
+
+  const runs =
+    typeof line?.runs === "number" ? line.runs :
+    typeof line?.value === "number" ? line.value :
+    parsed.runs;
+  const wickets = typeof line?.wickets === "number" ? line.wickets : parsed.wickets;
+  const overs = typeof line?.overs === "number" ? line.overs : parsed.overs;
+  const maxOvers = typeof line?.maxOvers === "number" ? line.maxOvers : parsed.maxOvers;
+
+  if (runs === undefined && wickets === undefined && overs === undefined && !competitor.score) {
+    return undefined;
+  }
+
+  const scoreText =
+    runs !== undefined && wickets !== undefined
+      ? `${runs}/${wickets}`
+      : competitor.score?.split("(")[0]?.trim() || (runs !== undefined ? String(runs) : "0");
+  const oversText = formatCricketNumber(overs);
+  const maxOversText = formatCricketNumber(maxOvers);
+
+  return {
+    runs,
+    wickets,
+    overs,
+    maxOvers,
+    isBatting: cricketBool(line?.isBatting) || cricketBool(line?.isCurrent),
+    description: line?.description,
+    scoreText,
+    detailText: oversText ? `${oversText}${maxOversText ? `/${maxOversText}` : ""} ov` : undefined,
+  };
+}
+
+function buildCricketScoreState(
+  home: ESPNCompetitor,
+  away: ESPNCompetitor,
+  status: ESPNStatus,
+): CricketScoreState | undefined {
+  const homeInnings = extractCricketInnings(home);
+  const awayInnings = extractCricketInnings(away);
+  if (!homeInnings && !awayInnings) return undefined;
+
+  const parsedTarget = parseCricketScoreText(`${home.score ?? ""} ${away.score ?? ""}`).target;
+  const battingSide =
+    homeInnings?.isBatting ? "home" :
+    awayInnings?.isBatting ? "away" :
+    undefined;
+  const summary = [
+    status.summary,
+    status.type.shortDetail,
+    status.type.detail,
+  ].find((text) => text && text.trim().length > 0)?.trim();
+
+  return {
+    home: homeInnings,
+    away: awayInnings,
+    battingSide,
+    innings: status.period ?? null,
+    summary,
+    target: parsedTarget,
+  };
+}
+
+function cricketStatusLine(
+  cricketState: CricketScoreState | undefined,
+  homeAbbr: string,
+  awayAbbr: string,
+): string | undefined {
+  if (!cricketState?.battingSide) return undefined;
+  const innings = cricketState[cricketState.battingSide];
+  if (!innings) return undefined;
+  const abbr = cricketState.battingSide === "home" ? homeAbbr : awayAbbr;
+  return [abbr, innings.scoreText, innings.detailText].filter(Boolean).join(" ");
+}
+
 function parseMlbLiveState({
   sport,
   status,
@@ -1419,10 +1703,25 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
 
   const homeScore = homeCompetitor.score ? parseInt(homeCompetitor.score, 10) : undefined;
   const awayScore = awayCompetitor.score ? parseInt(awayCompetitor.score, 10) : undefined;
+  const cricketState = sport === "IPL"
+    ? buildCricketScoreState(homeCompetitor, awayCompetitor, competition.status)
+    : undefined;
+  const cricketHomeScore = cricketState?.home?.runs;
+  const cricketAwayScore = cricketState?.away?.runs;
+  const cricketClock = sport === "IPL"
+    ? (cricketState?.battingSide ? cricketState[cricketState.battingSide]?.detailText : undefined)
+    : undefined;
+  const cricketQuarter = sport === "IPL"
+    ? cricketStatusLine(cricketState, homeTeam.abbreviation, awayTeam.abbreviation) ?? rawQuarter
+    : undefined;
 
   const extractLinescores = (c: ESPNCompetitor): number[] | undefined => {
     if (!c.linescores || c.linescores.length === 0) return undefined;
-    return c.linescores.map((ls) => (typeof ls.value === "number" ? ls.value : 0));
+    return c.linescores.map((ls) => (
+      typeof ls.value === "number" ? ls.value :
+      typeof ls.runs === "number" ? ls.runs :
+      0
+    ));
   };
   const homeLinescores = extractLinescores(homeCompetitor);
   const awayLinescores = extractLinescores(awayCompetitor);
@@ -1435,7 +1734,11 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     awayAbbr: awayTeam.abbreviation,
     gameId: event.id,
   });
-  const quarter = sport === "MLB" ? getMlbPeriodDisplay(liveState) ?? rawQuarter : rawQuarter;
+  const quarter = sport === "MLB"
+    ? getMlbPeriodDisplay(liveState) ?? rawQuarter
+    : sport === "IPL"
+      ? cricketQuarter
+      : rawQuarter;
   const normalizeTeamColor = (color: string | undefined): string =>
     color ? (color.startsWith("#") ? color : `#${color}`) : "#333333";
   const homeStanding = getStanding(homeCompetitor);
@@ -1475,25 +1778,27 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     venue: competition.venue?.fullName || "TBD",
     tvChannel,
     watchSources,
-    homeScore: homeScore !== undefined && !isNaN(homeScore) ? homeScore : undefined,
-    awayScore: awayScore !== undefined && !isNaN(awayScore) ? awayScore : undefined,
+    homeScore: cricketHomeScore !== undefined ? cricketHomeScore : homeScore !== undefined && !isNaN(homeScore) ? homeScore : undefined,
+    awayScore: cricketAwayScore !== undefined ? cricketAwayScore : awayScore !== undefined && !isNaN(awayScore) ? awayScore : undefined,
+    homeScoreDisplay: cricketState?.home?.scoreText,
+    awayScoreDisplay: cricketState?.away?.scoreText,
     spread,
     overUnder,
     marketFavorite,
     quarter,
-    clock,
+    clock: sport === "IPL" ? cricketClock ?? clock : clock,
     statusLabel: suspension?.display,
-    statusDetail: suspension?.resumeText,
+    statusDetail: sport === "IPL" ? cricketState?.summary ?? suspension?.resumeText : suspension?.resumeText,
     suspension,
     seasonContext,
     homeLinescores,
     awayLinescores,
+    cricketState,
     liveState,
   };
 
   // Attach freshest cached prediction if available, don't block on generating
-  // new ones. Use the shared helper so live games pick the live-adjusted cache
-  // (matching what the list/detail endpoints will return).
+  // new ones. Live games still use the stable pregame model call.
   const cachedPrediction = pickFreshestPrediction(game.id, gameStatus === "LIVE");
   if (cachedPrediction) {
     return attachPredictionToGame(game, cachedPrediction);
@@ -2310,7 +2615,7 @@ gamesRouter.get("/date/:date", async (c) => {
     // Attach any cached predictions inline so first paint shows them when warm.
     const gamesWithCached = games.map((g) => {
       if (g.prediction) return g;
-      const cached = getCachedPrediction(g.id);
+      const cached = pickFreshestPrediction(g.id, g.status === "LIVE");
       return cached ? attachPredictionToGame(g, cached) : g;
     });
 
@@ -2477,7 +2782,7 @@ gamesRouter.get("/:sport", async (c) => {
     const games = await fetchGamesBySport(sportParam, dateQuery || undefined, true);
     const gamesWithCached = games.map((game) => {
       if (game.prediction) return game;
-      const cached = getCachedPrediction(game.id);
+      const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
       return cached ? attachPredictionToGame(game, cached) : game;
     });
     const missing = gamesWithCached.filter((game) => !game.prediction);
@@ -2503,6 +2808,8 @@ interface LiveScore {
   awayTeam: { abbreviation: string; name: string };
   homeScore: number;
   awayScore: number;
+  homeScoreDisplay?: string;
+  awayScoreDisplay?: string;
   clock: string | null;
   period: number | null;
   quarter: string | null;
@@ -2510,6 +2817,7 @@ interface LiveScore {
   statusLabel?: string;
   statusDetail?: string;
   suspension?: Game["suspension"];
+  cricketState?: Game["cricketState"];
   liveState?: Game["liveState"];
 }
 
@@ -2609,6 +2917,14 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
             const home = comp.competitors.find((c) => c.homeAway === "home");
             const away = comp.competitors.find((c) => c.homeAway === "away");
             if (!home || !away) return null;
+            const cricketState = sport === "IPL"
+              ? buildCricketScoreState(home, away, comp.status)
+              : undefined;
+            const cricketHomeScore = cricketState?.home?.runs;
+            const cricketAwayScore = cricketState?.away?.runs;
+            const cricketClock = sport === "IPL"
+              ? (cricketState?.battingSide ? cricketState[cricketState.battingSide]?.detailText : undefined)
+              : undefined;
             const liveState = parseMlbLiveState({
               sport,
               status: liveStatus,
@@ -2618,6 +2934,9 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
               gameId: ev.id,
             });
             const rawQuarter = getPeriodDisplay(comp.status, sport) ?? null;
+            const cricketQuarter = sport === "IPL"
+              ? cricketStatusLine(cricketState, home.team.abbreviation, away.team.abbreviation) ?? rawQuarter
+              : null;
 
             return {
               id: ev.id,
@@ -2630,15 +2949,24 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
                 abbreviation: away.team.abbreviation,
                 name: away.team.shortDisplayName || away.team.name,
               },
-              homeScore: parseInt(home.score ?? "0", 10),
-              awayScore: parseInt(away.score ?? "0", 10),
-              clock: suspension?.resumeText ?? comp.status.displayClock ?? null,
+              homeScore: cricketHomeScore ?? parseInt(home.score ?? "0", 10),
+              awayScore: cricketAwayScore ?? parseInt(away.score ?? "0", 10),
+              homeScoreDisplay: cricketState?.home?.scoreText,
+              awayScoreDisplay: cricketState?.away?.scoreText,
+              clock: sport === "IPL"
+                ? cricketClock ?? suspension?.resumeText ?? comp.status.displayClock ?? null
+                : suspension?.resumeText ?? comp.status.displayClock ?? null,
               period: comp.status.period ?? null,
-              quarter: sport === "MLB" ? getMlbPeriodDisplay(liveState) ?? rawQuarter : rawQuarter,
+              quarter: sport === "MLB"
+                ? getMlbPeriodDisplay(liveState) ?? rawQuarter
+                : sport === "IPL"
+                  ? cricketQuarter
+                  : rawQuarter,
               status: liveStatus,
               statusLabel: suspension?.display,
-              statusDetail: suspension?.resumeText,
+              statusDetail: sport === "IPL" ? cricketState?.summary ?? suspension?.resumeText : suspension?.resumeText,
               suspension,
+              cricketState,
               liveState,
             };
           })

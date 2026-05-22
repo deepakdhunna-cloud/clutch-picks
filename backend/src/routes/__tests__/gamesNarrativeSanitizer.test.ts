@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  shouldPromotePredictionUpdate,
   sanitizePredictionForGame,
   updateLivePrediction,
   type Game,
@@ -116,9 +117,100 @@ describe("sanitizePredictionForGame", () => {
   });
 });
 
+describe("shouldPromotePredictionUpdate", () => {
+  test("keeps the prior prediction when a fresh run only nudges the numbers", () => {
+    const previous: GamePrediction = {
+      ...makePrediction("Stable pregame read."),
+      projection: {
+        engine: "game-script-v1",
+        iterations: 50000,
+        homeWinProbability: 59,
+        awayWinProbability: 41,
+        projectedHomeScore: 112,
+        projectedAwayScore: 108,
+        projectedSpread: 4,
+        projectedTotal: 220,
+        volatility: 0.2,
+        upsetRisk: 0.41,
+        signals: [],
+      },
+    };
+    const candidate: GamePrediction = {
+      ...previous,
+      confidence: 60,
+      homeWinProbability: 60,
+      awayWinProbability: 40,
+      projection: {
+        ...previous.projection!,
+        homeWinProbability: 60,
+        awayWinProbability: 40,
+        projectedHomeScore: 112.4,
+        projectedAwayScore: 108.1,
+        projectedSpread: 4.3,
+        projectedTotal: 220.5,
+      },
+    };
+
+    expect(shouldPromotePredictionUpdate(makeGame(), previous, candidate)).toBe(false);
+  });
+
+  test("promotes meaningful probability or projection moves", () => {
+    const previous = makePrediction("Stable pregame read.");
+    const candidate: GamePrediction = {
+      ...previous,
+      confidence: 64,
+      homeWinProbability: 64,
+      awayWinProbability: 36,
+    };
+
+    expect(shouldPromotePredictionUpdate(makeGame(), previous, candidate)).toBe(true);
+  });
+
+  test("requires a clear edge before replacing the visible pick with a flipped side", () => {
+    const previous: GamePrediction = {
+      ...makePrediction("Pregame read favors the home side."),
+      confidence: 52,
+      homeWinProbability: 52,
+      awayWinProbability: 48,
+    };
+    const noisyFlip: GamePrediction = {
+      ...previous,
+      predictedWinner: "away",
+      predictedOutcome: "away",
+      confidence: 51,
+      homeWinProbability: 49,
+      awayWinProbability: 51,
+    };
+    const clearFlip: GamePrediction = {
+      ...noisyFlip,
+      confidence: 56,
+      homeWinProbability: 44,
+      awayWinProbability: 56,
+    };
+
+    expect(shouldPromotePredictionUpdate(makeGame(), previous, noisyFlip)).toBe(false);
+    expect(shouldPromotePredictionUpdate(makeGame(), previous, clearFlip)).toBe(true);
+  });
+});
+
 describe("updateLivePrediction", () => {
-  test("blends late live score signal into the served prediction", () => {
-    const pregame = makePrediction("Pregame read favors the home side.");
+  test("keeps the model prediction stable during late live score swings", () => {
+    const pregame: GamePrediction = {
+      ...makePrediction("Pregame read favors the home side."),
+      projection: {
+        engine: "game-script-v1",
+        iterations: 50000,
+        homeWinProbability: 59,
+        awayWinProbability: 41,
+        projectedHomeScore: 112,
+        projectedAwayScore: 108,
+        projectedSpread: 4,
+        projectedTotal: 220,
+        volatility: 0.2,
+        upsetRisk: 0.41,
+        signals: [],
+      },
+    };
 
     const liveAdjusted = updateLivePrediction(
       pregame,
@@ -132,10 +224,11 @@ describe("updateLivePrediction", () => {
       "NBA",
     );
 
-    expect(liveAdjusted.predictedWinner).toBe("away");
-    expect(liveAdjusted.awayWinProbability).toBeGreaterThan(liveAdjusted.homeWinProbability);
-    expect(liveAdjusted.confidence).toBe(liveAdjusted.awayWinProbability);
-    expect(liveAdjusted.analysis).toContain("[LIVE Q4: 88");
+    expect(liveAdjusted).toBe(pregame);
+    expect(liveAdjusted.predictedWinner).toBe("home");
+    expect(liveAdjusted.homeWinProbability).toBe(59);
+    expect(liveAdjusted.awayWinProbability).toBe(41);
+    expect(liveAdjusted.analysis).not.toContain("[LIVE");
   });
 
   test("does not distort very early live games", () => {
@@ -156,7 +249,7 @@ describe("updateLivePrediction", () => {
     expect(liveAdjusted).toBe(pregame);
   });
 
-  test("uses soccer count-up clock instead of treating match minute as a period", () => {
+  test("does not let soccer live score rewrite the pregame three-way probabilities", () => {
     const pregame: GamePrediction = {
       ...makePrediction("Pregame read has a narrow home lean."),
       predictedOutcome: "home",
@@ -184,13 +277,15 @@ describe("updateLivePrediction", () => {
       liveAdjusted.awayWinProbability +
       (liveAdjusted.drawProbability ?? 0);
 
-    expect(liveAdjusted.homeWinProbability).toBeLessThan(70);
+    expect(liveAdjusted).toBe(pregame);
+    expect(liveAdjusted.homeWinProbability).toBe(40);
+    expect(liveAdjusted.awayWinProbability).toBe(35);
+    expect(liveAdjusted.drawProbability).toBe(25);
     expect(total).toBeCloseTo(100, 1);
-    expect(liveAdjusted.drawProbability).toBeDefined();
-    expect(liveAdjusted.analysis).toContain("[LIVE 23': 1-0");
+    expect(liveAdjusted.analysis).not.toContain("[LIVE");
   });
 
-  test("keeps soccer live home-away-draw probabilities coherent when draw is most likely", () => {
+  test("does not flip soccer picks to draw because of live match state", () => {
     const pregame: GamePrediction = {
       ...makePrediction("Pregame read has a narrow home lean."),
       predictedOutcome: "home",
@@ -218,9 +313,10 @@ describe("updateLivePrediction", () => {
       liveAdjusted.awayWinProbability +
       (liveAdjusted.drawProbability ?? 0);
 
+    expect(liveAdjusted).toBe(pregame);
     expect(total).toBeCloseTo(100, 1);
-    expect(liveAdjusted.predictedOutcome).toBe("draw");
+    expect(liveAdjusted.predictedOutcome).toBe("home");
     expect(liveAdjusted.drawProbability).toBeDefined();
-    expect(liveAdjusted.confidence).toBe(liveAdjusted.drawProbability!);
+    expect(liveAdjusted.confidence).toBe(45);
   });
 });

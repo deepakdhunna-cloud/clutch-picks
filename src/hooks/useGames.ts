@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
-import { GameWithPrediction, GameStatus } from '@/types/sports';
+import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
+import { enrichCricketLiveGame, enrichCricketLiveGames } from '@/lib/cricket-live-enrichment';
 
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 5000; // fast fallback when SSE drops, without hammering JS/network
@@ -85,7 +86,7 @@ async function fetchGamesForDates(dates: string[]): Promise<GameWithPrediction[]
       api.get<GameWithPrediction[]>(`/api/games/date/${d}`).catch(() => [] as GameWithPrediction[])
     )
   );
-  return results.flat();
+  return enrichCricketLiveGames(results.flat());
 }
 
 function dedupeGames(games: GameWithPrediction[]): GameWithPrediction[] {
@@ -200,7 +201,7 @@ export function useGames() {
         queryKey: ['game', gameId],
         queryFn: async () => {
           const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          return result ?? null;
+          return enrichCricketLiveGame(result ?? null);
         },
         staleTime: GAME_DETAIL_STALE_TIME,
       });
@@ -239,10 +240,19 @@ export function useGames() {
   };
 }
 
-// Shared adaptive interval — burst while predictions are missing, otherwise default.
-function predictionAwareInterval(games: GameWithPrediction[] | undefined): number {
+// Shared adaptive interval — burst while predictions are missing, then keep
+// live score fallback polling consistent anywhere the app renders score data.
+function liveAwareInterval(games: GameWithPrediction[] | undefined): number {
   if (games?.some(shouldBurstForMissingPrediction)) return PREDICTION_BURST_INTERVAL;
+  if (sseConnectedRef.current) return DEFAULT_POLLING_INTERVAL;
+  if (games?.some((g) => g.status === GameStatus.LIVE)) return LIVE_POLLING_INTERVAL;
   return DEFAULT_POLLING_INTERVAL;
+}
+
+function liveAwareBucketInterval(
+  buckets: Array<{ games: GameWithPrediction[] }> | undefined,
+): number {
+  return liveAwareInterval(buckets?.flatMap((bucket) => bucket.games ?? []));
 }
 
 // Hook to fetch games for a specific sport, with optional date filter
@@ -254,12 +264,12 @@ export function useGamesBySport(sport: string, date?: string) {
         ? `/api/games/${sport.toLowerCase()}?date=${date}`
         : `/api/games/${sport.toLowerCase()}`;
       const result = await api.get<GameWithPrediction[]>(url);
-      return result ?? [];
+      return enrichCricketLiveGames(result ?? []);
     },
     enabled: !!sport,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => predictionAwareInterval(query.state.data),
+    refetchInterval: (query) => liveAwareInterval(query.state.data),
     refetchIntervalInBackground: false,
   });
 }
@@ -270,12 +280,12 @@ export function useGamesByDate(date: string) {
     queryKey: ['games', 'date', date],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction[]>(`/api/games/date/${date}`);
-      return result ?? [];
+      return enrichCricketLiveGames(result ?? []);
     },
     enabled: !!date,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => predictionAwareInterval(query.state.data),
+    refetchInterval: (query) => liveAwareInterval(query.state.data),
     refetchIntervalInBackground: false,
   });
 }
@@ -351,7 +361,7 @@ export function useGame(gameId: string) {
     queryKey: ['game', gameId],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-      return result ?? null;
+      return enrichCricketLiveGame(result ?? null);
     },
     enabled: !!gameId,
     staleTime: GAME_DETAIL_STALE_TIME, // Quick stale time to get fresh predictions
@@ -383,7 +393,7 @@ export function useGame(gameId: string) {
     // screen after the navigation interaction has cleared.
     refetchOnMount: (query) => {
       const data = query.state.data;
-      return !data;
+      return !data || (data.sport === Sport.IPL && data.status === GameStatus.LIVE);
     },
   });
 
@@ -411,14 +421,14 @@ export function useWeekGamesBySport(sport: string) {
           const games = await api.get<GameWithPrediction[]>(
             `/api/games/${sport.toLowerCase()}?date=${date}`
           );
-          return { date, games: games ?? [] };
+          return { date, games: await enrichCricketLiveGames(games ?? []) };
         })
       );
     },
     enabled: !!sport,
     staleTime: GAME_DETAIL_STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: DEFAULT_POLLING_INTERVAL,
+    refetchInterval: (query) => liveAwareBucketInterval(query.state.data),
     refetchIntervalInBackground: false,
   });
 }
@@ -437,7 +447,7 @@ export function usePrefetchGame() {
         queryKey: ['game', gameId],
         queryFn: async () => {
           const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          return result ?? null;
+          return enrichCricketLiveGame(result ?? null);
         },
         staleTime: GAME_DETAIL_STALE_TIME,
       });
@@ -473,11 +483,11 @@ export function useTopPicks() {
     queryKey: ['topPicks'],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction[]>('/api/games/top-picks');
-      return result ?? [];
+      return enrichCricketLiveGames(result ?? []);
     },
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: (query) => liveAwareInterval(query.state.data),
     refetchIntervalInBackground: false,
   });
 }

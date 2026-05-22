@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, Pressable, Dimensions, TextInput, Image, Alert,
-  ActionSheetIOS, Platform, ActivityIndicator, StyleSheet,
+  View, Text, Pressable, Dimensions, TextInput, Image,
+  ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,6 +24,9 @@ import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
 import { setDisplayName as setRevenueCatDisplayName } from '@/lib/revenuecatClient';
+import { ArenaScoreboard } from '@/components/sports/ArenaScoreboard';
+import { FeedbackModal } from '@/components/FeedbackModal';
+import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 
 const { width: W } = Dimensions.get('window');
 
@@ -313,10 +316,10 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
 
           <View style={{ flexDirection: 'row', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 16, paddingVertical: 12 }}>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>Solid Pick</Text>
+              <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>Pick saved</Text>
             </View>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUT }}>MIN -3.5</Text>
+              <Text style={{ fontSize: 9, fontWeight: '600', color: TEXT_MUT }}>Game card ready</Text>
             </View>
           </View>
         </Animated.View>
@@ -379,10 +382,10 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
 
       <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24 }} style={{ flex: 1 }}>
         <Animated.Text entering={FadeInDown.duration(400)} style={{ fontSize: 26, fontWeight: '900', color: WHITE, textAlign: 'center', marginBottom: 6 }}>
-          AI-Powered Picks
+          Premium Pick Reads
         </Animated.Text>
         <Animated.Text entering={FadeInDown.delay(100).duration(400)} style={{ fontSize: 13, color: TEXT_MUT, textAlign: 'center', marginBottom: 28 }}>
-          Every game analyzed by 20+ prediction factors
+          Reveal confidence, matchup context, and the full model read
         </Animated.Text>
 
         {/* Clutch Pick card — with rotating shimmer border */}
@@ -414,7 +417,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>PICK STRENGTH</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>PICK READ</Text>
                       <View style={{ backgroundColor: 'rgba(122,157,184,0.08)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(122,157,184,0.19)' }}>
                         <Text style={{ fontSize: 11, fontWeight: '800', color: TEAL }}>Solid Pick</Text>
                       </View>
@@ -438,8 +441,8 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                       <View style={{ gap: 8 }}>
                         {[
                           { label: 'Recent Form', value: 0.8, color: TEAL },
-                          { label: 'Matchup Edge', value: 0.65, color: MAROON },
-                          { label: 'Home/Away Split', value: 0.45, color: TEAL },
+                          { label: 'Matchup Context', value: 0.65, color: MAROON },
+                          { label: 'Venue Split', value: 0.45, color: TEAL },
                         ].map((f, i) => (
                           <View key={i}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -454,7 +457,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(122,157,184,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(122,157,184,0.25)' }}>
-                          <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Full breakdown</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Preview details</Text>
                           <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
                             <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" />
                           </Svg>
@@ -472,7 +475,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={{ width: '100%', marginTop: 24 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: 3, height: 14, borderRadius: 1.5 }} />
-            <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>PICK STRENGTH TIERS</Text>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>CONFIDENCE LANGUAGE</Text>
           </View>
           <View style={{ gap: 8 }}>
             {[
@@ -526,6 +529,14 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
   );
 }
 
+function ProFeaturePill({ accent = TEAL }: { accent?: string }) {
+  return (
+    <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: 'rgba(122,157,184,0.10)', borderWidth: 1, borderColor: 'rgba(180,211,235,0.20)' }}>
+      <Text style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: accent, letterSpacing: 1.1 }}>PRO FEATURE</Text>
+    </View>
+  );
+}
+
 // ─── STEP 3: MY ARENA ────────────────────────────────────────
 function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; onContinue: () => void; onSkip: () => void; onBack: () => void }) {
   const labels = ['Game Day', 'Prep Mode', 'Review'];
@@ -560,11 +571,15 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
         </View>
 
         {/* Sub-page content */}
-        <View style={{ flex: 1, paddingHorizontal: 24 }}>
+        <Animated.ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 14 }}
+          showsVerticalScrollIndicator={false}
+        >
           {subPage === 0 ? <ArenaGameDay /> : null}
           {subPage === 1 ? <ArenaPrepMode /> : null}
           {subPage === 2 ? <ArenaReview /> : null}
-        </View>
+        </Animated.ScrollView>
 
         {/* Page dots */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingBottom: 12 }}>
@@ -593,90 +608,127 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
 function ArenaGameDay() {
   const minColors = getTeamColors('MIN', Sport.NBA);
   const chiColors = getTeamColors('CHI', Sport.NBA);
+  const jerseyType = sportEnumToJersey('NBA');
+  const momentumBars = [0.34, 0.48, 0.66, 0.78, 0.95, 0.74, 0.58];
 
   return (
     <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <PulsingDot />
-        <Text style={{ fontSize: 9, fontWeight: '700', color: RED, letterSpacing: 1.5 }}>YOUR LIVE GAMES</Text>
-      </View>
-      <Text style={{ fontSize: 12, color: TEXT_SEC, marginBottom: 4 }}>Track every game you care about in real time</Text>
-
-      {/* Mock live card — matches real LiveCard design */}
-      <View style={{ borderRadius: 22, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.14)', overflow: 'hidden' }}>
-        {/* Dark base */}
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#06080A' }]} />
-        {/* Team color washes */}
-        <LinearGradient colors={[`${minColors.primary}22`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFillObject} />
-        <LinearGradient colors={['transparent', `${chiColors.primary}18`]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
-        {/* Shimmer ribbon */}
-        <LinearGradient colors={[MAROON, TEAL, MAROON]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 2.5, width: '100%' }} />
-        {/* Ribbon bleed glow */}
-        <LinearGradient colors={['rgba(122,157,184,0.06)', 'rgba(139,10,31,0.03)', 'transparent']} style={{ height: 40, width: '100%' }} />
-        {/* Live + sport pill */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: -20 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <PulsingDot size={6} />
-            <Text style={{ fontSize: 11, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>LIVE</Text>
-          </View>
-          <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
-            <Text style={{ fontSize: 9, fontWeight: '700', color: WHITE, letterSpacing: 0.5 }}>NBA</Text>
-          </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 2 }}>
+        <View>
+          <Text style={{ fontSize: 9, fontWeight: '900', color: RED, letterSpacing: 2, marginBottom: 4 }}>LIVE FEED</Text>
+          <Text style={{ fontSize: 20, lineHeight: 24, fontWeight: '900', color: WHITE }}>Live board</Text>
         </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: 'rgba(239,68,68,0.10)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.20)' }}>
+          <PulsingDot size={6} />
+          <Text style={{ fontSize: 9, fontWeight: '900', color: RED, letterSpacing: 1.1, marginLeft: 6 }}>3 LIVE</Text>
+        </View>
+      </View>
 
-        {/* Scores — VT323 font */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SEC, marginBottom: 2, letterSpacing: 0.5 }}>MIN</Text>
-              <View style={{ width: 16, height: 2, backgroundColor: MAROON, borderRadius: 1, marginBottom: 2 }} />
-              <Text style={{ fontSize: 48, fontFamily: 'VT323_400Regular', color: WHITE, letterSpacing: 2 }}>67</Text>
-            </View>
-            <View style={{ alignItems: 'center', marginHorizontal: 8 }}>
-              <Text style={{ fontSize: 20, fontWeight: '300', color: 'rgba(255,255,255,0.15)' }}>-</Text>
-              <Text style={{ fontSize: 14, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, marginTop: 2 }}>Q3 · 5:42</Text>
-            </View>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: TEXT_SEC, marginBottom: 2, letterSpacing: 0.5 }}>CHI</Text>
-              <Text style={{ fontSize: 48, fontFamily: 'VT323_400Regular', color: WHITE, letterSpacing: 2 }}>58</Text>
-            </View>
-          </View>
+      <View style={{ borderRadius: 24, padding: 2, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[`${minColors.primary}90`, `${minColors.primary}44`, '#080C12', `${chiColors.primary}44`, `${chiColors.primary}90`]}
+          locations={[0, 0.18, 0.5, 0.82, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ borderRadius: 22, padding: 1, overflow: 'hidden' }}>
+          <LinearGradient
+            colors={[`${minColors.primary}55`, 'rgba(255,255,255,0.10)', '#080C12', `${chiColors.primary}48`]}
+            locations={[0, 0.24, 0.58, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={{ borderRadius: 21, overflow: 'hidden' }}>
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(4,5,10,0.92)' }]} />
+            <LinearGradient colors={[`${minColors.primary}80`, `${minColors.primary}24`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.72, y: 0.8 }} style={StyleSheet.absoluteFillObject} />
+            <LinearGradient colors={[`${chiColors.primary}70`, `${chiColors.primary}24`, 'transparent']} start={{ x: 1, y: 1 }} end={{ x: 0.28, y: 0.2 }} style={StyleSheet.absoluteFillObject} />
 
-          {/* Stat boxes — matches real card */}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(2,3,8,0.92)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>YOUR PICK</Text>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE }}>MIN</Text>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL, marginTop: 2 }}>Leading</Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: 'rgba(2,3,8,0.92)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>MOMENTUM</Text>
-              <View style={{ flexDirection: 'row', gap: 3, alignItems: 'flex-end', height: 20, marginBottom: 2 }}>
-                {[0.4, 0.7, 0.5, 0.9, 0.6].map((h, i) => <View key={i} style={{ width: 4, height: 8 + h * 12, borderRadius: 2, backgroundColor: h > 0.5 ? TEAL : TEXT_MUT, opacity: 0.5 + h * 0.5 }} />)}
+            <View style={{ padding: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239,68,68,0.12)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(239,68,68,0.24)' }}>
+                  <PulsingDot size={5} />
+                  <Text style={{ color: RED, fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginLeft: 6 }}>LIVE</Text>
+                </View>
+                <View style={{ backgroundColor: 'rgba(122,157,184,0.12)', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(122,157,184,0.22)' }}>
+                  <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(224,234,240,0.88)', letterSpacing: 0.6 }}>NBA</Text>
+                </View>
               </View>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: TEAL }}>Positive</Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: 'rgba(2,3,8,0.92)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: MAROON, letterSpacing: 1, marginBottom: 4 }}>PICK STRENGTH</Text>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: TEAL }}>Solid Pick</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ width: 78, alignItems: 'center' }}>
+                  <JerseyIcon teamCode="MIN" teamName="Minnesota Timberwolves" primaryColor={minColors.primary} secondaryColor={minColors.secondary} size={52} sport={jerseyType} />
+                  <Text style={{ fontSize: 12, lineHeight: 14, fontWeight: '900', color: WHITE, marginTop: 5 }}>MIN</Text>
+                  <Text style={{ fontSize: 10, color: TEXT_MUT, fontWeight: '700', marginTop: 1 }}>40-24</Text>
+                </View>
+
+                <View style={{ width: 132, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}>
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: RED, marginRight: 5 }} />
+                    <Text style={{ color: '#b8c3d1', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 }}>
+                      Q3 5:42
+                    </Text>
+                  </View>
+                  <ArenaScoreboard
+                    awayScore={67}
+                    homeScore={58}
+                    awayColor={minColors.primary}
+                    homeColor={chiColors.primary}
+                    displayText="67-58"
+                    scale={0.84}
+                  />
+                </View>
+
+                <View style={{ width: 78, alignItems: 'center' }}>
+                  <JerseyIcon teamCode="CHI" teamName="Chicago Bulls" primaryColor={chiColors.primary} secondaryColor={chiColors.secondary} size={52} sport={jerseyType} />
+                  <Text style={{ fontSize: 12, lineHeight: 14, fontWeight: '900', color: WHITE, marginTop: 5 }}>CHI</Text>
+                  <Text style={{ fontSize: 10, color: TEXT_MUT, fontWeight: '700', marginTop: 1 }}>30-34</Text>
+                </View>
+              </View>
+
+              <LinearGradient
+                colors={['transparent', 'rgba(122,157,184,0.20)', 'rgba(255,255,255,0.08)', 'rgba(139,10,31,0.14)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ height: 1, marginVertical: 12 }}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 9 }}>
+                <View style={{ flex: 1, minHeight: 66, borderRadius: 15, backgroundColor: 'rgba(2,5,12,0.72)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.18)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 }}>
+                  <Text style={{ fontSize: 8, fontWeight: '900', color: 'rgba(180,211,235,0.60)', letterSpacing: 1.5, marginBottom: 5 }}>YOUR PICK</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: WHITE }}>MIN</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: GREEN, marginTop: 3 }}>Up 9</Text>
+                </View>
+                <View style={{ flex: 1, minHeight: 66, borderRadius: 15, backgroundColor: 'rgba(2,5,12,0.72)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.18)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 }}>
+                  <Text style={{ fontSize: 8, fontWeight: '900', color: 'rgba(180,211,235,0.60)', letterSpacing: 1.5, marginBottom: 5 }}>MOMENTUM</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 18 }}>
+                    {momentumBars.map((h, i) => (
+                      <View key={i} style={{ width: 5, height: Math.max(4, Math.round(h * 18)), borderRadius: 2, backgroundColor: i === 4 ? RED : h > 0.66 ? '#c8d4df' : TEAL, marginHorizontal: 1, opacity: i === 4 ? 1 : 0.78 }} />
+                    ))}
+                  </View>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(224,234,240,0.72)', marginTop: 4 }}>MIN surge</Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Upcoming card — matches HorizonCard style */}
-      <View style={{ backgroundColor: 'rgba(8,8,12,0.95)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: TEAL, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-          <Text style={{ fontSize: 12, fontWeight: '800', color: WHITE }}>8:30</Text>
-          <Text style={{ fontSize: 8, fontWeight: '600', color: WHITE }}>PM</Text>
+      <View style={{ borderRadius: 16, padding: 1, backgroundColor: 'rgba(122,157,184,0.16)' }}>
+        <View style={{ backgroundColor: 'rgba(7,10,16,0.96)', borderRadius: 15, padding: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ width: 46, height: 46, borderRadius: 13, backgroundColor: 'rgba(122,157,184,0.12)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.18)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+            <Text style={{ fontSize: 12, fontWeight: '900', color: WHITE }}>8:30</Text>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: TEAL, marginTop: 1 }}>PM</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '900', color: WHITE }}>DEN at MIA</Text>
+            <Text style={{ fontSize: 10, color: TEXT_MUT, fontWeight: '700', marginTop: 3 }}>NBA - Kaseya Center</Text>
+          </View>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+            <Path d="M9 18l6-6-6-6" stroke={TEXT_MUT} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>DEN vs MIA</Text>
-          <Text style={{ fontSize: 10, color: TEXT_MUT, marginTop: 2 }}>NBA</Text>
-        </View>
-        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-          <Path d="M9 18l6-6-6-6" stroke={TEXT_MUT} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
       </View>
     </Animated.View>
   );
@@ -684,69 +736,129 @@ function ArenaGameDay() {
 
 function ArenaPrepMode() {
   return (
-    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
-      {/* Insight card */}
-      <View style={{ backgroundColor: GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: BORDER }}>
-        <Text style={{ fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 1.5, marginBottom: 8 }}>ARENA INSIGHT</Text>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE, lineHeight: 20 }}>3 home underdogs are in play tonight — a pattern hitting at a high rate this week.</Text>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
-          {['Knicks', 'Heat', 'Suns'].map(t => (
-            <View key={t} style={{ backgroundColor: 'rgba(139,10,31,0.12)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: MAROON }}>{t}</Text>
-            </View>
-          ))}
-        </View>
+    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 14 }}>
+      <View>
+        <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: MAROON, letterSpacing: 2.1 }}>PRO TOOLS</Text>
+        <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: '900', color: WHITE, marginTop: 5 }}>Same arena, deeper pregame reads</Text>
       </View>
 
-      <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>Matchups Ranked</Text>
-
-      {/* Ranked cards */}
-      {[
-        { rank: 1, teams: 'MIN at CHI', story: 'Solid Pick', detail: 'MIN rated a Solid Pick — clear statistical edge' },
-        { rank: 2, teams: 'DEN at MIA', story: 'Upset watch', detail: 'MIA 7-3 in last 10 despite underdog status' },
-      ].map(c => (
-        <View key={c.rank} style={{ backgroundColor: GLASS, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: BORDER, borderLeftWidth: 3, borderLeftColor: c.rank === 1 ? MAROON : TEAL }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <View style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: c.rank === 1 ? MAROON : TEAL, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 10, fontWeight: '900', color: WHITE }}>{c.rank}</Text>
+      <LinearGradient
+        colors={['rgba(122,157,184,0.24)', 'rgba(255,255,255,0.08)', 'rgba(139,10,31,0.18)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 24, padding: 1 }}
+      >
+        <View style={{ borderRadius: 23, overflow: 'hidden', backgroundColor: 'rgba(8,10,15,0.96)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(122,157,184,0.13)', 'rgba(5,8,13,0)', 'rgba(139,10,31,0.18)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={{ padding: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: 'rgba(180,211,235,0.72)', letterSpacing: 2.2 }}>DAILY MODEL BOARD</Text>
+                <Text style={{ fontSize: 25, lineHeight: 30, fontWeight: '900', color: WHITE, marginTop: 5 }}>Prep Mode</Text>
+              </View>
+              <ProFeaturePill accent={MAROON} />
             </View>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>{c.story}</Text>
+            <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: '700', color: TEXT_SEC, marginTop: 10, marginBottom: 14 }}>
+              Ranked matchups, confidence context, and matchup reads before the slate opens.
+            </Text>
+
+            {[
+              { rank: 1, teams: 'MIN at CHI', label: 'Solid Pick', confidence: 58, color: TEAL },
+              { rank: 2, teams: 'DEN at MIA', label: 'Watchlist', confidence: 54, color: MAROON },
+              { rank: 3, teams: 'NYK at BOS', label: 'Toss-up', confidence: 51, color: '#9AB8CC' },
+            ].map((item, index) => (
+              <View key={item.teams} style={{ borderRadius: 13, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.11)', padding: 11, marginBottom: index === 2 ? 0 : 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.055)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: item.color }}>#{item.rank}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 16, fontWeight: '900', color: WHITE }}>{item.teams}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 10, lineHeight: 13, fontWeight: '800', color: 'rgba(224,234,240,0.50)', marginTop: 2 }}>{item.label}</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, lineHeight: 20, fontWeight: '900', color: item.color }}>{item.confidence}%</Text>
+                </View>
+                <View style={{ height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden', marginTop: 9 }}>
+                  <View style={{ width: `${item.confidence}%` as `${number}%`, height: '100%', borderRadius: 3, backgroundColor: item.color }} />
+                </View>
+              </View>
+            ))}
           </View>
-          <Text style={{ fontSize: 11, color: TEXT_SEC, lineHeight: 16 }}>{c.detail}</Text>
         </View>
-      ))}
+      </LinearGradient>
     </Animated.View>
   );
 }
 
 function ArenaReview() {
   return (
-    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
-      {/* Hero */}
-      <View style={{ backgroundColor: GLASS, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(139,10,31,0.12)', alignItems: 'center' }}>
-        <Text style={{ fontSize: 9, fontWeight: '700', color: MAROON, letterSpacing: 1.5, marginBottom: 8 }}>YOUR NIGHT</Text>
-        <Text style={{ fontSize: 48, fontWeight: '800', color: WHITE }}>4-1</Text>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: MAROON, marginTop: 4 }}>80% accuracy</Text>
-        <View style={{ flexDirection: 'row', gap: 3, marginTop: 12 }}>
-          {['W', 'W', 'W', 'L', 'W'].map((r, i) => (
-            <View key={i} style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: r === 'W' ? TEAL : ERROR, opacity: r === 'W' ? 0.9 : 0.4 }} />
-          ))}
-        </View>
+    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 14 }}>
+      <View>
+        <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: TEAL, letterSpacing: 2.1 }}>POSTGAME AUDIT</Text>
+        <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: '900', color: WHITE, marginTop: 5 }}>Close the night with a clean recap</Text>
       </View>
 
-      {/* Results */}
-      {[
-        { teams: 'MIN vs CHI', result: 'win' },
-        { teams: 'DEN vs MIA', result: 'win' },
-        { teams: 'GSW vs PHI', result: 'loss' },
-      ].map((r, i) => (
-        <View key={i} style={{ backgroundColor: GLASS, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: BORDER, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: WHITE }}>{r.teams}</Text>
-          <View style={{ backgroundColor: r.result === 'win' ? 'rgba(122,157,184,0.12)' : 'rgba(239,68,68,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-            <Text style={{ fontSize: 9, fontWeight: '700', color: r.result === 'win' ? TEAL : ERROR }}>{r.result === 'win' ? 'CORRECT' : 'MISSED'}</Text>
+      <LinearGradient
+        colors={['rgba(122,157,184,0.28)', 'rgba(255,255,255,0.08)', 'rgba(139,10,31,0.14)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 24, padding: 1 }}
+      >
+        <View style={{ borderRadius: 23, overflow: 'hidden', backgroundColor: 'rgba(8,10,15,0.96)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(122,157,184,0.15)', 'rgba(5,8,13,0)', 'rgba(139,10,31,0.12)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={{ padding: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: 'rgba(180,211,235,0.72)', letterSpacing: 2.2 }}>REVIEW</Text>
+                <Text style={{ fontSize: 25, lineHeight: 30, fontWeight: '900', color: WHITE, marginTop: 5 }}>Your night, organized</Text>
+              </View>
+              <ProFeaturePill accent={TEAL} />
+            </View>
+            <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: '700', color: TEXT_SEC, marginTop: 10, marginBottom: 14 }}>
+              Results, accuracy, misses, and model notes stay together after final scores settle.
+            </Text>
+            <View style={{ borderRadius: 16, padding: 14, backgroundColor: 'rgba(2,5,12,0.52)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', marginBottom: 10 }}>
+              <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: 'rgba(180,211,235,0.60)', letterSpacing: 1.8 }}>YOUR NIGHT</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 8 }}>
+                <Text style={{ fontSize: 44, lineHeight: 46, fontWeight: '900', color: WHITE }}>4-1</Text>
+                <View style={{ alignItems: 'flex-end', paddingBottom: 5 }}>
+                  <Text style={{ fontSize: 10, lineHeight: 13, fontWeight: '900', color: TEAL, letterSpacing: 1.1 }}>80% ACCURACY</Text>
+                  <View style={{ flexDirection: 'row', marginTop: 7 }}>
+                    {['W', 'W', 'W', 'L', 'W'].map((result, index) => (
+                      <View key={`${result}-${index}`} style={{ width: 18, height: 5, borderRadius: 3, backgroundColor: result === 'W' ? TEAL : ERROR, opacity: result === 'W' ? 0.9 : 0.5, marginLeft: index === 0 ? 0 : 3 }} />
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </View>
+            {[
+              { label: 'Settled pick history', fill: 74, color: TEAL },
+              { label: 'Model notes after finals', fill: 58, color: MAROON },
+              { label: 'Season-level trends', fill: 64, color: '#9AB8CC' },
+            ].map((item, index) => (
+              <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 32, borderRadius: 11, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 10, marginBottom: index === 2 ? 0 : 8 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: item.color, marginRight: 9 }} />
+                <Text style={{ flex: 1, fontSize: 11, lineHeight: 14, fontWeight: '900', color: 'rgba(224,234,240,0.74)' }}>{item.label}</Text>
+                <View style={{ width: 64, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                  <View style={{ width: `${item.fill}%` as `${number}%`, height: '100%', borderRadius: 3, backgroundColor: item.color }} />
+                </View>
+              </View>
+            ))}
           </View>
         </View>
-      ))}
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -892,22 +1004,22 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
           <Text style={{ fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 2.5 }}>CLUTCH PRO</Text>
         </Animated.View>
 
-        {/* Title — matches paywall hero */}
+        {/* Title — matches current paywall hero */}
         <Animated.Text entering={FadeInDown.delay(300).duration(400)} style={{ fontSize: 32, fontWeight: '900', color: WHITE, textAlign: 'center', letterSpacing: -0.5, lineHeight: 38, marginBottom: 12 }}>
-          Every game.{'\n'}Every stat.{'\n'}
-          <Text style={{ color: TEAL }}>AI-analyzed.</Text>
+          Clutch Picks Pro{'\n'}
+          <Text style={{ color: TEAL }}>built for the full board.</Text>
         </Animated.Text>
         <Animated.Text entering={FadeInDown.delay(400).duration(400)} style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
-          Multi-factor predictions across every game, every league.
+          Daily model boards, live intelligence, matchup reads, and postgame review in one polished layer.
         </Animated.Text>
 
         {/* Features — alternating maroon/teal like paywall */}
         <Animated.View entering={FadeInDown.delay(500).duration(400)} style={{ width: '100%', gap: 16 }}>
           {[
-            { title: 'AI Predictions', desc: 'Multi-factor analysis per game', accent: MAROON, bg: 'rgba(139,10,31,0.12)', border: 'rgba(139,10,31,0.15)' },
-            { title: 'Live Scores', desc: 'Real-time across 11 leagues', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
-            { title: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: MAROON, bg: 'rgba(139,10,31,0.12)', border: 'rgba(139,10,31,0.15)' },
-            { title: 'Where to Watch', desc: 'TV & streaming info', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
+            { title: 'Daily Model Board', desc: 'Ranked picks and confidence context', accent: MAROON, bg: 'rgba(139,10,31,0.12)', border: 'rgba(139,10,31,0.15)' },
+            { title: 'Live Intelligence', desc: 'Premium reads during active games', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
+            { title: 'Full Matchup Reads', desc: 'Factors, projections, and details', accent: MAROON, bg: 'rgba(139,10,31,0.12)', border: 'rgba(139,10,31,0.15)' },
+            { title: 'Postgame Review', desc: 'Settled picks and season trends', accent: TEAL, bg: 'rgba(122,157,184,0.10)', border: 'rgba(122,157,184,0.12)' },
           ].map((f, i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 4 }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: f.bg, borderWidth: 1, borderColor: f.border, alignItems: 'center', justifyContent: 'center' }}>
@@ -926,12 +1038,12 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
       <View style={{ paddingHorizontal: 28, paddingBottom: 20 }}>
         <Pressable onPress={onSubscribe} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <LinearGradient colors={[MAROON, '#6A0818', '#5A0614']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: MAROON, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Free Trial</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Pro</Text>
           </LinearGradient>
         </Pressable>
         <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>3-day free trial for eligible users. Price shown before purchase.</Text>
         <Pressable onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 14 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Maybe later</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Continue free</Text>
         </Pressable>
       </View>
     </View>
@@ -947,50 +1059,52 @@ export default function OnboardingScreen() {
   const [displayName, setDisplayName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [skipProfile, setSkipProfile] = useState(false);
+  const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
+  const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
+  const [tutorialReplay, setTutorialReplay] = useState(false);
   const queryClient = useQueryClient();
   const invalidateSession = useInvalidateSession();
 
-  // Check if replaying from settings — skip profile step
+  // Settings replay is a help tour only. It should not show profile setup or paywall.
   useEffect(() => {
     AsyncStorage.getItem('clutch_onboarding_skip_profile').then(val => {
       if (val === 'true') {
-        setSkipProfile(true);
+        setTutorialReplay(true);
         AsyncStorage.removeItem('clutch_onboarding_skip_profile');
       }
     });
   }, []);
 
-  const goNext = useCallback(() => {
+  const goNext = useCallback(async () => {
     if (step === 3 && arenaSubPage < 2) {
       setArenaSubPage(arenaSubPage + 1);
       return;
     }
     if (step === 5) return;
-    // Skip profile step (4) when replaying from settings
-    if (step === 3 && skipProfile) {
+    if (step === 3 && tutorialReplay) {
       setArenaSubPage(0);
-      setStep(5);
+      await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
+      router.replace('/(tabs)');
     } else {
       if (step === 3) setArenaSubPage(0);
       setStep(step + 1);
     }
-  }, [step, arenaSubPage, skipProfile]);
+  }, [step, arenaSubPage, tutorialReplay, router]);
 
   const goBack = useCallback(() => {
     if (step === 3 && arenaSubPage > 0) {
       setArenaSubPage(arenaSubPage - 1);
       return;
     }
-    // When going back from paywall step and profile was skipped, go to arena
-    if (step === 5 && skipProfile) {
+    // Defensive: settings replay should never reach paywall, but keep it recoverable.
+    if (step === 5 && tutorialReplay) {
       setStep(3);
       setArenaSubPage(2);
       return;
     }
     if (step > 0) setStep(step - 1);
     if (step === 4) setArenaSubPage(2); // return to last arena sub-page
-  }, [step, arenaSubPage, skipProfile]);
+  }, [step, arenaSubPage, tutorialReplay]);
 
   const skip = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
@@ -1034,7 +1148,11 @@ export default function OnboardingScreen() {
       setProfileImage(uploadResult.url);
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     } catch {
-      Alert.alert('Upload Failed', 'Please try again.');
+      setFeedback({
+        title: 'Upload Failed',
+        message: 'Please try again.',
+        variant: 'error',
+      });
     } finally {
       setIsUploading(false);
     }
@@ -1042,26 +1160,36 @@ export default function OnboardingScreen() {
 
   const handlePhotoPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
-        async (buttonIndex) => {
-          if (buttonIndex === 1) handleImageUpload(await takePhoto());
-          else if (buttonIndex === 2) handleImageUpload(await pickImage());
-        }
-      );
-    } else {
-      Alert.alert('Add Photo', '', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: async () => handleImageUpload(await takePhoto()) },
-        { text: 'Choose from Library', onPress: async () => handleImageUpload(await pickImage()) },
-      ]);
-    }
+    setPhotoSourceVisible(true);
+  };
+
+  const handleTakePhoto = async () => {
+    setPhotoSourceVisible(false);
+    await handleImageUpload(await takePhoto());
+  };
+
+  const handleChooseLibrary = async () => {
+    setPhotoSourceVisible(false);
+    await handleImageUpload(await pickImage());
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <PhotoSourceModal
+          visible={photoSourceVisible}
+          title="Profile Photo"
+          onTakePhoto={handleTakePhoto}
+          onChooseLibrary={handleChooseLibrary}
+          onCancel={() => setPhotoSourceVisible(false)}
+        />
+        <FeedbackModal
+          visible={!!feedback}
+          title={feedback?.title ?? ''}
+          message={feedback?.message ?? ''}
+          variant={feedback?.variant}
+          onDismiss={() => setFeedback(null)}
+        />
         {step === 0 ? <WelcomeStep onContinue={() => setStep(1)} /> : null}
         {step === 1 ? <PickStep picked={picked} setPicked={setPicked} onContinue={() => setStep(2)} onSkip={skip} onBack={goBack} /> : null}
         {step === 2 ? <AIPredictionsStep onContinue={() => setStep(3)} onSkip={skip} onBack={goBack} picked={picked} /> : null}

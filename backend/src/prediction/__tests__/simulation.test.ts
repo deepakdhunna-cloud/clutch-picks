@@ -280,7 +280,7 @@ describe("game-script simulation", () => {
     const second = simulateGameProjection(ctx, 120, factors);
 
     expect(first).toEqual(second);
-    expect(first.iterations).toBe(8000);
+    expect(first.iterations).toBe(50000);
     expect(first.projectedTotal).toBeGreaterThan(180);
     expect(first.homeWinProbability).toBeGreaterThan(first.awayWinProbability);
   });

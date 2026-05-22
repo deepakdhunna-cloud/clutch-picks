@@ -40,7 +40,14 @@ const NARRATIVE_STYLE_VERSION = "bar-friend-v8-projection-consensus";
 export function computeVersionHash(
   prediction: Pick<
     GamePrediction,
-    "predictedWinner" | "confidence" | "factors" | "projection"
+    | "canonicalResult"
+    | "predictedWinner"
+    | "predictedOutcome"
+    | "confidence"
+    | "factors"
+    | "projection"
+    | "drawProbability"
+    | "isTossUp"
   >,
   injuries: InjuryListEntry[],
   seasonContext: NarrativeSeasonContext | null = null,
@@ -68,6 +75,29 @@ export function computeVersionHash(
   // Bucket confidence into 5-pt tranches so minor prob drift doesn't
   // cause needless regenerations.
   const bucket = Math.floor(prediction.confidence / 5) * 5;
+  const finalPick =
+    prediction.canonicalResult?.finalPick ??
+    prediction.predictedOutcome ??
+    prediction.predictedWinner;
+  const finalProbability = prediction.canonicalResult?.finalProbability;
+  const finalProbabilityBucket =
+    typeof finalProbability === "number" && Number.isFinite(finalProbability)
+      ? Math.floor((finalProbability * 100) / 5) * 5
+      : bucket;
+  const drawProbability =
+    prediction.canonicalResult?.probabilities.draw ??
+    prediction.drawProbability;
+  const drawProbabilityBucket =
+    typeof drawProbability === "number" && Number.isFinite(drawProbability)
+      ? Math.floor((drawProbability > 1 ? drawProbability : drawProbability * 100) / 5) * 5
+      : "none";
+  const outcomeKey = [
+    finalPick,
+    prediction.predictedOutcome ?? "legacy",
+    prediction.isTossUp ? "toss-up" : "not-toss-up",
+    finalProbabilityBucket,
+    drawProbabilityBucket,
+  ].join(":");
 
   const seasonKey = seasonContext
     ? `${seasonContext.phase}:${seasonContext.label}:${seasonContext.source}`
@@ -79,10 +109,13 @@ export function computeVersionHash(
         prediction.projection.projectedAwayScore.toFixed(1),
         Math.round(prediction.projection.homeWinProbability * 100),
         Math.round(prediction.projection.awayWinProbability * 100),
+        prediction.projection.drawProbability !== undefined
+          ? Math.round(prediction.projection.drawProbability * 100)
+          : "no-draw",
       ].join(":")
     : "no-projection";
 
-  const material = `${NARRATIVE_STYLE_VERSION}|${prediction.predictedWinner}|${bucket}|${topFactors}|${injuryKey}|${seasonKey}|${projectionKey}`;
+  const material = `${NARRATIVE_STYLE_VERSION}|${outcomeKey}|${bucket}|${topFactors}|${injuryKey}|${seasonKey}|${projectionKey}`;
   return createHash("sha1").update(material).digest("hex").slice(0, 16);
 }
 

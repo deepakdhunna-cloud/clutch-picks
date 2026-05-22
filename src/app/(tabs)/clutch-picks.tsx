@@ -5,7 +5,7 @@ import React, { useState, useCallback, memo, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
 import Svg, { Path, Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
@@ -20,7 +20,26 @@ import { useSubscription } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { displayWinProbability, displaySport, getConfidenceTier } from '@/lib/display-confidence';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
+import {
+  getCanonicalConfidence,
+  getCanonicalWinProbabilities,
+} from '@/lib/canonical-result';
+import { getGamePredictionDisplay } from '@/lib/prediction-display';
+import {
+  GLASS_BOTTOM_NAV_FADE_HEIGHT,
+  GLASS_BOTTOM_NAV_HEIGHT,
+  GLASS_BOTTOM_NAV_MIN_BOTTOM_PADDING,
+  GLASS_BOTTOM_NAV_SCROLL_PADDING,
+} from '@/components/GlassBottomNav';
 import { MAROON, TEAL } from '@/lib/theme';
+
+function getClutchPicksBottomPadding(bottomInset: number) {
+  return GLASS_BOTTOM_NAV_HEIGHT
+    + GLASS_BOTTOM_NAV_FADE_HEIGHT
+    + Math.max(bottomInset, GLASS_BOTTOM_NAV_MIN_BOTTOM_PADDING)
+    + GLASS_BOTTOM_NAV_SCROLL_PADDING
+    + 36;
+}
 
 // Expandable analysis text — tap to show full, tap again to collapse
 const ExpandableText = memo(function ExpandableText({ text }: { text: string }) {
@@ -158,16 +177,22 @@ const TopPickCard = memo(function TopPickCard({
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport);
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport);
   const chartColors = getDistinctColors(awayColors.primary, homeColors.primary);
-  const conf = game.prediction?.confidence ?? 70;
-  const tier = getConfidenceTier(conf, game.prediction?.isTossUp);
+  const conf = game.prediction ? getCanonicalConfidence(game.prediction) : 70;
+  const predictionDisplay = getGamePredictionDisplay(game);
+  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp);
   // Use real model probabilities — same data as game detail and analysis pages
-  const realHome = game.prediction?.homeWinProbability ?? 50;
-  const realAway = game.prediction?.awayWinProbability ?? 50;
+  const canonicalProbabilities = getCanonicalWinProbabilities(game.prediction);
+  const realHome = canonicalProbabilities.home;
+  const realAway = canonicalProbabilities.away;
   const dp = displayWinProbability(realHome, realAway);
   const awayPct = realAway;
   const homePct = realHome;
 
-  const isAwayPick = game.prediction?.predictedWinner === 'away';
+  const isAwayPick = predictionDisplay.outcome === 'away';
+  const isHomePick = predictionDisplay.outcome === 'home';
+  const matchupCenterLabel = predictionDisplay.outcome === 'draw' || predictionDisplay.outcome === 'toss_up'
+    ? predictionDisplay.badgeLabel
+    : 'VS';
 
   // Rotating shimmer border — traces around the card
   const rotation = useSharedValue(0);
@@ -333,7 +358,7 @@ const TopPickCard = memo(function TopPickCard({
                 {/* Divider with VS */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingLeft: 56 }}>
                   <LinearGradient colors={['transparent', 'rgba(255,255,255,0.35)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.45)', marginHorizontal: 8 }}>VS</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.45)', marginHorizontal: 8 }}>{matchupCenterLabel}</Text>
                   <LinearGradient colors={['rgba(255,255,255,0.35)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
                 </View>
 
@@ -345,7 +370,7 @@ const TopPickCard = memo(function TopPickCard({
                     primaryColor={homeColors.primary}
                     secondaryColor={homeColors.secondary}
                     size={44}
-                    isHighlighted={!isAwayPick}
+                    isHighlighted={isHomePick}
                     sport={game.sport}
                   />
                   <View style={{ flex: 1 }}>
@@ -354,7 +379,7 @@ const TopPickCard = memo(function TopPickCard({
                     </Text>
                     <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{game.homeTeam.record}</Text>
                   </View>
-                  {!isAwayPick ? (
+                  {isHomePick ? (
                     <View style={{ backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}>
                       <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>AI PICK</Text>
                     </View>
@@ -441,6 +466,8 @@ export default function ClutchPicksScreen() {
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
   const { isPremium } = useSubscription();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = getClutchPicksBottomPadding(insets.bottom);
 
   // Get top picks with guaranteed predictions from dedicated endpoint
   const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks();
@@ -498,57 +525,109 @@ export default function ClutchPicksScreen() {
 
         {/* Content */}
         {isLoadingPicks ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color="#5A7A8A" />
-            <Text style={{ color: 'rgba(255,255,255,0.4)', marginTop: 14 }}>Loading picks...</Text>
-          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPadding }} showsVerticalScrollIndicator={false}>
+            {headerComponent}
+            {[0, 1, 2].map((item) => (
+              <View
+                key={item}
+                style={{
+                  marginBottom: 14,
+                  minHeight: item === 0 ? 138 : 116,
+                  borderRadius: 20,
+                  overflow: 'hidden',
+                  borderWidth: 1,
+                  borderColor: item === 0 ? 'rgba(122,157,184,0.20)' : 'rgba(255,255,255,0.08)',
+                  backgroundColor: item === 0 ? 'rgba(122,157,184,0.055)' : 'rgba(255,255,255,0.025)',
+                  padding: 16,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <View style={{ width: 76, height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                  {item === 0 ? <ActivityIndicator size="small" color="#7A9DB8" /> : <View style={{ width: 32, height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.045)' }} />}
+                </View>
+                <View style={{ height: 18, width: item === 0 ? '70%' : '58%', borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 12 }} />
+                <View style={{ height: 10, width: '92%', borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.045)', marginBottom: 8 }} />
+                <View style={{ height: 10, width: item === 2 ? '62%' : '78%', borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.035)' }} />
+              </View>
+            ))}
+          </ScrollView>
         ) : !isPremium ? (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPadding }} showsVerticalScrollIndicator={false}>
             {headerComponent}
 
-            {/* Ghost pick cards — look like real picks but blurred out */}
+            {/* Ghost pick cards — premium locked model board */}
             {[1, 2, 3].map((rank) => (
-              <View key={rank} style={{ marginBottom: 14, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: rank === 1 ? 'rgba(139,10,31,0.25)' : 'rgba(255,255,255,0.06)', opacity: rank === 1 ? 1 : rank === 2 ? 0.85 : 0.65 }}>
-                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
-                <LinearGradient colors={rank === 1 ? ['rgba(139,10,31,0.12)', 'rgba(4,6,8,0.85)'] : ['rgba(255,255,255,0.04)', 'rgba(4,6,8,0.85)']} style={StyleSheet.absoluteFillObject} />
-                <View style={{ padding: 16 }}>
-                  {/* Header row */}
+              <View
+                key={rank}
+                style={{
+                  marginBottom: 14,
+                  borderRadius: 20,
+                  overflow: 'hidden',
+                  borderWidth: 1,
+                  borderColor: rank === 1 ? 'rgba(122,157,184,0.26)' : 'rgba(122,157,184,0.12)',
+                  backgroundColor: 'rgba(4,7,10,0.72)',
+                  opacity: rank === 1 ? 1 : rank === 2 ? 0.78 : 0.56,
+                }}
+              >
+                <BlurView intensity={rank === 1 ? 36 : 28} tint="dark" style={StyleSheet.absoluteFillObject} />
+                <LinearGradient
+                  colors={rank === 1
+                    ? ['rgba(122,157,184,0.13)', 'rgba(255,255,255,0.025)', 'rgba(139,10,31,0.055)']
+                    : ['rgba(122,157,184,0.07)', 'rgba(255,255,255,0.018)', 'rgba(4,6,8,0.86)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']}
+                  start={{ x: 0.1, y: 0 }}
+                  end={{ x: 0.85, y: 1 }}
+                  style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 1 }}
+                />
+                <View style={{ padding: 16, minHeight: 130 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                    <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: rank === 1 ? 'rgba(139,10,31,0.20)' : 'rgba(122,157,184,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '900', color: rank === 1 ? '#8B0A1F' : 'rgba(122,157,184,0.5)' }}>#{rank}</Text>
+                    <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: rank === 1 ? 'rgba(122,157,184,0.16)' : 'rgba(122,157,184,0.10)', borderWidth: 1, borderColor: rank === 1 ? 'rgba(122,157,184,0.24)' : 'rgba(122,157,184,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: rank === 1 ? '#A9C5D8' : 'rgba(169,197,216,0.48)' }}>#{rank}</Text>
                     </View>
-                    <View style={{ marginLeft: 8, flex: 1 }}>
-                      <View style={{ width: 80, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                    <View style={{ marginLeft: 10, flex: 1 }}>
+                      <View style={{ width: 104, height: 8, borderRadius: 4, backgroundColor: 'rgba(180,211,235,0.12)' }} />
+                      <View style={{ width: 54, height: 5, borderRadius: 3, backgroundColor: 'rgba(180,211,235,0.07)', marginTop: 6 }} />
                     </View>
-                    <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(139,10,31,0.18)' }}>
-                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#8B0A1F', letterSpacing: 1.2 }}>PRO</Text>
+                    <View style={{ backgroundColor: 'rgba(139,10,31,0.14)', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(139,10,31,0.26)' }}>
+                      <Text style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: 'rgba(255,255,255,0.78)', letterSpacing: 1.3 }}>PRO</Text>
                     </View>
                   </View>
-                  {/* Fake matchup row */}
+
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={{ width: 40, height: 44, borderRadius: 10, backgroundColor: 'rgba(122,157,184,0.08)' }} />
-                      <View>
-                        <View style={{ width: 70, height: 13, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 5 }} />
-                        <View style={{ width: 45, height: 9, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <View style={{ width: 42, height: 46, borderRadius: 13, backgroundColor: 'rgba(122,157,184,0.09)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.08)' }} />
+                      <View style={{ marginLeft: 10 }}>
+                        <View style={{ width: 78, height: 12, borderRadius: 5, backgroundColor: 'rgba(224,234,240,0.10)', marginBottom: 6 }} />
+                        <View style={{ width: 46, height: 7, borderRadius: 4, backgroundColor: 'rgba(180,211,235,0.08)' }} />
                       </View>
                     </View>
                     <View style={{ alignItems: 'center', paddingHorizontal: 12 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(122,157,184,0.3)', letterSpacing: 1 }}>VS</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(180,211,235,0.28)', letterSpacing: 1.2 }}>VS</Text>
                     </View>
-                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={{ width: 40, height: 44, borderRadius: 10, backgroundColor: 'rgba(139,10,31,0.08)' }} />
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <View style={{ width: 70, height: 13, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 5 }} />
-                        <View style={{ width: 45, height: 9, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center', flex: 1 }}>
+                      <View style={{ width: 42, height: 46, borderRadius: 13, backgroundColor: 'rgba(139,10,31,0.08)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.08)' }} />
+                      <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                        <View style={{ width: 78, height: 12, borderRadius: 5, backgroundColor: 'rgba(224,234,240,0.10)', marginBottom: 6 }} />
+                        <View style={{ width: 46, height: 7, borderRadius: 4, backgroundColor: 'rgba(180,211,235,0.08)' }} />
                       </View>
                     </View>
                   </View>
-                  {/* Fake confidence bar */}
+
                   {rank <= 2 ? (
-                    <View style={{ marginTop: 14 }}>
-                      <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
-                        <View style={{ width: rank === 1 ? '72%' : '58%', height: '100%', borderRadius: 3, backgroundColor: rank === 1 ? 'rgba(139,10,31,0.25)' : 'rgba(122,157,184,0.15)' }} />
+                    <View style={{ marginTop: 16 }}>
+                      <View style={{ height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.035)', overflow: 'hidden' }}>
+                        <LinearGradient
+                          colors={rank === 1 ? ['rgba(122,157,184,0.54)', 'rgba(139,10,31,0.28)'] : ['rgba(122,157,184,0.28)', 'rgba(255,255,255,0.08)']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={{ width: rank === 1 ? '72%' : '58%', height: '100%', borderRadius: 3 }}
+                        />
                       </View>
                     </View>
                   ) : null}
@@ -556,49 +635,70 @@ export default function ClutchPicksScreen() {
               </View>
             ))}
 
-            {/* Lock overlay + CTA card */}
-            <View style={{ borderRadius: 22, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(122,157,184,0.15)', marginTop: 8 }}>
-              <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <LinearGradient colors={['rgba(122,157,184,0.08)', 'rgba(139,10,31,0.08)', 'rgba(4,6,8,0.9)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFillObject} />
-              <View style={{ padding: 28, alignItems: 'center' }}>
-                {/* Lock icon */}
-                <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: 'rgba(122,157,184,0.10)', borderWidth: 1.5, borderColor: 'rgba(122,157,184,0.20)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, shadowColor: '#7A9DB8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 16 }}>
-                  <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                    <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z" fill="rgba(122,157,184,0.3)" stroke="#7A9DB8" strokeWidth="1.5" />
-                    <Path d="M7 11V7a5 5 0 0110 0v4" stroke="#7A9DB8" strokeWidth="1.5" strokeLinecap="round" />
-                    <Path d="M12 16v2" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-                  </Svg>
+            {/* Unified Pro introduction */}
+            <View style={{ borderRadius: 26, overflow: 'hidden', borderWidth: 1.2, borderColor: 'rgba(122,157,184,0.24)', backgroundColor: 'rgba(4,7,10,0.86)', marginTop: 8, marginBottom: 6 }}>
+              <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFillObject} />
+              <LinearGradient
+                colors={['rgba(122,157,184,0.15)', 'rgba(255,255,255,0.025)', 'rgba(139,10,31,0.08)', 'rgba(4,6,8,0.96)']}
+                locations={[0, 0.45, 0.78, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <LinearGradient
+                pointerEvents="none"
+                colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 1 }}
+              />
+              <View style={{ padding: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                  <View style={{ width: 52, height: 52, borderRadius: 17, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1.2, borderColor: 'rgba(122,157,184,0.28)', alignItems: 'center', justifyContent: 'center', marginRight: 13, shadowColor: '#7A9DB8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 14 }}>
+                    <Svg width={25} height={25} viewBox="0 0 24 24" fill="none">
+                      <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z" fill="rgba(122,157,184,0.18)" stroke="#9AB8CC" strokeWidth="1.5" />
+                      <Path d="M7 11V7a5 5 0 0110 0v4" stroke="#7A9DB8" strokeWidth="1.5" strokeLinecap="round" />
+                      <Path d="M12 16v2" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                    </Svg>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: '#7A9DB8', letterSpacing: 2, marginBottom: 5 }}>DAILY MODEL BOARD</Text>
+                    <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0 }}>Today's picks are queued</Text>
+                  </View>
+                  <View style={{ borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: 'rgba(139,10,31,0.14)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.30)', marginLeft: 12 }}>
+                    <Text style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: 'rgba(255,255,255,0.82)', letterSpacing: 1.4 }}>PRO</Text>
+                  </View>
                 </View>
 
-                <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>Unlock Clutch Picks Pro</Text>
-                <Text style={{ fontSize: 13, color: '#7A9DB8', textAlign: 'center', lineHeight: 20, marginBottom: 24, opacity: 0.8 }}>AI-powered picks ranked by confidence, updated daily across every sport.</Text>
+                <Text style={{ fontSize: 13, color: 'rgba(180,211,235,0.76)', lineHeight: 20, marginBottom: 16 }}>
+                  Reveal the ranked side, model confidence, and matchup read when you want the full board.
+                </Text>
 
-                {/* Feature bullets */}
-                <View style={{ width: '100%', gap: 12, marginBottom: 28 }}>
-                  {[
-                    { text: 'Confidence-ranked picks for every sport' },
-                    { text: 'Edge analysis & full breakdowns' },
-                    { text: 'Updated daily before games start' },
-                  ].map((item, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(122,157,184,0.06)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)' }}>
-                      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(122,157,184,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                          <Path d="M20 6L9 17l-5-5" stroke="#7A9DB8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      </View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)', flex: 1 }}>{item.text}</Text>
+                <View style={{ marginBottom: 18 }}>
+                  {['Ranked pick board', 'Model confidence', 'Matchup context'].map((label, itemIndex) => (
+                    <View key={label} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 32, borderRadius: 11, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 10, marginBottom: itemIndex === 2 ? 0 : 8 }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: itemIndex === 0 ? '#9AB8CC' : itemIndex === 1 ? 'rgba(139,10,31,0.78)' : 'rgba(224,234,240,0.55)', marginRight: 9 }} />
+                      <Text style={{ flex: 1, fontSize: 11, lineHeight: 14, color: 'rgba(224,234,240,0.74)', fontWeight: '800' }}>{label}</Text>
+                      <View style={{ width: itemIndex === 0 ? 58 : itemIndex === 1 ? 78 : 66, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.055)' }} />
                     </View>
                   ))}
                 </View>
 
-                {/* CTA button */}
                 <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
-                  <LinearGradient colors={['#8B0A1F', '#5A0614']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#8B0A1F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }}>Start Free Trial</Text>
+                  <LinearGradient
+                    colors={['rgba(122,157,184,0.24)', 'rgba(139,10,31,0.18)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ height: 54, borderRadius: 16, padding: 1, shadowColor: '#7A9DB8', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 12 }}
+                  >
+                    <View style={{ flex: 1, borderRadius: 15, backgroundColor: 'rgba(5,8,13,0.78)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}>
+                      <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.2 }}>Explore Pro</Text>
+                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginLeft: 6 }}>
+                        <Path d="M9 18l6-6-6-6" stroke="#9AB8CC" strokeWidth={2.7} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
                   </LinearGradient>
                 </Pressable>
-
-                <Text style={{ fontSize: 11, color: 'rgba(122,157,184,0.5)', marginTop: 12, textAlign: 'center' }}>Cancel anytime · No commitment</Text>
               </View>
             </View>
           </ScrollView>
@@ -619,7 +719,7 @@ export default function ClutchPicksScreen() {
                 />
               </View>
             )}
-            contentContainerStyle={[{ paddingHorizontal: 20, paddingBottom: 120 }, responsive.isTablet && { maxWidth: 700, alignSelf: 'center', width: '100%' }]}
+            contentContainerStyle={[{ paddingHorizontal: 20, paddingBottom: bottomPadding }, responsive.isTablet && { maxWidth: 700, alignSelf: 'center', width: '100%' }]}
             showsVerticalScrollIndicator={false}
             onScroll={scrollHandler}
             scrollEventThrottle={16}

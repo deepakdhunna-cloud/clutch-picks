@@ -84,52 +84,54 @@ const FOOTBALL_ICON = iconRows([
   '...........',
 ]);
 
-const BASKETBALL_ICON = iconRows([
-  '..#######..',
+const NBA_BASKETBALL_ICON = iconRows([
+  '...#####...',
+  '..#..#..#..',
   '.##..#..##.',
-  '#..#.#.#..#',
-  '#...###...#',
-  '#..##.##..#',
+  '#.#..#..#.#',
+  '#..#####..#',
   '###########',
-  '#..##.##..#',
-  '#...###...#',
-  '#..#.#.#..#',
+  '#..#####..#',
+  '#.#..#..#.#',
   '.##..#..##.',
-  '..#######..',
+  '..#..#..#..',
+  '...#####...',
+]);
+
+const BASEBALL_DIAMOND_ICON = iconRows([
+  '...........',
+  '.....#.....',
+  '....###....',
+  '...#####...',
+  '....###....',
+  '.....#.....',
+  '..#.....#..',
+  '.###...###.',
+  '#####.#####',
+  '.###...###.',
+  '..#.....#..',
 ]);
 
 const SOCCER_ICON = iconRows([
-  '..#######..',
-  '.##.....##.',
-  '#..##.##..#',
-  '#.#######.#',
+  '...#####...',
+  '..#..#..#..',
+  '.#..###..#.',
+  '#..#...#..#',
+  '#.#.....#.#',
+  '##.......##',
+  '#.#.....#.#',
   '#..#####..#',
-  '#.#######.#',
-  '#..##.##..#',
-  '.##.....##.',
-  '..#######..',
-  '...........',
-  '...........',
+  '.#..#.#..#.',
+  '..#..#..#..',
+  '...#####...',
 ]);
 
 const SPORT_PIXEL_ICONS: Record<string, number[][]> = {
   NFL: FOOTBALL_ICON,
   NCAAF: FOOTBALL_ICON,
-  NBA: BASKETBALL_ICON,
-  NCAAB: BASKETBALL_ICON,
-  MLB: iconRows([
-    '..#######..',
-    '.##.....##.',
-    '#..#...#..#',
-    '#...#.#...#',
-    '#....#....#',
-    '#....#....#',
-    '#...#.#...#',
-    '#..#...#..#',
-    '.##.....##.',
-    '..#######..',
-    '...........',
-  ]),
+  NBA: NBA_BASKETBALL_ICON,
+  NCAAB: NBA_BASKETBALL_ICON,
+  MLB: BASEBALL_DIAMOND_ICON,
   NHL: iconRows([
     '##.........',
     '##.........',
@@ -145,44 +147,32 @@ const SPORT_PIXEL_ICONS: Record<string, number[][]> = {
   ]),
   MLS: SOCCER_ICON,
   EPL: SOCCER_ICON,
-  UCL: iconRows([
-    '.....#.....',
-    '..#..#..#..',
-    '...#####...',
-    '.##.###.##.',
-    '..#######..',
-    '###########',
-    '..#######..',
-    '.##.###.##.',
-    '...#####...',
-    '..#..#..#..',
-    '.....#.....',
-  ]),
+  UCL: SOCCER_ICON,
   IPL: iconRows([
-    '.......##..',
-    '......##...',
-    '.....##....',
     '....##.....',
-    '...##..###.',
-    '..##...###.',
-    '.##.....#..',
-    '##.........',
-    '..#..#..#..',
-    '..#..#..#..',
-    '..#..#..#..',
+    '....##.....',
+    '....##.....',
+    '....##.....',
+    '...####....',
+    '...#..#....',
+    '...#..#....',
+    '...#..#....',
+    '...#..#....',
+    '...####....',
+    '...####....',
   ]),
   TENNIS: iconRows([
-    '..#####....',
-    '.##...##...',
-    '##.#.#.##..',
-    '#.#.#.#.#..',
-    '##.#.#.##..',
-    '.##...##...',
-    '..#####....',
-    '....##.....',
-    '...##......',
-    '..##....##.',
-    '.##.....##.',
+    '...#####...',
+    '..#.#.#.#..',
+    '.#.#.#.#.#.',
+    '.#..#.#..#.',
+    '.#.#.#.#.#.',
+    '..#.#.#.#..',
+    '...#...#...',
+    '....#.#....',
+    '....###....',
+    '....###....',
+    '....###....',
   ]),
 };
 
@@ -466,6 +456,25 @@ function emitMatrixCells(matrix: number[][], baseCol: number, baseRow: number, p
   }
 }
 
+function getLedIconMetrics(sport: Sport | string | null | undefined, fallbackMatrix: number[][]) {
+  const matrix = sport ? (SPORT_PIXEL_ICONS[sport] || fallbackMatrix) : fallbackMatrix;
+  return {
+    colCount: matrix[0]?.length ?? 0,
+    rowCount: matrix.length,
+  };
+}
+
+function emitLedIconCells(
+  sport: Sport | string | null | undefined,
+  fallbackMatrix: number[][],
+  baseCol: number,
+  baseRow: number,
+  out: LitPos[],
+) {
+  const matrix = sport ? (SPORT_PIXEL_ICONS[sport] || fallbackMatrix) : fallbackMatrix;
+  emitMatrixCells(matrix, baseCol, baseRow, 'blue', out);
+}
+
 function measureLedText(text: string) {
   const chars = text.toUpperCase().split('');
   const datas = chars
@@ -513,9 +522,9 @@ export const LedTilePanel = memo(function LedTilePanel({ sport, gameCount, size 
   const ICON_ROW_SPAN = 11;  // accommodate the larger, more recognizable sport pictographs
   const TEXT_ROWS = 7;       // every char is 5×7
 
-  const iconMatrix = SPORT_PIXEL_ICONS[sport] || SPORT_PIXEL_ICONS.NBA;
-  const iconCols = iconMatrix[0].length;
-  const iconRows = iconMatrix.length;
+  const iconMetrics = getLedIconMetrics(sport, SPORT_PIXEL_ICONS.NBA);
+  const iconCols = iconMetrics.colCount;
+  const iconRows = iconMetrics.rowCount;
 
   const abbrText = displaySport(sport);
   const abbr = measureLedText(abbrText);
@@ -539,11 +548,11 @@ export const LedTilePanel = memo(function LedTilePanel({ sport, gameCount, size 
 
   const cells = useMemo(() => {
     const next: LitPos[] = [];
-    emitMatrixCells(iconMatrix, iconStartCol, iconStartRow, 'blue', next);
+    emitLedIconCells(sport, SPORT_PIXEL_ICONS.NBA, iconStartCol, iconStartRow, next);
     emitTextCells(abbrText, abbrStartCol, abbrStartRow, 'white', next);
     emitTextCells(countText, countStartCol, countStartRow, 'blue', next);
     return next;
-  }, [abbrStartCol, abbrStartRow, abbrText, countStartCol, countStartRow, countText, iconMatrix, iconStartCol, iconStartRow]);
+  }, [abbrStartCol, abbrStartRow, abbrText, countStartCol, countStartRow, countText, iconStartCol, iconStartRow, sport]);
 
   return (
     <Svg width={size} height={size}>
@@ -569,17 +578,15 @@ export const LedBarPanel = memo(function LedBarPanel({
   height?: number;
   borderRadius?: number;
 }) {
-  const leftMatrix = leftSport
-    ? (SPORT_PIXEL_ICONS[leftSport as string] || LED_CALENDAR_MATRIX)
-    : LED_CALENDAR_MATRIX;
+  const leftIconMetrics = getLedIconMetrics(leftSport, LED_CALENDAR_MATRIX);
   const ICON_LABEL_GAP_COLS = 2;
   const LEFT_GAP_COLS = 8;
   const RIGHT_GAP_COLS = 8;
 
   const [width, setWidth] = useState(0);
 
-  const leftCols = leftMatrix[0].length;
-  const leftRows = leftMatrix.length;
+  const leftCols = leftIconMetrics.colCount;
+  const leftRows = leftIconMetrics.rowCount;
   const labelM = measureLedText(label);
   const countText = String(count);
   const countM = measureLedText(countText);
@@ -604,12 +611,12 @@ export const LedBarPanel = memo(function LedBarPanel({
   const cells = useMemo(() => {
     const next: LitPos[] = [];
     if (cols > 0) {
-      emitMatrixCells(leftMatrix, leftStartCol, leftStartRow, 'blue', next);
+      emitLedIconCells(leftSport, LED_CALENDAR_MATRIX, leftStartCol, leftStartRow, next);
       emitTextCells(label, labelStartCol, labelStartRow, 'white', next);
       emitTextCells(countText, countStartCol, countStartRow, 'blue', next);
     }
     return next;
-  }, [cols, countStartCol, countStartRow, countText, label, labelStartCol, labelStartRow, leftMatrix, leftStartCol, leftStartRow]);
+  }, [cols, countStartCol, countStartRow, countText, label, labelStartCol, labelStartRow, leftSport, leftStartCol, leftStartRow]);
 
   return (
     <View
@@ -655,17 +662,17 @@ export const LedMiniPanel = memo(function LedMiniPanel({
   height?: number;
   borderRadius?: number;
 }) {
-  const matrix = leftSport ? (SPORT_PIXEL_ICONS[leftSport as string] || SPORT_PIXEL_ICONS.NBA) : null;
+  const iconMetrics = getLedIconMetrics(leftSport, SPORT_PIXEL_ICONS.NBA);
   const labelM = measureLedText(label);
   const countText = count === undefined ? null : String(count);
   const countM = countText ? measureLedText(countText) : null;
-  const ICON_LABEL_GAP_COLS = matrix ? 3 : 0;
+  const ICON_LABEL_GAP_COLS = leftSport ? 3 : 0;
   const LABEL_COUNT_GAP_COLS = countM ? 3 : 0;
   const LEFT_PAD_COLS = sideRail ? 6 : 6;
   const RIGHT_PAD_COLS = 6;
 
-  const iconCols = matrix?.[0]?.length ?? 0;
-  const iconRows = matrix?.length ?? 0;
+  const iconCols = leftSport ? iconMetrics.colCount : 0;
+  const iconRows = leftSport ? iconMetrics.rowCount : 0;
   const contentCols =
     iconCols +
     ICON_LABEL_GAP_COLS +
@@ -679,8 +686,8 @@ export const LedMiniPanel = memo(function LedMiniPanel({
   const cells = useMemo(() => {
     const next: LitPos[] = [];
     let cursorCol = LEFT_PAD_COLS;
-    if (matrix) {
-      emitMatrixCells(matrix, cursorCol, Math.floor((rows - iconRows) / 2), 'blue', next);
+    if (leftSport) {
+      emitLedIconCells(leftSport, SPORT_PIXEL_ICONS.NBA, cursorCol, Math.floor((rows - iconRows) / 2), next);
       cursorCol += iconCols + ICON_LABEL_GAP_COLS;
     }
     emitTextCells(label, cursorCol, Math.floor((rows - labelM.rowCount) / 2), 'white', next);
@@ -689,7 +696,7 @@ export const LedMiniPanel = memo(function LedMiniPanel({
       emitTextCells(countText, cursorCol, Math.floor((rows - countM.rowCount) / 2), 'blue', next);
     }
     return next;
-  }, [ICON_LABEL_GAP_COLS, LABEL_COUNT_GAP_COLS, LEFT_PAD_COLS, countM, countText, iconCols, iconRows, label, labelM.colCount, labelM.rowCount, matrix, rows]);
+  }, [ICON_LABEL_GAP_COLS, LABEL_COUNT_GAP_COLS, LEFT_PAD_COLS, countM, countText, iconCols, iconRows, label, labelM.colCount, labelM.rowCount, leftSport, rows]);
 
   return (
     <View

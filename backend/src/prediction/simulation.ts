@@ -14,7 +14,7 @@ import type { FactorContribution, GameContext, ProjectionSignal, SimulationProje
 
 const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
 
-const ITERATIONS = 8000;
+const ITERATIONS = 50000;
 
 const SPORT_BASELINES: Record<string, { total: number; marginSd: number; totalSd: number; minScore: number; granularity: number }> = {
   NBA: { total: 224, marginSd: 12.5, totalSd: 15, minScore: 75, granularity: 1 },
@@ -60,11 +60,6 @@ function normalSample(rand: () => number): number {
   const u1 = Math.max(rand(), 1e-12);
   const u2 = Math.max(rand(), 1e-12);
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-}
-
-function mean(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
 function inferTeamAttack(
@@ -132,7 +127,7 @@ function anchorMarginToRatingEdge(args: {
     key: "rating-consensus-anchor",
     label: "Consensus margin anchor",
     value: round(shift, 2),
-    evidence: `Rating edge anchors the simulated score margin ${shift >= 0 ? "+" : ""}${round(shift, 1)} toward the model side`,
+    evidence: `Rating edge anchors the projected score margin ${shift >= 0 ? "+" : ""}${round(shift, 1)} toward the model side`,
   });
 
   return {
@@ -377,16 +372,17 @@ export function simulateGameProjection(
   totalRatingDelta: number,
   factors: FactorContribution[],
 ): SimulationProjection {
-  const rand = makePrng(`${ctx.game.id}|${ctx.sport}|${ctx.homeElo}|${ctx.awayElo}|projection-v1`);
+  const rand = makePrng(`${ctx.game.id}|${ctx.sport}|${ctx.homeElo}|${ctx.awayElo}|projection-v2`);
   const model = buildScoreModel(ctx, totalRatingDelta, factors);
   const soccer = SOCCER_LEAGUES.has(ctx.sport);
 
   let homeWins = 0;
   let awayWins = 0;
   let draws = 0;
-  const homeScores: number[] = [];
-  const awayScores: number[] = [];
-  const margins: number[] = [];
+  let homeScoreSum = 0;
+  let awayScoreSum = 0;
+  let marginSum = 0;
+  let marginSquareSum = 0;
 
   for (let i = 0; i < ITERATIONS; i++) {
     let { home, away } = sampleScorePair(model, ctx.sport, rand);
@@ -399,21 +395,23 @@ export function simulateGameProjection(
       else away += 1;
     }
 
-    homeScores.push(home);
-    awayScores.push(away);
-    margins.push(home - away);
+    const margin = home - away;
+    homeScoreSum += home;
+    awayScoreSum += away;
+    marginSum += margin;
+    marginSquareSum += margin ** 2;
 
     if (home > away) homeWins++;
     else if (away > home) awayWins++;
     else draws++;
   }
 
-  const projectedHomeScore = mean(homeScores);
-  const projectedAwayScore = mean(awayScores);
+  const projectedHomeScore = homeScoreSum / ITERATIONS;
+  const projectedAwayScore = awayScoreSum / ITERATIONS;
   const projectedSpread = projectedHomeScore - projectedAwayScore;
   const projectedTotal = projectedHomeScore + projectedAwayScore;
-  const avgMargin = mean(margins);
-  const variance = mean(margins.map((m) => (m - avgMargin) ** 2));
+  const avgMargin = marginSum / ITERATIONS;
+  const variance = Math.max(0, marginSquareSum / ITERATIONS - avgMargin ** 2);
   const volatility = Math.sqrt(variance);
   const favoriteWins = Math.max(homeWins, awayWins, draws) / ITERATIONS;
   const upsetRisk = 1 - favoriteWins;

@@ -12,6 +12,8 @@ describe("notificationPreferenceKeyForType", () => {
     expect(notificationPreferenceKeyForType("pick_result")).toBe("pickResult");
     expect(notificationPreferenceKeyForType("winner_flip")).toBe("predictionShift");
     expect(notificationPreferenceKeyForType("big_game")).toBe("bigGame");
+    expect(notificationPreferenceKeyForType("game_spotlight")).toBe("gameSpotlight");
+    expect(notificationPreferenceKeyForType("underdog_alert")).toBe("underdog");
     expect(notificationPreferenceKeyForType("streak")).toBe("streak");
   });
 

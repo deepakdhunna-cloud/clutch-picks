@@ -6,9 +6,6 @@ import {
   TextInput,
   ScrollView,
   Image,
-  ActionSheetIOS,
-  Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +19,8 @@ import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
 import { setDisplayName as setRevenueCatDisplayName } from '@/lib/revenuecatClient';
+import { FeedbackModal } from '@/components/FeedbackModal';
+import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 
 const BG = '#040608';
 const CORAL = '#8B0A1F';
@@ -56,6 +55,8 @@ export default function ProfileSetupScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
+  const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
 
   const hasDisplayName = displayName.trim().length > 0;
 
@@ -68,7 +69,11 @@ export default function ProfileSetupScreen() {
       await api.put<UserProfile>('/api/profile/image', { imageUrl: uploadResult.url });
       setProfileImage(uploadResult.url);
     } catch (error) {
-      Alert.alert('Upload Failed', 'There was an error uploading your photo. Please try again.');
+      setFeedback({
+        title: 'Upload Failed',
+        message: 'There was an error uploading your photo. Please try again.',
+        variant: 'error',
+      });
       if (__DEV__) console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
@@ -77,46 +82,17 @@ export default function ProfileSetupScreen() {
 
   const handlePhotoPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPhotoSourceVisible(true);
+  };
 
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take Photo', 'Choose from Library'],
-          cancelButtonIndex: 0,
-        },
-        async (buttonIndex) => {
-          if (buttonIndex === 1) {
-            const photo = await takePhoto();
-            handleImageUpload(photo);
-          } else if (buttonIndex === 2) {
-            const image = await pickImage();
-            handleImageUpload(image);
-          }
-        }
-      );
-    } else {
-      Alert.alert(
-        'Add Profile Photo',
-        'Choose an option',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Take Photo',
-            onPress: async () => {
-              const photo = await takePhoto();
-              handleImageUpload(photo);
-            },
-          },
-          {
-            text: 'Choose from Library',
-            onPress: async () => {
-              const image = await pickImage();
-              handleImageUpload(image);
-            },
-          },
-        ]
-      );
-    }
+  const handleTakePhoto = async () => {
+    setPhotoSourceVisible(false);
+    await handleImageUpload(await takePhoto());
+  };
+
+  const handleChooseLibrary = async () => {
+    setPhotoSourceVisible(false);
+    await handleImageUpload(await pickImage());
   };
 
   const toggleLeague = (leagueId: string) => {
@@ -163,6 +139,20 @@ export default function ProfileSetupScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <PhotoSourceModal
+          visible={photoSourceVisible}
+          title="Profile Photo"
+          onTakePhoto={handleTakePhoto}
+          onChooseLibrary={handleChooseLibrary}
+          onCancel={() => setPhotoSourceVisible(false)}
+        />
+        <FeedbackModal
+          visible={!!feedback}
+          title={feedback?.title ?? ''}
+          message={feedback?.message ?? ''}
+          variant={feedback?.variant}
+          onDismiss={() => setFeedback(null)}
+        />
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}

@@ -13,6 +13,8 @@ export interface LiveScore {
   awayTeam: { abbreviation: string; name: string };
   homeScore: number;
   awayScore: number;
+  homeScoreDisplay?: string;
+  awayScoreDisplay?: string;
   clock: string | null;
   period: number | null;
   quarter: string | null;
@@ -20,6 +22,7 @@ export interface LiveScore {
   statusLabel?: string;
   statusDetail?: string;
   suspension?: GameWithPrediction['suspension'];
+  cricketState?: GameWithPrediction['cricketState'];
   liveState?: GameWithPrediction['liveState'];
 }
 
@@ -54,14 +57,117 @@ function sameLiveState(
   );
 }
 
+function sameCricketState(
+  left: GameWithPrediction['cricketState'],
+  right: GameWithPrediction['cricketState'],
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return !left && !right;
+  const sameInnings = (side: 'home' | 'away') => (
+    (left[side]?.scoreText ?? null) === (right[side]?.scoreText ?? null) &&
+    (left[side]?.detailText ?? null) === (right[side]?.detailText ?? null) &&
+    (left[side]?.runs ?? null) === (right[side]?.runs ?? null) &&
+    (left[side]?.wickets ?? null) === (right[side]?.wickets ?? null) &&
+    (left[side]?.overs ?? null) === (right[side]?.overs ?? null) &&
+    (left[side]?.maxOvers ?? null) === (right[side]?.maxOvers ?? null) &&
+      (left[side]?.isBatting ?? false) === (right[side]?.isBatting ?? false)
+  );
+  const sameBatters = (
+    left.currentBatters?.length ?? 0
+  ) === (
+    right.currentBatters?.length ?? 0
+  ) && (left.currentBatters ?? []).every((batter, index) => {
+    const next = right.currentBatters?.[index];
+    return (
+      batter.name === next?.name &&
+      batter.role === next?.role &&
+      (batter.runs ?? null) === (next?.runs ?? null) &&
+      (batter.balls ?? null) === (next?.balls ?? null)
+    );
+  });
+  const sameBowler = (
+    (left.currentBowler?.name ?? null) === (right.currentBowler?.name ?? null) &&
+    (left.currentBowler?.overs ?? null) === (right.currentBowler?.overs ?? null) &&
+    (left.currentBowler?.runsConceded ?? null) === (right.currentBowler?.runsConceded ?? null) &&
+    (left.currentBowler?.wickets ?? null) === (right.currentBowler?.wickets ?? null)
+  );
+  const sameOverTrack = (
+    left.overTrack?.length ?? 0
+  ) === (
+    right.overTrack?.length ?? 0
+  ) && (left.overTrack ?? []).every((over, index) => {
+    const next = right.overTrack?.[index];
+    return (
+      over.over === next?.over &&
+      over.runs === next?.runs &&
+      over.wickets === next?.wickets &&
+      (over.complete ?? false) === (next?.complete ?? false)
+    );
+  });
+  const sameCurrentOver = (
+    (left.currentOver?.over ?? null) === (right.currentOver?.over ?? null) &&
+    (left.currentOver?.runs ?? null) === (right.currentOver?.runs ?? null) &&
+    (left.currentOver?.wickets ?? null) === (right.currentOver?.wickets ?? null) &&
+    (left.currentOver?.complete ?? false) === (right.currentOver?.complete ?? false) &&
+    (left.currentOver?.balls.length ?? 0) === (right.currentOver?.balls.length ?? 0) &&
+    (left.currentOver?.balls ?? []).every((ball, index) => {
+      const next = right.currentOver?.balls[index];
+      return (
+        ball.ball === next?.ball &&
+        ball.label === next?.label &&
+        ball.runs === next?.runs &&
+        (ball.wicket ?? false) === (next?.wicket ?? false) &&
+        (ball.extra ?? null) === (next?.extra ?? null)
+      );
+    })
+  );
+  return (
+    sameInnings('home') &&
+    sameInnings('away') &&
+    (left.battingSide ?? null) === (right.battingSide ?? null) &&
+    (left.innings ?? null) === (right.innings ?? null) &&
+    (left.summary ?? null) === (right.summary ?? null) &&
+    (left.target ?? null) === (right.target ?? null) &&
+    sameBatters &&
+    sameBowler &&
+    sameOverTrack &&
+    sameCurrentOver
+  );
+}
+
+function mergeCricketState(
+  current: GameWithPrediction['cricketState'],
+  incoming: GameWithPrediction['cricketState'],
+): GameWithPrediction['cricketState'] {
+  if (!incoming) return current;
+  const sameInningsContext =
+    (incoming.battingSide ?? null) === (current?.battingSide ?? null) &&
+    (incoming.innings ?? null) === (current?.innings ?? null);
+
+  if (!sameInningsContext) return incoming;
+
+  return {
+    ...incoming,
+    currentBatters: incoming.currentBatters ?? current?.currentBatters,
+    currentBowler: incoming.currentBowler ?? current?.currentBowler,
+    overTrack: incoming.overTrack ?? current?.overTrack,
+    currentOver: incoming.currentOver ?? current?.currentOver,
+  };
+}
+
 function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScore>): GameWithPrediction {
   const live = scoreMap.get(game.id);
   if (!live) return game;
   const nextLiveState =
     live.liveState ?? (live.status === GameStatus.FINAL ? undefined : game.liveState);
+  const nextCricketState = mergeCricketState(game.cricketState, live.cricketState);
+  const nextHomeScoreDisplay = live.homeScoreDisplay ?? game.homeScoreDisplay;
+  const nextAwayScoreDisplay = live.awayScoreDisplay ?? game.awayScoreDisplay;
   if (
     game.homeScore === live.homeScore &&
     game.awayScore === live.awayScore &&
+    (game.homeScoreDisplay ?? null) === (nextHomeScoreDisplay ?? null) &&
+    (game.awayScoreDisplay ?? null) === (nextAwayScoreDisplay ?? null) &&
     (game.clock ?? null) === live.clock &&
     (game.quarter ?? null) === live.quarter &&
     game.status === live.status &&
@@ -70,6 +176,7 @@ function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScor
     (game.suspension?.display ?? null) === (live.suspension?.display ?? null) &&
     (game.suspension?.resumeText ?? null) === (live.suspension?.resumeText ?? null) &&
     (game.suspension?.reasonText ?? null) === (live.suspension?.reasonText ?? null) &&
+    sameCricketState(game.cricketState, nextCricketState) &&
     sameLiveState(game.liveState, nextLiveState)
   ) {
     return game;
@@ -78,12 +185,15 @@ function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScor
     ...game,
     homeScore: live.homeScore,
     awayScore: live.awayScore,
+    homeScoreDisplay: nextHomeScoreDisplay,
+    awayScoreDisplay: nextAwayScoreDisplay,
     clock: live.clock ?? undefined,
     quarter: live.quarter ?? undefined,
     status: live.status,
     statusLabel: live.statusLabel,
     statusDetail: live.statusDetail,
     suspension: live.suspension,
+    cricketState: nextCricketState,
     liveState: nextLiveState,
   };
 }

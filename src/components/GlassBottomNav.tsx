@@ -20,6 +20,10 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 import { MAROON } from '@/lib/theme';
 
+export const GLASS_BOTTOM_NAV_HEIGHT = 72;
+export const GLASS_BOTTOM_NAV_FADE_HEIGHT = 18;
+export const GLASS_BOTTOM_NAV_MIN_BOTTOM_PADDING = 10;
+export const GLASS_BOTTOM_NAV_SCROLL_PADDING = 26;
 
 export function GlassBottomNav({
   state,
@@ -27,7 +31,7 @@ export function GlassBottomNav({
   navigation,
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const bottomPadding = Math.max(insets.bottom, 16);
+  const bottomPadding = Math.max(insets.bottom, GLASS_BOTTOM_NAV_MIN_BOTTOM_PADDING);
   const tabBarVisible = useTabBarVisible();
 
   const animatedContainerStyle = useAnimatedStyle(() => {
@@ -214,7 +218,7 @@ const styles = StyleSheet.create({
     right: 0,
   },
   fade: {
-    height: 10,
+    height: GLASS_BOTTOM_NAV_FADE_HEIGHT,
   },
   bar: {
     backgroundColor: '#040608',
@@ -225,54 +229,64 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   tabRow: {
+    height: GLASS_BOTTOM_NAV_HEIGHT,
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
   },
   tabButton: {
     flex: 1,
     minWidth: 44,
-    minHeight: 44,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabContent: {
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
+    width: '100%',
     position: 'relative',
-    paddingVertical: 2,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
   iconGlow: {
     position: 'absolute',
-    top: -4,
+    top: 7,
     width: 36,
     height: 40,
     borderRadius: 20,
     backgroundColor: MAROON,
   },
   iconWrap: {
-    marginBottom: 5,
+    height: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
     zIndex: 1,
     transform: [{ scale: 1 }],
   },
   label: {
-    fontSize: 8.5,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: '700',
     letterSpacing: 0.2,
     color: '#FFFFFF',
-    marginBottom: 6,
+    marginBottom: 5,
+    includeFontPadding: false,
     zIndex: 1,
   },
   pip: {
+    height: 5,
     alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 1,
   },
   pipDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: MAROON,
     ...Platform.select({
       ios: {

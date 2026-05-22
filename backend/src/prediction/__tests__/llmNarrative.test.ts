@@ -518,4 +518,35 @@ describe("computeVersionHash", () => {
     const b = { predictedWinner: "home" as const, confidence: 65, factors: baseFactors };
     expect(computeVersionHash(a, [])).not.toBe(computeVersionHash(b, []));
   });
+
+  it("changes when a canonical draw replaces a team pick", () => {
+    const teamPick = {
+      predictedWinner: "home" as const,
+      predictedOutcome: "home" as const,
+      confidence: 55,
+      factors: baseFactors,
+      canonicalResult: {
+        finalPick: "home" as const,
+        finalProbability: 0.55,
+        probabilities: { home: 0.55, away: 0.45 },
+      },
+    };
+    const drawPick = {
+      ...teamPick,
+      predictedOutcome: "draw" as const,
+      canonicalResult: {
+        finalPick: "draw" as const,
+        finalProbability: 0.38,
+        probabilities: { home: 0.31, away: 0.31, draw: 0.38 },
+      },
+    };
+
+    expect(computeVersionHash(teamPick as any, [])).not.toBe(computeVersionHash(drawPick as any, []));
+  });
+
+  it("changes when a pick becomes a toss-up display outcome", () => {
+    const pick = { predictedWinner: "home" as const, confidence: 54, factors: baseFactors, isTossUp: false };
+    const tossUp = { ...pick, isTossUp: true };
+    expect(computeVersionHash(pick, [])).not.toBe(computeVersionHash(tossUp, []));
+  });
 });

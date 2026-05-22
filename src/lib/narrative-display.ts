@@ -1,4 +1,6 @@
 import type { GameWithPrediction, Prediction, PredictionFactor, Sport, Team } from '@/types/sports';
+import { getCanonicalFinalPick } from './canonical-result';
+import { cleanProjectionCopy } from './projection-display';
 
 const STALE_RAW_NARRATIVE =
   /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b/i;
@@ -42,9 +44,14 @@ function findFactor(factors: PredictionFactor[] | undefined, terms: string[]): P
 }
 
 function rebuildStaleNarrative(game: NarrativeGame, prediction: Prediction): string | null {
-  const winner = prediction.predictedWinner === 'home' ? game.homeTeam : game.awayTeam;
-  const loser = prediction.predictedWinner === 'home' ? game.awayTeam : game.homeTeam;
-  const winnerSide = prediction.predictedWinner;
+  const canonicalPick = getCanonicalFinalPick(prediction);
+  if (canonicalPick === 'draw') {
+    const seasonLabel = game.seasonContext?.label;
+    return `${seasonLabel ? `Given the ${seasonLabel}, ` : ''}${teamSubject(game.sport, game.homeTeam)} and ${teamSubject(game.sport, game.awayTeam)} grade close enough that the canonical read is a draw. The supporting factors are not strong enough to separate one side from the other.`;
+  }
+  const winnerSide = canonicalPick === 'away' ? 'away' : 'home';
+  const winner = winnerSide === 'home' ? game.homeTeam : game.awayTeam;
+  const loser = winnerSide === 'home' ? game.awayTeam : game.homeTeam;
   const winnerSubject = teamSubject(game.sport, winner);
   const loserSubject = teamSubject(game.sport, loser);
   const ratingFactor = findFactor(prediction.factors, ['elo', 'rating']);
@@ -73,7 +80,7 @@ function rebuildStaleNarrative(game: NarrativeGame, prediction: Prediction): str
     sentences.push(`The counterpoint is ${possessive(loser.name)} recent form: ${loserForm} lately compared with ${winnerForm} for ${winner.name}.`);
   }
 
-  sentences.push(`For fans, the hook is whether ${possessive(winner.name)} home edge shows up before ${possessive(loser.name)} best counter can make the card uncomfortable.`);
+  sentences.push(`For fans, the hook is whether ${possessive(winner.name)} main edge shows up before ${possessive(loser.name)} best counter can make the card uncomfortable.`);
 
   return sentences.join(' ');
 }
@@ -81,9 +88,11 @@ function rebuildStaleNarrative(game: NarrativeGame, prediction: Prediction): str
 export function displayPredictionAnalysis(game: NarrativeGame): string {
   const prediction = game.prediction;
   const analysis = prediction?.analysis ?? '';
-  if (!analysis || !STALE_RAW_NARRATIVE.test(analysis)) {
-    return analysis;
+  if (!analysis) return analysis;
+  if (!STALE_RAW_NARRATIVE.test(analysis)) {
+    return cleanProjectionCopy(analysis);
   }
 
-  return prediction ? rebuildStaleNarrative(game, prediction) ?? analysis : analysis;
+  const rebuilt = prediction ? rebuildStaleNarrative(game, prediction) ?? analysis : analysis;
+  return cleanProjectionCopy(rebuilt);
 }

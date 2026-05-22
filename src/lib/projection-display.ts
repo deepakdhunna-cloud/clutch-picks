@@ -1,10 +1,14 @@
+import type { CanonicalPredictionResult } from '@/types/sports';
+
 type ProjectionDisplayInput = {
   sport?: string;
   homeAbbr: string;
   awayAbbr: string;
+  canonicalResult?: CanonicalPredictionResult | null;
   predictedWinner?: 'home' | 'away' | null;
   predictedOutcome?: 'home' | 'away' | 'draw' | null;
   confidence?: number | null;
+  isTossUp?: boolean | null;
   projection: {
     iterations: number;
     homeWinProbability?: number;
@@ -26,7 +30,33 @@ function normalizeProbability(value: number | undefined): number | null {
   return value > 1 ? value / 100 : value;
 }
 
-function projectionSide(input: ProjectionDisplayInput): 'home' | 'away' | 'draw' | null {
+export function cleanProjectionCopy(text: string | null | undefined): string {
+  if (!text) return 'Expected-score model aligned to the final pick';
+  const cleaned = text
+    .replace(/\b[\d,]+\s+simulated\s+(?:game\s+)?scripts(?:\s+aligned to the final pick)?/gi, 'Expected-score model aligned to the final pick')
+    .replace(/\bafter\s+[\d,]+\s+(?:simulated\s+)?(?:game\s+)?scripts;?\s*(?=upset\/draw risk)/gi, 'with ')
+    .replace(/\bafter\s+[\d,]+\s+(?:simulated\s+)?(?:game\s+)?scripts;?\s*/gi, '')
+    .replace(/\bsimulation lean\b/gi, 'projection lean')
+    .replace(/\bsimulated score margin\b/gi, 'projected score margin')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || 'Expected-score model aligned to the final pick';
+}
+
+function projectionSide(input: ProjectionDisplayInput): 'home' | 'away' | 'draw' | 'toss_up' | null {
+  if (input.canonicalResult?.finalPick === 'draw') return 'draw';
+  if (input.canonicalResult?.finalPick === 'none' || input.isTossUp || ((input.confidence ?? 0) > 0 && (input.confidence ?? 0) < 53)) {
+    return 'toss_up';
+  }
+  if (input.canonicalResult?.finalPick === 'home' || input.canonicalResult?.finalPick === 'away') {
+    return input.canonicalResult.finalPick;
+  }
+  if (input.predictedOutcome === 'draw') return 'draw';
+  if (input.predictedOutcome === 'home' || input.predictedOutcome === 'away') {
+    return input.predictedOutcome;
+  }
+  if (input.predictedWinner === 'home' || input.predictedWinner === 'away') return input.predictedWinner;
+
   const homeProb = normalizeProbability(input.projection.homeWinProbability);
   const awayProb = normalizeProbability(input.projection.awayWinProbability);
   const drawProb = normalizeProbability(input.projection.drawProbability);
@@ -45,33 +75,39 @@ function projectionSide(input: ProjectionDisplayInput): 'home' | 'away' | 'draw'
     return spread > 0 ? 'home' : 'away';
   }
 
-  if (input.predictedOutcome === 'home' || input.predictedOutcome === 'away' || input.predictedOutcome === 'draw') {
-    return input.predictedOutcome;
-  }
-  if (input.predictedWinner === 'home' || input.predictedWinner === 'away') return input.predictedWinner;
   return null;
 }
 
 export function getProjectionDisplay(input: ProjectionDisplayInput) {
   const side = projectionSide(input);
-  const leanAbbr = side === 'home' ? input.homeAbbr : side === 'away' ? input.awayAbbr : 'Draw';
+  const leanAbbr = side === 'home' ? input.homeAbbr : side === 'away' ? input.awayAbbr : side === 'draw' ? 'Draw' : 'Toss-Up';
+  const canonicalProbability =
+    side === 'home'
+      ? input.canonicalResult?.probabilities.home
+      : side === 'away'
+        ? input.canonicalResult?.probabilities.away
+        : side === 'draw'
+          ? input.canonicalResult?.probabilities.draw
+          : undefined;
   const projectionConfidence =
     side === 'home'
       ? normalizeProbability(input.projection.homeWinProbability)
       : side === 'away'
         ? normalizeProbability(input.projection.awayWinProbability)
-        : normalizeProbability(input.projection.drawProbability);
-  const confidence = Math.round((projectionConfidence ?? ((input.confidence ?? 0) / 100)) * 100);
+        : side === 'draw'
+          ? normalizeProbability(input.projection.drawProbability)
+          : null;
+  const confidence = Math.round((canonicalProbability ?? projectionConfidence ?? ((input.confidence ?? 0) / 100)) * 100);
   const confidenceText = confidence > 0 ? ` ${confidence}%` : '';
 
   return {
-    label: 'Expected Avg',
+    label: 'Unified Projection',
     homeScore: formatDecimal(input.projection.projectedHomeScore),
     awayScore: formatDecimal(input.projection.projectedAwayScore),
     total: formatDecimal(input.projection.projectedTotal),
     spread: formatDecimal(input.projection.projectedSpread),
     spreadValue: input.projection.projectedSpread,
-    leanText: side === 'draw' ? `Projection draw${confidenceText}` : `Projection lean ${leanAbbr}${confidenceText}`,
-    contextText: `${input.projection.iterations.toLocaleString()} simulated game scripts`,
+    leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
+    contextText: cleanProjectionCopy('Expected-score model aligned to the final pick'),
   };
 }

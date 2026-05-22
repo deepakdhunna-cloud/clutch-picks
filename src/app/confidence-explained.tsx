@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSubscription } from '@/lib/subscription-context';
+import { useGame } from '@/hooks/useGames';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
+import { getPredictionDisplay } from '@/lib/prediction-display';
+import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 
 
 interface Game {
@@ -15,10 +17,13 @@ interface Game {
   homeTeam: { name: string; abbreviation: string };
   awayTeam: { name: string; abbreviation: string };
   prediction?: {
+    canonicalResult?: CanonicalPredictionResult;
     predictedWinner: 'home' | 'away';
+    predictedOutcome?: 'home' | 'away' | 'draw';
     confidence: number;
     homeWinProbability: number;
     awayWinProbability: number;
+    drawProbability?: number;
     isTossUp?: boolean;
   };
 }
@@ -46,36 +51,99 @@ function getTier(conf: number, isTossUp?: boolean) {
   return TIERS[3];
 }
 
+function ConfidenceFallback({
+  title,
+  message,
+  loading = false,
+  onBack,
+}: {
+  title: string;
+  message: string;
+  loading?: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <View style={{ flex: 1, backgroundColor: BG }}>
+      <LinearGradient colors={['rgba(139,10,31,0.12)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.5, y: 0.3 }} style={[StyleSheet.absoluteFill, { height: 200 }]} />
+      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 12 }}>
+          <Pressable onPress={onBack} style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+              <Path d="M15 18l-6-6 6-6" stroke="#FFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </Pressable>
+          <View>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: -0.5 }}>Pick Confidence</Text>
+            <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{title}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 80 }}>
+          {loading ? <ActivityIndicator color={TEAL} /> : null}
+          <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginTop: loading ? 14 : 0, textAlign: 'center' }}>{title}</Text>
+          <Text style={{ color: '#6B7C94', fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: 'center' }}>{message}</Text>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
 export default function ConfidenceExplainedScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isPremium } = useSubscription();
 
-  const { data: game, isLoading } = useQuery<Game>({
-    queryKey: ['game', id],
-    queryFn: async () => {
-      const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
-      const res = await fetch(`${baseUrl}/api/games/id/${id}`);
-      if (!res.ok) throw new Error('Failed');
-      const json = await res.json();
-      return json.data ?? json;
-    },
-    enabled: !!id,
-  });
+  const { data: game, isLoading, isFetching, error } = useGame(id ?? '') as {
+    data: Game | null | undefined;
+    isLoading: boolean;
+    isFetching: boolean;
+    error: unknown;
+  };
 
-  if (!isPremium) { router.back(); return null; }
+  useEffect(() => {
+    if (!isPremium) router.back();
+  }, [isPremium, router]);
 
-  if (isLoading || !game?.prediction) {
+  if (!isPremium) return null;
+
+  if (isLoading && !game) {
     return (
-      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={TEAL} />
-      </View>
+      <ConfidenceFallback
+        title="Loading confidence"
+        message="Getting the latest pick context."
+        loading
+        onBack={() => router.back()}
+      />
+    );
+  }
+
+  if (error || !game) {
+    return (
+      <ConfidenceFallback
+        title="Confidence unavailable"
+        message="We could not load this game right now."
+        onBack={() => router.back()}
+      />
+    );
+  }
+
+  if (!game.prediction) {
+    return (
+      <ConfidenceFallback
+        title={isFetching ? 'Confidence is warming up' : 'Confidence unavailable'}
+        message={isFetching ? 'The pick is still being prepared for this game.' : 'There is no prediction available for this game yet.'}
+        loading={isFetching}
+        onBack={() => router.back()}
+      />
     );
   }
 
   const pred = game.prediction;
-  const winner = pred.predictedWinner === 'home' ? game.homeTeam : game.awayTeam;
-  const tier = getTier(pred.confidence, pred.isTossUp);
+  const predictionDisplay = getPredictionDisplay({
+    prediction: pred as unknown as Prediction,
+    homeTeam: game.homeTeam,
+    awayTeam: game.awayTeam,
+  });
+  const tier = getTier(pred.confidence, predictionDisplay.isTossUp);
   const currentTierIdx = TIERS.indexOf(tier);
 
   return (
@@ -101,7 +169,7 @@ export default function ConfidenceExplainedScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <View>
                 <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5 }}>CLUTCH PICK</Text>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFF', marginTop: 2 }}>{winner.name}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFF', marginTop: 2 }}>{predictionDisplay.label}</Text>
               </View>
               <View style={{ backgroundColor: `${tier.color}20`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: `${tier.color}40` }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: tier.color }}>{tier.label}</Text>

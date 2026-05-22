@@ -92,22 +92,48 @@ export default function NotificationsSettingsScreen() {
   const router = useRouter();
 
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFS);
+  const [savingKey, setSavingKey] = useState<keyof NotificationPreferences | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadNotificationPreferences().then(setNotifPrefs).catch(() => {});
   }, []);
 
-  const toggleNotif = useCallback((key: keyof typeof notifPrefs) => {
-    setNotifPrefs(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      void saveNotificationPreferences(next);
-      if (next[key]) {
-        void registerDeviceForPushNotifications(true);
-      }
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      return next;
-    });
-  }, []);
+  const toggleNotif = useCallback(async (key: keyof NotificationPreferences) => {
+    if (savingKey) return;
+    const previous = notifPrefs;
+    const next = { ...previous, [key]: !previous[key] };
+    setNotifPrefs(next);
+    setSavingKey(key);
+    setStatusMessage(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const pushRegistered = next[key]
+      ? await registerDeviceForPushNotifications(true)
+      : true;
+    const prefsSaved = await saveNotificationPreferences(next);
+
+    if (!pushRegistered || !prefsSaved) {
+      setNotifPrefs(previous);
+      await saveNotificationPreferences(previous);
+      setStatusMessage(pushRegistered
+        ? 'Could not save that notification setting. Try again in a moment.'
+        : 'Notifications were not enabled. Check device permissions and try again.');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+
+    setSavingKey(null);
+  }, [notifPrefs, savingKey]);
+
+  const renderSwitch = useCallback((key: keyof NotificationPreferences) => (
+    <Switch
+      value={notifPrefs[key]}
+      onValueChange={() => { void toggleNotif(key); }}
+      disabled={savingKey !== null}
+      trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
+      thumbColor={notifPrefs[key] ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
+    />
+  ), [notifPrefs, savingKey, toggleNotif]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
@@ -149,72 +175,54 @@ export default function NotificationsSettingsScreen() {
           contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
           showsVerticalScrollIndicator={false}
         >
+          {statusMessage ? (
+            <Text style={{ marginHorizontal: 20, marginBottom: 14, color: '#FCA5A5', fontSize: 12, lineHeight: 18, fontWeight: '700' }}>
+              {statusMessage}
+            </Text>
+          ) : null}
           <Animated.View entering={FadeInDown.delay(100).duration(400)}>
             <SettingSection title="ALERTS">
               <SettingItem
                 icon={Activity}
                 title="Game Going Live"
                 subtitle="When a game you picked starts"
-                rightElement={
-                  <Switch
-                    value={notifPrefs.gameLive}
-                    onValueChange={() => toggleNotif('gameLive')}
-                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
-                    thumbColor={notifPrefs.gameLive ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
-                  />
-                }
+                rightElement={renderSwitch('gameLive')}
               />
               <SettingItem
                 icon={Zap}
                 title="Pick Results"
                 subtitle="Win or loss when your pick resolves"
-                rightElement={
-                  <Switch
-                    value={notifPrefs.pickResult}
-                    onValueChange={() => toggleNotif('pickResult')}
-                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
-                    thumbColor={notifPrefs.pickResult ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
-                  />
-                }
+                rightElement={renderSwitch('pickResult')}
               />
               <SettingItem
                 icon={AlertTriangle}
                 title="Prediction Shifts"
                 subtitle="When the model changes its predicted winner"
-                rightElement={
-                  <Switch
-                    value={notifPrefs.predictionShift}
-                    onValueChange={() => toggleNotif('predictionShift')}
-                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
-                    thumbColor={notifPrefs.predictionShift ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
-                  />
-                }
+                rightElement={renderSwitch('predictionShift')}
               />
               <SettingItem
                 icon={TrendingUp}
                 title="Big Game Alerts"
                 subtitle="High-confidence picks 3 hours before tip-off"
-                rightElement={
-                  <Switch
-                    value={notifPrefs.bigGame}
-                    onValueChange={() => toggleNotif('bigGame')}
-                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
-                    thumbColor={notifPrefs.bigGame ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
-                  />
-                }
+                rightElement={renderSwitch('bigGame')}
+              />
+              <SettingItem
+                icon={Bell}
+                title="Game Spotlights"
+                subtitle="Curated matchups and timely reasons to check the board"
+                rightElement={renderSwitch('gameSpotlight')}
+              />
+              <SettingItem
+                icon={AlertTriangle}
+                title="Underdog Alerts"
+                subtitle="When the model finds a live upset path"
+                rightElement={renderSwitch('underdog')}
               />
               <SettingItem
                 icon={Bell}
                 title="Win Streak Milestones"
                 subtitle="Celebrate 5, 7, 10+ correct picks in a row"
-                rightElement={
-                  <Switch
-                    value={notifPrefs.streak}
-                    onValueChange={() => toggleNotif('streak')}
-                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(122,157,184,0.4)' }}
-                    thumbColor={notifPrefs.streak ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
-                  />
-                }
+                rightElement={renderSwitch('streak')}
               />
             </SettingSection>
           </Animated.View>

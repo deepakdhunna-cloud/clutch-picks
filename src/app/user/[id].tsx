@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -11,9 +12,18 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import * as Haptics from 'expo-haptics';
 import { MAROON, TEAL, WIN, LOSS } from '@/lib/theme';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { FeedbackModal } from '@/components/FeedbackModal';
 
 const GLASS_BG = 'rgba(4,5,10,0.97)';
 const GLASS_BORDER = 'rgba(255,255,255,0.13)';
+
+type FeedbackState = {
+  title: string;
+  message: string;
+  variant?: 'success' | 'error' | 'info';
+  onDismiss?: () => void;
+};
 
 interface Pick {
   id: string;
@@ -97,6 +107,8 @@ export default function UserProfileScreen() {
   const unfollowMutation = useUnfollowUser();
   const blockMutation = useBlockUser();
   const reportMutation = useReportUser();
+  const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   const isOwnProfile = currentUserId === id;
   const canViewContent = !profile?.isPrivate || isFollowing || isOwnProfile;
@@ -120,10 +132,18 @@ export default function UserProfileScreen() {
       { userId: id, reason: 'objectionable_content' },
       {
         onSuccess: () => {
-          Alert.alert('Report Sent', 'Thanks. We will review this profile.');
+          setFeedback({
+            title: 'Report Sent',
+            message: 'Thanks. We will review this profile.',
+            variant: 'success',
+          });
         },
         onError: () => {
-          Alert.alert('Report Failed', 'Please try again.');
+          setFeedback({
+            title: 'Report Failed',
+            message: 'Please try again.',
+            variant: 'error',
+          });
         },
       },
     );
@@ -131,27 +151,35 @@ export default function UserProfileScreen() {
 
   const handleBlockUser = () => {
     if (!id || blockMutation.isPending) return;
-    Alert.alert(
-      'Block User',
-      'This removes follow connections and hides this profile from you.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: () => blockMutation.mutate(id, {
-            onSuccess: () => {
-              Alert.alert('User Blocked', 'You will no longer see this profile.', [
-                { text: 'OK', onPress: () => router.back() },
-              ]);
-            },
-            onError: () => {
-              Alert.alert('Block Failed', 'Please try again.');
-            },
-          }),
-        },
-      ],
-    );
+    setBlockConfirmVisible(true);
+  };
+
+  const handleConfirmBlockUser = () => {
+    if (!id || blockMutation.isPending) return;
+    setBlockConfirmVisible(false);
+    blockMutation.mutate(id, {
+      onSuccess: () => {
+        setFeedback({
+          title: 'User Blocked',
+          message: 'You will no longer see this profile.',
+          variant: 'success',
+          onDismiss: () => router.back(),
+        });
+      },
+      onError: () => {
+        setFeedback({
+          title: 'Block Failed',
+          message: 'Please try again.',
+          variant: 'error',
+        });
+      },
+    });
+  };
+
+  const dismissFeedback = () => {
+    const onDismiss = feedback?.onDismiss;
+    setFeedback(null);
+    onDismiss?.();
   };
 
   const handleNavigateToFollowers = () => { router.push(`/followers/${id}?tab=followers` as any); };
@@ -193,6 +221,22 @@ export default function UserProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
+      <ConfirmModal
+        visible={blockConfirmVisible}
+        title="Block User"
+        message="This removes follow connections and hides this profile from you."
+        confirmLabel="Block"
+        destructive
+        onConfirm={handleConfirmBlockUser}
+        onCancel={() => setBlockConfirmVisible(false)}
+      />
+      <FeedbackModal
+        visible={!!feedback}
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+        variant={feedback?.variant}
+        onDismiss={dismissFeedback}
+      />
       <SafeAreaView edges={['top']} style={{ backgroundColor: '#000000' }}>
         <Animated.View entering={FadeInDown.duration(350)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 }}>

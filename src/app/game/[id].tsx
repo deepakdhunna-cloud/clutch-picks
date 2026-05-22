@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Modal,
   RefreshControl,
-  Alert,
   InteractionManager,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -29,7 +28,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
-import { Sport, type Prediction } from '@/types/sports';
+import { Sport, type CanonicalPredictionResult, type Prediction } from '@/types/sports';
 import { useGamePick, useMakePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
@@ -40,6 +39,21 @@ import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { getProjectionDisplay } from '@/lib/projection-display';
+import { getPredictionDisplay } from '@/lib/prediction-display';
+import {
+  getCanonicalConfidence,
+  getCanonicalResult,
+  getCanonicalWinProbabilities,
+} from '@/lib/canonical-result';
+import {
+  cricketInningsContext,
+  cricketLedScoreText,
+  cricketOversText,
+  cricketRequiredText,
+  cricketRoleText,
+  cricketStatusText,
+  teamScoreText,
+} from '@/lib/cricket-score';
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Tv, X } from 'lucide-react-native';
@@ -397,6 +411,7 @@ interface PredictionFactor {
 interface GamePrediction {
   id: string;
   gameId: string;
+  canonicalResult?: CanonicalPredictionResult;
   predictedWinner: 'home' | 'away';
   predictedOutcome?: 'home' | 'away' | 'draw';
   confidence: number;
@@ -452,6 +467,8 @@ interface Game {
   tvChannels?: unknown;
   homeScore?: number;
   awayScore?: number;
+  homeScoreDisplay?: string;
+  awayScoreDisplay?: string;
   spread?: number;
   overUnder?: number;
   marketFavorite?: 'home' | 'away';
@@ -465,6 +482,61 @@ interface Game {
   } | null;
   homeLinescores?: number[];
   awayLinescores?: number[];
+  cricketState?: {
+    home?: {
+      runs?: number;
+      wickets?: number;
+      overs?: number;
+      maxOvers?: number;
+      isBatting?: boolean;
+      scoreText: string;
+      detailText?: string;
+    };
+    away?: {
+      runs?: number;
+      wickets?: number;
+      overs?: number;
+      maxOvers?: number;
+      isBatting?: boolean;
+      scoreText: string;
+      detailText?: string;
+    };
+    battingSide?: 'home' | 'away';
+    innings?: number | null;
+    summary?: string;
+    target?: number;
+    currentBatters?: Array<{
+      name: string;
+      role: 'striker' | 'non-striker';
+      runs?: number;
+      balls?: number;
+    }>;
+    currentBowler?: {
+      name: string;
+      overs?: string;
+      runsConceded?: number;
+      wickets?: number;
+    };
+    overTrack?: Array<{
+      over: number;
+      runs: number;
+      wickets: number;
+      complete?: boolean;
+    }>;
+    currentOver?: {
+      over: number;
+      runs: number;
+      wickets: number;
+      complete?: boolean;
+      balls: Array<{
+        ball: number;
+        label: string;
+        runs: number;
+        wicket?: boolean;
+        extra?: 'wide' | 'noball' | 'bye' | 'legbye';
+      }>;
+    };
+  };
   liveState?: {
     balls: number;
     strikes: number;
@@ -591,8 +663,8 @@ function QuarterTable({ game }: { game: Game }) {
         </View>
       </View>
       {[
-        { team: homeTeam, total: game.homeScore, colors: homeColors, winning: homeWinning, line: homeLine },
-        { team: awayTeam, total: game.awayScore, colors: awayColors, winning: awayWinning, line: awayLine },
+        { team: homeTeam, total: teamScoreText(game, 'home'), colors: homeColors, winning: homeWinning, line: homeLine },
+        { team: awayTeam, total: teamScoreText(game, 'away'), colors: awayColors, winning: awayWinning, line: awayLine },
       ].map(({ team, total, colors, winning, line }, ri) => (
         <View key={team.id} style={[styles.tableRow, ri === 0 && { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }]}>
           <View style={styles.tableTeamCell}>
@@ -621,10 +693,159 @@ function QuarterTable({ game }: { game: Game }) {
             </View>
           ))}
           <View style={[styles.tableScoreCell, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' }]}>
-            <Text style={[styles.tableTotalText, winning && !tied && { color: colors.primary }]}>{total ?? ''}</Text>
+            <Text style={[styles.tableTotalText, winning && !tied && { color: colors.primary }]}>{total}</Text>
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+function CricketHeroTeamStack({
+  game,
+  side,
+  colors,
+  jersey,
+  showScore = true,
+}: {
+  game: Game;
+  side: 'home' | 'away';
+  colors: { primary: string; secondary: string };
+  jersey: React.ReactNode;
+  showScore?: boolean;
+}) {
+  const role = cricketRoleText(game, side);
+  if (!role) return <>{jersey}</>;
+
+  const batting = role === 'BATTING';
+  const score = teamScoreText(game, side);
+  const batters = [...(game.cricketState?.currentBatters ?? [])]
+    .sort((a, b) => {
+      if (a.role === b.role) return 0;
+      return a.role === 'striker' ? -1 : 1;
+    });
+  const bowlerName = game.cricketState?.currentBowler?.name ?? '';
+
+  return (
+    <View style={styles.cricketHeroTeamColumn}>
+      {showScore ? (
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.74}
+          style={[
+            styles.cricketHeroScore,
+            {
+              color: batting ? colors.primary : 'rgba(255,255,255,0.82)',
+              opacity: batting ? 1 : 0.72,
+            },
+          ]}
+        >
+          {score}
+        </Text>
+      ) : null}
+      {jersey}
+      <View style={styles.cricketHeroPlayerBlock}>
+        <Text style={[styles.cricketHeroRoleText, { color: batting ? colors.primary : 'rgba(255,255,255,0.52)' }]}>
+          {batting ? 'BATTING' : 'BOWLING'}
+        </Text>
+        {batting ? (
+          <View style={styles.cricketHeroBatterStack}>
+            {batters.length ? (
+              batters.slice(0, 2).map((batter) => (
+                <Text
+                  key={`${batter.role}-${batter.name}`}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={[styles.cricketHeroPlayerName, batter.role === 'striker' && { color: '#FFFFFF' }]}
+                >
+                  {batter.name}{batter.role === 'striker' ? '*' : ''}
+                </Text>
+              ))
+            ) : (
+              <Text style={[styles.cricketHeroPlayerName, { color: 'rgba(255,255,255,0.48)' }]}>—</Text>
+            )}
+          </View>
+        ) : (
+          <Text
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            style={[styles.cricketHeroPlayerName, { color: batting ? '#FFFFFF' : 'rgba(255,255,255,0.74)' }]}
+          >
+            {bowlerName || '—'}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function CricketCurrentOverPanel({
+  game,
+  homeColor,
+  awayColor,
+  context,
+}: {
+  game: Game;
+  homeColor: string;
+  awayColor: string;
+  context: { label: string; value: string; detail: string } | null;
+}) {
+  const currentOver = game.cricketState?.currentOver;
+  if (!currentOver && !context) return null;
+  const battingColor = game.cricketState?.battingSide === 'away' ? awayColor : homeColor;
+  const ballSlots = currentOver?.balls?.length ? currentOver.balls : [];
+
+  return (
+    <View style={styles.cricketLivePanel}>
+      {context ? (
+        <View style={[styles.cricketTargetBlock, !currentOver && styles.cricketTargetBlockWide]}>
+          <Text style={styles.cricketTargetLabel}>{context.label}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68} style={[styles.cricketTargetValue, { color: battingColor }]}>{context.value}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.cricketTargetDetail}>
+            {context.detail}
+          </Text>
+        </View>
+      ) : null}
+      {currentOver ? (
+        <View style={[styles.cricketCurrentOverBlock, !context && { flex: 1 }]}>
+          <View style={styles.cricketCurrentOverHeader}>
+            <Text style={styles.cricketTrackLabel}>OVER {currentOver.over}</Text>
+            <Text style={styles.cricketTrackKey}>
+              {currentOver.runs} RUN{currentOver.runs === 1 ? '' : 'S'}{currentOver.wickets ? ` · ${currentOver.wickets} W` : ''}
+            </Text>
+          </View>
+          <View style={styles.cricketBallRow}>
+            {ballSlots.map((ball, index) => {
+              const boundary = ball.label === '4' || ball.label === '6';
+              const wicket = ball.wicket === true;
+              const extra = Boolean(ball.extra);
+              return (
+                <View
+                  key={`${ball.ball}-${index}-${ball.label}`}
+                  style={[
+                    styles.cricketBallChip,
+                    {
+                      borderColor: wicket ? '#FFFFFF' : boundary ? battingColor : 'rgba(255,255,255,0.14)',
+                      backgroundColor: wicket ? '#FFFFFF' : boundary ? `${battingColor}33` : extra ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.24)',
+                      shadowColor: wicket ? '#FFFFFF' : battingColor,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.cricketBallText, { color: wicket ? battingColor : boundary ? '#FFFFFF' : 'rgba(255,255,255,0.82)' }]}>
+                    {ball.label}
+                  </Text>
+                </View>
+              );
+            })}
+            {Array.from({ length: Math.max(0, 6 - ballSlots.length) }).map((_, index) => (
+              <View key={`empty-${index}`} style={styles.cricketBallEmpty} />
+            ))}
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -637,59 +858,75 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
     <Pressable onPress={onUnlock}>
       <View style={{
         borderRadius: 22,
-        padding: 2,
-        backgroundColor: 'rgba(139,10,31,0.10)',
+        padding: 1.2,
+        backgroundColor: 'rgba(122,157,184,0.18)',
         overflow: 'hidden',
       }}>
         <LinearGradient
-          colors={['rgba(139,10,31,0.15)', 'rgba(122,157,184,0.08)', 'rgba(139,10,31,0.12)']}
+          colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
         />
         <View style={{
-          backgroundColor: '#040608',
+          backgroundColor: 'rgba(5,8,13,0.96)',
           borderRadius: 20,
           overflow: 'hidden',
+          borderWidth: 1,
+          borderColor: 'rgba(122,157,184,0.10)',
         }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(122,157,184,0.15)', 'rgba(255,255,255,0.025)', 'rgba(139,10,31,0.08)', 'rgba(5,8,13,0.96)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 1 }}
+          />
           <View style={{ padding: 16 }}>
             {/* Header — visible, but winner replaced with redacted bar */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <View>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Clutch Pick</Text>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#7A9DB8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Clutch Pick</Text>
                 {/* Redacted team name — blurry bar, not the actual name */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 140, height: 18, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}>
-                    <View style={{ position: 'absolute', inset: 0, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
-                      <View style={{ width: '70%', height: '100%', backgroundColor: 'rgba(255,255,255,0.03)' }} />
+                  <View style={{ width: 140, height: 18, borderRadius: 6, backgroundColor: 'rgba(180,211,235,0.10)' }}>
+                    <View style={{ position: 'absolute', inset: 0, borderRadius: 6, backgroundColor: 'rgba(180,211,235,0.05)', overflow: 'hidden' }}>
+                      <View style={{ width: '70%', height: '100%', backgroundColor: 'rgba(180,211,235,0.04)' }} />
                     </View>
                   </View>
-                  <View style={{ width: 60, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+                  <View style={{ width: 60, height: 14, borderRadius: 4, backgroundColor: 'rgba(180,211,235,0.07)' }} />
                 </View>
               </View>
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
-                <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.8 }}>PRO</Text>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(139,10,31,0.14)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.30)' }}>
+                <Text style={{ fontSize: 8, fontWeight: '900', color: 'rgba(255,255,255,0.82)', letterSpacing: 1.1 }}>PRO</Text>
               </View>
             </View>
 
             {/* Confidence bar — shows shape but hides the actual number */}
             <View style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Pick Strength</Text>
-                <View style={{ width: 32, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(180,211,235,0.52)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Pick Strength</Text>
+                <View style={{ width: 32, height: 14, borderRadius: 4, backgroundColor: 'rgba(180,211,235,0.08)' }} />
               </View>
               <View style={{ flexDirection: 'row', gap: 2.5 }}>
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < 7 ? 'rgba(139,10,31,0.15)' : 'rgba(255,255,255,0.04)' }} />
+                  <View key={i} style={{ flex: 1, height: 5, borderRadius: 2.5, backgroundColor: i < 7 ? 'rgba(122,157,184,0.24)' : 'rgba(255,255,255,0.04)' }} />
                 ))}
               </View>
             </View>
 
             {/* Analysis text — redacted shimmer lines, not real text */}
             <View style={{ marginBottom: 16, gap: 6 }}>
-              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.05)', width: '95%' }} />
-              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.04)', width: '88%' }} />
-              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.035)', width: '72%' }} />
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(180,211,235,0.08)', width: '95%' }} />
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(180,211,235,0.06)', width: '88%' }} />
+              <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(180,211,235,0.045)', width: '72%' }} />
             </View>
 
             {/* Stat tile — visible label, redacted value */}
@@ -700,16 +937,18 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
               </View>
             </View>
             {/* Unlock CTA inside the card */}
-            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(139,10,31,0.1)' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(139,10,31,0.08)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.15)' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 8, fontWeight: '900', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
+            <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(122,157,184,0.10)' }}>
+              <LinearGradient colors={['rgba(122,157,184,0.20)', 'rgba(139,10,31,0.14)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 12, padding: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, borderRadius: 11, backgroundColor: 'rgba(5,8,13,0.78)' }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: 'rgba(122,157,184,0.10)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.22)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 8, fontWeight: '900', color: '#9AB8CC', letterSpacing: 0.5 }}>PRO</Text>
+                  </View>
+                  <View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>AI pick is ready</Text>
+                  <Text style={{ fontSize: 11, color: 'rgba(180,211,235,0.46)' }}>Pick strength, analysis, and detailed breakdown</Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Unlock Clutch Picks Pro</Text>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Pick strength, analysis, and detailed breakdown</Text>
-                </View>
-              </View>
+              </LinearGradient>
             </View>
           </View>
         </View>
@@ -722,25 +961,42 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
 function RedactedWinProb({ homeTeam, awayTeam, onUnlock }: {
   homeTeam: GameTeam; awayTeam: GameTeam; onUnlock: () => void;
 }) {
-  const hColor = safeTeamColor(homeTeam.color);
-  const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
   return (
     <Pressable onPress={onUnlock}>
       <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: hColor, letterSpacing: 0.4 }}>{homeTeam.abbreviation}</Text>
-          <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: aColor, letterSpacing: 0.4 }}>{awayTeam.abbreviation}</Text>
-        </View>
-        {/* Bar with equal split — doesn't reveal the actual probability */}
-        <View style={{ height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', overflow: 'hidden', position: 'relative' }}>
-          <View style={{ flex: 1, backgroundColor: `${hColor}30`, borderRadius: 5 }} />
-          <View style={{ flex: 1, backgroundColor: `${aColor}30`, borderRadius: 5 }} />
-          {/* Centered lock */}
-          <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -10, width: 20, height: 20, borderRadius: 6, backgroundColor: 'rgba(4,6,8,0.9)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.3)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 6, fontWeight: '900', color: '#8B0A1F' }}>PRO</Text>
+        <LinearGradient
+          colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ borderRadius: 16, padding: 1 }}
+        >
+          <View style={{ borderRadius: 15, backgroundColor: 'rgba(5,8,13,0.92)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', padding: 12, overflow: 'hidden' }}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(122,157,184,0.11)', 'rgba(255,255,255,0.02)', 'rgba(139,10,31,0.06)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: '#9AB8CC', letterSpacing: 0.6 }}>{homeTeam.abbreviation}</Text>
+              <Text style={{ fontSize: 8, fontWeight: '900', color: 'rgba(180,211,235,0.56)', letterSpacing: 1.2, textTransform: 'uppercase' }}>Win Probability</Text>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(224,234,240,0.66)', letterSpacing: 0.6 }}>{awayTeam.abbreviation}</Text>
+            </View>
+            <View style={{ height: 9, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.04)', overflow: 'hidden', position: 'relative' }}>
+              <LinearGradient
+                colors={['rgba(122,157,184,0.36)', 'rgba(139,10,31,0.18)', 'rgba(224,234,240,0.10)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ width: '72%', height: '100%', borderRadius: 5 }}
+              />
+              <View style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+            </View>
+            <View style={{ alignSelf: 'center', marginTop: 8, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: 'rgba(139,10,31,0.14)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.30)' }}>
+              <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: '900', color: 'rgba(255,255,255,0.82)', letterSpacing: 1.1 }}>PRO</Text>
+            </View>
           </View>
-        </View>
+        </LinearGradient>
       </View>
     </Pressable>
   );
@@ -756,27 +1012,34 @@ function RedactedSection({ title, height, onUnlock }: {
       <Pressable onPress={onUnlock}>
         <View style={{
           height,
-          borderRadius: 16,
-          backgroundColor: 'rgba(255,255,255,0.02)',
+          borderRadius: 18,
+          backgroundColor: 'rgba(5,8,13,0.96)',
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.05)',
+          borderColor: 'rgba(122,157,184,0.14)',
           overflow: 'hidden',
           position: 'relative',
         }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(122,157,184,0.13)', 'rgba(255,255,255,0.025)', 'rgba(139,10,31,0.06)', 'rgba(5,8,13,0.95)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
           {/* Simulated content shapes inside */}
           <View style={{ padding: 14, gap: 10 }}>
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)' }} />
-              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)' }} />
+              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(180,211,235,0.06)' }} />
+              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(180,211,235,0.05)' }} />
             </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.025)' }} />
-              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.025)' }} />
+              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(180,211,235,0.045)' }} />
+              <View style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(180,211,235,0.04)' }} />
             </View>
             {height > 130 ? (
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {[1, 2, 3, 4, 5, 6].map(n => (
-                  <View key={n} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.03)' }} />
+                  <View key={n} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(180,211,235,0.045)' }} />
                 ))}
               </View>
             ) : null}
@@ -785,16 +1048,16 @@ function RedactedSection({ title, height, onUnlock }: {
           {/* Frosted overlay */}
           <View style={{
             ...StyleSheet.absoluteFillObject,
-            backgroundColor: 'rgba(4,6,8,0.6)',
+            backgroundColor: 'rgba(4,6,8,0.58)',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
             <View style={{ alignItems: 'center' }}>
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 9, fontWeight: '900', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
+              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.28)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 9, fontWeight: '900', color: '#9AB8CC', letterSpacing: 0.5 }}>PRO</Text>
               </View>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Unlock Clutch Picks Pro</Text>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>Tap to subscribe</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>Pro view available</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(180,211,235,0.46)', marginTop: 2 }}>Tap to preview</Text>
             </View>
           </View>
         </View>
@@ -818,7 +1081,8 @@ function safeTeamColor(color: string, fallback: string = '#5A7A8A'): string {
 }
 
 function WinProbBar({ prediction, homeTeam, awayTeam }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam }) {
-  const dp = displayWinProbability(prediction.homeWinProbability, prediction.awayWinProbability);
+  const canonicalProbabilities = getCanonicalWinProbabilities(prediction as Prediction);
+  const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away);
   const hColor = safeTeamColor(homeTeam.color);
   const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
   return (
@@ -876,7 +1140,12 @@ function ConfidenceBarSegment({ index, filled }: { index: number; filled: boolea
 
 function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, seasonContext }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport']; gameId: string; seasonContext?: Game['seasonContext'] }) {
   const router = useRouter();
-  const winner = prediction.predictedWinner === 'home' ? homeTeam : awayTeam;
+  const predictionDisplay = getPredictionDisplay({
+    prediction: prediction as Prediction,
+    homeTeam,
+    awayTeam,
+  });
+  const winnerName = predictionDisplay.label;
   const displayAnalysis = displayPredictionAnalysis({
     sport,
     homeTeam,
@@ -885,12 +1154,11 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
     prediction: prediction as any,
   } as any);
   const SEGS = 10;
-  const conf = prediction.confidence;
+  const conf = getCanonicalConfidence(prediction as Prediction);
   const filledSegs = Math.round((conf / 100) * SEGS);
 
   // Tier mapping (canonical — single source of truth in display-confidence.ts)
-  const isTossUp = prediction.isTossUp || conf < 53;
-  const tier = getConfidenceTier(conf, isTossUp);
+  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp);
 
   const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
   const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
@@ -1002,7 +1270,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                 CLUTCH PICK
               </Text>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 }}>
-                {winner.name}
+                {winnerName}
               </Text>
             </View>
             {null}
@@ -1053,7 +1321,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
           </View>
 
           {/* Vegas Market — populated only when backend has SHARPAPI_KEY. */}
-          <VegasMarketBlock prediction={prediction} winnerName={winner.name} />
+          <VegasMarketBlock prediction={prediction} winnerName={predictionDisplay.team?.name ?? null} />
         </View>
       </View>
     </View>
@@ -1121,9 +1389,11 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
     sport,
     homeAbbr: homeTeam.abbreviation,
     awayAbbr: awayTeam.abbreviation,
+    canonicalResult: getCanonicalResult(prediction as Prediction),
     predictedWinner: prediction.predictedWinner,
     predictedOutcome: prediction.predictedOutcome,
-    confidence: prediction.confidence,
+    confidence: getCanonicalConfidence(prediction as Prediction),
+    isTossUp: getPredictionDisplay({ prediction: prediction as Prediction, homeTeam, awayTeam }).isTossUp,
     projection,
   });
 
@@ -1131,11 +1401,7 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
     <View style={styles.projectionSectionShell}>
       <View style={styles.projectionSectionCard}>
         <View style={styles.projectionHeaderRow}>
-          <View>
-            <Text style={styles.projectionEyebrow}>{isLive ? 'Live Projection' : 'Projection Board'}</Text>
-            <Text style={styles.projectionSub}>{projectionDisplay.contextText}</Text>
-          </View>
-          <Text style={styles.projectionLeanBadge}>{projectionDisplay.leanText}</Text>
+          <Text style={styles.projectionEyebrow}>{isLive ? 'Live Projection' : 'Projection Board'}</Text>
         </View>
 
         <View style={styles.projectionTrackerStack}>
@@ -1177,7 +1443,7 @@ function VegasMarketBlock({
   winnerName,
 }: {
   prediction: Prediction;
-  winnerName: string;
+  winnerName: string | null;
 }) {
   const mc = prediction.marketComparison;
   if (!mc) return null;
@@ -1225,7 +1491,7 @@ function VegasMarketBlock({
         </View>
       ) : null}
 
-      {mc.bestBook ? (
+      {mc.bestBook && winnerName ? (
         <Text style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
           Best line on {winnerName}: {formatAmerican(mc.bestBook.american)} at {mc.bestBook.sportsbook}
         </Text>
@@ -1272,26 +1538,30 @@ function RecentForm({ game }: { game: Game }) {
               </View>
               <Text style={styles.formRecord}>{team.record}</Text>
             </View>
+            {form.split('').filter((c: string) => c === 'W' || c === 'L' || c === 'D').length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={true} decelerationRate="fast">
-              {form.split('').filter((c: string) => c === 'W' || c === 'L').slice(0, 10).map((r: string, i: number) => (
+              {form.split('').filter((c: string) => c === 'W' || c === 'L' || c === 'D').slice(0, 10).map((r: string, i: number) => (
                 <View key={i} style={{
                   width: 28,
                   height: 28,
                   borderRadius: 8,
-                  backgroundColor: r === 'W' ? 'rgba(122,157,184,0.15)' : 'rgba(239,68,68,0.10)',
+                  backgroundColor: r === 'W' ? 'rgba(122,157,184,0.15)' : r === 'D' ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.10)',
                   borderWidth: 1,
-                  borderColor: r === 'W' ? 'rgba(122,157,184,0.3)' : 'rgba(239,68,68,0.2)',
+                  borderColor: r === 'W' ? 'rgba(122,157,184,0.3)' : r === 'D' ? 'rgba(255,255,255,0.14)' : 'rgba(239,68,68,0.2)',
                   alignItems: 'center' as const,
                   justifyContent: 'center' as const,
                 }}>
                   <Text style={{
-                    color: r === 'W' ? '#7A9DB8' : '#EF4444',
+                    color: r === 'W' ? '#7A9DB8' : r === 'D' ? 'rgba(255,255,255,0.55)' : '#EF4444',
                     fontSize: 10,
                     fontWeight: '800',
                   }}>{r}</Text>
                 </View>
               ))}
             </ScrollView>
+            ) : (
+              <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '600' }}>Recent results are warming up for this team.</Text>
+            )}
           </View>
         ))}
       </View>
@@ -1544,11 +1814,19 @@ export default function GameDetailScreen() {
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
+  const predictionFactors = prediction?.factors ?? [];
   const isLive = game.status === 'LIVE';
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
+  const cricketLiveStatus = cricketStatusText(game);
+  const cricketOvers = !suspended ? cricketOversText(game) : null;
+  const cricketRequired = !suspended ? cricketRequiredText(game) : null;
   const isLiveMLB = isLive && game.sport === 'MLB' && !!game.liveState;
+  const isLiveCricket = isLive && game.sport === 'IPL';
+  const cricketLedScore = !suspended && isLiveCricket ? cricketLedScoreText(game) : null;
+  const cricketContext = !suspended && isLiveCricket ? cricketInningsContext(game) : null;
+  const cricketClockText = cricketOvers;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
   // Pre-game countdown state — true while the game is SCHEDULED and tip-off
   // is within the COUNTDOWN_WINDOW_SEC window (1 hour). Drives both the LED
@@ -1558,7 +1836,7 @@ export default function GameDetailScreen() {
   const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
   const scoreTextLength = `${game.homeScore ?? 0}-${game.awayScore ?? 0}`.length;
-  const detailScoreboardScale = suspended ? 0.7 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
+  const detailScoreboardScale = suspended ? 0.7 : isLiveCricket ? 1.22 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }}>
       {deferredContentReady ? <SilkThreads /> : null}
@@ -1640,14 +1918,33 @@ export default function GameDetailScreen() {
               />
             ) : (
             <View style={[styles.jerseyRow, { zIndex: 1 }]}>
-              <TappableJerseyHero
-                team={homeTeam}
-                isSelected={userPick?.pickedTeam === 'home'}
-                onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('home'); }}
-                isDisabled={gameStarted}
-                jerseyType={jerseyType}
-                sport={game.sport}
-              />
+              {isLiveCricket ? (
+                <CricketHeroTeamStack
+                  game={game}
+                  side="home"
+                  colors={homeColors}
+                  showScore={false}
+                  jersey={
+                    <TappableJerseyHero
+                      team={homeTeam}
+                      isSelected={userPick?.pickedTeam === 'home'}
+                      onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('home'); }}
+                      isDisabled={gameStarted}
+                      jerseyType={jerseyType}
+                      sport={game.sport}
+                    />
+                  }
+                />
+              ) : (
+                <TappableJerseyHero
+                  team={homeTeam}
+                  isSelected={userPick?.pickedTeam === 'home'}
+                  onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('home'); }}
+                  isDisabled={gameStarted}
+                  jerseyType={jerseyType}
+                  sport={game.sport}
+                />
+              )}
               <View style={styles.scorePanelOuter}>
                 <View style={[
                   styles.scorePanel,
@@ -1663,14 +1960,26 @@ export default function GameDetailScreen() {
                       awayColor={awayColors.primary}
                       scale={detailScoreboardScale}
                       label={suspended ? 'SUSPENDED' : undefined}
+                      displayText={cricketLedScore ?? undefined}
                       subLabel={suspended ? suspensionReason : undefined}
                       detailLabel={suspended ? suspensionTime : undefined}
                     />
                   ) : null}
                   {(() => {
-                    const timeStr = isLive && !suspended ? formatGameTime(game.sport, game.quarter, game.clock) : null;
+                    const timeStr = isLive && !suspended
+                      ? cricketClockText ?? cricketLiveStatus ?? formatGameTime(game.sport, game.quarter, game.clock)
+                      : null;
                     if (timeStr) {
-                      return <Text style={styles.scoreClock}>{timeStr}</Text>;
+                      return (
+                        <>
+                          <Text style={styles.scoreClock}>{timeStr}</Text>
+                          {cricketRequired ? (
+                            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.cricketRequiredLine}>
+                              {cricketRequired}
+                            </Text>
+                          ) : null}
+                        </>
+                      );
                     }
                     // For non-live games, show the status (SCHEDULED / FINAL / etc.)
                     // and — for scheduled games — the actual tip-off time underneath.
@@ -1693,18 +2002,45 @@ export default function GameDetailScreen() {
                   })()}
                 </View>
               </View>
-              <TappableJerseyHero
-                team={awayTeam}
-                isSelected={userPick?.pickedTeam === 'away'}
-                onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('away'); }}
-                isDisabled={gameStarted}
-                jerseyType={jerseyType}
-                sport={game.sport}
-              />
+              {isLiveCricket ? (
+                <CricketHeroTeamStack
+                  game={game}
+                  side="away"
+                  colors={awayColors}
+                  showScore={false}
+                  jersey={
+                    <TappableJerseyHero
+                      team={awayTeam}
+                      isSelected={userPick?.pickedTeam === 'away'}
+                      onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('away'); }}
+                      isDisabled={gameStarted}
+                      jerseyType={jerseyType}
+                      sport={game.sport}
+                    />
+                  }
+                />
+              ) : (
+                <TappableJerseyHero
+                  team={awayTeam}
+                  isSelected={userPick?.pickedTeam === 'away'}
+                  onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('away'); }}
+                  isDisabled={gameStarted}
+                  jerseyType={jerseyType}
+                  sport={game.sport}
+                />
+              )}
             </View>
             )}
           </View>
           </View>
+          {isLiveCricket && !suspended ? (
+            <CricketCurrentOverPanel
+              game={game}
+              homeColor={homeColors.primary}
+              awayColor={awayColors.primary}
+              context={cricketContext}
+            />
+          ) : null}
           {prediction ? <View style={{ paddingTop: 20 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}
           <WhereToWatchRow
             primaryChannel={game.tvChannel}
@@ -1736,7 +2072,7 @@ export default function GameDetailScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.analysisLinkTitle}>Why We Made This Pick</Text>
-                  <Text style={styles.analysisLinkSub}>{prediction.factors.length} factors · {prediction.factors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
+                  <Text style={styles.analysisLinkSub}>{predictionFactors.length} factors · {predictionFactors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
                 </View>
                 <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', fontWeight: '600' }}>›</Text>
               </Pressable>
@@ -1772,7 +2108,7 @@ export default function GameDetailScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.analysisLinkTitle}>Why We Made This Pick</Text>
-                  <Text style={styles.analysisLinkSub}>{prediction.factors.length} factors · {prediction.factors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
+                  <Text style={styles.analysisLinkSub}>{predictionFactors.length} factors · {predictionFactors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
                 </View>
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
                   <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
@@ -1795,22 +2131,22 @@ export default function GameDetailScreen() {
         teamColor={pendingPick === 'home' ? homeTeam.color : awayTeam.color}
         sport={game.sport as Sport}
         isChanging={!!userPick && userPick.pickedTeam !== pendingPick}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (pendingPick && id) {
-            makePick.mutate({
+            try {
+              await makePick.mutateAsync({
               gameId: id,
               pickedTeam: pendingPick,
               homeTeam: game.homeTeam.abbreviation,
               awayTeam: game.awayTeam.abbreviation,
               sport: game.sport,
-            }, {
-              onError: () => {
-                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                Alert.alert('Pick Not Saved', 'Please check your connection and try again.');
-              },
-            });
+              });
+              return true;
+            } catch {
+              return false;
+            }
           }
-          setPendingPick(null);
+          return false;
         }}
         onCancel={() => setPendingPick(null)}
       />
@@ -1833,9 +2169,29 @@ const styles = StyleSheet.create({
   teamName: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: -0.3, lineHeight: 22 },
   teamRecord: { fontSize: 12, color: '#ffffff', marginTop: 2 },
   jerseyRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 16 },
+  cricketHeroTeamColumn: { width: 106, alignItems: 'center' },
+  cricketHeroScore: { fontSize: 30, lineHeight: 34, fontFamily: 'VT323_400Regular', letterSpacing: 1, marginBottom: 1 },
+  cricketHeroPlayerBlock: { width: 112, minHeight: 43, marginTop: -2, alignItems: 'center', justifyContent: 'flex-start' },
+  cricketHeroBatterStack: { width: '100%', marginTop: 2, gap: 1 },
+  cricketHeroRoleText: { fontSize: 8, lineHeight: 10, fontWeight: '900', letterSpacing: 1.1, textAlign: 'center' },
+  cricketHeroPlayerName: { color: 'rgba(255,255,255,0.76)', fontSize: 10.5, lineHeight: 12.5, fontWeight: '800', textAlign: 'center' },
+  cricketLivePanel: { marginHorizontal: 16, marginTop: 12, minHeight: 72, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(2,3,5,0.32)', padding: 10, flexDirection: 'row', alignItems: 'stretch', gap: 10 },
+  cricketTargetBlock: { width: 86, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.34)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  cricketTargetBlockWide: { flex: 1, width: undefined },
+  cricketTargetLabel: { color: 'rgba(255,255,255,0.46)', fontSize: 7, lineHeight: 9, fontWeight: '900', letterSpacing: 1.3 },
+  cricketTargetValue: { fontSize: 24, lineHeight: 27, fontFamily: 'VT323_400Regular', letterSpacing: 1, marginTop: 1 },
+  cricketTargetDetail: { color: 'rgba(255,255,255,0.68)', fontSize: 8, lineHeight: 10, fontWeight: '800', textAlign: 'center' },
+  cricketCurrentOverBlock: { flex: 1, minWidth: 0, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.035)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 10, paddingVertical: 8, justifyContent: 'center' },
+  cricketCurrentOverHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
+  cricketTrackLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 8, fontWeight: '900', letterSpacing: 1.7 },
+  cricketTrackKey: { color: 'rgba(255,255,255,0.36)', fontSize: 7, fontWeight: '900', letterSpacing: 1.3 },
+  cricketBallRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cricketBallChip: { minWidth: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.18, shadowRadius: 7 },
+  cricketBallEmpty: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', backgroundColor: 'rgba(255,255,255,0.025)' },
+  cricketBallText: { fontSize: 9.5, lineHeight: 12, fontWeight: '900', letterSpacing: 0.2 },
   scoringWatermark: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -190 }, { translateY: -110 }], zIndex: 0, opacity: 0.5 },
   scorePanelOuter: { flex: 1, alignItems: 'center', paddingBottom: 8 },
-  scorePanel: { paddingHorizontal: 22, paddingVertical: 14, alignItems: 'center' },
+  scorePanel: { paddingHorizontal: 22, paddingVertical: 14, alignItems: 'center', position: 'relative' },
   scorePanelBoard: { paddingHorizontal: 0, paddingVertical: 10 },
   scoreNumber: { fontSize: 72, fontFamily: 'VT323_400Regular', lineHeight: 78, letterSpacing: 2 },
   scoreNumberShrunk: { fontSize: 54, lineHeight: 60 },
@@ -1843,6 +2199,7 @@ const styles = StyleSheet.create({
   scoreSepShrunk: { fontSize: 22, lineHeight: 60 },
   scoreClock: { fontSize: 22, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
+  cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },
   projectionSectionShell: {
     borderRadius: 18,
@@ -1866,9 +2223,7 @@ const styles = StyleSheet.create({
   },
   projectionHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
     marginBottom: 12,
   },
   projectionEyebrow: {
@@ -1876,26 +2231,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: 'rgba(255,255,255,0.94)',
     letterSpacing: 0,
-  },
-  projectionSub: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: 'rgba(226,240,249,0.34)',
-    marginTop: 2,
-  },
-  projectionLeanBadge: {
-    maxWidth: 122,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(226,240,249,0.12)',
-    fontSize: 9,
-    fontWeight: '900',
-    color: 'rgba(218,238,251,0.86)',
-    textAlign: 'right',
   },
   projectionTrackerStack: {
     paddingTop: 4,

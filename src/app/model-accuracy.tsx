@@ -59,7 +59,7 @@ export default function ModelAccuracyScreen() {
   const { data: calibration, isLoading: loadingCalibration } = useCalibration();
 
   const isLoading = loadingAcc || loadingDrift || loadingCalibration;
-  const hasEnoughData = (accuracy?.overall.totalResolved ?? 0) >= 50;
+  const hasEnoughData = (accuracy?.overall?.totalResolved ?? 0) >= 50;
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -83,18 +83,18 @@ export default function ModelAccuracyScreen() {
               <Text style={s.cardTitle}>Overall Accuracy</Text>
               {hasEnoughData ? (
                 <View style={{ alignItems: 'center', marginTop: 8 }}>
-                  <Text style={[s.bigNumber, { color: (accuracy?.overall.overallAccuracy ?? 0) >= 55 ? GREEN_UP : LOSS }]}>
-                    {accuracy?.overall.overallAccuracy ?? 0}%
+                  <Text style={[s.bigNumber, { color: (accuracy?.overall?.overallAccuracy ?? 0) >= 55 ? GREEN_UP : LOSS }]}>
+                    {accuracy?.overall?.overallAccuracy ?? 0}%
                   </Text>
                   <Text style={s.subtitle}>
-                    {accuracy?.overall.totalCorrect} correct out of {accuracy?.overall.totalResolved} resolved
+                    {accuracy?.overall?.totalCorrect ?? 0} correct out of {accuracy?.overall?.totalResolved ?? 0} resolved
                   </Text>
                 </View>
               ) : (
                 <View style={{ alignItems: 'center', marginTop: 8 }}>
                   <Text style={s.bigNumber}>--</Text>
                   <Text style={s.subtitle}>
-                    Building track record... ({accuracy?.overall.totalResolved ?? 0}/50 predictions resolved)
+                    Building track record... ({accuracy?.overall?.totalResolved ?? 0}/50 predictions resolved)
                   </Text>
                 </View>
               )}
@@ -112,9 +112,9 @@ export default function ModelAccuracyScreen() {
                     </Text>
                   </View>
                   <View style={s.statRow}>
-                    <StatItem label="7-day" value={drift.rollingAccuracy7d != null ? `${drift.rollingAccuracy7d}%` : '--'} count={drift.sample.last7d} />
-                    <StatItem label="30-day" value={drift.rollingAccuracy30d != null ? `${drift.rollingAccuracy30d}%` : '--'} count={drift.sample.last30d} />
-                    <StatItem label="All-time" value={drift.allTimeAccuracy != null ? `${drift.allTimeAccuracy}%` : '--'} count={drift.sample.total} />
+                    <StatItem label="7-day" value={drift.rollingAccuracy7d != null ? `${drift.rollingAccuracy7d}%` : '--'} count={drift.sample?.last7d ?? 0} />
+                    <StatItem label="30-day" value={drift.rollingAccuracy30d != null ? `${drift.rollingAccuracy30d}%` : '--'} count={drift.sample?.last30d ?? 0} />
+                    <StatItem label="All-time" value={drift.allTimeAccuracy != null ? `${drift.allTimeAccuracy}%` : '--'} count={drift.sample?.total ?? 0} />
                   </View>
                 </View>
               ) : null}
@@ -124,7 +124,7 @@ export default function ModelAccuracyScreen() {
             <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.card}>
               <Text style={s.cardTitle}>Calibration by Confidence</Text>
               <Text style={s.cardSubtitle}>Does 70% confidence actually win 70% of the time?</Text>
-              {accuracy?.buckets.filter(b => b.totalPredictions > 0).map((bucket) => (
+              {(accuracy?.buckets ?? []).filter(b => b.totalPredictions > 0).map((bucket) => (
                 <View key={bucket.bucket} style={s.bucketRow}>
                   <Text style={s.bucketLabel}>{bucket.bucket}%</Text>
                   <View style={s.bucketBarBg}>
@@ -143,7 +143,7 @@ export default function ModelAccuracyScreen() {
                   <Text style={s.bucketCount}>({bucket.totalPredictions})</Text>
                 </View>
               )) ?? null}
-              {accuracy?.buckets.every(b => b.totalPredictions === 0) ? (
+              {(accuracy?.buckets ?? []).every(b => b.totalPredictions === 0) ? (
                 <Text style={s.subtitle}>No resolved predictions yet</Text>
               ) : null}
             </Animated.View>
@@ -151,7 +151,7 @@ export default function ModelAccuracyScreen() {
             {/* Per Sport */}
             <Animated.View entering={FadeInDown.delay(400).duration(400)} style={s.card}>
               <Text style={s.cardTitle}>Accuracy by Sport</Text>
-              {accuracy?.perSport.map((sport) => (
+              {(accuracy?.perSport ?? []).map((sport) => (
                 <View key={sport.sport} style={s.sportRow}>
                   <Text style={s.sportName}>{sport.sport}</Text>
                   <Text style={[s.sportAccuracy, { color: (sport.accuracy ?? 0) >= 55 ? GREEN_UP : (sport.accuracy ?? 0) >= 50 ? TEAL : LOSS }]}>
@@ -166,13 +166,13 @@ export default function ModelAccuracyScreen() {
             <Animated.View entering={FadeInDown.delay(500).duration(400)} style={s.card}>
               <Text style={s.cardTitle}>Toss-Up Performance</Text>
               <Text style={s.cardSubtitle}>Games where the model said "too close to call"</Text>
-              {(accuracy?.tossUp.total ?? 0) > 0 ? (
+              {(accuracy?.tossUp?.total ?? 0) > 0 ? (
                 <View style={{ alignItems: 'center', marginTop: 8 }}>
                   <Text style={[s.bigNumber, { fontSize: 28 }]}>
-                    {accuracy?.tossUp.accuracy ?? 0}%
+                    {accuracy?.tossUp?.accuracy ?? 0}%
                   </Text>
                   <Text style={s.subtitle}>
-                    {accuracy?.tossUp.correct}/{accuracy?.tossUp.total} correct (expected ~50%)
+                    {accuracy?.tossUp?.correct ?? 0}/{accuracy?.tossUp?.total ?? 0} correct (expected ~50%)
                   </Text>
                 </View>
               ) : (

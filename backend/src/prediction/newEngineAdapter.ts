@@ -161,8 +161,8 @@ function buildDecisionNarrativeFactors(newPred: HonestPrediction, game: Game): F
       available: true,
       hasSignal: Math.abs(probabilityDelta) >= 0.015 || Math.abs(projection.projectedSpread) >= 0.15,
       evidence:
-        `${scoreRead}, while the simulation lean is ${lean} ` +
-        `after ${projection.iterations.toLocaleString()} game scripts; upset/draw risk ${Math.round(projection.upsetRisk * 100)}%`,
+        `${scoreRead}, while the projection lean is ${lean} ` +
+        `with upset/draw risk ${Math.round(projection.upsetRisk * 100)}%`,
     });
   }
 
@@ -185,6 +185,12 @@ function buildDecisionNarrativeFactors(newPred: HonestPrediction, game: Game): F
   return factors;
 }
 
+function recentFormString(form: GameContext["homeForm"] | undefined): string {
+  if (!form) return "";
+  if (form.formString) return form.formString;
+  return form.results.join("-");
+}
+
 /**
  * Build a GamePrediction from a HonestPrediction + Game shell.
  * Confidence is deliberately the RAW max probability — no ceilings, no
@@ -195,6 +201,7 @@ export function translateNewEnginePrediction(
   newPred: HonestPrediction,
   spread: number | undefined,
   overUnder: number | undefined,
+  ctx?: GameContext,
 ): GamePrediction {
   const homeProbPct = Math.round(newPred.homeWinProbability * 100);
   const awayProbPct = Math.round(newPred.awayWinProbability * 100);
@@ -236,6 +243,7 @@ export function translateNewEnginePrediction(
     spread: spread ?? 0,
     overUnder: overUnder ?? 0,
     createdAt: newPred.generatedAt,
+    canonicalResult: newPred.canonicalResult,
     homeWinProbability: homeProbPct,
     awayWinProbability: awayProbPct,
     drawProbability: drawProbPct,
@@ -261,10 +269,10 @@ export function translateNewEnginePrediction(
     factors: newPred.factors.map(translateFactor),
     edgeRating: 0,
     valueRating: 0,
-    recentFormHome: "",
-    recentFormAway: "",
-    homeStreak: 0,
-    awayStreak: 0,
+    recentFormHome: recentFormString(ctx?.homeForm),
+    recentFormAway: recentFormString(ctx?.awayForm),
+    homeStreak: ctx?.homeForm?.streak ?? 0,
+    awayStreak: ctx?.awayForm?.streak ?? 0,
     isTossUp: Math.abs(homeProbPct - awayProbPct) < 5,
   };
 }
@@ -300,6 +308,7 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
     newPred,
     game.spread,
     game.overUnder,
+    ctx,
   );
 
   // Persist on first generation; never overwrite an existing settled record.
@@ -388,6 +397,12 @@ function scheduleLLMEnrichment(
   });
 }
 
+const llmNarrativeInFlight = new Map<string, Promise<string | null>>();
+
+export function __resetLLMEnrichmentDedupeForTests(): void {
+  llmNarrativeInFlight.clear();
+}
+
 /**
  * Synchronous orchestration of the LLM cache check → OpenAI call →
  * cache write → in-place prediction mutation pipeline. Exported so the
@@ -412,19 +427,44 @@ export async function enrichPredictionWithLLMNarrative(
     game.seasonContext ??
     deriveSeasonContext({ sport, gameTime: game.gameTime });
   const versionHash = computeVersionHash(prediction, injuries, seasonContext);
+  const inFlightKey = `${game.id}:${versionHash}`;
+  let narrativeTask = llmNarrativeInFlight.get(inFlightKey);
 
+  if (!narrativeTask) {
+    narrativeTask = resolveLLMNarrative(game, newPred, sport, injuries, seasonContext, versionHash);
+    llmNarrativeInFlight.set(inFlightKey, narrativeTask);
+    narrativeTask.finally(() => {
+      if (llmNarrativeInFlight.get(inFlightKey) === narrativeTask) {
+        llmNarrativeInFlight.delete(inFlightKey);
+      }
+    }).catch(() => {});
+  }
+
+  const narrative = await narrativeTask;
+  if (narrative) {
+    prediction.analysis = narrative;
+  }
+}
+
+async function resolveLLMNarrative(
+  game: Game,
+  newPred: HonestPrediction,
+  sport: string,
+  injuries: ReturnType<typeof extractInjuryListForLLM>,
+  seasonContext: ReturnType<typeof deriveSeasonContext>,
+  versionHash: string,
+): Promise<string | null> {
   // Tier-2 cache hit: reuse stored narrative, no OpenAI call.
   const cached = await getCachedLLMNarrative(game.id, versionHash);
   if (cached) {
-    prediction.analysis = cached;
-    return;
+    return cached;
   }
 
   if (isRateCapped()) {
     console.warn(
       `[llm-narrative] rate cap hit, skipping enrichment for gameId=${game.id}`,
     );
-    return;
+    return null;
   }
 
   const input = buildLLMNarrativeInput(game, newPred, sport, injuries);
@@ -436,10 +476,9 @@ export async function enrichPredictionWithLLMNarrative(
         `[llm-narrative] fallback (${result.reason}) gameId=${game.id}`,
       );
     }
-    return;
+    return null;
   }
 
-  prediction.analysis = result.text;
   await putCachedLLMNarrative(
     game.id,
     versionHash,
@@ -449,6 +488,7 @@ export async function enrichPredictionWithLLMNarrative(
   console.log(
     `[llm-narrative] generation success gameId=${game.id} tokens=${result.tokensUsed}`,
   );
+  return result.text;
 }
 
 function buildLLMNarrativeInput(

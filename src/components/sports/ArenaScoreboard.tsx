@@ -15,9 +15,11 @@ const SCORE_FACE_MATRIX: Record<string, number[][]> = {
   '8': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
   '9': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
   '-': [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+  '/': [[0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]],
   ' ': [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
   'D': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
   'E': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 1]],
+  'I': [[1, 1, 1], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [1, 1, 1]],
   'N': [[1, 0, 0, 0, 1], [1, 1, 0, 0, 1], [1, 0, 1, 0, 1], [1, 0, 0, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
   'P': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0]],
   'S': [[0, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
@@ -58,14 +60,16 @@ const ArenaScoreFace = memo(function ArenaScoreFace({
   awayScore,
   scale,
   label,
+  displayText,
 }: {
   homeScore: number;
   awayScore: number;
   scale: number;
   label?: string;
+  displayText?: string;
 }) {
-  const text = label ? label.toUpperCase() : `${homeScore}-${awayScore}`;
-  const glyphScale = label ? 1 : SCORE_FACE_SCALE;
+  const text = displayText ? displayText.toUpperCase() : label ? label.toUpperCase() : `${homeScore}-${awayScore}`;
+  const glyphScale = displayText ? SCORE_FACE_SCALE : label ? (text.length <= 3 ? SCORE_FACE_SCALE : 1) : SCORE_FACE_SCALE;
   const textCols = scoreFaceTextWidth(text, glyphScale);
   const cols = textCols + 4;
   const rows = 7 * glyphScale + 4;
@@ -161,6 +165,7 @@ export const ArenaScoreboard = memo(function ArenaScoreboard({
   homeColor,
   scale = 1,
   label,
+  displayText,
   subLabel,
   detailLabel,
 }: {
@@ -170,6 +175,7 @@ export const ArenaScoreboard = memo(function ArenaScoreboard({
   homeColor: string;
   scale?: number;
   label?: string;
+  displayText?: string;
   subLabel?: string;
   detailLabel?: string;
 }) {
@@ -245,7 +251,7 @@ export const ArenaScoreboard = memo(function ArenaScoreboard({
             />
           ))}
           <View style={{ borderRadius: 12 * scale, padding: 2 * scale, backgroundColor: 'rgba(255,255,255,0.04)' }}>
-            <ArenaScoreFace awayScore={awayScore} homeScore={homeScore} scale={scale} label={label} />
+            <ArenaScoreFace awayScore={awayScore} homeScore={homeScore} scale={scale} label={label} displayText={displayText} />
           </View>
           {hasStatusDetail ? (
             <View style={{ alignItems: 'center', paddingTop: 5 * scale, paddingHorizontal: 5 * scale, minWidth: 98 * scale, maxWidth: 150 * scale }}>

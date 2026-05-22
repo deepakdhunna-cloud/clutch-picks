@@ -38,6 +38,11 @@ import { computeIPLFactors } from "./factors/ipl";
 import { computeTennisFactors } from "./factors/tennis";
 import { computeNCAAFBFactors } from "./factors/ncaafb";
 import { computeNCAAMBFactors } from "./factors/ncaamb";
+import {
+  buildCanonicalPredictionResult,
+  normalizeCanonicalProbabilities,
+  traceCanonicalDecision,
+} from "./canonical";
 
 const MODEL_VERSION = "2.4.0-consensus-harmonized";
 
@@ -753,9 +758,51 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     );
   }
 
+  const generatedAt = new Date().toISOString();
+  const marketProbabilities =
+    market && Number.isFinite(market.noVigHomeProb)
+      ? normalizeCanonicalProbabilities({
+          home: market.noVigHomeProb,
+          away: market.noVigAwayProb,
+          draw: drawProb !== undefined ? market.noVigDrawProb : undefined,
+        })
+      : undefined;
+  const canonicalResult = buildCanonicalPredictionResult({
+    ctx,
+    factors: adjustedFactors,
+    factorProbabilities: normalizeCanonicalProbabilities({
+      home: factorHomeWinProb,
+      away: factorAwayWinProb,
+      draw: factorDrawProb,
+    }),
+    projection,
+    rawProjection,
+    finalProbabilities: normalizeCanonicalProbabilities({
+      home: homeWinProb,
+      away: awayWinProb,
+      draw: drawProb,
+    }),
+    confidence,
+    generatedAt,
+    modelVersion: MODEL_VERSION,
+    blendedProbabilities: normalizeCanonicalProbabilities({
+      home: blended.home,
+      away: blended.away,
+      draw: blended.draw,
+    }),
+    marketProbabilities,
+  });
+  traceCanonicalDecision({
+    ctx,
+    canonicalResult,
+    factorProbabilities: canonicalResult.engineBreakdown.find((read) => read.engine === "factor-model-v1")?.probabilities ?? canonicalResult.probabilities,
+    rawProjection,
+  });
+
   return {
     gameId: ctx.game.id,
     league: ctx.sport,
+    canonicalResult,
     predictedWinner,
     homeWinProbability: homeWinProb,
     awayWinProbability: awayWinProb,
@@ -767,7 +814,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     unavailableFactors,
     narrative: "", // Filled by narrative.ts in a separate step
     modelVersion: MODEL_VERSION,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     dataSources,
     marketComparison,
   };

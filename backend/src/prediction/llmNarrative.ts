@@ -3,7 +3,7 @@
  *
  * Called from background-only enrichment paths — never synchronously from
  * /api/games. Builds a structured prompt from the prediction context,
- * hits OpenAI (gpt-4o-mini, 8s timeout), validates the response for
+ * hits OpenAI (low-cost narrative model, 8s timeout), validates the response for
  * sentence count + banned terms, and returns the text on success.
  *
  * Failures always return null. The caller serves the deterministic
@@ -358,7 +358,7 @@ export function __setLLMClientForTests(client: LLMClient | null): void {
 
 // ─── Public entry point ────────────────────────────────────────────────
 
-const MODEL = "gpt-4o-mini";
+const MODEL = process.env.OPENAI_NARRATIVE_MODEL ?? "gpt-4o-mini";
 const TEMPERATURE = 0.7;
 const MAX_TOKENS = 250;
 const TIMEOUT_MS = 8000;

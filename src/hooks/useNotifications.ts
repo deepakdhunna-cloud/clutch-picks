@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
@@ -14,6 +14,8 @@ export type NotificationPreferences = {
   pickResult: boolean;
   predictionShift: boolean;
   bigGame: boolean;
+  gameSpotlight: boolean;
+  underdog: boolean;
   streak: boolean;
 };
 
@@ -22,6 +24,8 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
   pickResult: true,
   predictionShift: true,
   bigGame: true,
+  gameSpotlight: true,
+  underdog: true,
   streak: true,
 };
 
@@ -32,6 +36,8 @@ const TYPE_TO_PREF: Record<string, string> = {
   pick_result: 'pickResult',
   winner_flip: 'predictionShift',
   big_game: 'bigGame',
+  game_spotlight: 'gameSpotlight',
+  underdog_alert: 'underdog',
   streak: 'streak',
 };
 
@@ -84,12 +90,14 @@ export async function loadNotificationPreferences(): Promise<NotificationPrefere
 
 export async function saveNotificationPreferences(
   prefs: NotificationPreferences,
-): Promise<void> {
+): Promise<boolean> {
   await AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs));
   try {
     await api.put('/api/notifications/preferences', prefs);
+    return true;
   } catch (error) {
     if (__DEV__) console.log('[Notifications] Failed to sync preferences:', error);
+    return false;
   }
 }
 
@@ -195,22 +203,46 @@ export async function unregisterCurrentDeviceForPushNotifications(): Promise<voi
  */
 export function useNotificationRegistration(userId?: string | null) {
   const registeredUserId = useRef<string | null>(null);
+  const refreshInFlight = useRef<boolean>(false);
+  const lastRefreshAt = useRef<number>(0);
 
   useEffect(() => {
     if (!userId) {
       registeredUserId.current = null;
       return;
     }
-    if (registeredUserId.current === userId) return;
 
-    (async () => {
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status !== 'granted') return;
-      const registered = await registerDeviceForPushNotifications(false);
-      if (registered) {
-        registeredUserId.current = userId;
+    const refreshRegistration = async (force = false) => {
+      const now = Date.now();
+      if (refreshInFlight.current) return;
+      if (!force && now - lastRefreshAt.current < 60_000) return;
+      refreshInFlight.current = true;
+      lastRefreshAt.current = now;
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') return;
+        const registered = await registerDeviceForPushNotifications(false);
+        if (registered) {
+          registeredUserId.current = userId;
+        }
+      } finally {
+        refreshInFlight.current = false;
       }
-    })();
+    };
+
+    if (registeredUserId.current !== userId) {
+      void refreshRegistration(true);
+    }
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void refreshRegistration();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+    };
   }, [userId]);
 }
 
@@ -219,6 +251,8 @@ export function useNotificationRegistration(userId?: string | null) {
  * Pass router from expo-router.
  */
 export function useNotificationNavigation(router: any) {
+  const handledResponseKey = useRef<string | null>(null);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -226,7 +260,7 @@ export function useNotificationNavigation(router: any) {
       if (!isMounted) return;
       const data = notification.request.content.data;
       if (data?.gameId) {
-        router.push(`/game/${String(data.gameId)}`);
+        router.push({ pathname: '/game/[id]', params: { id: String(data.gameId) } });
       } else if (data?.screen === 'picks') {
         router.push('/(tabs)/clutch-picks');
       } else if (data?.screen === 'profile') {
@@ -234,17 +268,27 @@ export function useNotificationNavigation(router: any) {
       }
     };
 
+    const openFromResponse = (response: Notifications.NotificationResponse | null | undefined) => {
+      if (!response?.notification) return;
+      const notification = response.notification;
+      const data = notification.request.content.data;
+      const key = [
+        notification.request.identifier,
+        data?.gameId ? `game:${String(data.gameId)}` : '',
+        data?.screen ? `screen:${String(data.screen)}` : '',
+      ].filter(Boolean).join('|');
+      if (key && handledResponseKey.current === key) return;
+      handledResponseKey.current = key || null;
+      openFromNotification(notification);
+    };
+
     Notifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (response?.notification) {
-          openFromNotification(response.notification);
-        }
-      })
+      .then(openFromResponse)
       .catch(() => {});
 
     // Handle notification tap when app is opened from background
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      openFromNotification(response.notification);
+      openFromResponse(response);
     });
 
     return () => {

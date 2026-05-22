@@ -11,6 +11,7 @@ export const DEFAULT_RATING = 1500;
 
 // In-memory read cache: key = "{sport}-{teamId}"
 const eloCache = new Map<string, number>();
+const warnedEloReadFailures = new Set<string>();
 
 // Sport-specific K-factors (how much each game moves the rating)
 const K_FACTORS: Record<string, number> = {
@@ -93,6 +94,17 @@ function eloKey(teamId: string, sport: string): string {
   return `${sport}-${teamId}`;
 }
 
+function shortErrorMessage(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const lines = err.message
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.find((line) => line.startsWith("Can't ") || line.includes("Environment variable"))
+    ?? lines.find((line) => !line.startsWith("Invalid `prisma.") && !line.startsWith("/"))
+    ?? err.name;
+}
+
 /**
  * Get the current Elo rating for a team.
  * Checks in-memory cache first, then database, then returns DEFAULT_RATING.
@@ -103,10 +115,21 @@ export async function getEloRating(teamId: string, sport: string): Promise<numbe
   const cached = eloCache.get(key);
   if (cached !== undefined) return cached;
 
-  const row = await prisma.eloRating.findUnique({ where: { id: key } });
-  if (row) {
-    eloCache.set(key, row.rating);
-    return row.rating;
+  try {
+    const row = await prisma.eloRating.findUnique({ where: { id: key } });
+    if (row) {
+      eloCache.set(key, row.rating);
+      return row.rating;
+    }
+  } catch (err) {
+    const warnKey = `${sport}:read`;
+    if (!warnedEloReadFailures.has(warnKey)) {
+      warnedEloReadFailures.add(warnKey);
+      console.warn(
+        `[elo] DB read failed for ${sport}; using default rating ${DEFAULT_RATING}`,
+        shortErrorMessage(err),
+      );
+    }
   }
 
   return DEFAULT_RATING;

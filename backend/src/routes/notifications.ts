@@ -17,6 +17,8 @@ const notificationPreferencesSchema = z.object({
   pickResult: z.boolean().optional(),
   predictionShift: z.boolean().optional(),
   bigGame: z.boolean().optional(),
+  gameSpotlight: z.boolean().optional(),
+  underdog: z.boolean().optional(),
   streak: z.boolean().optional(),
 });
 
@@ -25,6 +27,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
   pickResult: true,
   predictionShift: true,
   bigGame: true,
+  gameSpotlight: true,
+  underdog: true,
   streak: true,
 };
 
@@ -34,6 +38,8 @@ const TYPE_TO_PREF_KEY: Record<string, keyof typeof DEFAULT_NOTIFICATION_PREFERE
   pick_result: "pickResult",
   winner_flip: "predictionShift",
   big_game: "bigGame",
+  game_spotlight: "gameSpotlight",
+  underdog_alert: "underdog",
   streak: "streak",
 };
 
@@ -119,6 +125,8 @@ notificationsRouter.get("/preferences", async (c) => {
         pickResult: true,
         predictionShift: true,
         bigGame: true,
+        gameSpotlight: true,
+        underdog: true,
         streak: true,
       },
     });
@@ -145,6 +153,8 @@ notificationsRouter.put("/preferences", zValidator("json", notificationPreferenc
         pickResult: true,
         predictionShift: true,
         bigGame: true,
+        gameSpotlight: true,
+        underdog: true,
         streak: true,
       },
     });
@@ -222,8 +232,79 @@ interface ExpoPushResponse {
   }>;
 }
 
-async function sendPushNotifications(messages: PushMessage[]) {
-  if (messages.length === 0) return;
+interface ExpoPushReceipt {
+  status?: "ok" | "error";
+  message?: string;
+  details?: {
+    error?: string;
+  };
+}
+
+interface ExpoPushReceiptResponse {
+  data?: Record<string, ExpoPushReceipt>;
+  errors?: Array<{
+    message?: string;
+    code?: string;
+  }>;
+}
+
+type PushReceiptRequest = {
+  id: string;
+  token: string;
+};
+
+const PUSH_RECEIPT_CHECK_DELAY_MS = 30_000;
+
+function schedulePushReceiptCheck(receipts: PushReceiptRequest[]) {
+  if (receipts.length === 0) return;
+  setTimeout(() => {
+    checkPushReceipts(receipts).catch((error) => {
+      console.error("[Push] Receipt check error:", error);
+    });
+  }, PUSH_RECEIPT_CHECK_DELAY_MS);
+}
+
+async function checkPushReceipts(receipts: PushReceiptRequest[]) {
+  const tokenByReceiptId = new Map(receipts.map((receipt) => [receipt.id, receipt.token]));
+  const receiptIds = Array.from(tokenByReceiptId.keys());
+  const invalidTokens: string[] = [];
+
+  for (let i = 0; i < receiptIds.length; i += 300) {
+    const ids = receiptIds.slice(i, i + 300);
+    const response = await fetchWithTimeout("https://exp.host/--/api/v2/push/getReceipts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+      timeoutMs: 15000,
+    });
+    const payload = await response.json().catch(() => null) as ExpoPushReceiptResponse | null;
+    if (!response.ok) {
+      console.error("[Push] Expo receipt API error:", response.status, payload?.errors ?? payload);
+      continue;
+    }
+
+    for (const [receiptId, receipt] of Object.entries(payload?.data ?? {})) {
+      if (receipt.status !== "error") continue;
+      const errorCode = receipt.details?.error;
+      console.warn("[Push] Expo receipt error:", errorCode ?? "unknown", receipt.message ?? "");
+      if (errorCode === "DeviceNotRegistered") {
+        const token = tokenByReceiptId.get(receiptId);
+        if (token) invalidTokens.push(token);
+      }
+    }
+  }
+
+  if (invalidTokens.length > 0) {
+    await prisma.pushToken.deleteMany({
+      where: { token: { in: invalidTokens } },
+    });
+    console.log(`[Push] Removed ${invalidTokens.length} unregistered push token(s) from receipts`);
+  }
+}
+
+async function sendPushNotifications(messages: PushMessage[]): Promise<Set<string>> {
+  const acceptedTokens = new Set<string>();
+  if (messages.length === 0) return acceptedTokens;
   // Expo accepts batches of 100
   const chunks: PushMessage[][] = [];
   for (let i = 0; i < messages.length; i += 100) {
@@ -244,18 +325,28 @@ async function sendPushNotifications(messages: PushMessage[]) {
       }
 
       const invalidTokens: string[] = [];
+      const receiptRequests: PushReceiptRequest[] = [];
       const tickets = Array.isArray(payload?.data) ? payload.data : [];
       for (let index = 0; index < tickets.length; index += 1) {
         const ticket = tickets[index];
+        const token = chunk[index]?.to;
+        if (ticket?.status === "ok") {
+          if (token) acceptedTokens.add(token);
+          if (ticket.id && token) {
+            receiptRequests.push({ id: ticket.id, token });
+          }
+          continue;
+        }
+
         if (ticket?.status !== "error") continue;
 
-        const token = chunk[index]?.to;
         const errorCode = ticket.details?.error;
         console.warn('[Push] Expo ticket error:', errorCode ?? "unknown", ticket.message ?? "");
         if (errorCode === "DeviceNotRegistered" && token) {
           invalidTokens.push(token);
         }
       }
+      schedulePushReceiptCheck(receiptRequests);
 
       if (invalidTokens.length > 0) {
         await prisma.pushToken.deleteMany({
@@ -267,6 +358,7 @@ async function sendPushNotifications(messages: PushMessage[]) {
       console.error('[Push] Send error:', err);
     }
   }
+  return acceptedTokens;
 }
 
 async function isPushEnabledForUser(userId: string, type?: string): Promise<boolean> {
@@ -305,7 +397,8 @@ export async function sendPushToUser(userId: string, title: string, body: string
       sound: 'default' as const,
     }));
 
-    await sendPushNotifications(messages);
+    const acceptedTokens = await sendPushNotifications(messages);
+    if (acceptedTokens.size === 0) return;
 
     // Log it
     await prisma.notificationLog.create({
@@ -342,6 +435,7 @@ export async function sendPushToAll(
     }
 
     const messages: PushMessage[] = [];
+    const tokensByUser = new Map<string, string[]>();
     for (const [userId, tokens] of userTokens) {
       if (excluded.has(userId)) continue;
       if (!(await isPushEnabledForUser(userId, data?.type))) continue;
@@ -354,13 +448,16 @@ export async function sendPushToAll(
       for (const token of tokens) {
         messages.push({ to: token, title, body, data, sound: 'default' });
       }
+      tokensByUser.set(userId, tokens);
+    }
 
+    const acceptedTokens = await sendPushNotifications(messages);
+    for (const [userId, tokens] of tokensByUser) {
+      if (!tokens.some((token) => acceptedTokens.has(token))) continue;
       await prisma.notificationLog.create({
         data: { userId, type: data?.type ?? 'broadcast', gameId: data?.gameId, title, body },
       });
     }
-
-    await sendPushNotifications(messages);
   } catch (err) {
     console.error('[Push] sendPushToAll error:', err);
   }

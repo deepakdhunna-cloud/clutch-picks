@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
   buildAdapterNarrative,
   enrichPredictionWithLLMNarrative,
+  __resetLLMEnrichmentDedupeForTests,
 } from "../newEngineAdapter";
 import {
   __setLLMClientForTests,
@@ -23,6 +24,7 @@ import {
   computeVersionHash,
 } from "../narrativeCache";
 import type {
+  CanonicalPredictionResult,
   HonestPrediction,
   FactorContribution,
   GameContext,
@@ -41,7 +43,47 @@ function makeGame(): Game {
   };
 }
 
+function makeCanonicalResult(args: {
+  eventId: string;
+  sport: string;
+  finalPick: "home" | "away" | "draw" | "none";
+  home: number;
+  away: number;
+  confidence: number;
+}): CanonicalPredictionResult {
+  return {
+    eventId: args.eventId,
+    marketType: "moneyline",
+    finalPick: args.finalPick,
+    finalProbability: Math.max(args.home, args.away),
+    confidence: args.confidence,
+    probabilities: { home: args.home, away: args.away },
+    modelInputs: {
+      sport: args.sport,
+      homeTeamId: "1",
+      awayTeamId: "2",
+      gameTime: "2026-04-21T19:00Z",
+      factorCount: 0,
+      availableFactorCount: 0,
+      marketConsensusIncluded: false,
+    },
+    engineBreakdown: [],
+    reconciliation: { method: "test", notes: [] },
+    timestamp: "2026-04-21T12:00:00.000Z",
+    dataVersion: "test",
+    warnings: [],
+  };
+}
+
 function makePred(overrides: Partial<HonestPrediction> & { factors: FactorContribution[] }): HonestPrediction {
+  const canonicalResult = overrides.canonicalResult ?? makeCanonicalResult({
+    eventId: "g1",
+    sport: "NBA",
+    finalPick: "home",
+    home: 0.78,
+    away: 0.22,
+    confidence: 78,
+  });
   return {
     gameId: "g1",
     league: "NBA",
@@ -56,6 +98,7 @@ function makePred(overrides: Partial<HonestPrediction> & { factors: FactorContri
     dataSources: [],
     unavailableFactors: [],
     ...overrides,
+    canonicalResult,
   };
 }
 
@@ -254,6 +297,14 @@ function makeHonestPred(): HonestPrediction {
   return {
     gameId: "mlb-enrich-1",
     league: "MLB",
+    canonicalResult: makeCanonicalResult({
+      eventId: "mlb-enrich-1",
+      sport: "MLB",
+      finalPick: "home",
+      home: 0.62,
+      away: 0.38,
+      confidence: 62,
+    }),
     predictedWinner: { teamId: "1", abbr: "DET" },
     homeWinProbability: 0.62,
     awayWinProbability: 0.38,
@@ -312,10 +363,23 @@ function countingClient(text: string | null): { client: LLMClient; calls: () => 
   return { client, calls: () => n };
 }
 
+function delayedCountingClient(text: string): { client: LLMClient; calls: () => number } {
+  let n = 0;
+  const client: LLMClient = {
+    async complete() {
+      n++;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { text, tokensUsed: 175 };
+    },
+  };
+  return { client, calls: () => n };
+}
+
 describe("enrichPredictionWithLLMNarrative — orchestration", () => {
   beforeEach(() => {
     __resetRateWindowForTests();
     __resetNarrativeCacheForTests();
+    __resetLLMEnrichmentDedupeForTests();
     process.env.OPENAI_API_KEY = "sk-test";
   });
   afterEach(() => {
@@ -367,6 +431,32 @@ describe("enrichPredictionWithLLMNarrative — orchestration", () => {
 
     expect(calls()).toBe(1);
     expect(prediction.analysis).toBe(SAMPLE_NARRATIVE);
+  });
+
+  it("dedupes concurrent cache misses for the same game/version", async () => {
+    const { client, calls } = delayedCountingClient(SAMPLE_NARRATIVE);
+    __setLLMClientForTests(client);
+
+    const first = makeGamePrediction();
+    const second = makeGamePrediction();
+    await Promise.all([
+      enrichPredictionWithLLMNarrative(
+        makeMLBGame(),
+        makeMLBCtx(),
+        makeHonestPred(),
+        first,
+      ),
+      enrichPredictionWithLLMNarrative(
+        makeMLBGame(),
+        makeMLBCtx(),
+        makeHonestPred(),
+        second,
+      ),
+    ]);
+
+    expect(calls()).toBe(1);
+    expect(first.analysis).toBe(SAMPLE_NARRATIVE);
+    expect(second.analysis).toBe(SAMPLE_NARRATIVE);
   });
 
   it("cache miss + LLM validation fail: analysis stays on deterministic", async () => {

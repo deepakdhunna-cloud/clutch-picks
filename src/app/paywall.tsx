@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
+  View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
 } from 'react-native';
 import { api } from '@/lib/api/api';
 import { router } from 'expo-router';
@@ -16,19 +16,36 @@ import {
   purchasePackage,
   restorePurchases,
   isRevenueCatEnabled,
-  getCustomerInfo,
+  getRevenueCatAppUserId,
+  invalidateCustomerInfoCache,
   REVENUECAT_MONTHLY_PACKAGE_ID,
 } from '@/lib/revenuecatClient';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGames } from '@/hooks/useGames';
 import { GameStatus } from '@/types/sports';
 import type { PurchasesPackage } from 'react-native-purchases';
+import { PRO_MONTHLY_PRICE_FALLBACK } from '@/lib/subscription-pricing';
+import { FeedbackModal } from '@/components/FeedbackModal';
 
 import { BG, MAROON, MAROON_GLOW, TEAL } from '@/lib/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const MAROON_DIM = 'rgba(139,10,31,0.12)';
 const TEAL_DIM = 'rgba(122,157,184,0.10)';
+
+type FeedbackState = {
+  title: string;
+  message: string;
+  variant?: 'success' | 'error' | 'info';
+  actionLabel?: string;
+  onDismiss?: () => void;
+};
+
+const PRICE_PERIOD_PATTERN = /(?:\/\s*(?:mo|month|monthly|mth|wk|week|yr|year|annual))|\b(?:per|a)\s+(?:mo|month|week|year)\b/i;
+
+function priceIncludesBillingPeriod(price: string): boolean {
+  return PRICE_PERIOD_PATTERN.test(price);
+}
 
 // ─── Feature Icon Components ────────────────────────────────────
 function IconPredictions({ color }: { color: string }) {
@@ -143,8 +160,15 @@ export default function PaywallScreen() {
   const [promoCode, setPromoCode] = useState('');
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const { checkSubscription } = useSubscription();
   const { data: allGames } = useGames();
+
+  const dismissFeedback = () => {
+    const onDismiss = feedback?.onDismiss;
+    setFeedback(null);
+    onDismiss?.();
+  };
 
   const previewPicks = useMemo(() => {
     if (!allGames || allGames.length === 0) return null;
@@ -238,8 +262,11 @@ export default function PaywallScreen() {
         return null;
       }
 
-      if (!hasThreeDayFreeTrial(monthly) && __DEV__) {
-        console.log('[Paywall] 3-day trial metadata was not returned by StoreKit. Continuing because App Store purchase sheet is the source of truth for eligibility.');
+      if (!hasThreeDayFreeTrial(monthly)) {
+        setLoadError(true);
+        setErrorDetail(`${REVENUECAT_MONTHLY_PACKAGE_ID} must include a 3-day free trial introductory price.`);
+        setIsLoading(false);
+        return null;
       }
 
       setMonthlyPackage(monthly);
@@ -261,7 +288,11 @@ export default function PaywallScreen() {
       setIsLoading(true);
       packageToPurchase = await loadOfferings();
       if (!packageToPurchase) {
-        Alert.alert('Unable to Load', 'Could not load subscription. Check your connection and try again.');
+        setFeedback({
+          title: 'Unable to Load',
+          message: 'Could not load subscription. Check your connection and try again.',
+          variant: 'error',
+        });
         setIsLoading(false);
         return;
       }
@@ -278,7 +309,11 @@ export default function PaywallScreen() {
     } else if (result.reason === 'sdk_error') {
       const error = result.error as any;
       if (!error?.userCancelled) {
-        Alert.alert('Purchase Failed', 'Please try again later.');
+        setFeedback({
+          title: 'Purchase Failed',
+          message: 'Please try again later.',
+          variant: 'error',
+        });
       }
     }
     setIsPurchasing(false);
@@ -293,22 +328,46 @@ export default function PaywallScreen() {
       const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;
       if (hasActive) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Restored!', 'Your subscription has been restored.', [
-          { text: 'OK', onPress: () => router.replace('/(tabs)') },
-        ]);
+        setFeedback({
+          title: 'Restored',
+          message: 'Your subscription has been restored.',
+          variant: 'success',
+          onDismiss: () => router.replace('/(tabs)'),
+        });
       } else {
-        Alert.alert('No Subscription Found', 'No previous subscription was found for this account.');
+        setFeedback({
+          title: 'No Subscription Found',
+          message: 'No previous subscription was found for this account.',
+          variant: 'info',
+        });
       }
     } else {
-      Alert.alert('Restore Failed', 'Please try again later.');
+      setFeedback({
+        title: 'Restore Failed',
+        message: 'Please try again later.',
+        variant: 'error',
+      });
     }
     setIsRestoring(false);
   };
 
-  const priceString = monthlyPackage?.product?.priceString || '$4.99';
+  const storePriceString = monthlyPackage?.product?.priceString?.trim();
+  const priceString = storePriceString || PRO_MONTHLY_PRICE_FALLBACK;
+  const priceHasBillingPeriod = priceIncludesBillingPeriod(priceString);
+  const priceWithMonthlyPeriod = priceHasBillingPeriod ? priceString : `${priceString}/month`;
+  const priceWithShortPeriod = priceHasBillingPeriod ? priceString : `${priceString}/mo`;
+
+  useEffect(() => {
+    if (__DEV__ && monthlyPackage && !storePriceString) {
+      console.warn(`[Paywall] RevenueCat/App Store did not return a price string. Using fallback ${PRO_MONTHLY_PRICE_FALLBACK}.`);
+    }
+  }, [monthlyPackage, storePriceString]);
   const trialDisclosure = monthlyPackage
-    ? `Eligible users receive a 3-day free trial, then ${priceString}/month. App Store confirms final terms before purchase.`
+    ? `Eligible users receive a 3-day free trial, then ${priceWithMonthlyPeriod}. App Store confirms final terms before purchase.`
     : 'Subscription renews monthly. Cancel anytime.';
+  const purchaseCtaLabel = monthlyPackage && hasThreeDayFreeTrial(monthlyPackage)
+    ? 'Start 3-Day Free Trial'
+    : `Start Pro for ${priceWithShortPeriod}`;
 
   const features = [
     { IconComponent: IconPredictions, label: 'AI Predictions', desc: 'Multi-factor analysis per game', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
@@ -319,6 +378,14 @@ export default function PaywallScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
+      <FeedbackModal
+        visible={!!feedback}
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+        actionLabel={feedback?.actionLabel}
+        variant={feedback?.variant}
+        onDismiss={dismissFeedback}
+      />
       {/* Background ambience — maroon top, teal mid, maroon bottom */}
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
         {/* Maroon orb top */}
@@ -367,11 +434,11 @@ export default function PaywallScreen() {
 
             {/* Title — "AI-analyzed" in teal */}
             <Text style={{ fontSize: 32, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, lineHeight: 38 }}>
-              Every game.{'\n'}Every stat.{'\n'}
-              <Text style={{ color: TEAL }}>AI-analyzed.</Text>
+              Clutch Picks Pro{'\n'}
+              <Text style={{ color: TEAL }}>built for the full board.</Text>
             </Text>
             <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginTop: 12, lineHeight: 22 }}>
-              Multi-factor predictions across every game, every league. The analysis behind the edge.
+              Unified predictions, projections, simulations, live scores, and matchup context across every supported league.
             </Text>
           </Animated.View>
 
@@ -462,7 +529,7 @@ export default function PaywallScreen() {
           {/* ═══ STATS BAR — maroon for factors, teal for updates ═══ */}
           <Animated.View entering={FadeInDown.delay(280).duration(400)} style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 28, gap: 8 }}>
             {[
-              { value: '10', label: 'Leagues', color: '#FFF' },
+              { value: '11', label: 'Leagues', color: '#FFF' },
               { value: '20', label: 'Factors', color: MAROON },
               { value: '24/7', label: 'Updates', color: TEAL },
             ].map((s, i) => (
@@ -482,11 +549,17 @@ export default function PaywallScreen() {
           <Animated.View entering={FadeInDown.delay(360).duration(400)} style={{ paddingHorizontal: 20 }}>
             <Animated.View style={[{
               borderRadius: 22, overflow: 'hidden',
-              borderWidth: 1.5, borderColor: 'rgba(139,10,31,0.15)',
               shadowColor: MAROON,
               shadowOffset: { width: 0, height: 0 },
             }, ctaGlowStyle]}>
-              <View style={{ borderRadius: 22, overflow: 'hidden' }}>
+              <LinearGradient
+                colors={['rgba(224,234,240,0.44)', 'rgba(122,157,184,0.40)', 'rgba(139,10,31,0.48)', 'rgba(224,234,240,0.22)']}
+                locations={[0, 0.34, 0.74, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ padding: 1.35, borderRadius: 22 }}
+              >
+              <View style={{ borderRadius: 20.65, overflow: 'hidden' }}>
               <BlurView intensity={40} tint="dark" style={[StyleSheet.absoluteFill]} />
               <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,14,0.7)' }]} />
               <LinearGradient
@@ -499,7 +572,9 @@ export default function PaywallScreen() {
                 {/* Price row */}
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 }}>
                   <Text style={{ fontSize: 40, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{priceString}</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.3)', marginLeft: 4 }}>/month</Text>
+                  {!priceHasBillingPeriod ? (
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.3)', marginLeft: 4 }}>/month</Text>
+                  ) : null}
                 </View>
 
                 <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)', marginBottom: 16, lineHeight: 18 }}>
@@ -536,15 +611,25 @@ export default function PaywallScreen() {
                         setPromoLoading(true);
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         try {
-                          const rcInfo = await getCustomerInfo();
-                          const rcUserId = rcInfo.ok ? rcInfo.data.originalAppUserId : undefined;
+                          const rcAppUserId = await getRevenueCatAppUserId();
+                          const rcUserId = rcAppUserId.ok ? rcAppUserId.data : undefined;
                           const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: promoCode.trim(), rcUserId });
+                          await invalidateCustomerInfoCache();
                           await checkSubscription();
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                          Alert.alert('Code Applied!', result.message, [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]);
+                          setFeedback({
+                            title: 'Code Applied',
+                            message: result.message,
+                            variant: 'success',
+                            onDismiss: () => router.replace('/(tabs)'),
+                          });
                         } catch (error: any) {
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                          Alert.alert('Invalid Code', error?.message || 'This code could not be applied.');
+                          setFeedback({
+                            title: 'Invalid Code',
+                            message: error?.message || 'This code could not be applied.',
+                            variant: 'error',
+                          });
                         } finally {
                           setPromoLoading(false);
                         }
@@ -581,7 +666,7 @@ export default function PaywallScreen() {
                 ) : loadError ? (
                   <ShimmerButton onPress={loadOfferings} loading={false} label="Tap to Retry" />
                 ) : (
-                  <ShimmerButton onPress={handlePurchase} loading={isPurchasing} label="Unlock All Picks" />
+                  <ShimmerButton onPress={handlePurchase} loading={isPurchasing} label={purchaseCtaLabel} />
                 )}
 
                 <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>
@@ -592,6 +677,7 @@ export default function PaywallScreen() {
                 </Text>
               </View>
               </View>
+              </LinearGradient>
             </Animated.View>
           </Animated.View>
 

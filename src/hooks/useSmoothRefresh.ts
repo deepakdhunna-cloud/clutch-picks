@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 
 type RefreshAction = () => Promise<unknown> | unknown;
 
@@ -66,15 +67,19 @@ export function useSmoothRefresh(
     if (mountedRef.current) setRefreshing(true);
 
     const startedAt = Date.now();
+    let didFail = false;
     maxTimerRef.current = setTimeout(() => {
       maxTimerRef.current = null;
-      hideRefreshing();
+      if (__DEV__) {
+        console.warn('[refresh] pull-to-refresh is still waiting for data');
+      }
     }, maxVisibleMs);
 
     Promise.resolve()
       .then(waitForNextFrame)
       .then(() => actionRef.current())
       .catch((error) => {
+        didFail = true;
         if (__DEV__) {
           console.warn('[refresh] pull-to-refresh failed:', error);
         }
@@ -90,6 +95,11 @@ export function useSmoothRefresh(
         const wait = Math.max(0, minVisibleMs - elapsed);
         hideTimerRef.current = setTimeout(() => {
           hideTimerRef.current = null;
+          void Haptics.notificationAsync(
+            didFail
+              ? Haptics.NotificationFeedbackType.Error
+              : Haptics.NotificationFeedbackType.Success,
+          ).catch(() => {});
           hideRefreshing();
         }, wait);
       });

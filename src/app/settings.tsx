@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Alert, Linking, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -12,10 +12,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { useSubscription } from '@/lib/subscription-context';
-import { isRevenueCatEnabled, logoutUser, restorePurchases, getCustomerInfo } from '@/lib/revenuecatClient';
+import { isRevenueCatEnabled, logoutUser, restorePurchases, getRevenueCatAppUserId, invalidateCustomerInfoCache } from '@/lib/revenuecatClient';
 import { api } from '@/lib/api/api';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
+import { getAppVersionLabel } from '@/lib/app-version';
 
 interface SettingItemProps {
   icon: any;
@@ -115,13 +117,21 @@ const AUTH_STORAGE_KEYS = [
   'clutchpicks_bearer_token',
 ] as const;
 
+type FeedbackState = {
+  title: string;
+  message: string;
+  variant?: 'success' | 'error' | 'info';
+};
+
 export default function SettingsScreen() {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const appVersionLabel = getAppVersionLabel();
   const [promoModalVisible, setPromoModalVisible] = useState(false);
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const { isPremium, isLoading: isSubscriptionLoading, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
 
@@ -129,15 +139,24 @@ export default function SettingsScreen() {
     if (!code.trim()) return;
     setPromoLoading(true);
     try {
-      const rcInfo = await getCustomerInfo();
-      const rcUserId = rcInfo.ok ? rcInfo.data.originalAppUserId : undefined;
+      const rcAppUserId = await getRevenueCatAppUserId();
+      const rcUserId = rcAppUserId.ok ? rcAppUserId.data : undefined;
       const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: code.trim(), rcUserId });
+      await invalidateCustomerInfoCache();
       await checkSubscription();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Code Applied!', result.message ?? 'Lifetime access granted!');
+      setFeedback({
+        title: 'Code Applied',
+        message: result.message ?? 'Lifetime access granted.',
+        variant: 'success',
+      });
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Invalid Code', error?.message || 'This code could not be applied.');
+      setFeedback({
+        title: 'Invalid Code',
+        message: error?.message || 'This code could not be applied.',
+        variant: 'error',
+      });
     } finally {
       setPromoLoading(false);
       setPromoInput('');
@@ -147,13 +166,41 @@ export default function SettingsScreen() {
 
   const handlePromoPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (Platform.OS === 'ios') {
-      Alert.prompt('Promo Code', 'Enter your code', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Redeem', onPress: (code) => { if (code) handleRedeemPromo(code); } },
-      ], 'plain-text', '', 'default');
-    } else {
-      setPromoModalVisible(true);
+    setPromoModalVisible(true);
+  };
+
+  const handleRestorePurchases = async () => {
+    try {
+      const result = await restorePurchases();
+      if (result.ok) {
+        await checkSubscription();
+        const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;
+        if (hasActive) {
+          setFeedback({
+            title: 'Restored',
+            message: 'Your subscription has been restored.',
+            variant: 'success',
+          });
+        } else {
+          setFeedback({
+            title: 'No Subscription Found',
+            message: 'No previous subscription was found for this account.',
+            variant: 'info',
+          });
+        }
+      } else {
+        setFeedback({
+          title: 'No Subscription Found',
+          message: 'No previous subscription was found for this account.',
+          variant: 'info',
+        });
+      }
+    } catch {
+      setFeedback({
+        title: 'Restore Failed',
+        message: 'Please try again later.',
+        variant: 'error',
+      });
     }
   };
 
@@ -225,7 +272,11 @@ export default function SettingsScreen() {
       router.replace('/welcome');
     } catch (error) {
       if (__DEV__) console.log('[Settings] Sign out error:', error);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      setFeedback({
+        title: 'Sign Out Failed',
+        message: 'Failed to sign out. Please try again.',
+        variant: 'error',
+      });
       setIsSigningOut(false);
     }
   };
@@ -251,13 +302,24 @@ export default function SettingsScreen() {
       await invalidateSession();
       router.replace('/welcome');
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete account. Please try again or contact support.');
+      setFeedback({
+        title: 'Delete Failed',
+        message: 'Failed to delete account. Please try again or contact support.',
+        variant: 'error',
+      });
     }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <FeedbackModal
+          visible={!!feedback}
+          title={feedback?.title ?? ''}
+          message={feedback?.message ?? ''}
+          variant={feedback?.variant}
+          onDismiss={() => setFeedback(null)}
+        />
         {/* Header */}
         <View
           style={{
@@ -309,24 +371,7 @@ export default function SettingsScreen() {
                   icon={RefreshCw}
                   title="Restore Purchases"
                   subtitle="Restore a previous subscription"
-                  onPress={async () => {
-                    try {
-                      const result = await restorePurchases();
-                      if (result.ok) {
-                        await checkSubscription();
-                        const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;
-                        if (hasActive) {
-                          Alert.alert('Restored!', 'Your subscription has been restored.');
-                        } else {
-                          Alert.alert('No Subscription Found', 'No previous subscription was found for this account.');
-                        }
-                      } else {
-                        Alert.alert('No Subscription Found', 'No previous subscription was found for this account.');
-                      }
-                    } catch {
-                      Alert.alert('Restore Failed', 'Please try again later.');
-                    }
-                  }}
+                  onPress={handleRestorePurchases}
                 />
                 <SettingItem
                   icon={Gift}
@@ -464,7 +509,7 @@ export default function SettingsScreen() {
           {/* Version + Disclaimer */}
           <View style={{ alignItems: 'center', marginTop: 20, paddingHorizontal: 32 }}>
             <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
-              Clutch Picks v1.1.1
+              {appVersionLabel}
             </Text>
             <Text style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 15 }}>
               Predictions are for entertainment and informational purposes only. Clutch Picks does not facilitate, encourage, or enable gambling. Past prediction accuracy does not guarantee future results.
@@ -472,35 +517,32 @@ export default function SettingsScreen() {
           </View>
         </ScrollView>
 
-        {/* Android promo modal — iOS uses Alert.prompt */}
-        {Platform.OS !== 'ios' ? (
-          <Modal visible={promoModalVisible} transparent animationType="fade" onRequestClose={() => setPromoModalVisible(false)}>
-            <Pressable onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
-              <Pressable onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>Promo Code</Text>
-                <Text style={{ fontSize: 13, color: '#6B7C94', marginBottom: 16 }}>Enter your code</Text>
-                <TextInput
-                  value={promoInput}
-                  onChangeText={(t) => setPromoInput(t.toUpperCase())}
-                  placeholder="CODE"
-                  placeholderTextColor="rgba(255,255,255,0.15)"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 16, paddingVertical: 14, letterSpacing: 2, marginBottom: 16 }}
-                  keyboardAppearance="dark"
-                />
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <Pressable onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#6B7C94' }}>Cancel</Text>
-                  </Pressable>
-                  <Pressable onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{promoLoading ? 'Redeeming...' : 'Redeem'}</Text>
-                  </Pressable>
-                </View>
-              </Pressable>
+        <Modal visible={promoModalVisible} transparent animationType="fade" onRequestClose={() => setPromoModalVisible(false)}>
+          <Pressable onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>Promo Code</Text>
+              <Text style={{ fontSize: 13, color: '#6B7C94', marginBottom: 16 }}>Enter your code</Text>
+              <TextInput
+                value={promoInput}
+                onChangeText={(t) => setPromoInput(t.toUpperCase())}
+                placeholder="CODE"
+                placeholderTextColor="rgba(255,255,255,0.15)"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 16, paddingVertical: 14, letterSpacing: 2, marginBottom: 16 }}
+                keyboardAppearance="dark"
+              />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#6B7C94' }}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{promoLoading ? 'Redeeming...' : 'Redeem'}</Text>
+                </Pressable>
+              </View>
             </Pressable>
-          </Modal>
-        ) : null}
+          </Pressable>
+        </Modal>
 
         <ConfirmModal
           visible={deleteConfirmVisible}

@@ -57,6 +57,67 @@ export interface Team {
   matchesPlayed?: number;
 }
 
+export interface CricketInningsScore {
+  runs?: number;
+  wickets?: number;
+  overs?: number;
+  maxOvers?: number;
+  isBatting?: boolean;
+  description?: string;
+  scoreText: string;
+  detailText?: string;
+}
+
+export interface CricketBatterContext {
+  name: string;
+  role: 'striker' | 'non-striker';
+  runs?: number;
+  balls?: number;
+}
+
+export interface CricketBowlerContext {
+  name: string;
+  overs?: string;
+  runsConceded?: number;
+  wickets?: number;
+}
+
+export interface CricketOverSummary {
+  over: number;
+  runs: number;
+  wickets: number;
+  complete?: boolean;
+}
+
+export interface CricketBallSummary {
+  ball: number;
+  label: string;
+  runs: number;
+  wicket?: boolean;
+  extra?: 'wide' | 'noball' | 'bye' | 'legbye';
+}
+
+export interface CricketCurrentOverSummary {
+  over: number;
+  runs: number;
+  wickets: number;
+  complete?: boolean;
+  balls: CricketBallSummary[];
+}
+
+export interface CricketScoreState {
+  home?: CricketInningsScore;
+  away?: CricketInningsScore;
+  battingSide?: 'home' | 'away';
+  innings?: number | null;
+  summary?: string;
+  target?: number;
+  currentBatters?: CricketBatterContext[];
+  currentBowler?: CricketBowlerContext;
+  overTrack?: CricketOverSummary[];
+  currentOver?: CricketCurrentOverSummary;
+}
+
 export interface Game {
   id: string;
   sport: Sport;
@@ -69,6 +130,8 @@ export interface Game {
   watchSources?: string[];
   homeScore?: number;
   awayScore?: number;
+  homeScoreDisplay?: string;
+  awayScoreDisplay?: string;
   spread?: number; // Positive means home favored
   overUnder?: number;
   marketFavorite?: 'home' | 'away';
@@ -90,6 +153,7 @@ export interface Game {
   } | null;
   homeLinescores?: number[];
   awayLinescores?: number[];
+  cricketState?: CricketScoreState;
   liveState?: {
     balls: number;
     strikes: number;
@@ -115,9 +179,66 @@ export interface PredictionFactor {
   description: string;
 }
 
+export type CanonicalFinalPick = 'home' | 'away' | 'draw' | 'none';
+
+export interface CanonicalProbabilities {
+  home: number; // 0..1
+  away: number; // 0..1
+  draw?: number; // 0..1
+}
+
+export interface CanonicalPredictionResult {
+  eventId: string;
+  marketType: 'moneyline' | 'three_way_result';
+  finalPick: CanonicalFinalPick;
+  finalProbability: number; // 0..1
+  confidence: number; // 0..100
+  probabilities: CanonicalProbabilities;
+  projectedScore?: {
+    home: number;
+    away: number;
+    spread: number;
+    total: number;
+  };
+  simulationSummary?: {
+    engine: string;
+    iterations: number;
+    probabilities: CanonicalProbabilities;
+    volatility: number;
+    upsetRisk: number;
+  };
+  modelInputs?: {
+    sport: string;
+    homeTeamId: string;
+    awayTeamId: string;
+    gameTime: string;
+    factorCount: number;
+    availableFactorCount: number;
+    marketConsensusIncluded: boolean;
+  };
+  engineBreakdown?: Array<{
+    engine: string;
+    pick: CanonicalFinalPick;
+    probability: number;
+    confidence?: number;
+    weight?: number;
+    probabilities?: CanonicalProbabilities;
+    inputs?: Record<string, string | number | boolean | null>;
+    warnings?: string[];
+  }>;
+  reconciliation?: {
+    method: string;
+    notes: string[];
+  };
+  timestamp: string;
+  dataVersion: string;
+  warnings?: string[];
+}
+
 export interface Prediction {
   id: string;
   gameId: string;
+  canonicalResult?: CanonicalPredictionResult;
   predictedWinner: 'home' | 'away';
   predictedOutcome?: 'home' | 'away' | 'draw';
   confidence: number; // 0-100
@@ -128,6 +249,7 @@ export interface Prediction {
   // Advanced fields from new prediction engine
   homeWinProbability?: number; // 0-100
   awayWinProbability?: number; // 0-100
+  drawProbability?: number; // 0-100, soccer only
   factors?: PredictionFactor[];
   edgeRating?: number; // 1-10
   valueRating?: number; // 1-10

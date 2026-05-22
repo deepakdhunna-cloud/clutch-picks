@@ -179,6 +179,18 @@ export const getCustomerInfo = (): Promise<RevenueCatResult<CustomerInfo>> => {
   );
 };
 
+export const getRevenueCatAppUserId = (): Promise<RevenueCatResult<string>> => {
+  return guardRevenueCatUsage("getAppUserID", () => Purchases.getAppUserID());
+};
+
+export const invalidateCustomerInfoCache = (): Promise<
+  RevenueCatResult<void>
+> => {
+  return guardRevenueCatUsage("invalidateCustomerInfoCache", () =>
+    Purchases.invalidateCustomerInfoCache(),
+  );
+};
+
 export const customerInfoHasPremium = (customerInfo: CustomerInfo): boolean => {
   return Boolean(customerInfo.entitlements.active?.[REVENUECAT_ENTITLEMENT_ID]);
 };

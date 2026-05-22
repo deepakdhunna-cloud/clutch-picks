@@ -6,7 +6,14 @@ import { memo } from 'react';
 import { useGame } from '@/hooks/useGames';
 import { displayConfidence, displayWinProbability } from '@/lib/display-confidence';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { getProjectionDisplay } from '@/lib/projection-display';
+import { cleanProjectionCopy, getProjectionDisplay } from '@/lib/projection-display';
+import { getPredictionDisplay } from '@/lib/prediction-display';
+import {
+  getCanonicalConfidence,
+  getCanonicalResult,
+  getCanonicalWinProbabilities,
+} from '@/lib/canonical-result';
+import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useSubscription } from '@/lib/subscription-context';
@@ -35,6 +42,7 @@ interface GameTeam {
 }
 
 interface GamePrediction {
+  canonicalResult?: CanonicalPredictionResult;
   predictedWinner: 'home' | 'away';
   predictedOutcome?: 'home' | 'away' | 'draw';
   confidence: number;
@@ -242,13 +250,55 @@ export default function GameAnalysisScreen() {
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
 
-  const { data: game, isLoading } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean };
+  const { data: game, isLoading, isFetching, error } = useGame(id ?? '') as {
+    data: Game | null | undefined;
+    isLoading: boolean;
+    isFetching: boolean;
+    error: unknown;
+  };
 
-  if (isLoading || !game || !game.prediction) {
+  if (isLoading && !game) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={TEAL} />
         <Text style={{ color: '#6B7C94', fontSize: 14, marginTop: 12 }}>Loading analysis...</Text>
+      </View>
+    );
+  }
+
+  if (error || !game) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
+            </Pressable>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 80 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>Analysis unavailable</Text>
+            <Text style={{ color: '#6B7C94', fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: 'center' }}>We could not load this game right now.</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (!game.prediction) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
+            </Pressable>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 80 }}>
+            {isFetching ? <ActivityIndicator color={TEAL} /> : null}
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginTop: isFetching ? 14 : 0, textAlign: 'center' }}>{isFetching ? 'Analysis is warming up' : 'Analysis unavailable'}</Text>
+            <Text style={{ color: '#6B7C94', fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: 'center' }}>{isFetching ? 'The pick is still being prepared for this game.' : 'There is no prediction available for this game yet.'}</Text>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -262,17 +312,61 @@ export default function GameAnalysisScreen() {
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
-            <View style={{ backgroundColor: 'rgba(139,10,31,0.12)', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 8, marginBottom: 16 }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: '#8B0A1F', letterSpacing: 2 }}>PRO</Text>
-            </View>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 }}>Full AI Analysis</Text>
-            <Text style={{ fontSize: 13, color: '#A1B3C9', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>Detailed breakdown with edge ratings, factor analysis, and prediction confidence</Text>
-            <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
-              <LinearGradient colors={['#8B0A1F', '#6A0818']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>Unlock Clutch Picks Pro</Text>
-              </LinearGradient>
-            </Pressable>
+          <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+            <LinearGradient
+              colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ borderRadius: 24, padding: 1.2 }}
+            >
+              <View style={{ borderRadius: 22.8, backgroundColor: 'rgba(5,8,13,0.96)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', padding: 22, overflow: 'hidden' }}>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={['rgba(122,157,184,0.15)', 'rgba(255,255,255,0.025)', 'rgba(139,10,31,0.08)', 'rgba(5,8,13,0.96)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 1 }}
+                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+                  <View style={{ width: 52, height: 52, borderRadius: 17, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.28)', alignItems: 'center', justifyContent: 'center', marginRight: 13 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#9AB8CC', letterSpacing: 1.2 }}>PRO</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: TEAL, letterSpacing: 2, marginBottom: 5 }}>FULL BREAKDOWN</Text>
+                    <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0 }}>AI analysis is queued</Text>
+                  </View>
+                  <View style={{ borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: 'rgba(139,10,31,0.14)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.30)' }}>
+                    <Text style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: 'rgba(255,255,255,0.82)', letterSpacing: 1.3 }}>PRO</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 13, color: '#A1B3C9', lineHeight: 20, marginBottom: 18 }}>
+                  Reveal edge ratings, factor analysis, and model confidence when you want the complete read.
+                </Text>
+                <View style={{ marginBottom: 18 }}>
+                  {['Edge ratings', 'Factor analysis', 'Prediction confidence'].map((label, index) => (
+                    <View key={label} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 32, borderRadius: 11, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 10, marginBottom: index === 2 ? 0 : 8 }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: index === 0 ? '#9AB8CC' : index === 1 ? 'rgba(139,10,31,0.78)' : 'rgba(224,234,240,0.55)', marginRight: 9 }} />
+                      <Text style={{ flex: 1, fontSize: 11, lineHeight: 14, color: 'rgba(224,234,240,0.74)', fontWeight: '800' }}>{label}</Text>
+                      <View style={{ width: index === 0 ? 58 : index === 1 ? 78 : 66, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.055)' }} />
+                    </View>
+                  ))}
+                </View>
+                <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                  <LinearGradient colors={['rgba(122,157,184,0.24)', 'rgba(139,10,31,0.18)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 15, padding: 1 }}>
+                    <View style={{ flex: 1, borderRadius: 14, backgroundColor: 'rgba(5,8,13,0.78)', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF' }}>Preview Pro</Text>
+                    </View>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </LinearGradient>
           </View>
         </SafeAreaView>
       </View>
@@ -280,7 +374,8 @@ export default function GameAnalysisScreen() {
   }
 
   const { homeTeam, awayTeam, prediction } = game;
-  const sorted = [...prediction.factors]
+  const factors = prediction.factors ?? [];
+  const sorted = [...factors]
     .filter(f => f.weight > 0)
     .sort((a, b) => {
       const aDelta = Math.abs(a.homeScore - a.awayScore);
@@ -295,15 +390,24 @@ export default function GameAnalysisScreen() {
   const homeEdgeCount = sorted.filter(f => f.homeScore > f.awayScore + 0.3).length;
   const awayEdgeCount = sorted.filter(f => f.awayScore > f.homeScore + 0.3).length;
   const neutralCount = sorted.length - homeEdgeCount - awayEdgeCount;
-  const winner = prediction.predictedWinner === 'home' ? homeTeam : awayTeam;
+  const canonical = getCanonicalResult(prediction as unknown as Prediction);
+  const predictionDisplay = getPredictionDisplay({
+    prediction: prediction as unknown as Prediction,
+    homeTeam,
+    awayTeam,
+  });
+  const winnerName = predictionDisplay.label;
+  const canonicalConfidence = getCanonicalConfidence(prediction as unknown as Prediction);
   const projectionDisplay = prediction.projection
     ? getProjectionDisplay({
         sport: game.sport,
         homeAbbr: homeTeam.abbreviation,
         awayAbbr: awayTeam.abbreviation,
+        canonicalResult: canonical,
         predictedWinner: prediction.predictedWinner,
         predictedOutcome: prediction.predictedOutcome,
-        confidence: prediction.confidence,
+        confidence: canonicalConfidence,
+        isTossUp: predictionDisplay.isTossUp,
         projection: prediction.projection,
       })
     : null;
@@ -319,7 +423,7 @@ export default function GameAnalysisScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Analysis Breakdown</Text>
             <Text style={s.headerSub}>
-              {homeTeam.abbreviation} vs {awayTeam.abbreviation} · {sorted.length} factors analyzed
+              {homeTeam.abbreviation} vs {awayTeam.abbreviation} · unified engine · {sorted.length} factors
             </Text>
           </View>
         </View>
@@ -351,18 +455,19 @@ export default function GameAnalysisScreen() {
             <View style={s.pickCardInner}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <View>
-                  <Text style={s.pickLabel}>CLUTCH PICK</Text>
-                  <Text style={s.pickTeam}>{winner.name}</Text>
+                  <Text style={s.pickLabel}>UNIFIED ENGINE PICK</Text>
+                  <Text style={s.pickTeam}>{winnerName}</Text>
                 </View>
                 <View style={s.confBadge}>
-                  <Text style={s.confValue}>{displayConfidence(prediction.confidence)}%</Text>
+                  <Text style={s.confValue}>{displayConfidence(canonicalConfidence)}%</Text>
                   <Text style={s.confLabel}>CONF</Text>
                 </View>
               </View>
 
               {/* Win probability bar */}
               {(() => {
-                const dp = displayWinProbability(prediction.homeWinProbability, prediction.awayWinProbability);
+                const canonicalProbabilities = getCanonicalWinProbabilities(prediction as unknown as Prediction);
+                const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away);
                 return (
                   <View style={s.probRow}>
                     <Text style={[s.probTeam, { color: TEAL }]}>{homeTeam.abbreviation} {dp.home}%</Text>
@@ -397,7 +502,7 @@ export default function GameAnalysisScreen() {
 
         {/* Model Summary */}
         <View style={s.summaryCard}>
-          <Text style={s.sectionLabel}>Model Summary</Text>
+          <Text style={s.sectionLabel}>Unified Model Summary</Text>
           <Text style={s.summaryText}>{displayPredictionAnalysis({
             sport: (game.sport ?? 'UNKNOWN') as any,
             homeTeam,
@@ -412,7 +517,6 @@ export default function GameAnalysisScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <View>
                 <Text style={s.sectionLabel}>{projectionDisplay?.label ?? 'Expected Score'}</Text>
-                <Text style={s.projectionSub}>{projectionDisplay?.contextText ?? `${prediction.projection.iterations.toLocaleString()} simulated game scripts`}</Text>
               </View>
               <View style={s.upsetBadge}>
                 <Text style={s.upsetValue}>{Math.round(prediction.projection.upsetRisk * 100)}%</Text>
@@ -426,8 +530,8 @@ export default function GameAnalysisScreen() {
                 <Text style={s.projectionScore}>{projectionDisplay?.homeScore ?? Math.round(prediction.projection.projectedHomeScore)}</Text>
               </View>
               <View style={s.projectionMid}>
-                <Text style={s.projectionMidLabel}>{projectionDisplay?.label ?? 'Expected Score'}</Text>
-                <Text style={s.projectionMidValue}>{projectionDisplay?.leanText ?? `Pick lean ${winner.abbreviation} ${Math.round(prediction.confidence)}%`}</Text>
+                <Text style={s.projectionMidLabel}>{projectionDisplay?.label ?? 'Unified Projection'}</Text>
+                <Text style={s.projectionMidValue}>{projectionDisplay?.leanText ?? predictionDisplay.leanLabel}</Text>
                 <Text style={s.projectionMidValue}>Total {projectionDisplay?.total ?? Math.round(prediction.projection.projectedTotal)}</Text>
                 <Text style={s.projectionMidValue}>Spread {(projectionDisplay?.spreadValue ?? prediction.projection.projectedSpread) >= 0 ? '+' : ''}{projectionDisplay?.spread ?? Math.round(prediction.projection.projectedSpread)}</Text>
               </View>
@@ -442,7 +546,7 @@ export default function GameAnalysisScreen() {
                 {prediction.projection.signals.slice(0, 3).map((signal) => (
                   <View key={signal.key} style={s.projectionSignal}>
                     <Text style={s.projectionSignalTitle}>{signal.label}</Text>
-                    <Text style={s.projectionSignalBody}>{signal.evidence}</Text>
+                    <Text style={s.projectionSignalBody}>{cleanProjectionCopy(signal.evidence)}</Text>
                   </View>
                 ))}
               </View>
@@ -560,7 +664,6 @@ const s = StyleSheet.create({
     borderColor: 'rgba(122,157,184,0.16)',
     marginBottom: 20,
   },
-  projectionSub: { fontSize: 11, color: '#6B7C94', marginTop: 4 },
   upsetBadge: {
     borderRadius: 12,
     paddingHorizontal: 12,

@@ -84,6 +84,7 @@ Predictions are for entertainment and informational purposes only. Past predicti
 
 - Subscription display name: `Clutch Picks Pro`
 - Product type: auto-renewable monthly subscription
+- US price: `$6.99/month`
 - Trial: 3-day free trial for eligible users
 - User-facing entitlement/access: AI predictions, confidence ratings, detailed game analysis, live scores, stats, and where-to-watch information
 - Required links: Terms and Privacy Policy are available in-app and should also be linked in App Store Connect subscription metadata.
@@ -107,6 +108,7 @@ Recommended screens:
 - Current Offering exists and is marked current/default.
 - Current Offering contains package `$rc_monthly`.
 - `$rc_monthly` is backed by the App Store monthly subscription product.
+- App Store monthly subscription product is priced at `$6.99/month` in the US storefront.
 - App Store product has a 3-day free trial introductory offer.
 - Entitlement identifier exactly matches `Clutch Picks Pro`.
 - Monthly product is attached to the `Clutch Picks Pro` entitlement.

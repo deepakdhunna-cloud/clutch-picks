@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Image, Alert, ScrollView, Share,
+  View, Text, Pressable, ActivityIndicator, Image, ScrollView, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,7 +23,9 @@ import { displaySport } from '@/lib/display-confidence';
 import { authClient } from '@/lib/auth/auth-client';
 import { isRevenueCatEnabled, logoutUser } from '@/lib/revenuecatClient';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
+import { getAppVersionLabel } from '@/lib/app-version';
 
 // ─── COLORS ───
 const C = {
@@ -59,6 +61,39 @@ const AUTH_STORAGE_KEYS = [
   'clutchpicks_refresh_token',
   'clutchpicks_bearer_token',
 ] as const;
+
+const ProfileLoadingState = memo(function ProfileLoadingState() {
+  return (
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+          <View>
+            <View style={{ width: 132, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 8 }} />
+            <View style={{ width: 88, height: 10, borderRadius: 5, backgroundColor: 'rgba(122,157,184,0.12)' }} />
+          </View>
+          <ActivityIndicator size="small" color={C.TEAL} />
+        </View>
+        <View style={{ borderRadius: 18, borderWidth: 1, borderColor: C.BORDER, backgroundColor: C.GLASS, padding: 18, marginBottom: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(122,157,184,0.10)', marginRight: 14 }} />
+            <View style={{ flex: 1 }}>
+              <View style={{ width: '58%', height: 16, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 10 }} />
+              <View style={{ width: '42%', height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.045)' }} />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {[0, 1, 2].map((item) => (
+              <View key={item} style={{ flex: 1, height: 58, borderRadius: 14, backgroundColor: item === 1 ? C.TEAL_DIM : C.MAROON_DIM, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }} />
+            ))}
+          </View>
+        </View>
+        {[0, 1, 2].map((item) => (
+          <View key={item} style={{ height: 72, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.025)', borderWidth: 1, borderColor: C.BORDER, marginBottom: 10 }} />
+        ))}
+      </View>
+    </SafeAreaView>
+  );
+});
 
 // ─── SVG ICONS ───
 function GearIcon({ size = 16, color = C.TEXT_MUTED }: { size?: number; color?: string }) {
@@ -256,6 +291,7 @@ const SignedOutState = memo(function SignedOutState() {
 // ─── MAIN SCREEN ───
 export default function ProfileScreen() {
   const router = useRouter();
+  const appVersionLabel = getAppVersionLabel();
   const { data: session, isLoading: sessionLoading } = useSession();
   const userId = session?.user?.id;
   const { data: stats, refetch: refetchStats } = useUserStats();
@@ -264,6 +300,7 @@ export default function ProfileScreen() {
   const invalidateSession = useInvalidateSession();
   const scrollHandler = useHideOnScroll();
   const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
+  const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ['profile'],
@@ -450,13 +487,17 @@ export default function ProfileScreen() {
       await invalidateSession();
       router.replace('/welcome');
     } catch {
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      setFeedback({
+        title: 'Sign Out Failed',
+        message: 'Failed to sign out. Please try again.',
+        variant: 'error',
+      });
     }
   }, [invalidateSession, router]);
 
   // Loading
   if (sessionLoading) {
-    return <View style={{ flex: 1, backgroundColor: C.BG, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={C.TEAL} /></View>;
+    return <ProfileLoadingState />;
   }
 
   if (!session) return <SignedOutState />;
@@ -474,6 +515,13 @@ export default function ProfileScreen() {
         destructive
         onConfirm={handleConfirmSignOut}
         onCancel={() => setSignOutConfirmVisible(false)}
+      />
+      <FeedbackModal
+        visible={!!feedback}
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+        variant={feedback?.variant}
+        onDismiss={() => setFeedback(null)}
       />
       <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
 
@@ -771,7 +819,7 @@ export default function ProfileScreen() {
           <Pressable onPress={handleSignOut}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
           </Pressable>
-          <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>Clutch Picks v1.1.1</Text>
+          <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>{appVersionLabel}</Text>
         </View>
 
       </Animated.ScrollView>

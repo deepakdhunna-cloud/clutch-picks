@@ -4,7 +4,6 @@
  */
 
 import { prisma } from "../prisma";
-import { createNotification } from "../routes/notifications";
 import { notifyPickResult, checkStreakMilestone, calculateWinStreak } from "./notification-jobs";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 
@@ -314,15 +313,17 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
         const awayAbbr = pick.awayTeam ?? 'AWAY';
         const teams = [awayAbbr, homeAbbr].filter(Boolean).join(" vs ");
 
-        // In-app notification
+        // In-app notification. Push is sent once by notifyPickResult below.
         const emoji = result === "win" ? "W" : "L";
-        createNotification(
-          pick.odId,
-          "pick_resolved",
-          `Pick Result: ${emoji}`,
-          `Your pick on ${teams || "a game"} was a ${result}!`,
-          { gameId: pick.gameId }
-        );
+        await prisma.appNotification.create({
+          data: {
+            userId: pick.odId,
+            type: "pick_resolved",
+            title: `Pick Result: ${emoji}`,
+            body: `Your pick on ${teams || "a game"} was a ${result}!`,
+            data: JSON.stringify({ gameId: pick.gameId }),
+          },
+        });
 
         // Rich push notification (deduped in notifyPickResult)
         notifyPickResult(pick.odId, pick.gameId, result, homeAbbr, awayAbbr);
