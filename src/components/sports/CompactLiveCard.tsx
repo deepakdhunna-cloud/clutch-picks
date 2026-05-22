@@ -176,7 +176,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                 fontSize: 13,
                 fontWeight: awayWinning || awayBatting ? '800' : '500',
                 letterSpacing: 0.4,
-              }}>
+              }} numberOfLines={1}>
                 {game.awayTeam.city || game.awayTeam.abbreviation}
               </Text>
               {game.awayTeam.record ? (
@@ -225,7 +225,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                 fontSize: 13,
                 fontWeight: homeWinning || homeBatting ? '800' : '500',
                 letterSpacing: 0.4,
-              }}>
+              }} numberOfLines={1}>
                 {game.homeTeam.city || game.homeTeam.abbreviation}
               </Text>
               {game.homeTeam.record ? (
@@ -275,7 +275,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                       borderWidth: 1,
                       borderColor: suspended ? 'rgba(220,38,38,0.28)' : 'rgba(255,255,255,0.22)',
                     }}>
-                      <Text style={{ color: suspended ? '#DC2626' : '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{timeStr}</Text>
+                      <Text numberOfLines={1} style={{ color: suspended ? '#DC2626' : '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{timeStr}</Text>
                     </View>
                   );
                 }
@@ -292,7 +292,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.22)',
               }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>{game.tvChannel}</Text>
+                <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', maxWidth: 104 }}>{game.tvChannel}</Text>
               </View>
             ) : null}
           </View>

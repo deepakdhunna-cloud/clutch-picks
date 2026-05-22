@@ -382,9 +382,9 @@ export function useGame(gameId: string) {
       // hard so it appears the moment background generation finishes.
       if (game && !game.prediction) return PREDICTION_BURST_INTERVAL;
       if (game?.status === GameStatus.LIVE) {
-        // SSE is global now, but detail keeps a fast fallback in case the
-        // stream disconnects or the server is between score pushes.
-        return LIVE_POLLING_INTERVAL;
+        // SSE pushes live updates into detail caches, so avoid duplicate
+        // polling churn unless the stream is disconnected.
+        return sseConnectedRef.current ? DEFAULT_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;
       }
       return DEFAULT_POLLING_INTERVAL;
     },

@@ -1620,12 +1620,13 @@ const SilkThread = React.memo(function SilkThread({
       );
     }, delay);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [delay, duration, opacity, translateX, translateY]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
+      { rotate },
     ],
     opacity: opacity.value,
   }));
@@ -1640,7 +1641,6 @@ const SilkThread = React.memo(function SilkThread({
           left: '-50%',
           width: '200%',
           height: 1,
-          transform: [{ rotate }],
         },
       ]}
     >
@@ -1673,15 +1673,51 @@ function useSecondsUntil(gameTime: string): number {
     const t = new Date(gameTime).getTime();
     return Number.isNaN(t) ? null : t;
   }, [gameTime]);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (target == null) return;
-    const tick = () => setNow(Date.now());
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+  const getDisplaySeconds = useCallback(() => {
+    if (target == null) return Number.POSITIVE_INFINITY;
+    const next = Math.max(0, Math.floor((target - Date.now()) / 1000));
+    return next > COUNTDOWN_WINDOW_SEC ? Number.POSITIVE_INFINITY : next;
   }, [target]);
-  if (target == null) return Number.POSITIVE_INFINITY;
-  return Math.max(0, Math.floor((target - now) / 1000));
+  const [secondsLeft, setSecondsLeft] = useState(getDisplaySeconds);
+
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const sync = () => {
+      if (target == null) {
+        setSecondsLeft(Number.POSITIVE_INFINITY);
+        return;
+      }
+
+      const rawSeconds = Math.max(0, Math.floor((target - Date.now()) / 1000));
+      if (rawSeconds > COUNTDOWN_WINDOW_SEC) {
+        setSecondsLeft(Number.POSITIVE_INFINITY);
+        const msUntilWindow = Math.max(1000, (rawSeconds - COUNTDOWN_WINDOW_SEC) * 1000);
+        timeout = setTimeout(sync, Math.min(msUntilWindow, 60 * 60 * 1000));
+        return;
+      }
+
+      setSecondsLeft(rawSeconds);
+      interval = setInterval(() => {
+        const next = Math.max(0, Math.floor((target - Date.now()) / 1000));
+        setSecondsLeft(next > COUNTDOWN_WINDOW_SEC ? Number.POSITIVE_INFINITY : next);
+        if (next <= 0 && interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      }, 1000);
+    };
+
+    sync();
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
+  }, [target]);
+
+  return secondsLeft;
 }
 
 // In-flow pre-game countdown. Renders inside the score-panel slot during the
@@ -1697,7 +1733,7 @@ function PreGameCountdown({ secondsLeft, sport }: { secondsLeft: number; sport?:
       -1,
       false
     );
-  }, []);
+  }, [colonOpacity]);
   const colonStyle = useAnimatedStyle(() => ({ opacity: colonOpacity.value }));
 
   if (!Number.isFinite(secondsLeft) || secondsLeft <= 0 || secondsLeft > COUNTDOWN_WINDOW_SEC) return null;
@@ -1788,7 +1824,7 @@ export default function GameDetailScreen() {
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
   const { data: userPick } = useGamePick(id ?? '');
   const makePick = useMakePick();
-  const { data: game, isLoading, error, refetch } = useGame(id ?? '') as { data: Game | null | undefined; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
+  const { data: game, dataUpdatedAt, isLoading, error, refetch } = useGame(id ?? '') as { data: Game | null | undefined; dataUpdatedAt: number; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
   const { refreshing, onRefresh } = useSmoothRefresh(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     return refetch();
@@ -1797,11 +1833,12 @@ export default function GameDetailScreen() {
 
   useEffect(() => {
     if (!id || !hasGameData || !deferredContentReady) return;
+    if (Date.now() - dataUpdatedAt < 8000) return;
     const timeout = setTimeout(() => {
       void refetch();
     }, 120);
     return () => clearTimeout(timeout);
-  }, [deferredContentReady, hasGameData, id, refetch]);
+  }, [dataUpdatedAt, deferredContentReady, hasGameData, id, refetch]);
   // Tick the pre-game countdown clock — called unconditionally to respect
   // the rules of hooks. Returns +Infinity until we have a valid gameTime
   // and 0 once tip-off has passed.
@@ -1840,7 +1877,7 @@ export default function GameDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }}>
       {deferredContentReady ? <SilkThreads /> : null}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} removeClippedSubviews={true} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressViewOffset={insets.top + 40} />}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressViewOffset={insets.top + 40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
           <LinearGradient colors={[hexToRgba(homeTeam.color, 0.5), hexToRgba(homeTeam.color, 0.28), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />

@@ -294,8 +294,9 @@ export default function ProfileScreen() {
   const appVersionLabel = getAppVersionLabel();
   const { data: session, isLoading: sessionLoading } = useSession();
   const userId = session?.user?.id;
-  const { data: stats, refetch: refetchStats } = useUserStats();
-  const { data: picks } = useUserPicks();
+  const hasUser = Boolean(userId);
+  const { data: stats, refetch: refetchStats } = useUserStats(hasUser);
+  const { data: picks } = useUserPicks(hasUser);
   const { data: allGames } = useGames();
   const invalidateSession = useInvalidateSession();
   const scrollHandler = useHideOnScroll();
@@ -308,7 +309,9 @@ export default function ProfileScreen() {
     enabled: !!userId,
   });
 
-  useFocusEffect(useCallback(() => { refetchStats(); }, [refetchStats]));
+  useFocusEffect(useCallback(() => {
+    if (hasUser) void refetchStats();
+  }, [hasUser, refetchStats]));
 
   // Derived
   const userName = session?.user?.name ?? 'Player';

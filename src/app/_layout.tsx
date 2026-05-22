@@ -171,19 +171,30 @@ function RootLayoutNav({
   useEffect(() => {
     const currentId = session?.user?.id ?? null;
     const prevId = prevUserIdRef.current;
+    let cancelled = false;
 
     const isFirstRun = prevId === undefined;
     const wasSignedOut = prevId === null && currentId !== null;
     const wasSignedIn = prevId !== null && currentId === null;
 
     if (isFirstRun || wasSignedOut || wasSignedIn) {
+      setOnboardingChecked(false);
       AsyncStorage.getItem('clutch_onboarding_complete').then((val) => {
+        if (cancelled) return;
         setOnboardingDone(val === 'true');
+        setOnboardingChecked(true);
+      }).catch(() => {
+        if (cancelled) return;
+        setOnboardingDone(false);
         setOnboardingChecked(true);
       });
     }
 
     prevUserIdRef.current = currentId;
+
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.id]);
 
   // Configure focus manager for React Query - refetch when app comes to foreground
@@ -197,6 +208,7 @@ function RootLayoutNav({
   }, []);
 
   const segment = segments[0];
+  const hasUser = Boolean(session?.user);
   const inAuthGroup =
     segment === 'sign-in' ||
     segment === 'sign-up' ||
@@ -208,8 +220,8 @@ function RootLayoutNav({
     !isLoading &&
     onboardingChecked &&
     (
-      (Boolean(session?.user) && inAuthGroup && segment !== 'onboarding') ||
-      (!session?.user && !inAuthGroup && !inPublicGroup)
+      (hasUser && inAuthGroup && segment !== 'onboarding') ||
+      (!hasUser && !inAuthGroup && !inPublicGroup)
     );
   const appFlowLoading = isLoading || !onboardingChecked || shouldRedirect;
 
@@ -223,27 +235,19 @@ function RootLayoutNav({
 
   // Handle auth state changes and redirect accordingly
   useEffect(() => {
-    if (__DEV__) console.log('[guard]', segments[0], 'hasUser:', !!session?.user, 'loading:', isLoading, 'onbChk:', onboardingChecked, 'onbDone:', onboardingDone);
     if (isLoading || !onboardingChecked) return;
 
-    if (__DEV__) {
-      console.log('[layout] guard: hasUser=', !!session?.user, 'segment=', segment, 'inAuthGroup=', inAuthGroup, 'onboardingDone=', onboardingDone);
-    }
-
-    if (session?.user && inAuthGroup && segment !== 'onboarding') {
+    if (hasUser && inAuthGroup && segment !== 'onboarding') {
       // Check if onboarding is complete — if not, send to onboarding first
       if (!onboardingDone) {
-        if (__DEV__) console.log('[layout] guard: signed in on auth screen → onboarding');
         router.replace('/onboarding');
       } else {
-        if (__DEV__) console.log('[layout] guard: signed in on auth screen → (tabs)');
         router.replace('/(tabs)');
       }
-    } else if (!session?.user && !inAuthGroup && !inPublicGroup) {
-      if (__DEV__) console.log('[layout] guard: NOT signed in but on app screen → /welcome');
+    } else if (!hasUser && !inAuthGroup && !inPublicGroup) {
       router.replace('/welcome');
     }
-  }, [session, isLoading, segments, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup]);
+  }, [hasUser, isLoading, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup, router]);
 
   // Callback when splash animation completes
   const handleAnimationComplete = useCallback(() => {

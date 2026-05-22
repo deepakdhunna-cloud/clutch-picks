@@ -239,6 +239,7 @@ interface HomeHeaderProps {
   gameCounts: Partial<Record<Sport, number>>;
   isLoadingGames: boolean;
   router: ReturnType<typeof useRouter>;
+  onOpenGame: (game: GameWithPrediction) => void;
   horizontalPadding: number;
   headerFontSize: number;
   responsive: ReturnType<typeof useResponsive>;
@@ -365,6 +366,7 @@ const HomeHeader = React.memo(function HomeHeader({
   gameCounts,
   isLoadingGames,
   router,
+  onOpenGame,
   horizontalPadding,
   headerFontSize,
   responsive,
@@ -493,7 +495,7 @@ const HomeHeader = React.memo(function HomeHeader({
             decelerationRate="fast"
           >
             {(showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)).map((game) => (
-              <CompactLiveCard key={game.id} game={game} onPress={() => router.push(`/game/${game.id}` as any)} />
+              <CompactLiveCard key={game.id} game={game} onPress={() => onOpenGame(game)} />
             ))}
 
             {/* View All button — only show when there are more than 5 and not yet expanded */}
@@ -550,8 +552,6 @@ const SearchGameCard = memo(function SearchGameCard({
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport);
   const isLive = game.status === GameStatus.LIVE;
   const sportMeta = SPORT_META[game.sport];
-  const awayScore = game.awayScore ?? 0;
-  const homeScore = game.homeScore ?? 0;
   const awayScoreLabel = teamScoreText(game, 'away');
   const homeScoreLabel = teamScoreText(game, 'home');
 
@@ -727,6 +727,13 @@ export default function HomeScreen() {
   const deferredSelectedLiveSportFilter = useDeferredValue(selectedLiveSportFilter);
   const deferredStatusFilter = useDeferredValue(statusFilter);
 
+  useEffect(() => {
+    if (!selectedSportFilter) return;
+    if (selectedLiveSportFilter && selectedLiveSportFilter !== selectedSportFilter) {
+      setSelectedLiveSportFilter(null);
+    }
+  }, [selectedLiveSportFilter, selectedSportFilter]);
+
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       'worklet';
@@ -776,7 +783,8 @@ export default function HomeScreen() {
     },
   });
 
-  // Reset gently when sport filter changes without snapping the whole page.
+  // Reset gently when board filters change so the user never lands in the
+  // middle of a shorter slate after chips swap the list underneath them.
   const didMountFilterRef = useRef(false);
   useEffect(() => {
     if (!didMountFilterRef.current) {
@@ -786,11 +794,16 @@ export default function HomeScreen() {
     requestAnimationFrame(() => {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
-  }, [selectedSportFilter]);
+  }, [selectedSportFilter, statusFilter]);
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
-  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames } = useGames();
+  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames();
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames);
+
+  const handleOpenGame = useCallback((game: GameWithPrediction) => {
+    prefetchGame(game.id, game);
+    router.push(`/game/${game.id}` as any);
+  }, [prefetchGame, router]);
 
   // Derive live games from the same query (no double subscription)
   const liveGamesPreview = useMemo(
@@ -1177,10 +1190,10 @@ export default function HomeScreen() {
   const getItemKey = useCallback((item: FlatListItem) => item.key, []);
 
   // Navigate to game from search modal - memoized
-  const handleSearchGamePress = useCallback((gameId: string) => {
+  const handleSearchGamePress = useCallback((game: GameWithPrediction) => {
     setSearchModalVisible(false);
-    router.push(`/game/${gameId}` as any);
-  }, [router]);
+    handleOpenGame(game);
+  }, [handleOpenGame]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
@@ -1252,6 +1265,7 @@ export default function HomeScreen() {
             gameCounts={gameCounts}
             isLoadingGames={isLoadingGames}
             router={router}
+            onOpenGame={handleOpenGame}
             horizontalPadding={horizontalPadding}
             headerFontSize={headerFontSize}
             responsive={responsive}
@@ -1396,7 +1410,7 @@ export default function HomeScreen() {
               <SearchGameCard
                 game={item}
                 index={index}
-                onPress={() => handleSearchGamePress(item.id)}
+                onPress={() => handleSearchGamePress(item)}
               />
             )}
             ListHeaderComponent={

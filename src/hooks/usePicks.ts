@@ -114,6 +114,7 @@ export function useGamePick(gameId: string) {
       return result ?? [];
     },
     select: selector,
+    enabled: gameId.length > 0,
     staleTime: 30000,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
@@ -139,9 +140,10 @@ export function useRefreshPicks() {
 
 // Per-card hook: reads from the single batch query via selector (no extra network calls)
 export function useGamePickStats(gameId: string) {
+  const fallback = useMemo(() => ({ ...DEFAULT_STATS, gameId }), [gameId]);
   const selector = useMemo(
-    () => (data: AllPickStatsMap | undefined) => data?.[gameId] ?? { ...DEFAULT_STATS, gameId },
-    [gameId]
+    () => (data: AllPickStatsMap | undefined) => data?.[gameId] ?? fallback,
+    [fallback, gameId]
   );
   return useQuery({
     queryKey: ['allPickStats'],
@@ -150,6 +152,7 @@ export function useGamePickStats(gameId: string) {
       return result ?? {};
     },
     select: selector,
+    enabled: gameId.length > 0,
     staleTime: 60000,
     refetchInterval: 120000,
     refetchIntervalInBackground: false,

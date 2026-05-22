@@ -423,7 +423,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   }}
                 >
                   <Tv size={10} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4 }}>
+                  <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4, maxWidth: 104 }}>
                     {game.tvChannel}
                   </Text>
                 </Pressable>
@@ -556,7 +556,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                           borderWidth: 1,
                           borderColor: suspended ? 'rgba(220,38,38,0.28)' : 'rgba(255,255,255,0.18)',
                         }}>
-                          <Text style={{ color: suspended ? '#DC2626' : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{timeStr}</Text>
+                          <Text numberOfLines={1} style={{ color: suspended ? '#DC2626' : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{timeStr}</Text>
                         </View>
                       );
                     }

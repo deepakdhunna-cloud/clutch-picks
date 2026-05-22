@@ -28,6 +28,7 @@ export function useSmoothRefresh(
   const actionRef = useRef(refreshAction);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const visibleRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -57,6 +58,7 @@ export function useSmoothRefresh(
 
   const hideRefreshing = useCallback(() => {
     if (!mountedRef.current) return;
+    visibleRef.current = false;
     setRefreshing(false);
   }, []);
 
@@ -64,15 +66,14 @@ export function useSmoothRefresh(
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     clearTimers();
+    visibleRef.current = true;
     if (mountedRef.current) setRefreshing(true);
 
     const startedAt = Date.now();
     let didFail = false;
     maxTimerRef.current = setTimeout(() => {
       maxTimerRef.current = null;
-      if (__DEV__) {
-        console.warn('[refresh] pull-to-refresh is still waiting for data');
-      }
+      hideRefreshing();
     }, maxVisibleMs);
 
     Promise.resolve()
@@ -90,6 +91,8 @@ export function useSmoothRefresh(
           clearTimeout(maxTimerRef.current);
           maxTimerRef.current = null;
         }
+
+        if (!visibleRef.current) return;
 
         const elapsed = Date.now() - startedAt;
         const wait = Math.max(0, minVisibleMs - elapsed);
