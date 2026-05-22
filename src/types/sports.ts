@@ -373,7 +373,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
     sport: Sport.TENNIS,
     name: 'Tennis',
     icon: 'tennis',
-    color: '#2E7D5B',
+    color: '#7A9DB8',
     accentColor: '#FFFFFF',
     isCollege: false,
   },

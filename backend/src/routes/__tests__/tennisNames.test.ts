@@ -3,6 +3,7 @@ import {
   isTennisPlaceholderName,
   tennisAbbreviation,
   tennisCompetitorName,
+  tennisDisplayColor,
 } from "../games";
 
 describe("tennis display names", () => {
@@ -36,5 +37,15 @@ describe("tennis display names", () => {
     expect(doublesName).toBe("Doubles Team To Be Decided");
     expect(tennisAbbreviation(singlesName)).toBe("TBA");
     expect(tennisAbbreviation(doublesName, [{ nm: "TBD" }])).toBe("TBA");
+  });
+
+  test("does not fall back every unmapped tennis player to green", () => {
+    const chungColor = tennisDisplayColor("Yunseong Chung", { country: "KOR", tour: "ATP" });
+    const shinColor = tennisDisplayColor("Sanhui Shin", { country: "KOR", tour: "ATP", side: "away", offset: 5 });
+    const unmappedColor = tennisDisplayColor("Lower tour player without country", { tour: "WTA" });
+
+    expect(chungColor).toBe("#1F4E9E");
+    expect(shinColor).not.toBe("#2E7D5B");
+    expect(unmappedColor).not.toBe("#2E7D5B");
   });
 });

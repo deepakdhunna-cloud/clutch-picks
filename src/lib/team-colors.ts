@@ -277,8 +277,8 @@ export const IPL_TEAM_COLORS: Record<string, TeamColors> = {
 // Tennis uses player/country-driven ESPN colors when available. These are
 // only fallbacks for generic tennis abbreviations that do not carry feed color.
 export const TENNIS_TEAM_COLORS: Record<string, TeamColors> = {
-  'TEN': { primary: '#2E7D5B', secondary: '#D7FF4A' },
-  'TBA': { primary: '#2E7D5B', secondary: '#D7FF4A' },
+  'TEN': { primary: '#7A9DB8', secondary: '#8B0A1F' },
+  'TBA': { primary: '#7A9DB8', secondary: '#FFFFFF' },
   'ATP': { primary: '#1F6F8B', secondary: '#FFFFFF' },
   'WTA': { primary: '#C0266F', secondary: '#FFFFFF' },
 };

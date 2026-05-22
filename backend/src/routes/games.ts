@@ -1811,11 +1811,15 @@ const TENNIS_COUNTRY_COLORS: Record<string, string> = {
   AUS: "#006B3F",
   AUT: "#ED2939",
   BEL: "#FAE042",
+  BRA: "#009C3B",
+  BUL: "#00966E",
   CAN: "#D52B1E",
+  CHI: "#D52B1E",
   CHN: "#DE2910",
   COL: "#FCD116",
   CRO: "#171796",
   CZE: "#11457E",
+  DEN: "#C60C30",
   EGY: "#CE1126",
   ESP: "#AA151B",
   FIN: "#002F6C",
@@ -1824,19 +1828,88 @@ const TENNIS_COUNTRY_COLORS: Record<string, string> = {
   GER: "#000000",
   GRE: "#0D5EAF",
   HKG: "#DE2910",
+  IND: "#FF9933",
   ITA: "#008C45",
   JPN: "#BC002D",
   KAZ: "#00AFCA",
+  KOR: "#1F4E9E",
+  NED: "#FF4F00",
+  NZL: "#00247D",
   NOR: "#BA0C2F",
+  POL: "#DC143C",
+  POR: "#D00000",
   ROM: "#002B7F",
   RUS: "#0033A0",
+  RSA: "#007A4D",
+  SRB: "#0C4076",
   SLO: "#005DA4",
   SUI: "#D52B1E",
   SWE: "#006AA7",
+  THA: "#2D2A4A",
   TPE: "#000095",
   UKR: "#0057B7",
   USA: "#1D4ED8",
 };
+
+const TENNIS_PLAYER_COLOR_PALETTE = [
+  "#7A9DB8", // Clutch teal
+  "#8B0A1F", // Clutch maroon
+  "#2563EB",
+  "#D97706",
+  "#9333EA",
+  "#DC2626",
+  "#0891B2",
+  "#E11D48",
+  "#4F46E5",
+  "#B45309",
+  "#BE185D",
+  "#0F766E",
+];
+
+function stableHash(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function tennisDisplayColor(
+  seed: string,
+  opts: { country?: string; tour?: TennisTour; side?: "home" | "away"; offset?: number } = {},
+): string {
+  const country = opts.country?.toUpperCase();
+  if (country && TENNIS_COUNTRY_COLORS[country]) return TENNIS_COUNTRY_COLORS[country];
+
+  const hashSeed = [
+    seed.trim().toLowerCase() || "tennis",
+    opts.tour ?? "TENNIS",
+    opts.side ?? "player",
+  ].join("|");
+  const index = (stableHash(hashSeed) + (opts.offset ?? 0)) % TENNIS_PLAYER_COLOR_PALETTE.length;
+  return TENNIS_PLAYER_COLOR_PALETTE[index]!;
+}
+
+function sameHexColor(a: string | undefined, b: string | undefined): boolean {
+  return a?.toLowerCase() === b?.toLowerCase();
+}
+
+function ensureDistinctTennisColors(homeTeam: GameTeam, awayTeam: GameTeam): { homeTeam: GameTeam; awayTeam: GameTeam } {
+  if (!sameHexColor(homeTeam.color, awayTeam.color)) return { homeTeam, awayTeam };
+
+  return {
+    homeTeam,
+    awayTeam: {
+      ...awayTeam,
+      color: tennisDisplayColor(`${awayTeam.id}-${awayTeam.name}`, {
+        tour: awayTeam.tour,
+        side: "away",
+        offset: 5,
+      }),
+    },
+  };
+}
 
 function tennisDateParam(date?: string): string {
   const iso = date ?? new Date().toISOString().slice(0, 10);
@@ -2000,13 +2073,14 @@ function tennisTeamFromCompetitor(
   const ranking = !isDoubles && athleteId ? rankings.get(athleteId) : undefined;
   const seed = typeof competitor.rnk === "number" ? competitor.rnk : undefined;
   const rank = ranking?.rank;
+  const colorSeed = [athleteId, competitor.uid, competitor.id, name].filter(Boolean).join("|");
   return {
     id: athleteId ?? competitor.uid ?? competitor.id ?? name,
     name,
     abbreviation: tennisAbbreviation(name, competitor.rstr),
     city: name,
     record: rank ? `${ranking.tour} Rank #${rank}` : seed ? `Seed #${seed}` : isDoubles ? "Doubles" : "Singles",
-    color: country ? TENNIS_COUNTRY_COLORS[country] ?? "#2E7D5B" : "#2E7D5B",
+    color: tennisDisplayColor(colorSeed, { country, tour: ranking?.tour }),
     logo,
     rank,
     seed,
@@ -2027,7 +2101,7 @@ function tennisTeamFromExplorer(match: TennisExplorerLiveMatch, side: "home" | "
     abbreviation: isHome ? match.homeAbbreviation : match.awayAbbreviation,
     city: name,
     record: rank ? `${match.tour} Rank #${rank}` : seed ? `Seed #${seed}` : "Singles",
-    color: "#2E7D5B",
+    color: tennisDisplayColor(`${match.id}-${name}`, { tour: match.tour, side }),
     rank,
     seed,
     tour: match.tour,
@@ -2035,11 +2109,15 @@ function tennisTeamFromExplorer(match: TennisExplorerLiveMatch, side: "home" | "
 }
 
 function transformTennisExplorerMatch(match: TennisExplorerLiveMatch): Game {
+  const teams = ensureDistinctTennisColors(
+    tennisTeamFromExplorer(match, "home"),
+    tennisTeamFromExplorer(match, "away"),
+  );
   const game: Game = {
     id: match.id,
     sport: "TENNIS",
-    homeTeam: tennisTeamFromExplorer(match, "home"),
-    awayTeam: tennisTeamFromExplorer(match, "away"),
+    homeTeam: teams.homeTeam,
+    awayTeam: teams.awayTeam,
     gameTime: match.gameTime,
     status: "LIVE",
     venue: match.venue,
@@ -2091,8 +2169,12 @@ function transformTennisCompetition(
 
   const gameStatus = mapTennisStatus(competition.status);
   const suspension = getSuspensionInfoFromTennis(competition.status);
-  const homeTeam = tennisTeamFromCompetitor(homeCompetitor, competition.dbls === true, rankings);
-  const awayTeam = tennisTeamFromCompetitor(awayCompetitor, competition.dbls === true, rankings);
+  const tennisTeams = ensureDistinctTennisColors(
+    tennisTeamFromCompetitor(homeCompetitor, competition.dbls === true, rankings),
+    tennisTeamFromCompetitor(awayCompetitor, competition.dbls === true, rankings),
+  );
+  const homeTeam = tennisTeams.homeTeam;
+  const awayTeam = tennisTeams.awayTeam;
   const homeLinescores = tennisSetScores(homeCompetitor);
   const awayLinescores = tennisSetScores(awayCompetitor);
   const hasSetScores = Boolean(homeLinescores?.length || awayLinescores?.length || gameStatus === "LIVE" || gameStatus === "FINAL");
