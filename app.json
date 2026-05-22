@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CLUTCH PICKS",
+    "name": "Clutch Picks",
     "slug": "clutch-picks",
     "scheme": "vibecode",
     "version": "1.1.1",
@@ -13,8 +13,8 @@
       "buildNumber": "27",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "CLUTCH PICKS uses the camera to capture photos inside the app before you publish them.",
-        "NSPhotoLibraryUsageDescription": "CLUTCH PICKS accesses your photo library to let you choose media that appears in the app.",
+        "NSCameraUsageDescription": "Clutch Picks uses the camera to capture photos inside the app before you publish them.",
+        "NSPhotoLibraryUsageDescription": "Clutch Picks accesses your photo library to let you choose media that appears in the app.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {

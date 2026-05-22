@@ -211,7 +211,7 @@ const SearchBar = memo(function SearchBar() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(180,211,235,0.54)', letterSpacing: 2.2, marginBottom: 5 }}>
-            CLUTCH PICKS
+            Clutch Picks
           </Text>
           <Text adjustsFontSizeToFit minimumFontScale={0.86} numberOfLines={1} style={{ color: WHITE, fontSize: 30, lineHeight: 34, fontWeight: '900', letterSpacing: 0 }}>
             My Arena

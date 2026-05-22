@@ -84,7 +84,7 @@ export const auth = betterAuth({
                 </p>
                 <div style="height:1px;background:#1f1f1f;margin:32px 0 20px;"></div>
                 <div style="text-align:center;">
-                  <p style="font-size:11px;color:#888888;margin:0 0 6px;letter-spacing:1.5px;font-weight:600;">CLUTCH PICKS</p>
+                  <p style="font-size:11px;color:#888888;margin:0 0 6px;letter-spacing:1.5px;font-weight:600;">Clutch Picks</p>
                   <p style="font-size:11px;color:#666666;margin:0;letter-spacing:0.5px;">AI-powered sports predictions</p>
                 </div>
               </div>
