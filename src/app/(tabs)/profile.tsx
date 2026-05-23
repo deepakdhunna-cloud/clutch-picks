@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
 import { useUserStats, useUserPicks } from '@/hooks/usePicks';
-import { useGames } from '@/hooks/useGames';
+import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { getSignatureCalls, type SignatureCall, type SignatureCallReason } from '@/lib/signature-calls';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { api } from '@/lib/api/api';
@@ -298,6 +298,7 @@ export default function ProfileScreen() {
   const { data: stats, refetch: refetchStats } = useUserStats(hasUser);
   const { data: picks } = useUserPicks(hasUser);
   const { data: allGames } = useGames();
+  const prefetchGame = usePrefetchGame();
   const invalidateSession = useInvalidateSession();
   const scrollHandler = useHideOnScroll();
   const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
@@ -347,16 +348,24 @@ export default function ProfileScreen() {
         : null;
       return {
         id: p.id,
+        gameId: p.gameId,
         abbreviation: pickedAbbr,
         opponentAbbr,
         color: pickedTeamObj?.color ?? '#5A7A8A',
         result: p.result ?? 'pending',
         sport,
+        game,
       };
     });
     if (__DEV__) console.log('[Profile] tiles generated:', tiles.length, tiles.slice(0, 3).map(t => `${t.abbreviation} vs ${t.opponentAbbr} (${t.result})`));
     return tiles;
   }, [picks, allGames]);
+
+  const handleRecentPickPress = useCallback((gameId: string, game?: NonNullable<typeof allGames>[number]) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    prefetchGame(gameId, game);
+    router.push(`/game/${gameId}` as any);
+  }, [prefetchGame, router]);
 
   const formLine = useMemo(() => {
     if (!picks) return [];
@@ -689,11 +698,13 @@ export default function ProfileScreen() {
               const ribbonShadowColor = isWin ? C.TEAL : isLoss ? C.MAROON : '#1A202C';
               const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'TBD';
               return (
-                <View key={p.id} style={{
+                <Pressable key={p.id} onPress={() => handleRecentPickPress(p.gameId, p.game)} style={({ pressed }) => ({
                   width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 10, borderWidth: 1,
                   borderColor: isWin ? 'rgba(122,157,184,0.2)' : isLoss ? 'rgba(139,10,31,0.2)' : 'rgba(255,255,255,0.08)',
                   alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                }}>
+                  opacity: pressed ? 0.86 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}>
                   {/* Corner ribbon — premium layered. TBD shown for unresolved picks. */}
                   <View style={{ position: 'absolute', top: 0, right: 0, width: 44, height: 44, zIndex: 10, overflow: 'hidden' }}>
                     {/* Shadow layer */}
@@ -734,7 +745,7 @@ export default function ProfileScreen() {
                   </View>
                   <Text style={{ fontSize: 11, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 2 }}>{p.abbreviation}</Text>
                   <Text style={{ fontSize: 8, color: C.TEXT_MUTED }}>vs {p.opponentAbbr}</Text>
-                </View>
+                </Pressable>
               );
             })}
 
