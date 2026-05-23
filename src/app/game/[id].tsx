@@ -57,6 +57,7 @@ import {
   teamScoreText,
 } from '@/lib/cricket-score';
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { getWatchSourceUrl } from '@/lib/watch-url';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Smartphone, Tv, X } from 'lucide-react-native';
 
@@ -81,43 +82,6 @@ const UNKNOWN_WATCH_LABELS = new Set([
   'broadcast info not listed',
   'watch info tbd',
 ]);
-
-const tvChannelUrls: Record<string, string> = {
-  espn: 'https://www.espn.com/watch/',
-  fox: 'https://www.foxsports.com/live',
-  fs1: 'https://www.foxsports.com/live',
-  fs2: 'https://www.foxsports.com/live',
-  nbc: 'https://www.peacocktv.com/sports',
-  peacock: 'https://www.peacocktv.com/sports',
-  cbs: 'https://www.paramountplus.com/sports/',
-  'paramount+': 'https://www.paramountplus.com/sports/',
-  tnt: 'https://www.tntdrama.com/watchtnt',
-  tbs: 'https://www.tntdrama.com/watchtnt',
-  abc: 'https://abc.com/watch-live',
-  nfl: 'https://www.nfl.com/network/watch/',
-  mlb: 'https://www.mlb.com/tv',
-  nba: 'https://www.nba.com/watch',
-  nhl: 'https://www.nhl.com/tv',
-  prime: 'https://www.amazon.com/primevideo',
-  amazon: 'https://www.amazon.com/primevideo',
-  apple: 'https://tv.apple.com/',
-  'apple tv+': 'https://tv.apple.com/',
-  youtube: 'https://tv.youtube.com/',
-  'youtube tv': 'https://tv.youtube.com/',
-  hulu: 'https://www.hulu.com/live-tv',
-  fubo: 'https://www.fubo.tv/',
-  sling: 'https://www.sling.com/',
-  directv: 'https://streamtv.directv.com/',
-  max: 'https://www.max.com/sports',
-  'espn+': 'https://www.espn.com/espnplus/',
-  'fox sports': 'https://www.foxsports.com/live',
-  'nbc sports': 'https://www.nbcsports.com/watch',
-  'cbs sports': 'https://www.cbssports.com/watch/',
-  'league pass': 'https://www.nba.com/watch/league-pass-stream',
-  'nba league pass': 'https://www.nba.com/watch/league-pass-stream',
-  'nfl+': 'https://www.nfl.com/plus/',
-  willow: 'https://www.willow.tv/',
-};
 
 const DIRECT_STREAMING_SOURCE_RE = /(mlb\.tv|espn\+|espn plus|peacock|paramount\+|prime video|amazon prime|apple tv\+|youtube tv|hulu|fubo|sling|directv stream|nba league pass|league pass|nfl\+|willow)/i;
 
@@ -225,21 +189,8 @@ const STREAMING_RULES: StreamingRule[] = [
   },
 ];
 
-function getTvChannelUrl(channel: string): string {
-  const channelLower = channel.toLowerCase().trim();
-  if (/^https?:\/\//i.test(channelLower)) return channel.trim();
-  if (channelLower.includes('espn+') || channelLower.includes('espn plus')) return tvChannelUrls['espn+'];
-  if (channelLower.includes('nba league pass') || channelLower.includes('league pass')) return tvChannelUrls['nba league pass'];
-  if (channelLower.includes('nfl+')) return tvChannelUrls['nfl+'];
-  if (channelLower.includes('directv stream')) return tvChannelUrls.directv;
-  for (const [key, url] of Object.entries(tvChannelUrls)) {
-    if (channelLower.includes(key)) return url;
-  }
-  return `https://www.google.com/search?q=watch+${encodeURIComponent(channel)}+live+stream`;
-}
-
 function openWatchSource(source: string) {
-  void Linking.openURL(getTvChannelUrl(source)).catch(() => undefined);
+  void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
 }
 
 function watchKindForName(name: string): WatchOptionKind {

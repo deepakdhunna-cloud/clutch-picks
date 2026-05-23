@@ -472,6 +472,8 @@ export default function ClutchPicksScreen() {
   // Get top picks with guaranteed predictions from dedicated endpoint
   const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks();
   const { refreshing, onRefresh } = useSmoothRefresh(refetchPicks);
+  const hasTopPicksData = (topPicks?.length ?? 0) > 0;
+  const isInitialPicksLoading = isLoadingPicks && !hasTopPicksData;
 
   // Filter out games with missing/TBD team names — these have no valid prediction
   const validPicks = useMemo(() => {
@@ -524,7 +526,7 @@ export default function ClutchPicksScreen() {
         <ErrorBoundary onGoBack={() => router.back()}>
 
         {/* Content */}
-        {isLoadingPicks ? (
+        {isInitialPicksLoading ? (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPadding }} showsVerticalScrollIndicator={false}>
             {headerComponent}
             {[0, 1, 2].map((item) => (
@@ -739,24 +741,31 @@ export default function ClutchPicksScreen() {
             }
           />
         ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: bottomPadding }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5A7A8A" />
+            }
+          >
             {headerComponent}
-            <View style={{ position: 'relative', marginBottom: 20 }}>
-              <View style={{ position: 'absolute', top: -8, left: -8, right: -8, bottom: -8, borderRadius: 48, backgroundColor: MAROON, opacity: 0.15 }} />
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: `${MAROON}30` }}>
-                <FieldGoalU size={44} color={`${MAROON}60`} />
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 80 }}>
+              <View style={{ position: 'relative', marginBottom: 20 }}>
+                <View style={{ position: 'absolute', top: -8, left: -8, right: -8, bottom: -8, borderRadius: 48, backgroundColor: MAROON, opacity: 0.15 }} />
+                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(139,10,31,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: `${MAROON}30` }}>
+                  <FieldGoalU size={44} color={`${MAROON}60`} />
+                </View>
               </View>
-            </View>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>No top picks yet</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', paddingHorizontal: 32 }}>
-              New predictions populate throughout the day. Pull to refresh or check back soon.
-            </Text>
-            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, position: 'absolute', bottom: 100 }}>
-              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
-                AI predictions are for entertainment purposes only. Not financial advice.
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>No top picks yet</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', paddingHorizontal: 12 }}>
+                New predictions populate throughout the day. Pull to refresh or check back soon.
               </Text>
             </View>
-          </View>
+            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
+              AI predictions are for entertainment purposes only. Not financial advice.
+            </Text>
+          </ScrollView>
         )}
         </ErrorBoundary>
       </SafeAreaView>

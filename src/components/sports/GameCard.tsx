@@ -22,6 +22,7 @@ import {
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { cricketRequiredText, cricketRoleText, cricketStatusText, scorePairText, teamScoreText } from '@/lib/cricket-score';
+import { getWatchSourceUrl } from '@/lib/watch-url';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Calendar, Clock, Tv, TrendingUp, ChevronRight, Lock } from 'lucide-react-native';
@@ -98,45 +99,10 @@ function getStatusBadge(status: GameStatus) {
   }
 }
 
-// Get streaming URL for TV channel - memoized outside component
-const tvChannelUrls: Record<string, string> = {
-  espn: 'https://www.espn.com/watch/',
-  fox: 'https://www.foxsports.com/live',
-  fs1: 'https://www.foxsports.com/live',
-  fs2: 'https://www.foxsports.com/live',
-  nbc: 'https://www.peacocktv.com/sports',
-  peacock: 'https://www.peacocktv.com/sports',
-  cbs: 'https://www.paramountplus.com/sports/',
-  'paramount+': 'https://www.paramountplus.com/sports/',
-  tnt: 'https://www.tntdrama.com/watchtnt',
-  tbs: 'https://www.tntdrama.com/watchtnt',
-  abc: 'https://abc.com/watch-live',
-  nfl: 'https://www.nfl.com/network/watch/',
-  mlb: 'https://www.mlb.com/tv',
-  nba: 'https://www.nba.com/watch',
-  nhl: 'https://www.nhl.com/tv',
-  prime: 'https://www.amazon.com/primevideo',
-  amazon: 'https://www.amazon.com/primevideo',
-  apple: 'https://tv.apple.com/',
-  youtube: 'https://tv.youtube.com/',
-};
-
-function getTvChannelUrl(channel: string): string {
-  const channelLower = channel.toLowerCase().trim();
-
-  for (const [key, url] of Object.entries(tvChannelUrls)) {
-    if (channelLower.includes(key)) {
-      return url;
-    }
-  }
-
-  return `https://www.google.com/search?q=watch+${encodeURIComponent(channel)}+live+stream`;
-}
-
 // Handle TV channel press
 function handleTvChannelPress(channel: string) {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  const url = getTvChannelUrl(channel);
+  const url = getWatchSourceUrl(channel);
   Linking.openURL(url);
 }
 
