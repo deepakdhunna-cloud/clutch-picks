@@ -671,92 +671,113 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* ── 3. PREDICTIONS + RECENT PICKS ROW ── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flexDirection: 'row', marginTop: 28 }}>
-          {/* Predictions tile — fixed, doesn't scroll */}
-          <View style={{ width: 110, height: 130, marginLeft: 16, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: C.MAROON_DIM, borderWidth: 1, borderColor: C.MAROON, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
-              <GridIcon size={18} color={C.TEXT_PRIMARY} />
-            </View>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: C.TEXT_PRIMARY }}>{totalPicks}</Text>
-            <Text style={{ fontSize: 8, fontWeight: '600', color: C.TEXT_MUTED, letterSpacing: 1.2, marginTop: 2 }}>PREDICTIONS</Text>
-          </View>
+        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ marginTop: 28 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ height: 146, flexGrow: 0 }}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+          >
+            {/* Predictions tile */}
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/picks-history'); }}
+              style={({ pressed }) => ({
+                width: 112,
+                height: 140,
+                backgroundColor: C.GLASS,
+                borderRadius: 18,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.12)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.88 : 1,
+                transform: [{ scale: pressed ? 0.985 : 1 }],
+              })}
+            >
+              <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: C.MAROON_DIM, borderWidth: 1, borderColor: C.MAROON, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                <GridIcon size={18} color={C.TEXT_PRIMARY} />
+              </View>
+              <Text style={{ fontSize: 24, lineHeight: 29, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{totalPicks}</Text>
+              <Text style={{ fontSize: 8.5, lineHeight: 11, fontWeight: '800', color: C.TEXT_MUTED, letterSpacing: 1.4, marginTop: 6, includeFontPadding: false }}>PREDICTIONS</Text>
+            </Pressable>
 
-          {/* Recent pick tiles — scrollable, goes behind predictions tile */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 130, marginLeft: 8 }} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
             {recentPickTiles.map((p) => {
               const teamColors = getTeamColors(p.abbreviation, p.sport as any, p.color);
               const jerseyType = sportEnumToJersey(p.sport);
               const isWin = p.result === 'win';
               const isLoss = p.result === 'loss';
-              // Premium corner-ribbon tokens per state. Pending uses a neutral
-              // slate gradient so it reads as distinct from win (teal) / loss
-              // (maroon) without mixing the two win/loss colors together.
-              const ribbonGradient: [string, string, string] =
-                isWin ? [C.TEAL, '#5A8A9A', C.TEAL]
-                : isLoss ? [C.MAROON, '#6A0818', C.MAROON]
-                : ['#4A5568', '#2D3748', '#4A5568'];
-              const ribbonShadowColor = isWin ? C.TEAL : isLoss ? C.MAROON : '#1A202C';
-              const ribbonLabel = isWin ? 'W' : isLoss ? 'L' : 'TBD';
+              const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
+              const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
               return (
-                <Pressable key={p.id} onPress={() => handleRecentPickPress(p.gameId, p.game)} style={({ pressed }) => ({
-                  width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 10, borderWidth: 1,
-                  borderColor: isWin ? 'rgba(122,157,184,0.2)' : isLoss ? 'rgba(139,10,31,0.2)' : 'rgba(255,255,255,0.08)',
-                  alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                  opacity: pressed ? 0.86 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}>
-                  {/* Corner ribbon — premium layered. TBD shown for unresolved picks. */}
-                  <View style={{ position: 'absolute', top: 0, right: 0, width: 44, height: 44, zIndex: 10, overflow: 'hidden' }}>
-                    {/* Shadow layer */}
-                    <View style={{
-                      position: 'absolute', top: -2, right: -2,
-                      width: 62, height: 22,
-                      backgroundColor: 'rgba(0,0,0,0.4)',
-                      transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -4 }],
-                    }} />
-                    {/* Main ribbon */}
-                    <LinearGradient
-                      colors={ribbonGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={{
-                        position: 'absolute', top: 0, right: 0,
-                        width: 62, height: 20,
-                        transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
-                        alignItems: 'center', justifyContent: 'center',
-                        shadowColor: ribbonShadowColor,
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.4,
-                        shadowRadius: 4,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{ribbonLabel}</Text>
-                    </LinearGradient>
-                    {/* Highlight edge — thin white line on top edge */}
-                    <View style={{
-                      position: 'absolute', top: 0, right: 0,
-                      width: 62, height: 1,
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                      transform: [{ rotate: '45deg' }, { translateX: 8 }, { translateY: -5 }],
-                    }} />
-                  </View>
-                  <View style={{ marginBottom: 4 }}>
-                    <JerseyIcon teamCode={p.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={48} sport={jerseyType} />
-                  </View>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 2 }}>{p.abbreviation}</Text>
-                  <Text style={{ fontSize: 8, color: C.TEXT_MUTED }}>vs {p.opponentAbbr}</Text>
+                <Pressable
+                  key={p.id}
+                  onPress={() => handleRecentPickPress(p.gameId, p.game)}
+                  onPressIn={() => p.game ? prefetchGame(p.gameId, p.game) : undefined}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${p.abbreviation} versus ${p.opponentAbbr}`}
+                  style={({ pressed }) => ({
+                    width: 124,
+                    height: 140,
+                    opacity: pressed ? 0.88 : 1,
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                  })}
+                >
+                  <LinearGradient
+                    colors={[`${teamColors.primary}66`, 'rgba(255,255,255,0.10)', statusColor === C.MAROON ? 'rgba(139,10,31,0.36)' : 'rgba(122,157,184,0.22)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
+                  >
+                    <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', padding: 10, overflow: 'hidden' }}>
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={[`${teamColors.primary}1F`, 'rgba(255,255,255,0.018)', 'rgba(0,0,0,0)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 82 }}
+                      />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text numberOfLines={1} style={{ flex: 1, fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>{displaySport(p.sport)}</Text>
+                        <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: `${statusColor}22`, borderWidth: 1, borderColor: `${statusColor}44`, marginLeft: 6 }}>
+                          <Text style={{ fontSize: 7.5, lineHeight: 9, fontWeight: '900', color: statusColor, includeFontPadding: false }}>{statusLabel}</Text>
+                        </View>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 62 }}>
+                        <View style={{ width: 70, height: 58, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.075)', borderWidth: 1, borderColor: 'rgba(180,211,235,0.10)' }}>
+                          <JerseyIcon teamCode={p.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={54} sport={jerseyType} />
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'center', paddingTop: 7 }}>
+                        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: '100%', fontSize: 14, lineHeight: 17, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{p.abbreviation}</Text>
+                        <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 9, lineHeight: 11, fontWeight: '700', color: C.TEXT_MUTED, includeFontPadding: false }}>vs {p.opponentAbbr}</Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
                 </Pressable>
               );
             })}
 
             {recentPickTiles.length === 0 ? (
-              <View style={{ width: 110, height: 130, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 124, height: 140, backgroundColor: C.GLASS, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 10, color: C.TEXT_MUTED, textAlign: 'center' }}>Make picks to see them here</Text>
               </View>
             ) : (
               <Pressable
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/picks-history'); }}
-                style={{ width: 80, height: 130, backgroundColor: C.GLASS, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(122,157,184,0.2)', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                style={({ pressed }) => ({
+                  width: 88,
+                  height: 140,
+                  backgroundColor: C.GLASS,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: 'rgba(122,157,184,0.2)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  opacity: pressed ? 0.88 : 1,
+                  transform: [{ scale: pressed ? 0.985 : 1 }],
+                })}
               >
                 <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.TEAL_DIM, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontSize: 16, color: C.TEAL, fontWeight: '700' }}>›</Text>
