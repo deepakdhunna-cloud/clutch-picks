@@ -173,7 +173,12 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       : isChanging
         ? 'Switch your pick?'
         : 'Lock in your pick?';
-  const bodyText = showSuccess ? 'Saved to your game board.' : errorMessage ?? 'Confirm this selection before it goes on your board.';
+  const bodyText = showSuccess
+    ? 'Saved to your board.'
+    : errorMessage ?? (isChanging
+      ? 'This replaces your current selection and keeps the game on your board.'
+      : 'This saves the pick to your board so you can track it through the game.');
+  const primaryLabel = errorMessage ? 'Try Again' : isChanging ? 'Switch Pick' : 'Lock It In';
   const recordText = team.record?.trim() ? team.record.trim() : 'Season record';
 
   return (
@@ -258,34 +263,51 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                 ) : null}
               </View>
 
-              <Text style={styles.title}>{titleText}</Text>
-              <Text style={styles.teamName} numberOfLines={2}>{team.name}</Text>
-              <View style={styles.recordPill}>
-                <Text style={styles.recordText}>{recordText}</Text>
+              <View style={styles.copyBlock}>
+                <Text style={styles.title}>{titleText}</Text>
+                <Text style={styles.teamName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82}>{team.name}</Text>
+                <View style={styles.recordPill}>
+                  <Text style={styles.recordText}>{recordText}</Text>
+                </View>
+                <Text style={[styles.body, errorMessage ? styles.errorBody : null]}>{bodyText}</Text>
               </View>
-              <Text style={[styles.body, errorMessage ? styles.errorBody : null]}>{bodyText}</Text>
+
+              {!showSuccess && !errorMessage ? (
+                <View style={styles.promiseRow}>
+                  <View style={styles.promiseChip}>
+                    <Check size={13} color="rgba(218,238,251,0.84)" strokeWidth={3} />
+                    <Text style={styles.promiseText}>Board save</Text>
+                  </View>
+                  <View style={styles.promiseChip}>
+                    <Sparkles size={13} color="rgba(218,238,251,0.84)" strokeWidth={2.4} />
+                    <Text style={styles.promiseText}>Track live</Text>
+                  </View>
+                </View>
+              ) : null}
 
               {!isConfirming ? (
-                <View style={styles.actionsRow}>
-                  <Pressable
-                    onPress={onCancel}
-                    style={({ pressed }) => [styles.cancelButton, pressed ? styles.pressed : null]}
-                  >
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </Pressable>
+                <View style={[styles.actionsStack, !showSuccess && !errorMessage ? styles.actionsAfterPromise : null]}>
                   <Pressable
                     onPress={handleConfirm}
                     style={({ pressed }) => [styles.lockButtonWrap, pressed ? styles.pressed : null]}
                   >
                     <LinearGradient
-                      colors={[resolvedColors.primary, '#0F62B8', '#D8C08C']}
+                      colors={['#8B0A1F', resolvedColors.primary, '#7A9DB8']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.lockButton}
                     >
-                      <ShieldCheck size={18} color="#FFFFFF" strokeWidth={2.6} />
-                      <Text style={styles.lockText}>Lock It In</Text>
+                      <View style={styles.lockContent}>
+                        <ShieldCheck size={19} color="#FFFFFF" strokeWidth={2.8} />
+                        <Text style={styles.lockText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>{primaryLabel}</Text>
+                      </View>
                     </LinearGradient>
+                  </Pressable>
+                  <Pressable
+                    onPress={onCancel}
+                    style={({ pressed }) => [styles.cancelButton, pressed ? styles.pressed : null]}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -322,7 +344,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 29,
     padding: 20,
-    paddingBottom: 18,
+    paddingBottom: 20,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(226,240,249,0.10)',
@@ -361,11 +383,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226,240,249,0.10)',
   },
   jerseyStage: {
-    height: 132,
+    height: 138,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 5,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   luxeHalo: {
     position: 'absolute',
@@ -433,17 +455,22 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#091018',
   },
+  copyBlock: {
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
   title: {
-    fontSize: 16,
+    fontSize: 17,
+    lineHeight: 21,
     fontWeight: '900',
-    color: 'rgba(218,238,251,0.72)',
+    color: 'rgba(218,238,251,0.76)',
     textAlign: 'center',
     letterSpacing: 0,
-    marginBottom: 5,
+    marginBottom: 6,
   },
   teamName: {
-    fontSize: 28,
-    lineHeight: 32,
+    fontSize: 30,
+    lineHeight: 35,
     fontWeight: '900',
     color: '#FFFFFF',
     textAlign: 'center',
@@ -468,58 +495,99 @@ const styles = StyleSheet.create({
   },
   body: {
     marginTop: 13,
-    marginBottom: 22,
+    marginBottom: 0,
     color: 'rgba(226,240,249,0.58)',
-    fontSize: 15,
+    fontSize: 14,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
     letterSpacing: 0,
   },
   errorBody: {
     color: '#FCA5A5',
   },
-  actionsRow: {
+  promiseRow: {
     width: '100%',
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 14,
   },
-  cancelButton: {
+  promiseChip: {
     flex: 1,
-    height: 56,
-    borderRadius: 17,
+    minHeight: 38,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.085)',
+    gap: 6,
+    backgroundColor: 'rgba(218,238,251,0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(226,240,249,0.16)',
+    borderColor: 'rgba(218,238,251,0.10)',
+  },
+  promiseText: {
+    color: 'rgba(218,238,251,0.72)',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  actionsStack: {
+    width: '100%',
+    gap: 10,
+    marginTop: 18,
+  },
+  actionsAfterPromise: {
+    marginTop: 0,
+  },
+  cancelButton: {
+    width: '100%',
+    minHeight: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(226,240,249,0.09)',
   },
   cancelText: {
-    color: 'rgba(226,240,249,0.82)',
-    fontSize: 16,
+    color: 'rgba(226,240,249,0.70)',
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '900',
     letterSpacing: 0,
   },
   lockButtonWrap: {
-    flex: 1.18,
-    height: 56,
-    borderRadius: 17,
+    width: '100%',
+    minHeight: 60,
+    borderRadius: 18,
     overflow: 'hidden',
-    shadowColor: '#D8C08C',
+    shadowColor: '#8B0A1F',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.32,
+    shadowOpacity: 0.34,
     shadowRadius: 18,
   },
   lockButton: {
     flex: 1,
+    minHeight: 60,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  lockContent: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 9,
   },
   lockText: {
+    flexShrink: 1,
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900',
     letterSpacing: 0,
   },
