@@ -1594,9 +1594,11 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
         </View>
 
         <View style={styles.projectionSummaryRow}>
-          <Text style={styles.projectionSummaryText}>Total {projectionDisplay.total}</Text>
-          <Text style={styles.projectionSummaryText}>Spread {projectionDisplay.spreadValue >= 0 ? '+' : ''}{projectionDisplay.spread}</Text>
-          <Text style={styles.projectionSummaryText}>Risk {projectionRiskTier}</Text>
+          <Text numberOfLines={1} style={[styles.projectionSummaryText, styles.projectionSummaryLeft]}>Total {projectionDisplay.total}</Text>
+          <Text numberOfLines={1} style={styles.projectionSummaryText}>Spread {projectionDisplay.spreadValue >= 0 ? '+' : ''}{projectionDisplay.spread}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.projectionSummaryText, styles.projectionSummaryRight]}>
+            Upset Risk {projectionRiskTier}
+          </Text>
         </View>
       </View>
     </View>
@@ -2653,12 +2655,19 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.07)',
   },
   projectionSummaryText: {
+    flex: 1,
     fontSize: 8,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.34)',
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 0.45,
+  },
+  projectionSummaryLeft: {
+    textAlign: 'left',
+  },
+  projectionSummaryRight: {
+    textAlign: 'right',
   },
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
