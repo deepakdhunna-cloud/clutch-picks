@@ -4,6 +4,14 @@ import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 import { enrichCricketLiveGame, enrichCricketLiveGames } from '@/lib/cricket-live-enrichment';
+import {
+  APP_STORE_SCREENSHOT_MODE,
+  getScreenshotGame,
+  getScreenshotGames,
+  getScreenshotGamesByDate,
+  getScreenshotGamesBySport,
+  getScreenshotTopPicks,
+} from '@/lib/app-store-screenshot-mode';
 
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 3000; // fast fallback when SSE drops, without hammering JS/network
@@ -79,6 +87,11 @@ function scheduleGameDetailWarmup(
   // the detail screen can paint from cache. Defer broader cache scans/network
   // prefetches until after the tap has started navigation.
   seedGameDetailCache(queryClient, gameId, sourceGame);
+
+  if (APP_STORE_SCREENSHOT_MODE) {
+    seedGameDetailCache(queryClient, gameId, sourceGame ?? getScreenshotGame(gameId));
+    return;
+  }
 
   if (scheduledGameDetailWarmups.has(gameId)) return;
   scheduledGameDetailWarmups.add(gameId);
@@ -228,6 +241,8 @@ export function useGames() {
   const query = useQuery({
     queryKey: ['games'],
     queryFn: async () => {
+      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotGames();
+
       // Render the first screen from yesterday/today first; future slates are
       // filled in after first paint so cold starts don't wait on four endpoints.
       const dates = boardDates();
@@ -253,6 +268,8 @@ export function useGames() {
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
     refetchInterval: (query) => {
+      if (APP_STORE_SCREENSHOT_MODE) return false;
+
       const games = query.state.data;
       // Burst-poll while predictions are still being generated server-side.
       // This is the dominant case right after first paint / sport-filter
@@ -304,7 +321,8 @@ export function useGames() {
 
 // Shared adaptive interval — burst while predictions are missing, then keep
 // live score fallback polling consistent anywhere the app renders score data.
-function liveAwareInterval(games: GameWithPrediction[] | undefined): number {
+function liveAwareInterval(games: GameWithPrediction[] | undefined): number | false {
+  if (APP_STORE_SCREENSHOT_MODE) return false;
   if (games?.some(shouldBurstForMissingPrediction)) return PREDICTION_BURST_INTERVAL;
   if (sseConnectedRef.current) return DEFAULT_POLLING_INTERVAL;
   if (games?.some((g) => g.status === GameStatus.LIVE)) return LIVE_POLLING_INTERVAL;
@@ -313,7 +331,7 @@ function liveAwareInterval(games: GameWithPrediction[] | undefined): number {
 
 function liveAwareBucketInterval(
   buckets: Array<{ games: GameWithPrediction[] }> | undefined,
-): number {
+): number | false {
   return liveAwareInterval(buckets?.flatMap((bucket) => bucket.games ?? []));
 }
 
@@ -322,6 +340,12 @@ export function useGamesBySport(sport: string, date?: string) {
   return useQuery({
     queryKey: ['games', 'sport', sport, date],
     queryFn: async () => {
+      if (APP_STORE_SCREENSHOT_MODE) {
+        return date
+          ? getScreenshotGamesBySport(sport).filter((game) => game.gameTime.slice(0, 10) === date)
+          : getScreenshotGamesBySport(sport);
+      }
+
       const url = date
         ? `/api/games/${sport.toLowerCase()}?date=${date}`
         : `/api/games/${sport.toLowerCase()}`;
@@ -341,6 +365,8 @@ export function useGamesByDate(date: string) {
   return useQuery({
     queryKey: ['games', 'date', date],
     queryFn: async () => {
+      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotGamesByDate(date);
+
       const result = await api.get<GameWithPrediction[]>(`/api/games/date/${date}`);
       return enrichCricketLiveGames(result ?? []);
     },
@@ -418,10 +444,15 @@ export function useLiveGames() {
 // Hook to get a single game by ID - with adaptive polling based on game status
 export function useGame(gameId: string) {
   const queryClient = useQueryClient();
+  const screenshotGame = APP_STORE_SCREENSHOT_MODE ? getScreenshotGame(gameId) : undefined;
 
   const query = useQuery({
     queryKey: ['game', gameId],
     queryFn: async () => {
+      if (APP_STORE_SCREENSHOT_MODE) {
+        return screenshotGame ?? getScreenshotGames()[0] ?? null;
+      }
+
       const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
       const enriched = await enrichCricketLiveGame(result ?? null);
       const current = findCachedGame(queryClient, gameId);
@@ -433,7 +464,7 @@ export function useGame(gameId: string) {
     placeholderData: keepPreviousData,
     // Seed from list cache for instant navigation
     initialData: () => {
-      return findCachedGame(queryClient, gameId) ?? undefined;
+      return screenshotGame ?? findCachedGame(queryClient, gameId) ?? undefined;
     },
     initialDataUpdatedAt: () => {
       return queryClient.getQueryState(['game', gameId])?.dataUpdatedAt
@@ -442,6 +473,8 @@ export function useGame(gameId: string) {
     },
     // Adaptive polling: burst when prediction missing, faster for live games
     refetchInterval: (query) => {
+      if (APP_STORE_SCREENSHOT_MODE) return false;
+
       const game = query.state.data;
       // If the detail page is showing a game without a prediction yet, poll
       // hard so it appears the moment background generation finishes.
@@ -457,6 +490,8 @@ export function useGame(gameId: string) {
     // Paint cached game data first. Detail refreshes are scheduled by the
     // screen after the navigation interaction has cleared.
     refetchOnMount: (query) => {
+      if (APP_STORE_SCREENSHOT_MODE) return false;
+
       const data = query.state.data;
       return !data || (data.sport === Sport.IPL && data.status === GameStatus.LIVE);
     },
@@ -470,6 +505,11 @@ export function useWeekGamesBySport(sport: string) {
   return useQuery({
     queryKey: ['games', 'week', sport],
     queryFn: async () => {
+      if (APP_STORE_SCREENSHOT_MODE) {
+        const today = formatLocalDate(new Date());
+        return [{ date: today, games: getScreenshotGamesBySport(sport) }];
+      }
+
       const today = new Date();
       const dates: string[] = [];
 
@@ -531,6 +571,8 @@ export function useTopPicks() {
   return useQuery({
     queryKey: ['topPicks'],
     queryFn: async () => {
+      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotTopPicks();
+
       const result = await api.get<GameWithPrediction[]>('/api/games/top-picks');
       return enrichCricketLiveGames(result ?? []);
     },

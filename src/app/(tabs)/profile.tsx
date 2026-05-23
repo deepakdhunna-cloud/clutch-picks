@@ -26,6 +26,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 import { getAppVersionLabel } from '@/lib/app-version';
+import { APP_STORE_SCREENSHOT_MODE, SCREENSHOT_PROFILE } from '@/lib/app-store-screenshot-mode';
 
 // ─── COLORS ───
 const C = {
@@ -420,7 +421,7 @@ export default function ProfileScreen() {
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<{ id: string; name: string; email: string | null; image: string | null; bio: string | null }>('/api/profile'),
-    enabled: !!userId,
+    enabled: !!userId && !APP_STORE_SCREENSHOT_MODE,
   });
 
   useFocusEffect(useCallback(() => {
@@ -428,11 +429,11 @@ export default function ProfileScreen() {
   }, [hasUser, refetchStats]));
 
   // Derived
-  const userName = session?.user?.name ?? 'Player';
-  const userImage = profile?.image ?? session?.user?.image ?? null;
+  const userName = APP_STORE_SCREENSHOT_MODE ? SCREENSHOT_PROFILE.name : session?.user?.name ?? 'Player';
+  const userImage = APP_STORE_SCREENSHOT_MODE ? null : profile?.image ?? session?.user?.image ?? null;
   const initial = userName.charAt(0).toUpperCase();
-  const userEmail = (profile?.email ?? session?.user?.email ?? null) as string | null;
-  const handle = userEmail ?? `@clutch${userName.toLowerCase().replace(/\s/g, '')}`;
+  const userEmail = APP_STORE_SCREENSHOT_MODE ? null : (profile?.email ?? session?.user?.email ?? null) as string | null;
+  const handle = APP_STORE_SCREENSHOT_MODE ? SCREENSHOT_PROFILE.handle : userEmail ?? `@clutch${userName.toLowerCase().replace(/\s/g, '')}`;
 
   const wins = stats?.wins ?? 0;
   const losses = stats?.losses ?? 0;
