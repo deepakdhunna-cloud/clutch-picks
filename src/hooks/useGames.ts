@@ -13,6 +13,7 @@ const DEFAULT_POLLING_INTERVAL = 60000; // background freshness; SSE handles liv
 const PREDICTION_BURST_INTERVAL = 8000;
 const STALE_TIME = 30000; // avoid refetching the whole board on every fast tab/screen hop
 const GAME_DETAIL_STALE_TIME = 10000;
+type DatedGamesResult = { games: GameWithPrediction[]; successfulDates: Set<string> };
 
 function runAfterNavigationStart(task: () => void) {
   const run = () => setTimeout(task, 0);
@@ -80,24 +81,63 @@ function boardDates() {
   };
 }
 
-async function fetchGamesForDates(dates: string[]): Promise<GameWithPrediction[]> {
-  const results = await Promise.all(
-    dates.map((d) =>
-      api.get<GameWithPrediction[]>(`/api/games/date/${d}`).catch(() => [] as GameWithPrediction[])
-    )
+async function fetchGamesForDates(dates: string[]): Promise<DatedGamesResult> {
+  const results = await Promise.allSettled(
+    dates.map((date) => api.get<GameWithPrediction[]>(`/api/games/date/${date}`))
   );
-  return enrichCricketLiveGames(results.flat());
+  const successfulDates = new Set<string>();
+  const games: GameWithPrediction[] = [];
+
+  results.forEach((result, index) => {
+    const date = dates[index];
+    if (!date || result.status !== 'fulfilled') return;
+    successfulDates.add(date);
+    games.push(...(result.value ?? []));
+  });
+
+  return { games: await enrichCricketLiveGames(games), successfulDates };
 }
 
-function dedupeGames(games: GameWithPrediction[]): GameWithPrediction[] {
+function mergeGameData(previous: GameWithPrediction, incoming: GameWithPrediction): GameWithPrediction {
+  return {
+    ...previous,
+    ...incoming,
+    homeTeam: { ...previous.homeTeam, ...incoming.homeTeam },
+    awayTeam: { ...previous.awayTeam, ...incoming.awayTeam },
+    prediction: incoming.prediction ?? previous.prediction,
+    seasonContext: incoming.seasonContext ?? previous.seasonContext,
+    watchSources: incoming.watchSources ?? previous.watchSources,
+    homeLinescores: incoming.homeLinescores ?? previous.homeLinescores,
+    awayLinescores: incoming.awayLinescores ?? previous.awayLinescores,
+    cricketState: incoming.cricketState ?? previous.cricketState,
+    liveState: incoming.liveState ?? previous.liveState,
+  };
+}
+
+function dedupeGames(games: GameWithPrediction[], previousGames?: GameWithPrediction[]): GameWithPrediction[] {
   const byId = new Map<string, GameWithPrediction>();
-  for (const game of games) byId.set(game.id, game);
+  const previousById = new Map((previousGames ?? []).map((game) => [game.id, game]));
+  for (const game of games) {
+    const existing = byId.get(game.id) ?? previousById.get(game.id);
+    byId.set(game.id, existing ? mergeGameData(existing, game) : game);
+  }
   return Array.from(byId.values());
 }
 
 function gamesOutsideDates(games: GameWithPrediction[] | undefined, dates: Set<string>): GameWithPrediction[] {
   if (!games) return [];
   return games.filter((game) => !dates.has(formatLocalDate(new Date(game.gameTime))));
+}
+
+function mergeFetchedGames(
+  currentGames: GameWithPrediction[] | undefined,
+  fetchedGames: GameWithPrediction[],
+  successfulDates: Set<string>,
+): GameWithPrediction[] {
+  return dedupeGames([
+    ...gamesOutsideDates(currentGames, successfulDates),
+    ...fetchedGames,
+  ], currentGames);
 }
 
 function shouldBurstForMissingPrediction(game: GameWithPrediction): boolean {
@@ -148,23 +188,19 @@ export function useGames() {
       // Render the first screen from yesterday/today first; future slates are
       // filled in after first paint so cold starts don't wait on four endpoints.
       const dates = boardDates();
-      const priorityGames = dedupeGames(await fetchGamesForDates(dates.priority));
-      const priorityDateSet = new Set(dates.priority);
-      const deferredDateSet = new Set(dates.deferred);
+      const priorityResult = await fetchGamesForDates(dates.priority);
       const currentGames = queryClient.getQueryData<GameWithPrediction[]>(['games']);
-      const firstPaintGames = dedupeGames([
-        ...priorityGames,
-        ...gamesOutsideDates(currentGames, priorityDateSet),
-      ]);
+      const firstPaintGames = mergeFetchedGames(
+        currentGames,
+        priorityResult.games,
+        priorityResult.successfulDates
+      );
 
       void fetchGamesForDates(dates.deferred)
-        .then((futureGames) => {
+        .then((futureResult) => {
           queryClient.setQueryData<GameWithPrediction[]>(['games'], (current) => {
             const currentSlate = Array.isArray(current) ? current : firstPaintGames;
-            return dedupeGames([
-              ...gamesOutsideDates(currentSlate, deferredDateSet),
-              ...futureGames,
-            ]);
+            return mergeFetchedGames(currentSlate, futureResult.games, futureResult.successfulDates);
           });
         })
         .catch(() => {});
@@ -201,7 +237,10 @@ export function useGames() {
         queryKey: ['game', gameId],
         queryFn: async () => {
           const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          return enrichCricketLiveGame(result ?? null);
+          const enriched = await enrichCricketLiveGame(result ?? null);
+          const current = findCachedGame(queryClient, gameId);
+          if (!enriched) return current ?? null;
+          return current ? mergeGameData(current, enriched) : enriched;
         },
         staleTime: GAME_DETAIL_STALE_TIME,
       });
@@ -361,7 +400,10 @@ export function useGame(gameId: string) {
     queryKey: ['game', gameId],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-      return enrichCricketLiveGame(result ?? null);
+      const enriched = await enrichCricketLiveGame(result ?? null);
+      const current = findCachedGame(queryClient, gameId);
+      if (!enriched) return current ?? null;
+      return current ? mergeGameData(current, enriched) : enriched;
     },
     enabled: !!gameId,
     staleTime: GAME_DETAIL_STALE_TIME, // Quick stale time to get fresh predictions
@@ -447,7 +489,10 @@ export function usePrefetchGame() {
         queryKey: ['game', gameId],
         queryFn: async () => {
           const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          return enrichCricketLiveGame(result ?? null);
+          const enriched = await enrichCricketLiveGame(result ?? null);
+          const current = findCachedGame(queryClient, gameId);
+          if (!enriched) return current ?? null;
+          return current ? mergeGameData(current, enriched) : enriched;
         },
         staleTime: GAME_DETAIL_STALE_TIME,
       });
