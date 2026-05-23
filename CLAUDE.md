@@ -114,6 +114,11 @@
   Don't hold back. This is mobile — design for touch, thumb zones, glanceability.
   Inspiration: iOS, Instagram, Airbnb, Coinbase, polished habit trackers.
 
+  <brand_lock>
+    Do not change the app icon or primary logo artwork without explicit user approval.
+    The canonical app icon is `icon.png`: the 3D border Clutch Picks artwork with the full CLUTCH + PICKS logo, not the standalone field-goal mark.
+  </brand_lock>
+
   <avoid>
     Purple gradients on white, generic centered layouts, predictable patterns.
     Web-like designs on mobile. Overused fonts (Space Grotesk, Inter).
