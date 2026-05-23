@@ -8,6 +8,7 @@ private/
 .env
 .env.*
 backend/.env
+app-store-screenshots/
 *.p8
 *.p12
 *.key
