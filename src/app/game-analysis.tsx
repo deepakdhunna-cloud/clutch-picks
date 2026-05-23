@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useGame } from '@/hooks/useGames';
 import { displayConfidence, displayWinProbability } from '@/lib/display-confidence';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { cleanProjectionCopy, getProjectionDisplay } from '@/lib/projection-display';
+import { cleanProjectionCopy, getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import { getPredictionDisplay } from '@/lib/prediction-display';
 import {
   getCanonicalConfidence,
@@ -411,6 +411,7 @@ export default function GameAnalysisScreen() {
         projection: prediction.projection,
       })
     : null;
+  const projectionRiskTier = prediction.projection ? getProjectionRiskTier(prediction.projection.upsetRisk) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -519,7 +520,7 @@ export default function GameAnalysisScreen() {
                 <Text style={s.sectionLabel}>{projectionDisplay?.label ?? 'Expected Score'}</Text>
               </View>
               <View style={s.upsetBadge}>
-                <Text style={s.upsetValue}>{Math.round(prediction.projection.upsetRisk * 100)}%</Text>
+                <Text style={s.upsetValue}>{projectionRiskTier}</Text>
                 <Text style={s.upsetLabel}>UPSET RISK</Text>
               </View>
             </View>

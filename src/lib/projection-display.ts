@@ -30,6 +30,14 @@ function normalizeProbability(value: number | undefined): number | null {
   return value > 1 ? value / 100 : value;
 }
 
+export function getProjectionRiskTier(value: number | null | undefined): 'Low' | 'Medium' | 'High' {
+  const risk = normalizeProbability(value ?? undefined);
+  if (risk === null) return 'Medium';
+  if (risk < 0.34) return 'Low';
+  if (risk < 0.45) return 'Medium';
+  return 'High';
+}
+
 export function cleanProjectionCopy(text: string | null | undefined): string {
   if (!text) return 'Expected-score model aligned to the final pick';
   const cleaned = text

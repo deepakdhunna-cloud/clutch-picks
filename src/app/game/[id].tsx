@@ -38,7 +38,7 @@ import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal
 import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { getProjectionDisplay } from '@/lib/projection-display';
+import { getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import { getPredictionDisplay } from '@/lib/prediction-display';
 import {
   getCanonicalConfidence,
@@ -1349,6 +1349,7 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
   const liveHome = game.homeScore ?? 0;
   const liveAway = game.awayScore ?? 0;
   const liveTotal = liveHome + liveAway;
+  const projectionRiskTier = getProjectionRiskTier(projection.upsetRisk);
   const projectionDisplay = getProjectionDisplay({
     sport,
     homeAbbr: homeTeam.abbreviation,
@@ -1392,7 +1393,7 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
         <View style={styles.projectionSummaryRow}>
           <Text style={styles.projectionSummaryText}>Total {projectionDisplay.total}</Text>
           <Text style={styles.projectionSummaryText}>Spread {projectionDisplay.spreadValue >= 0 ? '+' : ''}{projectionDisplay.spread}</Text>
-          <Text style={styles.projectionSummaryText}>Risk {Math.round(projection.upsetRisk * 100)}%</Text>
+          <Text style={styles.projectionSummaryText}>Risk {projectionRiskTier}</Text>
         </View>
       </View>
     </View>

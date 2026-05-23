@@ -14,7 +14,7 @@ import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { cleanProjectionCopy, getProjectionDisplay } from '@/lib/projection-display';
+import { cleanProjectionCopy, getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import {
   getCanonicalConfidence,
   getCanonicalResult,
@@ -754,6 +754,10 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       projection: game.prediction.projection,
     });
   }, [game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction, canonicalResult, canonicalConfidence, predictionDisplay.isTossUp]);
+  const projectionRiskTier = useMemo(
+    () => game.prediction?.projection ? getProjectionRiskTier(game.prediction.projection.upsetRisk) : null,
+    [game.prediction?.projection]
+  );
 
   // Get pending team for modal
   const pendingTeam = pendingSelection === 'home' ? game.homeTeam : pendingSelection === 'away' ? game.awayTeam : null;
@@ -1211,7 +1215,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                           Upset Risk
                         </Text>
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900', marginTop: 2 }}>
-                          {Math.round(game.prediction.projection.upsetRisk * 100)}%
+                          {projectionRiskTier}
                         </Text>
                       </View>
                     </View>
