@@ -29,7 +29,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Sport, type CanonicalPredictionResult, type Prediction } from '@/types/sports';
-import { useGamePick, useMakePick } from '@/hooks/usePicks';
+import { useGamePick, useMakePick, useRemovePick } from '@/hooks/usePicks';
 import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { MLBLiveCenterStack } from '@/components/sports/MLBLiveState';
@@ -381,7 +381,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
             paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6,
             borderWidth: 1, borderColor: `${teamColors.primary}40`,
           }, labelStyle]}>
-            <Text style={{ fontSize: 8, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.5 }}>YOUR PICK</Text>
+            <Text style={{ fontSize: 8, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.1 }}>{isDisabled ? 'YOUR PICK' : 'TAP TO REMOVE'}</Text>
           </Animated.View>
         </View>
       </Animated.View>
@@ -1787,8 +1787,10 @@ export default function GameDetailScreen() {
     } catch {}
   }, [id]);
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
+  const [pendingPickAction, setPendingPickAction] = useState<'pick' | 'remove'>('pick');
   const { data: userPick } = useGamePick(id ?? '');
   const makePick = useMakePick();
+  const removePick = useRemovePick();
   const { data: game, dataUpdatedAt, isLoading, error, refetch } = useGame(id ?? '') as { data: Game | null | undefined; dataUpdatedAt: number; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
   const { refreshing, onRefresh } = useSmoothRefresh(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1830,6 +1832,11 @@ export default function GameDetailScreen() {
   const cricketContext = !suspended && isLiveCricket ? cricketInningsContext(game) : null;
   const cricketClockText = cricketOvers;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
+  const openPickAction = useCallback((side: 'home' | 'away') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPendingPickAction(userPick?.pickedTeam === side ? 'remove' : 'pick');
+    setPendingPick(side);
+  }, [userPick?.pickedTeam]);
   // Pre-game countdown state — true while the game is SCHEDULED and tip-off
   // is within the COUNTDOWN_WINDOW_SEC window (1 hour). Drives both the LED
   // countdown visibility and the shrunk-score / dim-overlay treatment.
@@ -1930,7 +1937,7 @@ export default function GameDetailScreen() {
                     <TappableJerseyHero
                       team={homeTeam}
                       isSelected={userPick?.pickedTeam === 'home'}
-                      onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('home'); }}
+                      onSelect={() => openPickAction('home')}
                       isDisabled={gameStarted}
                       jerseyType={jerseyType}
                       sport={game.sport}
@@ -1941,7 +1948,7 @@ export default function GameDetailScreen() {
                 <TappableJerseyHero
                   team={homeTeam}
                   isSelected={userPick?.pickedTeam === 'home'}
-                  onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('home'); }}
+                  onSelect={() => openPickAction('home')}
                   isDisabled={gameStarted}
                   jerseyType={jerseyType}
                   sport={game.sport}
@@ -2014,7 +2021,7 @@ export default function GameDetailScreen() {
                     <TappableJerseyHero
                       team={awayTeam}
                       isSelected={userPick?.pickedTeam === 'away'}
-                      onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('away'); }}
+                      onSelect={() => openPickAction('away')}
                       isDisabled={gameStarted}
                       jerseyType={jerseyType}
                       sport={game.sport}
@@ -2025,7 +2032,7 @@ export default function GameDetailScreen() {
                 <TappableJerseyHero
                   team={awayTeam}
                   isSelected={userPick?.pickedTeam === 'away'}
-                  onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPendingPick('away'); }}
+                  onSelect={() => openPickAction('away')}
                   isDisabled={gameStarted}
                   jerseyType={jerseyType}
                   sport={game.sport}
@@ -2122,17 +2129,22 @@ export default function GameDetailScreen() {
         team={pendingPick === 'home' ? homeTeam : pendingPick === 'away' ? awayTeam : null}
         teamColor={pendingPick === 'home' ? homeTeam.color : awayTeam.color}
         sport={game.sport as Sport}
-        isChanging={!!userPick && userPick.pickedTeam !== pendingPick}
+        action={pendingPickAction}
+        isChanging={pendingPickAction === 'pick' && !!userPick && userPick.pickedTeam !== pendingPick}
         onConfirm={async () => {
           if (pendingPick && id) {
             try {
-              await makePick.mutateAsync({
-              gameId: id,
-              pickedTeam: pendingPick,
-              homeTeam: game.homeTeam.abbreviation,
-              awayTeam: game.awayTeam.abbreviation,
-              sport: game.sport,
-              });
+              if (pendingPickAction === 'remove') {
+                await removePick.mutateAsync({ gameId: id });
+              } else {
+                await makePick.mutateAsync({
+                  gameId: id,
+                  pickedTeam: pendingPick,
+                  homeTeam: game.homeTeam.abbreviation,
+                  awayTeam: game.awayTeam.abbreviation,
+                  sport: game.sport,
+                });
+              }
               return true;
             } catch {
               return false;
@@ -2140,7 +2152,10 @@ export default function GameDetailScreen() {
           }
           return false;
         }}
-        onCancel={() => setPendingPick(null)}
+        onCancel={() => {
+          setPendingPick(null);
+          setPendingPickAction('pick');
+        }}
       />
     </View>
   );

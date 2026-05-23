@@ -36,6 +36,7 @@ type PickConfirmationModalProps = {
   teamColor?: string | null;
   sport: Sport;
   isChanging?: boolean;
+  action?: 'pick' | 'remove';
   onConfirm: () => Promise<boolean | void> | boolean | void;
   onCancel: () => void;
 };
@@ -47,6 +48,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
   teamColor,
   sport,
   isChanging = false,
+  action = 'pick',
   onConfirm,
   onCancel,
 }: PickConfirmationModalProps) {
@@ -166,19 +168,24 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
   if (!team) return null;
 
   const cardWidth = Math.min(width - 38, 360);
+  const isRemoving = action === 'remove';
   const titleText = showSuccess
-    ? 'Pick Locked'
+    ? isRemoving ? 'Pick Removed' : 'Pick Locked'
     : errorMessage
       ? 'Pick Not Saved'
-      : isChanging
+      : isRemoving
+        ? 'Remove this pick?'
+        : isChanging
         ? 'Switch your pick?'
         : 'Lock in your pick?';
   const bodyText = showSuccess
-    ? 'Saved to your board.'
-    : errorMessage ?? (isChanging
+    ? isRemoving ? 'Cleared from your board.' : 'Saved to your board.'
+    : errorMessage ?? (isRemoving
+      ? 'This clears the pick from your board. You can choose again before the game starts.'
+      : isChanging
       ? 'This replaces your current selection and keeps the game on your board.'
       : 'This saves the pick to your board so you can track it through the game.');
-  const primaryLabel = errorMessage ? 'Try Again' : isChanging ? 'Switch Pick' : 'Lock It In';
+  const primaryLabel = errorMessage ? 'Try Again' : isRemoving ? 'Remove Pick' : isChanging ? 'Switch Pick' : 'Lock It In';
   const recordText = team.record?.trim() ? team.record.trim() : 'Season record';
 
   return (
@@ -276,11 +283,11 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                 <View style={styles.promiseRow}>
                   <View style={styles.promiseChip}>
                     <Check size={13} color="rgba(218,238,251,0.84)" strokeWidth={3} />
-                    <Text style={styles.promiseText}>Board save</Text>
+                    <Text style={styles.promiseText}>{isRemoving ? 'Board clears' : 'Board save'}</Text>
                   </View>
                   <View style={styles.promiseChip}>
                     <Sparkles size={13} color="rgba(218,238,251,0.84)" strokeWidth={2.4} />
-                    <Text style={styles.promiseText}>Track live</Text>
+                    <Text style={styles.promiseText}>{isRemoving ? 'Pick again' : 'Track live'}</Text>
                   </View>
                 </View>
               ) : null}
@@ -298,7 +305,11 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                       style={styles.lockButton}
                     >
                       <View style={styles.lockContent}>
-                        <ShieldCheck size={19} color="#FFFFFF" strokeWidth={2.8} />
+                        {isRemoving ? (
+                          <X size={19} color="#FFFFFF" strokeWidth={2.8} />
+                        ) : (
+                          <ShieldCheck size={19} color="#FFFFFF" strokeWidth={2.8} />
+                        )}
                         <Text style={styles.lockText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>{primaryLabel}</Text>
                       </View>
                     </LinearGradient>
@@ -312,8 +323,12 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                 </View>
               ) : (
                 <View style={styles.lockedState}>
-                  <ShieldCheck size={18} color="#DAEEFB" strokeWidth={2.6} />
-                  <Text style={styles.lockedText}>{showSuccess ? 'Locked In' : 'Saving Pick'}</Text>
+                  {isRemoving ? (
+                    <X size={18} color="#DAEEFB" strokeWidth={2.6} />
+                  ) : (
+                    <ShieldCheck size={18} color="#DAEEFB" strokeWidth={2.6} />
+                  )}
+                  <Text style={styles.lockedText}>{showSuccess ? (isRemoving ? 'Removed' : 'Locked In') : (isRemoving ? 'Removing Pick' : 'Saving Pick')}</Text>
                 </View>
               )}
             </LinearGradient>

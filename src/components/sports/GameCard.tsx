@@ -25,7 +25,7 @@ import { cricketRequiredText, cricketRoleText, cricketStatusText, scorePairText,
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Calendar, Clock, Tv, TrendingUp, ChevronRight, Lock } from 'lucide-react-native';
-import { useMakePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
+import { useMakePick, useRemovePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
 import { usePrefetchGame } from '@/hooks/useGames';
@@ -230,7 +230,7 @@ const TappableJersey = memo(function TappableJersey({
             backgroundColor: teamColors.primary,
             paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
           }, labelStyle]}>
-            <Text style={{ fontSize: 6, fontWeight: '900', color: '#040608', letterSpacing: 1 }}>YOUR PICK</Text>
+            <Text style={{ fontSize: 6, fontWeight: '900', color: '#040608', letterSpacing: 0.8 }}>{isDisabled ? 'YOUR PICK' : 'REMOVE'}</Text>
           </Animated.View>
 
           {/* Winner badge */}
@@ -600,6 +600,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
   // Use backend hooks for picks
   const { mutateAsync: makePick } = useMakePick();
+  const { mutateAsync: removePick } = useRemovePick();
   const { data: userPrediction } = useGamePick(game.id);
   const { data: pickStatsData } = useGamePickStats(game.id);
 
@@ -690,6 +691,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   // Confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<'home' | 'away' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'pick' | 'remove'>('pick');
 
   const handlePress = useCallback(() => {
     if (isNavigatingRef.current) return;
@@ -703,8 +705,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
   const handleJerseyTap = useCallback((selectedTeam: 'home' | 'away') => {
     if (userPrediction?.pickedTeam === selectedTeam) {
+      setPendingAction('remove');
+      setPendingSelection(selectedTeam);
+      setShowConfirmModal(true);
       return;
     }
+    setPendingAction('pick');
     setPendingSelection(selectedTeam);
     setShowConfirmModal(true);
   }, [userPrediction?.pickedTeam]);
@@ -712,6 +718,10 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const handleConfirmSelection = useCallback(async () => {
     if (!pendingSelection) return false;
     try {
+      if (pendingAction === 'remove') {
+        await removePick({ gameId: game.id });
+        return true;
+      }
       await makePick({
         gameId: game.id,
         pickedTeam: pendingSelection,
@@ -723,11 +733,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
     } catch {
       return false;
     }
-  }, [pendingSelection, game.id, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.sport, makePick]);
+  }, [pendingAction, pendingSelection, game.id, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.sport, makePick, removePick]);
 
   const handleCancelSelection = useCallback(() => {
     setShowConfirmModal(false);
     setPendingSelection(null);
+    setPendingAction('pick');
   }, []);
 
   // Memoized derived team values
@@ -784,6 +795,8 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
           team={pendingTeam}
           teamColors={pendingTeamColors}
           sport={game.sport}
+          action={pendingAction}
+          isChanging={pendingAction === 'pick' && !!userPrediction && userPrediction.pickedTeam !== pendingSelection}
           onConfirm={handleConfirmSelection}
           onCancel={handleCancelSelection}
         />

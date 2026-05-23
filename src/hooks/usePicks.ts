@@ -104,6 +104,32 @@ export function useMakePick() {
   });
 }
 
+// Hook to remove an unresolved pick from the user's board
+export function useRemovePick() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { gameId: string }) =>
+      api.delete<{ deleted: boolean }>(`/api/picks/game/${encodeURIComponent(data.gameId)}`),
+    onMutate: async ({ gameId }) => {
+      await queryClient.cancelQueries({ queryKey: ['picks'] });
+      const previousPicks = queryClient.getQueryData<Pick[]>(['picks']);
+      queryClient.setQueryData<Pick[]>(['picks'], (current) => current?.filter((pick) => pick.gameId !== gameId) ?? []);
+      return { previousPicks };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousPicks) {
+        queryClient.setQueryData(['picks'], context.previousPicks);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['picks'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['allPickStats'] });
+    },
+  });
+}
+
 // Helper to find a pick for a specific game — uses select so only rerenders when this game's pick changes
 export function useGamePick(gameId: string) {
   const selector = useMemo(() => (picks: Pick[] | undefined) => picks?.find((p) => p.gameId === gameId), [gameId]);

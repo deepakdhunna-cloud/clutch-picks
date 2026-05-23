@@ -91,6 +91,45 @@ picksRouter.post("/", zValidator("json", createPickSchema), async (c) => {
   }
 });
 
+// DELETE /api/picks/game/:gameId - Remove an unresolved pick from the user's board
+picksRouter.delete("/game/:gameId", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const gameId = c.req.param("gameId");
+  if (!gameId) {
+    return c.json({ error: { message: "Missing game id", code: "MISSING_GAME_ID" } }, 400);
+  }
+
+  try {
+    const existing = await prisma.userPick.findUnique({
+      where: { odId_gameId: { odId: user.id, gameId } },
+    });
+
+    if (!existing) {
+      return c.json({ data: { deleted: false } });
+    }
+
+    if (existing.result !== null) {
+      return c.json(
+        { error: { message: "Cannot remove a resolved pick", code: "PICK_RESOLVED" } },
+        400
+      );
+    }
+
+    await prisma.userPick.delete({
+      where: { odId_gameId: { odId: user.id, gameId } },
+    });
+
+    return c.json({ data: { deleted: true } });
+  } catch (error) {
+    console.error("Error removing pick:", error);
+    return c.json({ error: { message: "Failed to remove pick", code: "DELETE_FAILED" } }, 500);
+  }
+});
+
 // GET /api/picks - Get all picks for current user
 picksRouter.get("/", async (c) => {
   const user = c.get("user");
