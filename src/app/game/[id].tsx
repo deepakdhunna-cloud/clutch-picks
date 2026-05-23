@@ -58,9 +58,18 @@ import {
 } from '@/lib/cricket-score';
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Tv, X } from 'lucide-react-native';
+import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Smartphone, Tv, X } from 'lucide-react-native';
 
-type WatchOption = { name: string };
+type WatchOptionKind = 'broadcast' | 'streaming';
+type WatchOption = {
+  name: string;
+  kind: WatchOptionKind;
+  note?: string;
+};
+type StreamingRule = {
+  match: RegExp;
+  options: WatchOption[];
+};
 
 const UNKNOWN_WATCH_LABELS = new Set([
   'tbd',
@@ -92,12 +101,137 @@ const tvChannelUrls: Record<string, string> = {
   prime: 'https://www.amazon.com/primevideo',
   amazon: 'https://www.amazon.com/primevideo',
   apple: 'https://tv.apple.com/',
+  'apple tv+': 'https://tv.apple.com/',
   youtube: 'https://tv.youtube.com/',
+  'youtube tv': 'https://tv.youtube.com/',
+  hulu: 'https://www.hulu.com/live-tv',
+  fubo: 'https://www.fubo.tv/',
+  sling: 'https://www.sling.com/',
+  directv: 'https://streamtv.directv.com/',
+  max: 'https://www.max.com/sports',
+  'espn+': 'https://www.espn.com/espnplus/',
+  'fox sports': 'https://www.foxsports.com/live',
+  'nbc sports': 'https://www.nbcsports.com/watch',
+  'cbs sports': 'https://www.cbssports.com/watch/',
+  'league pass': 'https://www.nba.com/watch/league-pass-stream',
+  'nba league pass': 'https://www.nba.com/watch/league-pass-stream',
+  'nfl+': 'https://www.nfl.com/plus/',
+  willow: 'https://www.willow.tv/',
 };
+
+const DIRECT_STREAMING_SOURCE_RE = /(mlb\.tv|espn\+|espn plus|peacock|paramount\+|prime video|amazon prime|apple tv\+|youtube tv|hulu|fubo|sling|directv stream|nba league pass|league pass|nfl\+|willow)/i;
+
+const STREAMING_RULES: StreamingRule[] = [
+  {
+    match: /\bmlb\.tv\b/i,
+    options: [{ name: 'MLB.TV', kind: 'streaming', note: 'Official stream' }],
+  },
+  {
+    match: /\bmlb network\b/i,
+    options: [
+      { name: 'MLB app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Fubo', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bespn\+|espn plus\b/i,
+    options: [{ name: 'ESPN+', kind: 'streaming', note: 'Official stream' }],
+  },
+  {
+    match: /\bespn|espn2|espnu|acc network|sec network\b/i,
+    options: [
+      { name: 'ESPN app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Sling TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bfox|fs1|fs2|big ten network|btn\b/i,
+    options: [
+      { name: 'FOX Sports app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Fubo', kind: 'streaming', note: 'Live TV' },
+      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\babc\b/i,
+    options: [
+      { name: 'ABC app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bnbc|usa network|peacock\b/i,
+    options: [
+      { name: 'Peacock', kind: 'streaming', note: 'Official stream' },
+      { name: 'NBC Sports app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bcbs|paramount\+\b/i,
+    options: [
+      { name: 'Paramount+', kind: 'streaming', note: 'Official stream' },
+      { name: 'CBS Sports app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\btnt|tbs|tru tv|trutv\b/i,
+    options: [
+      { name: 'Max', kind: 'streaming', note: 'Sports add-on' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
+      { name: 'Sling TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bprime video|amazon\b/i,
+    options: [{ name: 'Prime Video', kind: 'streaming', note: 'Official stream' }],
+  },
+  {
+    match: /\bapple|apple tv\+\b/i,
+    options: [{ name: 'Apple TV+', kind: 'streaming', note: 'Official stream' }],
+  },
+  {
+    match: /\bnba tv\b/i,
+    options: [
+      { name: 'NBA League Pass', kind: 'streaming', note: 'League stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bnfl network|nfl\+\b/i,
+    options: [
+      { name: 'NFL+', kind: 'streaming', note: 'Official stream' },
+      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+  {
+    match: /\bwillow\b/i,
+    options: [{ name: 'Willow TV', kind: 'streaming', note: 'Cricket stream' }],
+  },
+  {
+    match: /\bfanduel|bally sports|yes network|\byes\b|sny|nesn|masn|marquee|root sports|altitude|monumental|sportsnet\b/i,
+    options: [
+      { name: 'Regional sports app', kind: 'streaming', note: 'TV provider stream' },
+      { name: 'DIRECTV Stream', kind: 'streaming', note: 'Live TV' },
+      { name: 'Fubo', kind: 'streaming', note: 'Live TV' },
+    ],
+  },
+];
 
 function getTvChannelUrl(channel: string): string {
   const channelLower = channel.toLowerCase().trim();
   if (/^https?:\/\//i.test(channelLower)) return channel.trim();
+  if (channelLower.includes('espn+') || channelLower.includes('espn plus')) return tvChannelUrls['espn+'];
+  if (channelLower.includes('nba league pass') || channelLower.includes('league pass')) return tvChannelUrls['nba league pass'];
+  if (channelLower.includes('nfl+')) return tvChannelUrls['nfl+'];
+  if (channelLower.includes('directv stream')) return tvChannelUrls.directv;
   for (const [key, url] of Object.entries(tvChannelUrls)) {
     if (channelLower.includes(key)) return url;
   }
@@ -106,6 +240,10 @@ function getTvChannelUrl(channel: string): string {
 
 function openWatchSource(source: string) {
   void Linking.openURL(getTvChannelUrl(source)).catch(() => undefined);
+}
+
+function watchKindForName(name: string): WatchOptionKind {
+  return DIRECT_STREAMING_SOURCE_RE.test(name) ? 'streaming' : 'broadcast';
 }
 
 function splitWatchString(value: string): string[] {
@@ -134,18 +272,37 @@ function collectWatchNames(source: unknown): string[] {
   return [];
 }
 
-function getWatchOptions(primaryChannel?: string | null, watchSources?: unknown): WatchOption[] {
-  const names = [...collectWatchNames(primaryChannel), ...collectWatchNames(watchSources)];
+function makeUniqueWatchOptions(options: WatchOption[]): WatchOption[] {
   const seen = new Set<string>();
-  return names.reduce<WatchOption[]>((result, name) => {
-    const cleaned = name.replace(/\s+/g, ' ').trim();
+  return options.reduce<WatchOption[]>((result, option) => {
+    const cleaned = option.name.replace(/\s+/g, ' ').trim();
     const key = cleaned.toLowerCase();
     if (!cleaned || UNKNOWN_WATCH_LABELS.has(key)) return result;
     if (seen.has(key)) return result;
     seen.add(key);
-    result.push({ name: cleaned });
+    result.push({ ...option, name: cleaned });
     return result;
   }, []);
+}
+
+function inferStreamingOptions(names: string[]): WatchOption[] {
+  return makeUniqueWatchOptions(
+    names.flatMap((name) => (
+      STREAMING_RULES
+        .filter((rule) => rule.match.test(name))
+        .flatMap((rule) => rule.options)
+    ))
+  );
+}
+
+function getWatchOptions(primaryChannel?: string | null, watchSources?: unknown): WatchOption[] {
+  const names = [...collectWatchNames(primaryChannel), ...collectWatchNames(watchSources)];
+  const listedOptions = names.map((name) => ({
+    name,
+    kind: watchKindForName(name),
+    note: watchKindForName(name) === 'streaming' ? 'Listed stream' : 'Listed broadcast',
+  }));
+  return makeUniqueWatchOptions([...listedOptions, ...inferStreamingOptions(names)]);
 }
 
 function WhereToWatchRow({
@@ -161,16 +318,25 @@ function WhereToWatchRow({
   const options = useMemo(() => getWatchOptions(primaryChannel, watchSources), [primaryChannel, watchSources]);
   const [isMenuVisible, setIsMenuVisible] = useState<boolean>(false);
 
+  const broadcastOptions = useMemo(() => options.filter((option) => option.kind === 'broadcast'), [options]);
+  const streamingOptions = useMemo(() => options.filter((option) => option.kind === 'streaming'), [options]);
+  const visibleStreamingOptions = streamingOptions.slice(0, 4);
+  const hiddenStreamingCount = Math.max(0, streamingOptions.length - visibleStreamingOptions.length);
   const primary = options[0];
   const hasBroadcastInfo = options.length > 0;
-  const menuOptions = options.length > 0 ? options : [{ name: 'Broadcast info not listed' }];
-  const primaryText = primary?.name ?? 'Watch info TBD';
+  const menuOptions: WatchOption[] = options.length > 0
+    ? options
+    : [{ name: 'Broadcast info not listed', kind: 'broadcast', note: 'Source not listed' }];
+  const primaryText = broadcastOptions[0]?.name ?? streamingOptions[0]?.name ?? 'Watch info TBD';
+  const broadcastText = broadcastOptions.length > 0
+    ? broadcastOptions.map((option) => option.name).join(' · ')
+    : 'TV broadcast not listed';
   const venueText = venue?.trim() ? venue.trim() : 'Venue TBD';
   const menuSummaryText = hasBroadcastInfo
-    ? `${menuOptions.length} source${menuOptions.length === 1 ? '' : 's'} listed for this game`
+    ? `${broadcastOptions.length} broadcast${broadcastOptions.length === 1 ? '' : 's'} · ${streamingOptions.length} stream option${streamingOptions.length === 1 ? '' : 's'}`
     : 'Broadcast source not listed yet';
   const sourceCountText = hasBroadcastInfo
-    ? `${menuOptions.length} source${menuOptions.length === 1 ? '' : 's'}`
+    ? `${broadcastOptions.length} TV · ${streamingOptions.length} stream`
     : 'Source TBD';
 
   return (
@@ -204,6 +370,66 @@ function WhereToWatchRow({
           >
             <ChevronDown size={18} color="rgba(226,240,249,0.82)" strokeWidth={2.8} />
           </Pressable>
+        </View>
+
+        <View style={styles.watchHubTile}>
+          <View style={styles.watchHubTileIcon}>
+            <Tv size={15} color="rgba(218,238,251,0.92)" strokeWidth={2.4} />
+          </View>
+          <View style={styles.watchHubTileCopy}>
+            <Text style={styles.watchHubTileLabel}>TV Broadcast</Text>
+            <Text style={styles.watchHubTileValue} numberOfLines={1}>{broadcastText}</Text>
+          </View>
+        </View>
+
+        <View style={styles.watchHubStreamingBlock}>
+          <View style={styles.watchHubStreamingHeader}>
+            <Text style={styles.watchHubTileLabel}>Streaming Services</Text>
+            <Text style={styles.watchHubStreamingMeta}>
+              {streamingOptions.length > 0 ? `${streamingOptions.length} option${streamingOptions.length === 1 ? '' : 's'}` : 'Not listed'}
+            </Text>
+          </View>
+          {visibleStreamingOptions.length > 0 ? (
+            <View style={styles.watchHubStreamingGrid}>
+              {visibleStreamingOptions.map((option, index) => (
+                <Pressable
+                  key={`${option.name}-${index}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${option.name}`}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    openWatchSource(option.name);
+                  }}
+                  style={({ pressed }) => [
+                    styles.watchHubServiceChip,
+                    pressed && styles.infoPillPressed,
+                  ]}
+                >
+                  <Smartphone size={12} color="rgba(218,238,251,0.88)" strokeWidth={2.4} />
+                  <Text style={styles.watchHubServiceText} numberOfLines={1}>{option.name}</Text>
+                </Pressable>
+              ))}
+              {hiddenStreamingCount > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${hiddenStreamingCount} more streaming options`}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsMenuVisible(true);
+                  }}
+                  style={({ pressed }) => [
+                    styles.watchHubServiceChip,
+                    styles.watchHubMoreChip,
+                    pressed && styles.infoPillPressed,
+                  ]}
+                >
+                  <Text style={styles.watchHubServiceText}>+{hiddenStreamingCount}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : (
+            <Text style={styles.watchHubStreamingEmpty}>Streaming service is not listed for this matchup yet.</Text>
+          )}
         </View>
 
         <View style={styles.watchHubTile}>
@@ -262,8 +488,8 @@ function WhereToWatchRow({
             <ScrollView style={styles.watchMenuList} contentContainerStyle={styles.watchMenuListContent} showsVerticalScrollIndicator={false}>
               {menuOptions.map((opt, index) => {
                 const isPrimary = index === 0 && !!primary;
-                const sourceSubtitle = isPrimary ? 'Primary broadcast' : hasBroadcastInfo ? `Broadcast source ${index + 1}` : 'Source not listed';
-                const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : Tv;
+                const sourceSubtitle = opt.note ?? (opt.kind === 'streaming' ? 'Streaming service' : isPrimary ? 'Primary broadcast' : hasBroadcastInfo ? `Broadcast source ${index + 1}` : 'Source not listed');
+                const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : opt.kind === 'streaming' ? Smartphone : Tv;
                 return (
                   <Pressable
                     key={`${opt.name}-${index}`}
@@ -2549,6 +2775,66 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.035)',
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.10)',
+  },
+  watchHubStreamingBlock: {
+    marginTop: 10,
+    marginBottom: 10,
+    borderRadius: 16,
+    padding: 10,
+    backgroundColor: 'rgba(3,9,14,0.52)',
+    borderWidth: 1,
+    borderColor: 'rgba(122,157,184,0.12)',
+  },
+  watchHubStreamingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 9,
+    gap: 10,
+  },
+  watchHubStreamingMeta: {
+    fontSize: 7,
+    fontWeight: '900',
+    color: 'rgba(226,240,249,0.38)',
+    letterSpacing: 0.85,
+    textTransform: 'uppercase',
+  },
+  watchHubStreamingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  watchHubServiceChip: {
+    maxWidth: '48%',
+    minHeight: 30,
+    borderRadius: 11,
+    paddingHorizontal: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(122,157,184,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(180,211,235,0.16)',
+  },
+  watchHubMoreChip: {
+    minWidth: 46,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(139,10,31,0.20)',
+    borderColor: 'rgba(139,10,31,0.32)',
+  },
+  watchHubServiceText: {
+    minWidth: 0,
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  watchHubStreamingEmpty: {
+    color: 'rgba(226,240,249,0.38)',
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 15,
   },
   watchHubTileIcon: {
     width: 30,
