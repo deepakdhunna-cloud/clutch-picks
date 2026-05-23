@@ -59,7 +59,7 @@ import {
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { getWatchSourceUrl } from '@/lib/watch-url';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Smartphone, Tv, X } from 'lucide-react-native';
+import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Tv, X } from 'lucide-react-native';
 
 type WatchOptionKind = 'broadcast' | 'streaming';
 type WatchOption = {
@@ -84,6 +84,29 @@ const UNKNOWN_WATCH_LABELS = new Set([
 ]);
 
 const DIRECT_STREAMING_SOURCE_RE = /(mlb\.tv|espn\+|espn plus|peacock|paramount\+|prime video|amazon prime|apple tv\+|youtube tv|hulu|fubo|sling|directv stream|nba league pass|league pass|nfl\+|willow)/i;
+
+const WATCH_POPULARITY_ORDER: Array<{ match: RegExp; rank: number }> = [
+  { match: /youtube tv/i, rank: 10 },
+  { match: /hulu/i, rank: 20 },
+  { match: /peacock/i, rank: 30 },
+  { match: /prime video|amazon/i, rank: 40 },
+  { match: /espn\+|espn plus/i, rank: 45 },
+  { match: /paramount/i, rank: 50 },
+  { match: /apple tv/i, rank: 55 },
+  { match: /\bmax\b/i, rank: 60 },
+  { match: /fubo/i, rank: 70 },
+  { match: /directv/i, rank: 80 },
+  { match: /sling/i, rank: 90 },
+  { match: /mlb\.tv|mlb app/i, rank: 100 },
+  { match: /nba league pass|league pass/i, rank: 105 },
+  { match: /nfl\+/i, rank: 110 },
+  { match: /fox sports/i, rank: 120 },
+  { match: /nbc sports/i, rank: 125 },
+  { match: /cbs sports/i, rank: 130 },
+  { match: /abc app/i, rank: 135 },
+  { match: /regional sports/i, rank: 145 },
+  { match: /willow/i, rank: 150 },
+];
 
 const STREAMING_RULES: StreamingRule[] = [
   {
@@ -193,6 +216,22 @@ function openWatchSource(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
 }
 
+function getWatchPopularityRank(option: WatchOption): number {
+  if (option.kind === 'broadcast') return 0;
+  const match = WATCH_POPULARITY_ORDER.find((rule) => rule.match.test(option.name));
+  return match?.rank ?? 999;
+}
+
+function sortWatchOptions(options: WatchOption[]): WatchOption[] {
+  return [...options].sort((a, b) => {
+    const kindDelta = a.kind === b.kind ? 0 : a.kind === 'broadcast' ? -1 : 1;
+    if (kindDelta !== 0) return kindDelta;
+    const rankDelta = getWatchPopularityRank(a) - getWatchPopularityRank(b);
+    if (rankDelta !== 0) return rankDelta;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function watchKindForName(name: string): WatchOptionKind {
   return DIRECT_STREAMING_SOURCE_RE.test(name) ? 'streaming' : 'broadcast';
 }
@@ -253,7 +292,7 @@ function getWatchOptions(primaryChannel?: string | null, watchSources?: unknown)
     kind: watchKindForName(name),
     note: watchKindForName(name) === 'streaming' ? 'Listed stream' : 'Listed broadcast',
   }));
-  return makeUniqueWatchOptions([...listedOptions, ...inferStreamingOptions(names)]);
+  return sortWatchOptions(makeUniqueWatchOptions([...listedOptions, ...inferStreamingOptions(names)]));
 }
 
 function WhereToWatchRow({
@@ -271,12 +310,10 @@ function WhereToWatchRow({
 
   const broadcastOptions = useMemo(() => options.filter((option) => option.kind === 'broadcast'), [options]);
   const streamingOptions = useMemo(() => options.filter((option) => option.kind === 'streaming'), [options]);
-  const visibleStreamingOptions = streamingOptions.slice(0, 4);
-  const hiddenStreamingCount = Math.max(0, streamingOptions.length - visibleStreamingOptions.length);
   const primary = options[0];
   const hasBroadcastInfo = options.length > 0;
   const menuOptions: WatchOption[] = options.length > 0
-    ? options
+    ? sortWatchOptions(options)
     : [{ name: 'Broadcast info not listed', kind: 'broadcast', note: 'Source not listed' }];
   const primaryText = broadcastOptions[0]?.name ?? streamingOptions[0]?.name ?? 'Watch info TBD';
   const broadcastText = broadcastOptions.length > 0
@@ -333,55 +370,33 @@ function WhereToWatchRow({
           </View>
         </View>
 
-        <View style={styles.watchHubStreamingBlock}>
-          <View style={styles.watchHubStreamingHeader}>
-            <Text style={styles.watchHubTileLabel}>Streaming Services</Text>
-            <Text style={styles.watchHubStreamingMeta}>
-              {streamingOptions.length > 0 ? `${streamingOptions.length} option${streamingOptions.length === 1 ? '' : 's'}` : 'Not listed'}
-            </Text>
-          </View>
-          {visibleStreamingOptions.length > 0 ? (
-            <View style={styles.watchHubStreamingGrid}>
-              {visibleStreamingOptions.map((option, index) => (
-                <Pressable
-                  key={`${option.name}-${index}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${option.name}`}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    openWatchSource(option.name);
-                  }}
-                  style={({ pressed }) => [
-                    styles.watchHubServiceChip,
-                    pressed && styles.infoPillPressed,
-                  ]}
-                >
-                  <Smartphone size={12} color="rgba(218,238,251,0.88)" strokeWidth={2.4} />
-                  <Text style={styles.watchHubServiceText} numberOfLines={1}>{option.name}</Text>
-                </Pressable>
-              ))}
-              {hiddenStreamingCount > 0 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${hiddenStreamingCount} more streaming options`}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setIsMenuVisible(true);
-                  }}
-                  style={({ pressed }) => [
-                    styles.watchHubServiceChip,
-                    styles.watchHubMoreChip,
-                    pressed && styles.infoPillPressed,
-                  ]}
-                >
-                  <Text style={styles.watchHubServiceText}>+{hiddenStreamingCount}</Text>
-                </Pressable>
-              ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={streamingOptions.length > 0 ? `Open ${streamingOptions.length} streaming options` : 'Streaming services not listed'}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setIsMenuVisible(true);
+          }}
+          style={({ pressed }) => [
+            styles.watchHubDropdownTile,
+            pressed && styles.infoPillPressed,
+          ]}
+        >
+          <View style={styles.watchHubDropdownHeader}>
+            <View style={styles.watchHubDropdownCopy}>
+              <Text style={styles.watchHubTileLabel}>Streaming Services</Text>
+              <Text style={styles.watchHubDropdownValue} numberOfLines={1}>
+                {streamingOptions.length > 0
+                  ? `${streamingOptions.length} option${streamingOptions.length === 1 ? '' : 's'} ranked by popularity`
+                  : 'Streaming service is not listed yet'}
+              </Text>
             </View>
-          ) : (
-            <Text style={styles.watchHubStreamingEmpty}>Streaming service is not listed for this matchup yet.</Text>
-          )}
-        </View>
+            <View style={styles.watchHubDropdownRight}>
+              <Text style={styles.watchHubDropdownCount}>{streamingOptions.length > 0 ? 'View all' : 'TBD'}</Text>
+              <ChevronDown size={16} color="rgba(226,240,249,0.72)" strokeWidth={2.8} />
+            </View>
+          </View>
+        </Pressable>
 
         <View style={styles.watchHubTile}>
           <View style={styles.watchHubTileIcon}>
@@ -440,7 +455,10 @@ function WhereToWatchRow({
               {menuOptions.map((opt, index) => {
                 const isPrimary = index === 0 && !!primary;
                 const sourceSubtitle = opt.note ?? (opt.kind === 'streaming' ? 'Streaming service' : isPrimary ? 'Primary broadcast' : hasBroadcastInfo ? `Broadcast source ${index + 1}` : 'Source not listed');
-                const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : opt.kind === 'streaming' ? Smartphone : Tv;
+                const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : Tv;
+                const streamRank = opt.kind === 'streaming'
+                  ? streamingOptions.findIndex((stream) => stream.name === opt.name) + 1
+                  : 0;
                 return (
                   <Pressable
                     key={`${opt.name}-${index}`}
@@ -455,12 +473,18 @@ function WhereToWatchRow({
                       pressed && styles.watchMenuOptionPressed,
                     ]}
                   >
-                    <View style={styles.watchMenuSourceIcon}>
-                      <SourceIcon size={17} color="rgba(226,240,249,0.9)" strokeWidth={2.35} />
+                    <View style={[styles.watchMenuSourceIcon, opt.kind === 'streaming' && styles.watchMenuRankIcon]}>
+                      {opt.kind === 'streaming' ? (
+                        <Text style={styles.watchMenuRankText}>#{streamRank || index + 1}</Text>
+                      ) : (
+                        <SourceIcon size={17} color="rgba(226,240,249,0.9)" strokeWidth={2.35} />
+                      )}
                     </View>
                     <View style={styles.watchMenuOptionCopy}>
                       <Text style={styles.watchMenuOptionText} numberOfLines={1}>{opt.name}</Text>
-                      <Text style={styles.watchMenuOptionSub}>{sourceSubtitle}</Text>
+                      <Text style={styles.watchMenuOptionSub}>
+                        {streamRank > 0 ? `#${streamRank} most popular · ${sourceSubtitle}` : sourceSubtitle}
+                      </Text>
                     </View>
                     {isPrimary ? (
                       <View style={styles.watchMenuPrimaryBadge}>
@@ -2727,65 +2751,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.10)',
   },
-  watchHubStreamingBlock: {
+  watchHubDropdownTile: {
     marginTop: 10,
     marginBottom: 10,
+    minHeight: 56,
     borderRadius: 16,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     backgroundColor: 'rgba(3,9,14,0.52)',
     borderWidth: 1,
     borderColor: 'rgba(122,157,184,0.12)',
   },
-  watchHubStreamingHeader: {
+  watchHubDropdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 9,
     gap: 10,
   },
-  watchHubStreamingMeta: {
-    fontSize: 7,
+  watchHubDropdownCopy: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  watchHubDropdownValue: {
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '900',
-    color: 'rgba(226,240,249,0.38)',
-    letterSpacing: 0.85,
-    textTransform: 'uppercase',
+    letterSpacing: 0,
   },
-  watchHubStreamingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
-  },
-  watchHubServiceChip: {
-    maxWidth: '48%',
-    minHeight: 30,
-    borderRadius: 11,
-    paddingHorizontal: 9,
+  watchHubDropdownRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(122,157,184,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.16)',
+    gap: 7,
+    flexShrink: 0,
   },
-  watchHubMoreChip: {
-    minWidth: 46,
-    justifyContent: 'center',
-    backgroundColor: 'rgba(139,10,31,0.20)',
-    borderColor: 'rgba(139,10,31,0.32)',
-  },
-  watchHubServiceText: {
-    minWidth: 0,
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 10.5,
+  watchHubDropdownCount: {
+    color: 'rgba(218,238,251,0.68)',
+    fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 0,
-  },
-  watchHubStreamingEmpty: {
-    color: 'rgba(226,240,249,0.38)',
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 15,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   watchHubTileIcon: {
     width: 30,
@@ -3252,6 +3258,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(180,211,235,0.16)',
     marginRight: 10,
     flexShrink: 0,
+  },
+  watchMenuRankIcon: {
+    backgroundColor: 'rgba(139,10,31,0.22)',
+    borderColor: 'rgba(139,10,31,0.38)',
+  },
+  watchMenuRankText: {
+    color: '#DAEEFB',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0,
+    includeFontPadding: false,
   },
   watchMenuPrimaryBadge: {
     width: 24,
