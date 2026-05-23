@@ -5,9 +5,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming, withRepeat, Easing, cancelAnimation, runOnJS,
+  FadeIn, useSharedValue, useAnimatedStyle, withTiming, withRepeat, Easing, cancelAnimation,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, G, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Search, ChevronRight, Plus, Zap, Lock } from 'lucide-react-native';
@@ -54,7 +53,6 @@ const { width: SW } = Dimensions.get('window');
 const SPORTS = ['All', 'NBA', 'NFL', 'MLB', 'NHL', 'IPL', 'TENNIS', 'NCAAF', 'NCAAB', 'MLS', 'EPL', 'UCL'] as const;
 const ALWAYS_VISIBLE_SPORT_FILTERS = new Set<string>(['IPL', 'TENNIS']);
 const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENNIS: 'Tennis' };
-const SPRING = { stiffness: 380, damping: 34, mass: 0.85 };
 const ARENA_SIDE_PADDING = 20;
 const ARENA_SECTION_GAP = 28;
 const ARENA_CARD_GAP = 18;
@@ -259,26 +257,46 @@ const SearchBar = memo(function SearchBar() {
 });
 
 // ─── SPORT PILLS ───
-const SportPills = memo(function SportPills({ selected, onSelect, available }: { selected: string; onSelect: (s: string) => void; available?: Set<string> }) {
+const SportPills = memo(function SportPills({
+  selected,
+  onSelect,
+  available,
+  counts,
+  compact = false,
+  alwaysShowSpecialSports = true,
+  sidePadding = ARENA_SIDE_PADDING,
+  bottomMargin = 24,
+}: {
+  selected: string;
+  onSelect: (s: string) => void;
+  available?: Set<string>;
+  counts?: Map<string, number>;
+  compact?: boolean;
+  alwaysShowSpecialSports?: boolean;
+  sidePadding?: number;
+  bottomMargin?: number;
+}) {
   // Hide chips for sports with zero games on the current slate so users
   // don't dead-end into empty filters (e.g. CFB during the off-season).
   // 'All' always stays. When `available` is undefined (loading or no data),
   // show the full set rather than blanking out.
   const visible = useMemo(
     () => available
-      ? SPORTS.filter(s => s === 'All' || available.has(s) || ALWAYS_VISIBLE_SPORT_FILTERS.has(s))
+      ? SPORTS.filter(s => s === 'All' || available.has(s) || (alwaysShowSpecialSports && ALWAYS_VISIBLE_SPORT_FILTERS.has(s)))
       : SPORTS,
-    [available]
+    [alwaysShowSpecialSports, available]
   );
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={{ flexGrow: 0, marginBottom: 24 }}
-      contentContainerStyle={{ paddingLeft: ARENA_SIDE_PADDING, paddingRight: ARENA_SIDE_PADDING, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
+      style={{ flexGrow: 0, marginBottom: bottomMargin }}
+      contentContainerStyle={{ paddingLeft: sidePadding, paddingRight: sidePadding, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
     >
       {visible.map((s, index) => {
         const on = selected === s;
+        const count = counts?.get(s);
+        const label = count !== undefined && counts ? `${SPORT_DISPLAY[s] ?? s} ${count}` : (SPORT_DISPLAY[s] ?? s);
         return (
           <Pressable
             key={s}
@@ -295,8 +313,8 @@ const SportPills = memo(function SportPills({ selected, onSelect, available }: {
               end={{ x: 1, y: 1 }}
               style={{
                 borderRadius: 22,
-                height: 44,
-                minWidth: s === 'All' ? 56 : s === 'TENNIS' ? 98 : 78,
+                height: compact ? 38 : 44,
+                minWidth: compact ? (s === 'All' ? 58 : s === 'TENNIS' ? 92 : 72) : (s === 'All' ? 56 : s === 'TENNIS' ? 98 : 78),
                 padding: 1,
               }}
             >
@@ -304,13 +322,13 @@ const SportPills = memo(function SportPills({ selected, onSelect, available }: {
                 style={{
                   flex: 1,
                   borderRadius: 21,
-                  paddingHorizontal: 18,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: on ? 'rgba(7,10,16,0.52)' : 'rgba(7,10,16,0.88)',
+                  paddingHorizontal: compact ? 14 : 18,
                 }}
               >
-                <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 16, fontWeight: on ? '800' : '600', color: on ? WHITE : TEAL, letterSpacing: on ? 0 : 0.4, includeFontPadding: false }}>{SPORT_DISPLAY[s] ?? s}</Text>
+                <Text numberOfLines={1} style={{ fontSize: compact ? 12 : 13, lineHeight: compact ? 15 : 16, fontWeight: on ? '800' : '600', color: on ? WHITE : TEAL, letterSpacing: on ? 0 : 0.4, includeFontPadding: false }}>{label}</Text>
               </View>
             </LinearGradient>
           </Pressable>
@@ -2316,17 +2334,35 @@ const GameDay = memo(function GameDay({
   const pm = useMemo(() => { const m = new Map<string, UserPick>(); picks.forEach(p => m.set(p.gameId, p)); return m; }, [picks]);
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [liveSearch, setLiveSearch] = useState('');
+  const [liveSportFilter, setLiveSportFilter] = useState('All');
+  const liveSports = useMemo<Set<string>>(() => new Set(live.map(g => g.sport)), [live]);
+  const liveSportCounts = useMemo(() => {
+    const counts = new Map<string, number>([['All', live.length]]);
+    live.forEach((game) => {
+      counts.set(game.sport, (counts.get(game.sport) ?? 0) + 1);
+    });
+    return counts;
+  }, [live]);
   const filteredLive = useMemo(() => {
-    if (!liveSearch.trim()) return live;
     const q = liveSearch.toLowerCase().trim();
-    return live.filter(g =>
+    const sportScoped = liveSportFilter === 'All' ? live : live.filter(g => g.sport === liveSportFilter);
+    if (!q) return sportScoped;
+    return sportScoped.filter(g =>
       g.homeTeam.name.toLowerCase().includes(q) || g.homeTeam.abbreviation.toLowerCase().includes(q) ||
       g.awayTeam.name.toLowerCase().includes(q) || g.awayTeam.abbreviation.toLowerCase().includes(q) ||
       g.sport.toLowerCase().includes(q)
     );
-  }, [live, liveSearch]);
+  }, [live, liveSearch, liveSportFilter]);
   const focusedGame = filteredLive[focusedIdx] ?? filteredLive[0] ?? null;
   const focusedIntel = useMemo(() => liveIntelLocked ? [] : generateLiveIntel(focusedGame), [focusedGame, liveIntelLocked]);
+
+  useEffect(() => {
+    if (liveSportFilter !== 'All' && !liveSports.has(liveSportFilter)) setLiveSportFilter('All');
+  }, [liveSportFilter, liveSports]);
+
+  useEffect(() => {
+    setFocusedIdx(0);
+  }, [liveSearch, liveSportFilter]);
 
   useEffect(() => {
     if (focusedIdx >= filteredLive.length) setFocusedIdx(0);
@@ -2370,7 +2406,7 @@ const GameDay = memo(function GameDay({
           </View>
           <View style={{borderRadius:999, paddingHorizontal:10, paddingVertical:6, backgroundColor:'rgba(239,68,68,0.10)', borderWidth:1, borderColor:'rgba(239,68,68,0.20)', flexDirection:'row', alignItems:'center'}}>
             <View style={{width:6, height:6, borderRadius:3, backgroundColor:LIVE_RED, marginRight:6}} />
-            <Text style={{fontSize:9, fontWeight:'900', color:LIVE_RED, letterSpacing:1.1}}>{liveSearch.trim() ? `${filteredLive.length} MATCH` : `${live.length} LIVE`}</Text>
+            <Text style={{fontSize:9, fontWeight:'900', color:LIVE_RED, letterSpacing:1.1}}>{liveSearch.trim() || liveSportFilter !== 'All' ? `${filteredLive.length} MATCH` : `${live.length} LIVE`}</Text>
           </View>
         </View>
         {live.length > 0 ? (
@@ -2419,12 +2455,26 @@ const GameDay = memo(function GameDay({
             </View>
           </LinearGradient>
         ) : null}
+        {live.length > 0 ? (
+          <View style={{ marginTop: 12 }}>
+            <SportPills
+              selected={liveSportFilter}
+              onSelect={setLiveSportFilter}
+              available={liveSports}
+              counts={liveSportCounts}
+              compact
+              alwaysShowSpecialSports={false}
+              sidePadding={0}
+              bottomMargin={0}
+            />
+          </View>
+        ) : null}
       </View>
 
       {/* 4. Scrollable live cards */}
-      {filteredLive.length === 0 && liveSearch.trim() ? (
+      {filteredLive.length === 0 && (liveSearch.trim() || liveSportFilter !== 'All') ? (
         <View style={{alignItems:'center', paddingVertical:20}}>
-          <Text style={{fontSize:13, color:TEXT_MUTED}}>No live games match "{liveSearch}"</Text>
+          <Text style={{fontSize:13, color:TEXT_MUTED}}>{liveSearch.trim() ? `No live games match "${liveSearch}"` : 'No live games match this sport'}</Text>
         </View>
       ) : filteredLive.length === 1 ? (
         <View style={{paddingHorizontal:20, marginBottom:ARENA_CARD_GAP}}>
@@ -2843,8 +2893,6 @@ export default function MyArenaScreen() {
   const [am, setAm] = useState(0);
   const [contentReady, setContentReady] = useState(false);
   const [fgi, setFgi] = useState<Set<string>>(new Set());
-  const mtx = useSharedValue(0);
-  const sx = useSharedValue(0);
   const {data:allGames, isLoading, refetch} = useGames();
   const {data:userPicks} = useUserPicks(isPremium && contentReady);
   const {data:userStats} = useUserStats(isPremium && contentReady && am !== 0);
@@ -2892,15 +2940,7 @@ export default function MyArenaScreen() {
     if (m === am) return;
     fireSelectionHaptic();
     setAm(m);
-    mtx.value=withSpring(m, SPRING);
-  }, [am, mtx]);
-  const pg = Gesture.Pan()
-    .activeOffsetX([-14, 14])
-    .failOffsetY([-28, 28])
-    .onStart(()=>{sx.value=mtx.value;})
-    .onUpdate(e=>{mtx.value=Math.max(0, Math.min(2, sx.value-(e.translationX/SW)*1.5));})
-    .onEnd(e=>{let t=Math.round(mtx.value);if(Math.abs(e.velocityX)>500) t=e.velocityX<0?Math.ceil(mtx.value):Math.floor(mtx.value);t=Math.max(0, Math.min(2, t));mtx.value=withSpring(t, SPRING);if(t!==Math.round(sx.value)) runOnJS(fireSelectionHaptic)();runOnJS(setAm)(t);});
-  const cs = useAnimatedStyle(()=>({transform:[{translateX:-mtx.value*SW}]}));
+  }, [am]);
   const isInitialArenaLoading = isLoading && !(allGames?.length);
 
   if (isInitialArenaLoading || !contentReady) {
@@ -2936,16 +2976,31 @@ export default function MyArenaScreen() {
     );
   }
 
+  const premiumArenaChrome = (
+    <ArenaChrome
+      selected={sf}
+      onSelect={setSf}
+      available={availableSports}
+      showModes
+      active={am}
+      onChange={hmc}
+      hasLive={live.length>0}
+    />
+  );
+  const premiumMode = am === 0 ? (
+    <GameDay live={live} sched={sched} picks={userPicks??[]} followed={followed} sh={sh} onR={onR} isR={isR} bottomPadding={arenaBottomPadding} top={premiumArenaChrome} />
+  ) : am === 1 ? (
+    <Prep sched={sched} picks={userPicks??[]} stats={userStats} sh={sh} onR={onR} isR={isR} bottomPadding={arenaBottomPadding} top={premiumArenaChrome} />
+  ) : (
+    <Review final={final} picks={userPicks??[]} stats={userStats} sh={sh} onR={onR} isR={isR} bottomPadding={arenaBottomPadding} top={premiumArenaChrome} />
+  );
+
   return (
     <SafeAreaView edges={['top']} style={{flex:1, backgroundColor:BG}}>
       <ErrorBoundary>
-      <GestureDetector gesture={pg}>
-        <Animated.View style={[{flexDirection:'row', width:SW*3, flex:1}, cs]}>
-          <View style={{width:SW}}>{am===0?<GameDay live={live} sched={sched} picks={userPicks??[]} followed={followed} sh={sh} onR={onR} isR={isR} bottomPadding={arenaBottomPadding} top={<ArenaChrome selected={sf} onSelect={setSf} available={availableSports} showModes active={am} onChange={hmc} hasLive={live.length>0} />} />:<View />}</View>
-          <View style={{width:SW}}>{am===1?<Prep sched={sched} picks={userPicks??[]} stats={userStats} sh={sh} onR={onR} isR={isR} bottomPadding={arenaBottomPadding} top={<ArenaChrome selected={sf} onSelect={setSf} available={availableSports} showModes active={am} onChange={hmc} hasLive={live.length>0} />} />:<View />}</View>
-          <View style={{width:SW}}>{am===2?<Review final={final} picks={userPicks??[]} stats={userStats} sh={sh} onR={onR} isR={isR} bottomPadding={arenaBottomPadding} top={<ArenaChrome selected={sf} onSelect={setSf} available={availableSports} showModes active={am} onChange={hmc} hasLive={live.length>0} />} />:<View />}</View>
+        <Animated.View key={`arena-mode-${am}`} entering={FadeIn.duration(140)} style={{ flex: 1 }}>
+          {premiumMode}
         </Animated.View>
-      </GestureDetector>
       </ErrorBoundary>
     </SafeAreaView>
   );
