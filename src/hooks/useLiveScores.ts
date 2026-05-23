@@ -29,6 +29,9 @@ export interface LiveScore {
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
 const MIN_RECONNECT_MS = 500;
 const MAX_RECONNECT_MS = 30_000;
+const LIVE_STREAM_STALE_MS = 6_500;
+const LIVE_STREAM_WATCHDOG_MS = 2_500;
+const WATCHDOG_RECONNECT_COOLDOWN_MS = 10_000;
 
 // Module-level ref so useGames can read SSE connection state without subscribing
 export const sseConnectedRef = { current: false };
@@ -198,6 +201,32 @@ function mergeLiveScore(game: GameWithPrediction, scoreMap: Map<string, LiveScor
   };
 }
 
+function dataHasLiveGame(data: unknown): boolean {
+  if (!data) return false;
+  if (Array.isArray(data)) return data.some(dataHasLiveGame);
+  if (typeof data !== 'object') return false;
+
+  const record = data as {
+    status?: unknown;
+    games?: unknown;
+    game?: unknown;
+  };
+
+  if (record.status === GameStatus.LIVE) return true;
+  return dataHasLiveGame(record.games) || dataHasLiveGame(record.game);
+}
+
+function cacheHasLiveGames(queryClient: ReturnType<typeof useQueryClient>): boolean {
+  const queries = queryClient.getQueryCache().findAll();
+  return queries.some((query) => dataHasLiveGame(query.state.data));
+}
+
+function refetchActiveScoreQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ['games'], refetchType: 'active' });
+  void queryClient.invalidateQueries({ queryKey: ['game'], refetchType: 'active' });
+  void queryClient.invalidateQueries({ queryKey: ['topPicks'], refetchType: 'active' });
+}
+
 function mergeLiveScoresIntoArray<T extends GameWithPrediction>(
   games: T[],
   scoreMap: Map<string, LiveScore>,
@@ -241,6 +270,8 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const mountedRef = useRef(true);
+  const lastUsefulScoresAt = useRef(Date.now());
+  const lastWatchdogReconnectAt = useRef(0);
   // Stable ref to latest applyScoresToCache — updated below so connect() needs no deps on it
   const applyScoresRef = useRef<((scores: LiveScore[]) => void) | null>(null);
   // Throttle SSE state updates to max once per 500ms
@@ -302,6 +333,9 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
       if (!mountedRef.current) return;
       try {
         const scores: LiveScore[] = JSON.parse(event.data ?? '[]');
+        if (scores.length > 0) {
+          lastUsefulScoresAt.current = Date.now();
+        }
         // Always update cache immediately (cheap — only writes if data changed)
         applyScoresRef.current?.(scores);
         if (!trackStateRef.current) return;
@@ -371,6 +405,29 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
       disconnect();
     };
   }, [connect, disconnect]);
+
+  // If the socket stays technically open but stops delivering live scores, keep
+  // the board moving with active-query polling and force a clean reconnect.
+  useEffect(() => {
+    const watchdog = setInterval(() => {
+      if (!mountedRef.current || appStateRef.current !== 'active') return;
+      if (!cacheHasLiveGames(queryClient)) return;
+
+      const now = Date.now();
+      const streamIsStale = now - lastUsefulScoresAt.current > LIVE_STREAM_STALE_MS;
+      if (!streamIsStale) return;
+
+      refetchActiveScoreQueries(queryClient);
+
+      if (now - lastWatchdogReconnectAt.current < WATCHDOG_RECONNECT_COOLDOWN_MS) return;
+      lastWatchdogReconnectAt.current = now;
+      reconnectDelay.current = MIN_RECONNECT_MS;
+      disconnect();
+      connect();
+    }, LIVE_STREAM_WATCHDOG_MS);
+
+    return () => clearInterval(watchdog);
+  }, [connect, disconnect, queryClient]);
 
   // Pause when app goes to background, resume when foregrounded
   useEffect(() => {

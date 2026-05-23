@@ -6,7 +6,7 @@ import { sseConnectedRef } from './useLiveScores';
 import { enrichCricketLiveGame, enrichCricketLiveGames } from '@/lib/cricket-live-enrichment';
 
 // Polling intervals for different contexts
-const LIVE_POLLING_INTERVAL = 5000; // fast fallback when SSE drops, without hammering JS/network
+const LIVE_POLLING_INTERVAL = 3000; // fast fallback when SSE drops, without hammering JS/network
 const DEFAULT_POLLING_INTERVAL = 60000; // background freshness; SSE handles live score pushes
 // Burst-poll while ANY visible game is missing its prediction. Keep this
 // responsive without creating a startup/network storm on large slates.
