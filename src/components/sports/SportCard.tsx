@@ -1,8 +1,11 @@
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import Animated, {
+  interpolate,
   withSpring,
+  withSequence,
+  withTiming,
   useSharedValue,
   useAnimatedStyle,
 } from 'react-native-reanimated';
@@ -1299,9 +1302,35 @@ export const SportCard = memo(function SportCard({
   }, [onPress, router, sport]);
 
   const scale = useSharedValue(1);
+  const selectedProgress = useSharedValue(isSelected ? 1 : 0);
+  const selectionPulse = useSharedValue(0);
+
+  useEffect(() => {
+    selectedProgress.value = withTiming(isSelected ? 1 : 0, { duration: isSelected ? 150 : 220 });
+    if (isSelected) {
+      selectionPulse.value = 0;
+      selectionPulse.value = withSequence(
+        withTiming(1, { duration: 120 }),
+        withTiming(0, { duration: 460 })
+      );
+    }
+  }, [isSelected, selectedProgress, selectionPulse]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.value + selectionPulse.value * 0.018 }],
+  }));
+
+  const selectedGlowStyle = useAnimatedStyle(() => ({
+    opacity: selectedProgress.value * 0.9 + selectionPulse.value * 0.26,
+    transform: [{ scale: 1 + selectionPulse.value * 0.045 }],
+  }));
+
+  const selectedSweepStyle = useAnimatedStyle(() => ({
+    opacity: selectionPulse.value,
+    transform: [
+      { translateX: interpolate(selectionPulse.value, [0, 1], [-tileSize * 0.62, tileSize * 1.12]) },
+      { rotate: '-18deg' },
+    ],
   }));
 
   // ═══════════════════════════════════════════════
@@ -1310,7 +1339,7 @@ export const SportCard = memo(function SportCard({
   if (tile) {
     const isDimmed = hasActiveFilter && !isSelected;
     const isChosen = hasActiveFilter && isSelected;
-    const borderColor = isChosen ? '#2a3a4a' : LED_BORDER;
+    const borderColor = isChosen ? 'rgba(122,157,184,0.72)' : LED_BORDER;
 
     return (
       <AnimatedPressable
@@ -1321,7 +1350,16 @@ export const SportCard = memo(function SportCard({
         onPressOut={() => {
           scale.value = withSpring(1, { damping: 12, stiffness: 300 });
         }}
-        style={animatedStyle}
+        style={[
+          animatedStyle,
+          isChosen ? {
+            shadowColor: JB.blue,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.46,
+            shadowRadius: 16,
+            elevation: 10,
+          } : null,
+        ]}
       >
         <View
           style={{
@@ -1335,7 +1373,38 @@ export const SportCard = memo(function SportCard({
             opacity: isDimmed ? 0.45 : 1,
           }}
         >
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, selectedGlowStyle]}>
+            <LinearGradient
+              colors={['rgba(139,10,31,0.24)', 'rgba(122,157,184,0.18)', 'rgba(255,255,255,0.03)']}
+              locations={[0, 0.62, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </Animated.View>
           <LedTilePanel sport={sport} gameCount={gameCount} size={tileSize} />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                position: 'absolute',
+                top: -tileSize * 0.25,
+                bottom: -tileSize * 0.25,
+                width: 20,
+              },
+              selectedSweepStyle,
+            ]}
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(255,255,255,0.58)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </Animated.View>
+          {isChosen ? (
+            <View pointerEvents="none" style={{ position: 'absolute', left: 8, right: 8, bottom: 7, height: 2, borderRadius: 1, backgroundColor: JB.blue, opacity: 0.86 }} />
+          ) : null}
         </View>
       </AnimatedPressable>
     );

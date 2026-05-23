@@ -2,6 +2,7 @@ import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Mod
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import Animated, {
+  FadeInDown,
   useAnimatedStyle,
   useAnimatedScrollHandler,
   useSharedValue,
@@ -24,11 +25,13 @@ import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { MAROON, TEAL, TEAL_DARK } from '@/lib/theme';
 import { teamScoreText } from '@/lib/cricket-score';
+import * as Haptics from 'expo-haptics';
 
 // Memoize all sports array
 const allSports = Object.values(Sport);
 const HOME_SPORT_INITIAL_GAME_COUNT = 10;
 const HOME_SPORT_GAME_BATCH_COUNT = 10;
+const HOME_BOARD_SCROLL_OFFSET = 300;
 
 // ─── Paginated sport tile carousel ──────────────────────────────────
 const SportTileCarousel = memo(function SportTileCarousel({
@@ -727,6 +730,13 @@ export default function HomeScreen() {
   const deferredSelectedLiveSportFilter = useDeferredValue(selectedLiveSportFilter);
   const deferredStatusFilter = useDeferredValue(statusFilter);
 
+  const applySportFilter = useCallback((nextSport: Sport | null) => {
+    if (nextSport !== selectedSportFilter) {
+      void Haptics.selectionAsync().catch(() => {});
+    }
+    setSelectedSportFilter(nextSport);
+  }, [selectedSportFilter]);
+
   useEffect(() => {
     if (!selectedSportFilter) return;
     if (selectedLiveSportFilter && selectedLiveSportFilter !== selectedSportFilter) {
@@ -792,7 +802,7 @@ export default function HomeScreen() {
       return;
     }
     requestAnimationFrame(() => {
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true });
     });
   }, [selectedSportFilter, statusFilter]);
 
@@ -1060,13 +1070,13 @@ export default function HomeScreen() {
     if (item.type === 'sport-header') {
       const sportLabel = displaySport(item.sport);
       return (
-        <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 14 }}>
+        <Animated.View entering={FadeInDown.duration(180)} style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 14 }}>
           <LedBarPanel
             label={sportLabel}
             count={item.gameCount}
             leftSport={item.sport}
           />
-        </View>
+        </Animated.View>
       );
     }
 
@@ -1079,7 +1089,7 @@ export default function HomeScreen() {
         item.label === 'FINAL RESULTS' ? '#A1B3C9' :
         '#FFFFFF';
       return (
-        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 }}>
+        <Animated.View entering={FadeInDown.duration(180)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 }}>
           {/* Subtle divider above — fades from edges */}
           {!isLive ? (
             <LinearGradient colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1, marginBottom: 14 }} />
@@ -1100,7 +1110,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ width: 40, height: 2, borderRadius: 1, backgroundColor: accentColor, marginTop: 8, opacity: 0.6 }} />
           </View>
-        </View>
+        </Animated.View>
       );
     }
 
@@ -1110,7 +1120,7 @@ export default function HomeScreen() {
       const sportLabel = displaySport(item.sport);
       const DirectionIcon = hasMore ? ChevronDown : ChevronUp;
       return (
-        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
+        <Animated.View entering={FadeInDown.duration(190)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
           <Pressable
             onPress={() => {
               if (hasMore) {
@@ -1172,22 +1182,29 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </Pressable>
-        </View>
+        </Animated.View>
       );
     }
 
     if (item.type === 'game') {
       return (
-        <View style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 14 }}>
+        <Animated.View
+          entering={FadeInDown.duration(190).delay(Math.min(item.index * 18, 108))}
+          style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 14 }}
+        >
           <GameCard game={item.game} index={item.index} />
-        </View>
+        </Animated.View>
       );
     }
 
     return null;
   }, [numColumns, responsive.contentPadding, showLessSportGames, showMoreSportGames]);
 
-  const getItemKey = useCallback((item: FlatListItem) => item.key, []);
+  const boardTransitionKey = useMemo(
+    () => `${deferredStatusFilter}:${deferredSelectedSportFilter ?? 'all'}`,
+    [deferredSelectedSportFilter, deferredStatusFilter]
+  );
+  const getItemKey = useCallback((item: FlatListItem) => `${boardTransitionKey}:${item.key}`, [boardTransitionKey]);
 
   // Navigate to game from search modal - memoized
   const handleSearchGamePress = useCallback((game: GameWithPrediction) => {
@@ -1257,10 +1274,10 @@ export default function HomeScreen() {
             selectedLiveSportFilter={selectedLiveSportFilter}
             setSelectedLiveSportFilter={setSelectedLiveSportFilter}
             selectedSportFilter={selectedSportFilter}
-            setSelectedSportFilter={setSelectedSportFilter}
+            setSelectedSportFilter={applySportFilter}
             showAllLive={showAllLive}
             setShowAllLive={setShowAllLive}
-            onViewAll={() => flatListRef.current?.scrollToOffset({ offset: 300, animated: true })}
+            onViewAll={() => flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true })}
             nonLiveGames={nonLiveGames}
             gameCounts={gameCounts}
             isLoadingGames={isLoadingGames}
@@ -1295,7 +1312,13 @@ export default function HomeScreen() {
                   sideRail
                 />
                 {/* Clear button — separate jumbotron tile */}
-                <Pressable onPress={() => setSelectedSportFilter(null)}>
+                <Pressable
+                  onPress={() => applySportFilter(null)}
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.84 : 1,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
+                  })}
+                >
                   <LedMiniPanel label="CLEAR" />
                 </Pressable>
               </View>
