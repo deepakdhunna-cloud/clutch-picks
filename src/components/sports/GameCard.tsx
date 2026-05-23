@@ -1,4 +1,5 @@
 import { View, Text, Pressable, Linking, StyleSheet } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useAnimatedStyle,
@@ -31,6 +32,7 @@ import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
 import { usePrefetchGame } from '@/hooks/useGames';
 import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 
 interface GameCardProps {
   game: GameWithPrediction;
@@ -132,6 +134,12 @@ const TappableJersey = memo(function TappableJersey({
 }) {
   const scale = useSharedValue(1);
   const selectionProgress = useSharedValue(isSelected ? 1 : 0);
+  const {
+    onTouchStart,
+    onTouchMove,
+    onTouchCancel,
+    shouldHandlePress,
+  } = useTapGestureGuard();
 
   useEffect(() => {
     selectionProgress.value = withTiming(isSelected && !isLoser && !isWinner ? 1 : 0, {
@@ -152,14 +160,15 @@ const TappableJersey = memo(function TappableJersey({
     transform: [{ scale: interpolate(selectionProgress.value, [0, 1], [0.8, 1]) }],
   }));
 
-  const handlePress = useCallback(() => {
-    if (isDisabled) return;
+  const handlePress = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+    if (isDisabled || !shouldHandlePress()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withTiming(0.95, { duration: 150, easing: Easing.out(Easing.ease) }, () => {
       scale.value = withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) });
     });
     onSelect();
-  }, [isDisabled, onSelect, scale]);
+  }, [isDisabled, onSelect, scale, shouldHandlePress]);
 
   const shadowStyle = useMemo(() => ({
     shadowColor: '#000000',
@@ -170,7 +179,14 @@ const TappableJersey = memo(function TappableJersey({
   }), []);
 
   return (
-    <Pressable onPress={handlePress} disabled={isDisabled}>
+    <Pressable
+      onPress={handlePress}
+      disabled={isDisabled}
+      pressRetentionOffset={4}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
+    >
       <Animated.View style={[containerStyle, styles.jerseyAnimatedContainer]}>
         <View style={{ position: 'relative', alignItems: 'center' }}>
           {/* Jersey — smoothly lifts when selected */}
@@ -219,8 +235,8 @@ const LiveGameLayout = memo(function LiveGameLayout({
   sportMeta,
 }: {
   game: GameWithPrediction;
-  awayTeamColors: { primary: string; secondary: string };
-  homeTeamColors: { primary: string; secondary: string };
+  awayTeamColors: { primary: string; secondary: string; accent?: string };
+  homeTeamColors: { primary: string; secondary: string; accent?: string };
   sportMeta: typeof SPORT_META[Sport];
 }) {
   const router = useRouter();
@@ -243,20 +259,41 @@ const LiveGameLayout = memo(function LiveGameLayout({
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
+  const awayAccent = awayTeamColors.accent ?? awayTeamColors.primary;
+  const homeAccent = homeTeamColors.accent ?? homeTeamColors.primary;
+  const {
+    onTouchStart: onCardTouchStart,
+    onTouchMove: onCardTouchMove,
+    onTouchCancel: onCardTouchCancel,
+    shouldHandlePress: shouldHandleCardPress,
+  } = useTapGestureGuard();
+
+  const warmGame = useCallback(() => {
+    prefetchGame(game.id, game);
+  }, [game, prefetchGame]);
 
   const handlePress = useCallback(() => {
+    if (!shouldHandleCardPress()) return;
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
-    prefetchGame(game.id, game);
+    warmGame();
     router.push(`/game/${game.id}` as any);
     setTimeout(() => {
       isNavigatingRef.current = false;
     }, 700);
-  }, [game, router, prefetchGame]);
+  }, [game.id, router, shouldHandleCardPress, warmGame]);
 
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
-      <Pressable onPress={handlePress} className="active:opacity-85">
+      <Pressable
+        onPress={handlePress}
+        onPressIn={warmGame}
+        className="active:opacity-85"
+        pressRetentionOffset={6}
+        onTouchStart={onCardTouchStart}
+        onTouchMove={onCardTouchMove}
+        onTouchCancel={onCardTouchCancel}
+      >
         {/* Red glow for live */}
         <View style={{
           borderRadius: 22,
@@ -279,13 +316,13 @@ const LiveGameLayout = memo(function LiveGameLayout({
         <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
           <LinearGradient
             colors={[
-              `${awayTeamColors.primary}90`,
-              `${awayTeamColors.primary}50`,
+              `${awayAccent}90`,
+              `${awayAccent}50`,
               '#0D1118',
               '#080C12',
               '#0D1118',
-              `${homeTeamColors.primary}50`,
-              `${homeTeamColors.primary}90`,
+              `${homeAccent}50`,
+              `${homeAccent}90`,
             ]}
             locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
             start={{ x: 0, y: 0 }}
@@ -296,11 +333,11 @@ const LiveGameLayout = memo(function LiveGameLayout({
           <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
             <LinearGradient
               colors={[
-                `${awayTeamColors.primary}60`,
+                `${awayAccent}60`,
                 'rgba(255,255,255,0.12)',
                 '#080C12',
                 'rgba(0,0,0,0.6)',
-                `${homeTeamColors.primary}50`,
+                `${homeAccent}50`,
               ]}
               locations={[0, 0.2, 0.5, 0.8, 1]}
               start={{ x: 0, y: 0 }}
@@ -314,7 +351,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
 
           {/* Away team color bleed */}
           <LinearGradient
-            colors={[`${awayTeamColors.primary}CC`, `${awayTeamColors.primary}66`, `${awayTeamColors.primary}22`, 'transparent']}
+            colors={[`${awayAccent}CC`, `${awayAccent}66`, `${awayAccent}22`, 'transparent']}
             start={{ x: 0, y: 0 }}
             end={{ x: 0.7, y: 0.8 }}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -322,7 +359,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
 
           {/* Home team color bleed */}
           <LinearGradient
-            colors={[`${homeTeamColors.primary}CC`, `${homeTeamColors.primary}66`, `${homeTeamColors.primary}22`, 'transparent']}
+            colors={[`${homeAccent}CC`, `${homeAccent}66`, `${homeAccent}22`, 'transparent']}
             start={{ x: 1, y: 1 }}
             end={{ x: 0.3, y: 0.2 }}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -431,7 +468,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 ) : null}
                 {awayCricketRole ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
-                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayTeamColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayAccent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
                     <Text style={{ color: awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 8, fontWeight: '900', letterSpacing: 1 }}>
                       {awayCricketRole}
                     </Text>
@@ -484,7 +521,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 ) : null}
                 {homeCricketRole ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
-                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeTeamColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeAccent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
                     <Text style={{ color: homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 8, fontWeight: '900', letterSpacing: 1 }}>
                       {homeCricketRole}
                     </Text>
@@ -551,6 +588,12 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const router = useRouter();
   const prefetchGame = usePrefetchGame();
   const isNavigatingRef = useRef(false);
+  const {
+    onTouchStart: onCardTouchStart,
+    onTouchMove: onCardTouchMove,
+    onTouchCancel: onCardTouchCancel,
+    shouldHandlePress: shouldHandleCardPress,
+  } = useTapGestureGuard();
   const { isPremium } = useSubscription();
   const isLive = game.status === GameStatus.LIVE;
 
@@ -563,6 +606,8 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   // Get team colors - memoized, pass ESPN color as fallback
   const awayTeamColors = useMemo(() => getTeamColors(game.awayTeam.abbreviation, game.sport, game.awayTeam.color), [game.awayTeam.abbreviation, game.sport, game.awayTeam.color]);
   const homeTeamColors = useMemo(() => getTeamColors(game.homeTeam.abbreviation, game.sport, game.homeTeam.color), [game.homeTeam.abbreviation, game.sport, game.homeTeam.color]);
+  const awayAccent = awayTeamColors.accent;
+  const homeAccent = homeTeamColors.accent;
 
   // Use backend hooks for picks
   const { mutateAsync: makePick } = useMakePick();
@@ -659,15 +704,20 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const [pendingSelection, setPendingSelection] = useState<'home' | 'away' | null>(null);
   const [pendingAction, setPendingAction] = useState<'pick' | 'remove'>('pick');
 
+  const warmGame = useCallback(() => {
+    prefetchGame(game.id, game);
+  }, [game, prefetchGame]);
+
   const handlePress = useCallback(() => {
+    if (!shouldHandleCardPress()) return;
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
-    prefetchGame(game.id, game);
+    warmGame();
     router.push(`/game/${game.id}` as any);
     setTimeout(() => {
       isNavigatingRef.current = false;
     }, 700);
-  }, [game, router, prefetchGame]);
+  }, [game.id, router, shouldHandleCardPress, warmGame]);
 
   const handleJerseyTap = useCallback((selectedTeam: 'home' | 'away') => {
     if (userPrediction?.pickedTeam === selectedTeam) {
@@ -768,20 +818,28 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         />
       )}
 
-      <Pressable onPress={handlePress} style={{ flex: 1 }}>
+      <Pressable
+        onPress={handlePress}
+        onPressIn={warmGame}
+        style={{ flex: 1 }}
+        pressRetentionOffset={6}
+        onTouchStart={onCardTouchStart}
+        onTouchMove={onCardTouchMove}
+        onTouchCancel={onCardTouchCancel}
+      >
       {/* Depth shadow */}
       <View style={styles.cardShadowContainer}>
       {/* Glass border — dark reflective with team colors */}
       <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
         <LinearGradient
           colors={[
-            `${awayTeamColors.primary}90`,
-            `${awayTeamColors.primary}50`,
+            `${awayAccent}90`,
+            `${awayAccent}50`,
             '#0D1118',
             '#080C12',
             '#0D1118',
-            `${homeTeamColors.primary}50`,
-            `${homeTeamColors.primary}90`,
+            `${homeAccent}50`,
+            `${homeAccent}90`,
           ]}
           locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
           start={{ x: 0, y: 0 }}
@@ -792,11 +850,11 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
           <LinearGradient
             colors={[
-              `${awayTeamColors.primary}60`,
+              `${awayAccent}60`,
               'rgba(255,255,255,0.12)',
               '#080C12',
               'rgba(0,0,0,0.6)',
-              `${homeTeamColors.primary}50`,
+              `${homeAccent}50`,
             ]}
             locations={[0, 0.2, 0.5, 0.8, 1]}
             start={{ x: 0, y: 0 }}
@@ -807,7 +865,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         <View style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
           {/* Away team color - bottom left corner fading up */}
           <LinearGradient
-            colors={[`${awayTeamColors.primary}${colorOpacities.away.opacity}`, `${awayTeamColors.primary}${colorOpacities.away.opacityLight}`, `${awayTeamColors.primary}18`, 'transparent']}
+            colors={[`${awayAccent}${colorOpacities.away.opacity}`, `${awayAccent}${colorOpacities.away.opacityLight}`, `${awayAccent}18`, 'transparent']}
             start={{ x: 0, y: 1 }}
             end={{ x: 0.6, y: 0 }}
             pointerEvents="none"
@@ -822,7 +880,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
           />
           {/* Home team color - bottom right corner fading up */}
           <LinearGradient
-            colors={[`${homeTeamColors.primary}${colorOpacities.home.opacity}`, `${homeTeamColors.primary}${colorOpacities.home.opacityLight}`, `${homeTeamColors.primary}18`, 'transparent']}
+            colors={[`${homeAccent}${colorOpacities.home.opacity}`, `${homeAccent}${colorOpacities.home.opacityLight}`, `${homeAccent}18`, 'transparent']}
             start={{ x: 1, y: 1 }}
             end={{ x: 0.4, y: 0 }}
             pointerEvents="none"
@@ -1041,7 +1099,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 {/* Header row: away % | label | home % */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: awayTeamColors.primary, marginRight: 5 }} />
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: awayAccent, marginRight: 5 }} />
                     <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
                       {pickStats.awayWinChance.toFixed(0)}%
                     </Text>
@@ -1062,7 +1120,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
                       {pickStats.homeWinChance.toFixed(0)}%
                     </Text>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: homeTeamColors.primary, marginLeft: 5 }} />
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: homeAccent, marginLeft: 5 }} />
                   </View>
                 </View>
 
@@ -1074,7 +1132,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                       flex: pickStats.awayWinChance,
                       borderTopLeftRadius: 3,
                       borderBottomLeftRadius: 3,
-                      backgroundColor: awayTeamColors.primary,
+                      backgroundColor: awayAccent,
                       opacity: 1,
                     }}
                   />
@@ -1086,7 +1144,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                       flex: pickStats.homeWinChance,
                       borderTopRightRadius: 3,
                       borderBottomRightRadius: 3,
-                      backgroundColor: homeTeamColors.primary,
+                      backgroundColor: homeAccent,
                       opacity: 1,
                     }}
                   />

@@ -9,6 +9,11 @@ import { prisma } from "../prisma";
 export const accuracyRouter = new Hono();
 
 const BUCKETS = [
+  { label: "25-29", min: 25, max: 29 },
+  { label: "30-34", min: 30, max: 34 },
+  { label: "35-39", min: 35, max: 39 },
+  { label: "40-44", min: 40, max: 44 },
+  { label: "45-49", min: 45, max: 49 },
   { label: "50-54", min: 50, max: 54 },
   { label: "55-59", min: 55, max: 59 },
   { label: "60-64", min: 60, max: 64 },
@@ -29,6 +34,9 @@ accuracyRouter.get("/accuracy", async (c) => {
       confidence: true,
       wasCorrect: true,
       isTossUp: true,
+      modelVersion: true,
+      predictedOutcome: true,
+      actualOutcome: true,
     },
   });
 
@@ -44,6 +52,13 @@ accuracyRouter.get("/accuracy", async (c) => {
   // --- Toss-up ---
   let tossUpTotal = 0;
   let tossUpCorrect = 0;
+
+  // --- Per engine/model version ---
+  const versionMap = new Map<string, { total: number; correct: number }>();
+
+  // --- Draw-aware audit ---
+  let drawResolved = 0;
+  let drawCorrect = 0;
 
   // --- Overall ---
   let totalResolved = 0;
@@ -70,6 +85,19 @@ accuracyRouter.get("/accuracy", async (c) => {
     sportEntry.total++;
     if (correct) sportEntry.correct++;
 
+    const version = row.modelVersion ?? "unknown";
+    if (!versionMap.has(version)) {
+      versionMap.set(version, { total: 0, correct: 0 });
+    }
+    const versionEntry = versionMap.get(version)!;
+    versionEntry.total++;
+    if (correct) versionEntry.correct++;
+
+    if (row.predictedOutcome === "draw" || row.actualOutcome === "draw") {
+      drawResolved++;
+      if (correct) drawCorrect++;
+    }
+
     // Toss-up
     if (row.isTossUp) {
       tossUpTotal++;
@@ -94,6 +122,13 @@ accuracyRouter.get("/accuracy", async (c) => {
     accuracy: s.total > 0 ? Math.round((s.correct / s.total) * 100) : null,
   }));
 
+  const byModelVersion = Array.from(versionMap.entries()).map(([modelVersion, s]) => ({
+    modelVersion,
+    total: s.total,
+    correct: s.correct,
+    accuracy: s.total > 0 ? Math.round((s.correct / s.total) * 100) : null,
+  }));
+
   return c.json({
     data: {
       buckets,
@@ -108,6 +143,12 @@ accuracyRouter.get("/accuracy", async (c) => {
         correct: tossUpCorrect,
         accuracy: tossUpTotal > 0 ? Math.round((tossUpCorrect / tossUpTotal) * 100) : null,
       },
+      drawAudit: {
+        total: drawResolved,
+        correct: drawCorrect,
+        accuracy: drawResolved > 0 ? Math.round((drawCorrect / drawResolved) * 100) : null,
+      },
+      byModelVersion,
     },
   });
 });

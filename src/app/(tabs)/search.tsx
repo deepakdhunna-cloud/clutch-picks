@@ -91,9 +91,9 @@ function useGameDetailActions() {
   }, [prefetchGame]);
 
   const openGame = useCallback((game: GameWithPrediction) => {
-    fireLightHaptic();
     warmGame(game);
     router.push({ pathname: '/game/[id]', params: { id: game.id } });
+    fireLightHaptic();
   }, [router, warmGame]);
 
   return { openGame, warmGame };
@@ -517,7 +517,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport, game.homeTeam.color);
   const winningTeam = awayWon ? game.awayTeam : homeWon ? game.homeTeam : null;
   const winningColors = awayWon ? awayColors : homeWon ? homeColors : null;
-  const resultAccent = winningColors?.primary ?? SILVER;
+  const resultAccent = winningColors?.accent ?? SILVER;
   const prediction = game.prediction;
   const predictionDisplay = prediction ? getGamePredictionDisplay(game) : null;
   const tier = prediction ? getConfidenceTier(getCanonicalConfidence(prediction), predictionDisplay?.isTossUp) : null;
@@ -545,6 +545,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
     result: FinalTeamResult = 'neutral',
   ) => {
     const scoreLabel = game.sport === Sport.IPL && (live || final) ? teamScoreText(game, side) : score ?? 0;
+    const accent = colors.accent;
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', opacity: result === 'loser' ? 0.58 : 1 }}>
         <View
@@ -554,9 +555,9 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
             borderRadius: 13,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: result === 'winner' ? hexWithAlpha(colors.primary, 0.22) : hexWithAlpha(colors.primary, 0.1),
+            backgroundColor: result === 'winner' ? hexWithAlpha(accent, 0.22) : hexWithAlpha(accent, 0.1),
             borderWidth: 1,
-            borderColor: result === 'winner' ? 'rgba(255,255,255,0.26)' : hexWithAlpha(colors.primary, 0.2),
+            borderColor: result === 'winner' ? 'rgba(255,255,255,0.26)' : hexWithAlpha(accent, 0.2),
             flexShrink: 0,
           }}
         >
@@ -569,7 +570,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
             sport={game.sport as Sport}
           />
           {result === 'winner' ? (
-            <View style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: hexWithAlpha(colors.primary, 0.72) }}>
+            <View style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: hexWithAlpha(accent, 0.72) }}>
               <Text style={{ color: '#040608', fontSize: 8, fontWeight: '900' }}>W</Text>
             </View>
           ) : null}
@@ -578,7 +579,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
           <Text style={{ color: result === 'winner' ? '#FFFFFF' : WHITE, fontSize: 14, fontWeight: '900', letterSpacing: 0 }} numberOfLines={1}>
             {team.abbreviation}
           </Text>
-          <Text style={{ color: result === 'winner' ? hexWithAlpha(colors.primary, 0.9) : 'rgba(255,255,255,0.48)', fontSize: 9.5, fontWeight: '800', marginTop: 1 }} numberOfLines={1}>
+          <Text style={{ color: result === 'winner' ? hexWithAlpha(accent, 0.9) : 'rgba(255,255,255,0.48)', fontSize: 9.5, fontWeight: '800', marginTop: 1 }} numberOfLines={1}>
             {team.name}
           </Text>
         </View>
@@ -615,30 +616,8 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
         elevation: 6,
       }}
     >
-      <LinearGradient
-        colors={['#111a24', '#090f17', '#03060a']}
-        locations={[0, 0.55, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ padding: 12, minHeight: 162, borderRadius: 30 }}
-      >
+      <View style={{ padding: 12, minHeight: 162, borderRadius: 30, backgroundColor: '#0b1119' }}>
         <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 15, bottom: 15, width: 3, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: live ? LIVE_RED : resultAccent }} />
-        <LinearGradient
-          pointerEvents="none"
-          colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0)']}
-          locations={[0, 0.42, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.7, y: 0.8 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <LinearGradient
-          pointerEvents="none"
-          colors={[hexWithAlpha(awayColors.primary, 0.16), 'rgba(255,255,255,0)', hexWithAlpha(homeColors.primary, 0.16)]}
-          locations={[0, 0.52, 1]}
-          start={{ x: 0, y: 0.4 }}
-          end={{ x: 1, y: 0.7 }}
-          style={StyleSheet.absoluteFillObject}
-        />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 9, paddingVertical: 4 }}>
@@ -672,7 +651,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
             <Text style={{ color: final ? resultAccent : TEAL, fontSize: 10, fontWeight: '900', letterSpacing: 0.5, marginLeft: 10 }}>{final ? 'RECAP' : 'OPEN'}</Text>
           )}
         </View>
-      </LinearGradient>
+      </View>
     </Pressable>
   );
 });
@@ -710,37 +689,31 @@ const YourGames = memo(function YourGames({
         style={{
           borderRadius: 30,
           overflow: 'hidden',
-          backgroundColor: 'transparent',
+          backgroundColor: 'rgba(10,15,22,0.98)',
+          borderWidth: 1,
+          borderColor: 'rgba(122,157,184,0.16)',
         }}
       >
-        <LinearGradient
-          colors={['rgba(122,157,184,0.92)', 'rgba(248,250,252,0.78)', 'rgba(139,10,31,0.95)', 'rgba(122,157,184,0.88)']}
-          locations={[0, 0.32, 0.68, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 30, padding: 4 }}
-        >
-          <View style={{ minHeight: 118, padding: 16, justifyContent: 'space-between', borderRadius: 26, backgroundColor: 'rgba(5,8,13,0.98)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                  <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: TEAL }} />
-                  <Text style={{ color: 'rgba(224,234,240,0.46)', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.8, marginLeft: 7 }}>PRIVATE BOARD</Text>
-                </View>
-                <Text style={{ color: WHITE, fontSize: 20, fontWeight: '900', letterSpacing: 0 }}>Track your games</Text>
-                <Text style={{ color: TEXT_SECONDARY, fontSize: 12.5, lineHeight: 18, marginTop: 5 }}>Add games or teams to keep live scores, starts, and recaps in one focused view.</Text>
+        <View style={{ minHeight: 118, padding: 16, justifyContent: 'space-between', borderRadius: 30, backgroundColor: 'rgba(10,15,22,0.98)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: TEAL }} />
+                <Text style={{ color: 'rgba(224,234,240,0.46)', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.8, marginLeft: 7 }}>PRIVATE BOARD</Text>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <View style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.2)' }}>
-                  <Plus size={18} color={TEAL} strokeWidth={2.7} />
-                </View>
-                <View style={{ backgroundColor: 'rgba(122,157,184,0.09)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(122,157,184,0.16)', marginTop: 9 }}>
-                  <Text style={{ color: TEAL, fontSize: 9.5, fontWeight: '900', letterSpacing: 1.1 }}>BROWSE SLATE</Text>
-                </View>
+              <Text style={{ color: WHITE, fontSize: 20, fontWeight: '900', letterSpacing: 0 }}>Track your games</Text>
+              <Text style={{ color: TEXT_SECONDARY, fontSize: 12.5, lineHeight: 18, marginTop: 5 }}>Add games or teams to keep live scores, starts, and recaps in one focused view.</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.2)' }}>
+                <Plus size={18} color={TEAL} strokeWidth={2.7} />
+              </View>
+              <View style={{ backgroundColor: 'rgba(122,157,184,0.09)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(122,157,184,0.16)', marginTop: 9 }}>
+                <Text style={{ color: TEAL, fontSize: 9.5, fontWeight: '900', letterSpacing: 1.1 }}>BROWSE SLATE</Text>
               </View>
             </View>
           </View>
-        </LinearGradient>
+        </View>
       </Pressable>
     </View>
   );
@@ -1182,6 +1155,8 @@ const LiveCard = memo(function LiveCard({
   const lead = ps > os;
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color);
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color);
+  const homeAccent = homeColors.accent;
+  const awayAccent = awayColors.accent;
 
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
@@ -1223,7 +1198,7 @@ const LiveCard = memo(function LiveCard({
   );
   const homeLeading = hs > as2;
   const awayLeading = as2 > hs;
-  const leaderColor = homeLeading ? homeColors.primary : awayLeading ? awayColors.primary : TEAL;
+  const leaderColor = homeLeading ? homeAccent : awayLeading ? awayAccent : TEAL;
   const scoreGap = Math.abs(hs - as2);
   const pickStatusColor = !pick ? '#6b7280' : lead ? '#4ade80' : ps === os ? '#facc15' : LIVE_RED;
   const pickStatusText = !pick ? 'No pick set' : lead ? `Up ${scoreGap}` : ps === os ? 'Even' : `Down ${scoreGap}`;
@@ -1234,10 +1209,11 @@ const LiveCard = memo(function LiveCard({
   const renderCricketTeamMeta = (
     scoreLabel: string | null,
     role: 'BATTING' | 'BOWLING' | null,
-    colors: { primary: string; secondary: string },
+    colors: { primary: string; secondary: string; accent?: string },
   ) => {
     if (!scoreLabel) return null;
     const batting = role === 'BATTING';
+    const accent = colors.accent ?? colors.primary;
     return (
       <View style={{ alignItems: 'center', marginTop: 4 }}>
         <Text
@@ -1245,7 +1221,7 @@ const LiveCard = memo(function LiveCard({
           adjustsFontSizeToFit
           minimumFontScale={0.74}
           style={{
-            color: batting ? colors.primary : 'rgba(248,250,252,0.74)',
+            color: batting ? accent : 'rgba(248,250,252,0.74)',
             fontSize: 18,
             lineHeight: 21,
             fontFamily: 'VT323_400Regular',
@@ -1256,7 +1232,7 @@ const LiveCard = memo(function LiveCard({
         </Text>
         {role ? (
           <View style={{ marginTop: 2, flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: batting ? colors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: batting ? accent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
             <Text style={{ color: batting ? '#f8fafc' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 1 }}>
               {role}
             </Text>
@@ -1393,7 +1369,7 @@ const LiveCard = memo(function LiveCard({
           {/* Home block (left) */}
           <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
             <View style={{ height: 62, alignItems: 'center', justifyContent: 'center', opacity: homeLeading || !awayLeading ? 1 : 0.66, transform: [{ scale: homeLeading ? 1.04 : 1 }] }}>
-              <JerseyGlow color={homeColors.primary}>
+              <JerseyGlow color={homeAccent}>
                 <TeamJersey
                   teamAbbreviation={game.homeTeam.abbreviation}
                   teamName={game.homeTeam.name}
@@ -1435,8 +1411,8 @@ const LiveCard = memo(function LiveCard({
             <SharedArenaScoreboard
               awayScore={as2}
               homeScore={hs}
-              awayColor={awayColors.primary}
-              homeColor={homeColors.primary}
+              awayColor={awayAccent}
+              homeColor={homeAccent}
               label={suspended ? 'SUSPENDED' : undefined}
               displayText={cricketLedScore ?? undefined}
               subLabel={suspended ? suspensionReason : undefined}
@@ -1462,7 +1438,7 @@ const LiveCard = memo(function LiveCard({
           {/* Away block (right) */}
           <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
             <View style={{ height: 62, alignItems: 'center', justifyContent: 'center', opacity: awayLeading || !homeLeading ? 1 : 0.66, transform: [{ scale: awayLeading ? 1.04 : 1 }] }}>
-              <JerseyGlow color={awayColors.primary}>
+              <JerseyGlow color={awayAccent}>
                 <TeamJersey
                   teamAbbreviation={game.awayTeam.abbreviation}
                   teamName={game.awayTeam.name}
@@ -2335,7 +2311,8 @@ const ResultCard = memo(function ResultCard({ game, pick }: { game: GameWithPred
 });
 
 // ─── GAME DAY ───
-const CARD_W = SW - 40;
+const CARD_W = SW - ARENA_SIDE_PADDING * 2;
+const LIVE_CARD_SNAP_INTERVAL = CARD_W + ARENA_CARD_GAP;
 
 const GameDay = memo(function GameDay({
   live,
@@ -2390,6 +2367,11 @@ const GameDay = memo(function GameDay({
   }, [live, liveSearch, liveSportFilter]);
   const focusedGame = filteredLive[focusedIdx] ?? filteredLive[0] ?? null;
   const focusedIntel = useMemo(() => liveIntelLocked ? [] : generateLiveIntel(focusedGame), [focusedGame, liveIntelLocked]);
+  const liveCardSnapOffsets = useMemo<number[]>(
+    () => filteredLive.map((_, index) => index * LIVE_CARD_SNAP_INTERVAL),
+    [filteredLive.length],
+  );
+  const liveInitialRenderCount = Math.min(filteredLive.length, 3);
 
   useEffect(() => {
     if (liveSportFilter !== 'All' && !liveSports.has(liveSportFilter)) setLiveSportFilter('All');
@@ -2404,9 +2386,11 @@ const GameDay = memo(function GameDay({
   }, [focusedIdx, filteredLive.length]);
 
   const onLiveScroll = useCallback((e: any) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / (CARD_W + ARENA_CARD_GAP));
-    if (idx >= 0 && idx < filteredLive.length && idx !== focusedIdx) setFocusedIdx(idx);
-  }, [filteredLive.length, focusedIdx]);
+    const idx = Math.round(e.nativeEvent.contentOffset.x / LIVE_CARD_SNAP_INTERVAL);
+    if (idx >= 0 && idx < filteredLive.length) {
+      setFocusedIdx((current) => idx === current ? current : idx);
+    }
+  }, [filteredLive.length]);
 
   // No live games
   if (!live.length) return (
@@ -2525,16 +2509,18 @@ const GameDay = memo(function GameDay({
         <Animated.FlatList
           data={filteredLive}
           horizontal
-          pagingEnabled
           showsHorizontalScrollIndicator={false}
-          snapToInterval={CARD_W + ARENA_CARD_GAP}
+          snapToOffsets={liveCardSnapOffsets}
+          snapToAlignment="start"
+          disableIntervalMomentum
           decelerationRate="fast"
-          contentContainerStyle={{paddingHorizontal:20}}
+          contentContainerStyle={{paddingHorizontal:ARENA_SIDE_PADDING}}
           ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
-          initialNumToRender={1}
-          maxToRenderPerBatch={2}
-          windowSize={3}
-          removeClippedSubviews
+          initialNumToRender={liveInitialRenderCount}
+          maxToRenderPerBatch={3}
+          updateCellsBatchingPeriod={16}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <LiveCard
@@ -2544,7 +2530,7 @@ const GameDay = memo(function GameDay({
               showModelEdge={!liveIntelLocked}
             />
           )}
-          getItemLayout={(_, index) => ({ length: CARD_W + ARENA_CARD_GAP, offset: (CARD_W + ARENA_CARD_GAP) * index, index })}
+          getItemLayout={(_, index) => ({ length: LIVE_CARD_SNAP_INTERVAL, offset: LIVE_CARD_SNAP_INTERVAL * index, index })}
           style={{flexGrow:0}}
           onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
           onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}

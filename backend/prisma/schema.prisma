@@ -174,13 +174,18 @@ model PredictionResult {
   gameId           String    @unique
   sport            String
   predictedWinner  String
+  predictedOutcome String?
   actualWinner     String?
+  actualOutcome    String?
   confidence       Int
   isTossUp         Boolean   @default(false)
   wasCorrect       Boolean?
   homeElo          Float?
   awayElo          Float?
   homeWinProb      Float?    // 0..1 — needed for Brier score and calibration
+  awayWinProb      Float?    // 0..1 — point-in-time away probability
+  drawProb         Float?    // 0..1 — point-in-time draw probability for three-way sports
+  modelVersion     String?   // engine/version that produced this row
   createdAt        DateTime  @default(now())
   resolvedAt       DateTime?
 
@@ -188,6 +193,9 @@ model PredictionResult {
   @@index([wasCorrect])
   @@index([createdAt])
   @@index([sport, wasCorrect])
+  @@index([modelVersion])
+  @@index([predictedOutcome])
+  @@index([actualOutcome])
 }
 
 model CalibrationSnapshot {

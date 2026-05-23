@@ -26,11 +26,20 @@ interface SportAccuracy {
   accuracy: number | null;
 }
 
+interface ModelVersionAccuracy {
+  modelVersion: string;
+  total: number;
+  correct: number;
+  accuracy: number | null;
+}
+
 interface AccuracyData {
   buckets: AccuracyBucket[];
   overall: { totalResolved: number; totalCorrect: number; overallAccuracy: number | null };
   perSport: SportAccuracy[];
   tossUp: { total: number; correct: number; accuracy: number | null };
+  drawAudit?: { total: number; correct: number; accuracy: number | null };
+  byModelVersion?: ModelVersionAccuracy[];
 }
 
 interface DriftData {
@@ -178,6 +187,32 @@ export default function ModelAccuracyScreen() {
               ) : (
                 <Text style={s.subtitle}>No toss-up predictions resolved yet</Text>
               )}
+            </Animated.View>
+
+            {/* Audit Coverage */}
+            <Animated.View entering={FadeInDown.delay(550).duration(400)} style={s.card}>
+              <Text style={s.cardTitle}>Audit Coverage</Text>
+              {(accuracy?.drawAudit?.total ?? 0) > 0 ? (
+                <View style={s.sportRow}>
+                  <Text style={s.sportName}>DRAW OUTCOMES</Text>
+                  <Text style={[s.sportAccuracy, { color: (accuracy?.drawAudit?.accuracy ?? 0) >= 50 ? TEAL : LOSS }]}>
+                    {accuracy?.drawAudit?.accuracy != null ? `${accuracy.drawAudit.accuracy}%` : '--'}
+                  </Text>
+                  <Text style={s.sportCount}>{accuracy?.drawAudit?.total ?? 0} games</Text>
+                </View>
+              ) : (
+                <Text style={s.subtitle}>No draw outcomes resolved under the new audit fields yet</Text>
+              )}
+
+              {(accuracy?.byModelVersion ?? []).slice(0, 4).map((version) => (
+                <View key={version.modelVersion} style={s.versionRow}>
+                  <Text numberOfLines={1} style={s.versionName}>{version.modelVersion}</Text>
+                  <Text style={[s.sportAccuracy, { color: (version.accuracy ?? 0) >= 55 ? GREEN_UP : (version.accuracy ?? 0) >= 50 ? TEAL : LOSS }]}>
+                    {version.accuracy != null ? `${version.accuracy}%` : '--'}
+                  </Text>
+                  <Text style={s.sportCount}>{version.total} games</Text>
+                </View>
+              ))}
             </Animated.View>
 
             {/* Model Calibration (per-league reliability curves) */}
@@ -362,6 +397,8 @@ const s = StyleSheet.create({
   sportName: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', flex: 1 },
   sportAccuracy: { fontSize: 14, fontWeight: '800', marginRight: 8 },
   sportCount: { color: 'rgba(255,255,255,0.25)', fontSize: 10, width: 60, textAlign: 'right' },
+  versionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 4 },
+  versionName: { color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: '600', flex: 1, marginRight: 8 },
   disclaimer: { color: 'rgba(255,255,255,0.2)', fontSize: 10, textAlign: 'center', marginTop: 20, lineHeight: 15 },
   calTimestamp: { color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 4 },
   warningBanner: { marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)' },

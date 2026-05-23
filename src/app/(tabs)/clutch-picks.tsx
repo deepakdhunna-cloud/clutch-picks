@@ -13,7 +13,7 @@ import { Clock } from 'lucide-react-native';
 import { TeamJerseyCompact } from '@/components/sports';
 import { GameWithPrediction } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
-import { useTopPicks } from '@/hooks/useGames';
+import { usePrefetchGame, useTopPicks } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import ClutchPicksBackground from '@/components/ClutchPicksBackground';
 import { useSubscription } from '@/lib/subscription-context';
@@ -168,10 +168,12 @@ const TopPickCard = memo(function TopPickCard({
   game,
   index,
   onPress,
+  onPressIn,
 }: {
   game: GameWithPrediction;
   index: number;
   onPress: () => void;
+  onPressIn?: () => void;
 }) {
   const router = useRouter();
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport);
@@ -227,6 +229,7 @@ const TopPickCard = memo(function TopPickCard({
       <AnimatedPressable
         onPress={onPress}
         onPressIn={() => {
+          onPressIn?.();
           pressProgress.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) });
         }}
         onPressOut={() => {
@@ -468,6 +471,7 @@ export default function ClutchPicksScreen() {
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
   const bottomPadding = getClutchPicksBottomPadding(insets.bottom);
+  const prefetchGame = usePrefetchGame();
 
   // Get top picks with guaranteed predictions from dedicated endpoint
   const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks();
@@ -487,9 +491,14 @@ export default function ClutchPicksScreen() {
     });
   }, [topPicks]);
 
-  const handleGamePress = useCallback((gameId: string) => {
-    router.push(`/game/${gameId}` as any);
-  }, [router]);
+  const handleGameWarm = useCallback((game: GameWithPrediction) => {
+    prefetchGame(game.id, game);
+  }, [prefetchGame]);
+
+  const handleGamePress = useCallback((game: GameWithPrediction) => {
+    handleGameWarm(game);
+    router.push(`/game/${game.id}` as any);
+  }, [handleGameWarm, router]);
 
   const headerComponent = (
     <View style={{ paddingTop: 16, paddingBottom: 28 }}>
@@ -717,7 +726,8 @@ export default function ClutchPicksScreen() {
                 <TopPickCard
                   game={item}
                   index={index}
-                  onPress={() => handleGamePress(item.id)}
+                  onPressIn={() => handleGameWarm(item)}
+                  onPress={() => handleGamePress(item)}
                 />
               </View>
             )}

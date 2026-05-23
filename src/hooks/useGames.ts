@@ -14,6 +14,7 @@ const PREDICTION_BURST_INTERVAL = 8000;
 const STALE_TIME = 30000; // avoid refetching the whole board on every fast tab/screen hop
 const GAME_DETAIL_STALE_TIME = 10000;
 type DatedGamesResult = { games: GameWithPrediction[]; successfulDates: Set<string> };
+const scheduledGameDetailWarmups = new Set<string>();
 
 function runAfterNavigationStart(task: () => void) {
   const run = () => setTimeout(task, 0);
@@ -50,6 +51,9 @@ function findGameInData(data: unknown, gameId: string): GameWithPrediction | und
 }
 
 function findCachedGame(queryClient: ReturnType<typeof useQueryClient>, gameId: string): GameWithPrediction | undefined {
+  const seeded = queryClient.getQueryData<GameWithPrediction | null>(['game', gameId]);
+  if (seeded) return seeded;
+
   const direct = findGameInData(queryClient.getQueryData<GameWithPrediction[]>(['games']), gameId);
   if (direct) return direct;
 
@@ -64,6 +68,45 @@ function findCachedGame(queryClient: ReturnType<typeof useQueryClient>, gameId: 
 function seedGameDetailCache(queryClient: ReturnType<typeof useQueryClient>, gameId: string, game?: GameWithPrediction) {
   if (!game) return;
   queryClient.setQueryData<GameWithPrediction | null>(['game', gameId], (current) => current ?? game);
+}
+
+function scheduleGameDetailWarmup(
+  queryClient: ReturnType<typeof useQueryClient>,
+  gameId: string,
+  sourceGame?: GameWithPrediction,
+) {
+  // If the caller already has the card's game object, seed it immediately so
+  // the detail screen can paint from cache. Defer broader cache scans/network
+  // prefetches until after the tap has started navigation.
+  seedGameDetailCache(queryClient, gameId, sourceGame);
+
+  if (scheduledGameDetailWarmups.has(gameId)) return;
+  scheduledGameDetailWarmups.add(gameId);
+
+  runAfterNavigationStart(() => {
+    try {
+      const cachedGame = sourceGame ?? findCachedGame(queryClient, gameId);
+      seedGameDetailCache(queryClient, gameId, cachedGame);
+
+      void queryClient.prefetchQuery({
+        queryKey: ['game', gameId],
+        queryFn: async () => {
+          const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
+          const enriched = await enrichCricketLiveGame(result ?? null);
+          const current = findCachedGame(queryClient, gameId);
+          if (!enriched) return current ?? null;
+          return current ? mergeGameData(current, enriched) : enriched;
+        },
+        staleTime: GAME_DETAIL_STALE_TIME,
+      });
+
+      if (cachedGame) {
+        void prefetchNewsForGame(queryClient, cachedGame);
+      }
+    } finally {
+      scheduledGameDetailWarmups.delete(gameId);
+    }
+  });
 }
 
 function formatLocalDate(date: Date): string {
@@ -228,27 +271,7 @@ export function useGames() {
 
   // Prefetch game details and news for visible games to make navigation instant
   const prefetchGame = useCallback((gameId: string, sourceGame?: GameWithPrediction) => {
-    // First check if we have game data in cache to get team IDs
-    const cachedGame = sourceGame ?? findCachedGame(queryClient, gameId);
-    seedGameDetailCache(queryClient, gameId, cachedGame);
-
-    runAfterNavigationStart(() => {
-      void queryClient.prefetchQuery({
-        queryKey: ['game', gameId],
-        queryFn: async () => {
-          const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          const enriched = await enrichCricketLiveGame(result ?? null);
-          const current = findCachedGame(queryClient, gameId);
-          if (!enriched) return current ?? null;
-          return current ? mergeGameData(current, enriched) : enriched;
-        },
-        staleTime: GAME_DETAIL_STALE_TIME,
-      });
-
-      if (cachedGame) {
-        void prefetchNewsForGame(queryClient, cachedGame);
-      }
-    });
+    scheduleGameDetailWarmup(queryClient, gameId, sourceGame);
   }, [queryClient]);
 
   return {
@@ -481,26 +504,7 @@ export function usePrefetchGame() {
   const queryClient = useQueryClient();
 
   return useCallback((gameId: string, sourceGame?: GameWithPrediction) => {
-    const cachedGame = sourceGame ?? findCachedGame(queryClient, gameId);
-    seedGameDetailCache(queryClient, gameId, cachedGame);
-
-    runAfterNavigationStart(() => {
-      void queryClient.prefetchQuery({
-        queryKey: ['game', gameId],
-        queryFn: async () => {
-          const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          const enriched = await enrichCricketLiveGame(result ?? null);
-          const current = findCachedGame(queryClient, gameId);
-          if (!enriched) return current ?? null;
-          return current ? mergeGameData(current, enriched) : enriched;
-        },
-        staleTime: GAME_DETAIL_STALE_TIME,
-      });
-
-      if (cachedGame) {
-        void prefetchNewsForGame(queryClient, cachedGame);
-      }
-    });
+    scheduleGameDetailWarmup(queryClient, gameId, sourceGame);
   }, [queryClient]);
 }
 

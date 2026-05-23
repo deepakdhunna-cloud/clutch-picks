@@ -7,6 +7,7 @@ import { TeamJerseyCompact } from './TeamJersey';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { cricketRequiredText, cricketRoleText, cricketStatusText, teamScoreText } from '@/lib/cricket-score';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 165;
@@ -14,9 +15,16 @@ const CARD_HEIGHT = 165;
 interface CompactLiveCardProps {
   game: GameWithPrediction;
   onPress: () => void;
+  onPressIn?: () => void;
 }
 
-export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPress }: CompactLiveCardProps) {
+export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPress, onPressIn }: CompactLiveCardProps) {
+  const {
+    onTouchStart,
+    onTouchMove,
+    onTouchCancel,
+    shouldHandlePress,
+  } = useTapGestureGuard();
   const awayColors = useMemo(
     () => getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color),
     [game.awayTeam.abbreviation, game.awayTeam.color, game.sport]
@@ -25,6 +33,8 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
     () => getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color),
     [game.homeTeam.abbreviation, game.homeTeam.color, game.sport]
   );
+  const awayAccent = awayColors.accent;
+  const homeAccent = homeColors.accent;
 
   const awayScore = game.awayScore ?? 0;
   const homeScore = game.homeScore ?? 0;
@@ -55,20 +65,28 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
       elevation: 20,
     }}>
     <Pressable
-      onPress={onPress}
+      onPressIn={onPressIn}
+      onPress={() => {
+        if (!shouldHandlePress()) return;
+        onPress();
+      }}
+      pressRetentionOffset={6}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
       className="active:opacity-85"
     >
       {/* Glass border — dark reflective with team colors */}
       <View style={{ borderRadius: 18, padding: 2, overflow: 'hidden' }}>
         <LinearGradient
           colors={[
-            `${awayColors.primary}90`,
-            `${awayColors.primary}50`,
+            `${awayAccent}90`,
+            `${awayAccent}50`,
             '#0D1118',
             '#080C12',
             '#0D1118',
-            `${homeColors.primary}50`,
-            `${homeColors.primary}90`,
+            `${homeAccent}50`,
+            `${homeAccent}90`,
           ]}
           locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
           start={{ x: 0, y: 0 }}
@@ -79,11 +97,11 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
         <View style={{ borderRadius: 16, padding: 1, overflow: 'hidden' }}>
           <LinearGradient
             colors={[
-              `${awayColors.primary}60`,
+              `${awayAccent}60`,
               'rgba(255,255,255,0.12)',
               '#080C12',
               'rgba(0,0,0,0.6)',
-              `${homeColors.primary}50`,
+              `${homeAccent}50`,
             ]}
             locations={[0, 0.2, 0.5, 0.8, 1]}
             start={{ x: 0, y: 0 }}
@@ -97,7 +115,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
 
       {/* Away team color — vivid corner bleed top-left */}
       <LinearGradient
-        colors={[`${awayColors.primary}EE`, `${awayColors.primary}88`, `${awayColors.primary}33`, 'transparent']}
+        colors={[`${awayAccent}EE`, `${awayAccent}88`, `${awayAccent}33`, 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.7, y: 0.8 }}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -105,7 +123,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
 
       {/* Home team color — vivid corner bleed bottom-right */}
       <LinearGradient
-        colors={[`${homeColors.primary}EE`, `${homeColors.primary}88`, `${homeColors.primary}33`, 'transparent']}
+        colors={[`${homeAccent}EE`, `${homeAccent}88`, `${homeAccent}33`, 'transparent']}
         start={{ x: 1, y: 1 }}
         end={{ x: 0.3, y: 0.2 }}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -186,7 +204,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               ) : null}
               {awayCricketRole ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayAccent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
                   <Text style={{ color: awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 0.9 }}>
                     {awayCricketRole}
                   </Text>
@@ -235,7 +253,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               ) : null}
               {homeCricketRole ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeColors.primary : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeAccent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
                   <Text style={{ color: homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 0.9 }}>
                     {homeCricketRole}
                   </Text>

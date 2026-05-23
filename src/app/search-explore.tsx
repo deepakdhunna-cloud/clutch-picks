@@ -100,6 +100,8 @@ const GameBar = memo(function GameBar({ game, onPress, onPressIn, showModelSigna
   const final = game.status === GameStatus.FINAL;
   const awayC = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color);
   const homeC = getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color);
+  const awayAccent = awayC.accent;
+  const homeAccent = homeC.accent;
   const sportMeta = SPORT_META[game.sport as Sport];
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
   const timeStr = live ? null : final ? null : fmtTime(game.gameTime);
@@ -120,7 +122,7 @@ const GameBar = memo(function GameBar({ game, onPress, onPressIn, showModelSigna
         <View style={{ borderRadius: 17, overflow: 'hidden', backgroundColor: 'rgba(5,8,13,0.97)', padding: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.055)' }}>
           <LinearGradient
             pointerEvents="none"
-            colors={[hexWithAlpha(awayC.primary, 0.12), 'rgba(5,8,13,0)', hexWithAlpha(homeC.primary, 0.12)]}
+            colors={[hexWithAlpha(awayAccent, 0.12), 'rgba(5,8,13,0)', hexWithAlpha(homeAccent, 0.12)]}
             start={{ x: 0, y: 0.4 }}
             end={{ x: 1, y: 0.7 }}
             style={StyleSheet.absoluteFillObject}
@@ -376,11 +378,11 @@ export default function SearchExploreScreen() {
 
   const navGame = useCallback((game: GameWithPrediction) => {
     Keyboard.dismiss();
-    fireLightHaptic();
     warmGame(game);
+    router.push({ pathname: '/game/[id]', params: { id: game.id } });
+    fireLightHaptic();
     if (query.trim()) void saveRecent(query.trim());
     else void saveRecent(`${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`);
-    router.push({ pathname: '/game/[id]', params: { id: game.id } });
   }, [query, router, saveRecent, warmGame]);
 
   const goBack = useCallback(() => { Keyboard.dismiss(); router.back(); }, [router]);

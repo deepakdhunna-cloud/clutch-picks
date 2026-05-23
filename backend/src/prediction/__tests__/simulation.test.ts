@@ -418,7 +418,8 @@ describe("game-script simulation", () => {
     expect(prediction.projection!.projectedTotal).toBeGreaterThanOrEqual(2);
     expect(prediction.projection!.projectedTotal).toBeLessThanOrEqual(3);
     expect(prediction.awayWinProbability).toBeGreaterThan(prediction.homeWinProbability);
-    expect(prediction.confidence).toBeGreaterThan(60);
+    expect(prediction.confidence).toBeGreaterThan(55);
+    expect(prediction.confidence).toBeLessThan(60);
     expect(prediction.projection!.signals.some((s) => s.key === "legacy-consensus")).toBe(false);
     expect(prediction.dataSources).toContain("game-script simulation");
     expect(prediction.confidence).toBe(

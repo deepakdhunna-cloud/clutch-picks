@@ -52,15 +52,15 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
   onConfirm,
   onCancel,
 }: PickConfirmationModalProps) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const cardScale = useSharedValue(0.92);
+  const cardScale = useSharedValue(0.96);
   const cardOpacity = useSharedValue(0);
   const jerseyScale = useSharedValue(1);
   const sweepProgress = useSharedValue(0);
-  const haloRotate = useSharedValue(0);
+  const stagePulse = useSharedValue(0);
   const successScale = useSharedValue(0);
 
   const resolvedColors = useMemo<TeamColors>(() => {
@@ -71,19 +71,25 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
 
   useEffect(() => {
     if (visible) {
-      cardOpacity.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.ease) });
-      cardScale.value = withSpring(1, { damping: 17, stiffness: 180 });
-      jerseyScale.value = 1;
+      cardOpacity.value = withTiming(1, { duration: 150, easing: Easing.out(Easing.ease) });
+      cardScale.value = withSpring(1, { damping: 19, stiffness: 210 });
+      jerseyScale.value = withSequence(
+        withTiming(1.06, { duration: 210, easing: Easing.out(Easing.cubic) }),
+        withSpring(1, { damping: 13, stiffness: 210 })
+      );
       sweepProgress.value = withRepeat(
         withSequence(
-          withTiming(1, { duration: 2100, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 900, easing: Easing.inOut(Easing.ease) })
+          withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) })
         ),
         -1,
         false
       );
-      haloRotate.value = withRepeat(
-        withTiming(360, { duration: 9000, easing: Easing.linear }),
+      stagePulse.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1250, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 1250, easing: Easing.inOut(Easing.ease) })
+        ),
         -1,
         false
       );
@@ -93,36 +99,40 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       setErrorMessage(null);
     } else {
       cardOpacity.value = 0;
-      cardScale.value = 0.92;
+      cardScale.value = 0.96;
       jerseyScale.value = 1;
       sweepProgress.value = 0;
-      haloRotate.value = 0;
+      stagePulse.value = 0;
       successScale.value = 0;
     }
-  }, [visible, cardOpacity, cardScale, haloRotate, jerseyScale, successScale, sweepProgress]);
+  }, [visible, cardOpacity, cardScale, jerseyScale, stagePulse, successScale, sweepProgress]);
 
   const cardStyle = useAnimatedStyle(() => ({
     opacity: cardOpacity.value,
     transform: [
       { scale: cardScale.value },
-      { translateY: interpolate(cardScale.value, [0.92, 1], [18, 0]) },
+      { translateY: interpolate(cardScale.value, [0.96, 1], [10, 0]) },
     ],
   }));
 
   const sweepStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sweepProgress.value, [0, 0.5, 1], [0.08, 0.42, 0.08]),
+    opacity: interpolate(sweepProgress.value, [0, 0.48, 1], [0, 0.34, 0]),
     transform: [
-      { translateX: interpolate(sweepProgress.value, [0, 1], [-92, 92]) },
-      { rotate: '-18deg' },
+      { translateX: interpolate(sweepProgress.value, [0, 1], [-58, 206]) },
+      { rotate: '-10deg' },
     ],
   }));
 
   const haloStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${haloRotate.value}deg` }],
+    opacity: interpolate(stagePulse.value, [0, 1], [0.42, 0.82]),
+    transform: [{ scale: interpolate(stagePulse.value, [0, 1], [0.96, 1.04]) }],
   }));
 
   const jerseyStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: jerseyScale.value }, { translateY: isConfirming ? -4 : 0 }],
+    transform: [
+      { scale: jerseyScale.value },
+      { translateY: isConfirming ? -3 : interpolate(jerseyScale.value, [1, 1.08], [0, -3]) },
+    ],
   }));
 
   const successStyle = useAnimatedStyle(() => ({
@@ -167,25 +177,25 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
 
   if (!team) return null;
 
-  const cardWidth = Math.min(width - 38, 360);
+  const cardWidth = Math.min(width - 44, 340);
+  const isCompactHeight = height < 760;
+  const jerseySize = isCompactHeight ? 82 : 94;
   const isRemoving = action === 'remove';
   const titleText = showSuccess
-    ? isRemoving ? 'Pick Removed' : 'Pick Locked'
+    ? isRemoving ? 'Pick Unselected' : 'Pick Selected'
     : errorMessage
       ? 'Pick Not Saved'
       : isRemoving
-        ? 'Remove this pick?'
-        : isChanging
-        ? 'Switch your pick?'
-        : 'Lock in your pick?';
+        ? 'Unselect this pick?'
+        : 'Select this pick?';
   const bodyText = showSuccess
     ? isRemoving ? 'Cleared from your board.' : 'Saved to your board.'
     : errorMessage ?? (isRemoving
-      ? 'This clears the pick from your board. You can choose again before the game starts.'
+      ? 'This clears this jersey from your board. You can choose again before the game starts.'
       : isChanging
-      ? 'This replaces your current selection and keeps the game on your board.'
-      : 'This saves the pick to your board so you can track it through the game.');
-  const primaryLabel = errorMessage ? 'Try Again' : isRemoving ? 'Remove Pick' : isChanging ? 'Switch Pick' : 'Lock It In';
+      ? 'This selects this jersey and updates your board for the game.'
+      : 'This saves this jersey to your board so you can track it through the game.');
+  const primaryLabel = errorMessage ? 'Try Again' : isRemoving ? 'Unselect Pick' : 'Select Pick';
   const recordText = team.record?.trim() ? team.record.trim() : 'Season record';
 
   return (
@@ -214,7 +224,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
               colors={['#121821', '#070A0F', '#10151D']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.card}
+              style={[styles.card, isCompactHeight ? styles.cardCompact : null]}
             >
               <View style={styles.topRow}>
                 <View style={styles.eyebrowPill}>
@@ -230,14 +240,11 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                 </Pressable>
               </View>
 
-              <View style={styles.jerseyStage}>
-                <Animated.View style={[styles.luxeHalo, haloStyle, { borderColor: `${resolvedColors.primary}55` }]}>
-                  <View style={[styles.haloTick, styles.haloTickTop, { backgroundColor: '#D8C08C' }]} />
-                  <View style={[styles.haloTick, styles.haloTickBottom, { backgroundColor: resolvedColors.primary }]} />
-                </Animated.View>
-                <View style={styles.luxePlinth}>
+              <View style={[styles.jerseyStage, isCompactHeight ? styles.jerseyStageCompact : null]}>
+                <Animated.View style={[styles.luxeHalo, haloStyle, { borderColor: `${resolvedColors.primary}46`, backgroundColor: `${resolvedColors.primary}10` }]} />
+                <View style={[styles.luxePlinth, { borderColor: `${resolvedColors.primary}22` }]}>
                   <LinearGradient
-                    colors={['rgba(216,192,140,0.16)', `${resolvedColors.primary}28`, 'rgba(218,238,251,0.08)']}
+                    colors={['rgba(216,192,140,0.10)', `${resolvedColors.primary}24`, 'rgba(218,238,251,0.07)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={StyleSheet.absoluteFill}
@@ -251,15 +258,13 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                     />
                   </Animated.View>
                 </View>
-                <View style={[styles.stageLine, styles.stageLineTop, { backgroundColor: `${resolvedColors.primary}42` }]} />
-                <View style={[styles.stageLine, styles.stageLineBottom, { backgroundColor: 'rgba(216,192,140,0.28)' }]} />
                 <Animated.View style={jerseyStyle}>
                   <JerseyIcon
                     teamCode={team.abbreviation}
                     teamName={team.name}
                     primaryColor={resolvedColors.primary}
                     secondaryColor={resolvedColors.secondary}
-                    size={108}
+                    size={jerseySize}
                     sport={sportEnumToJersey(sport)}
                   />
                 </Animated.View>
@@ -279,21 +284,8 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                 <Text style={[styles.body, errorMessage ? styles.errorBody : null]}>{bodyText}</Text>
               </View>
 
-              {!showSuccess && !errorMessage ? (
-                <View style={styles.promiseRow}>
-                  <View style={styles.promiseChip}>
-                    <Check size={13} color="rgba(218,238,251,0.84)" strokeWidth={3} />
-                    <Text style={styles.promiseText}>{isRemoving ? 'Board clears' : 'Board save'}</Text>
-                  </View>
-                  <View style={styles.promiseChip}>
-                    <Sparkles size={13} color="rgba(218,238,251,0.84)" strokeWidth={2.4} />
-                    <Text style={styles.promiseText}>{isRemoving ? 'Pick again' : 'Track live'}</Text>
-                  </View>
-                </View>
-              ) : null}
-
               {!isConfirming ? (
-                <View style={[styles.actionsStack, !showSuccess && !errorMessage ? styles.actionsAfterPromise : null]}>
+                <View style={styles.actionsRow}>
                   <Pressable
                     onPress={handleConfirm}
                     style={({ pressed }) => [styles.lockButtonWrap, pressed ? styles.pressed : null]}
@@ -313,12 +305,6 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                         <Text style={styles.lockText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>{primaryLabel}</Text>
                       </View>
                     </LinearGradient>
-                  </Pressable>
-                  <Pressable
-                    onPress={onCancel}
-                    style={({ pressed }) => [styles.cancelButton, pressed ? styles.pressed : null]}
-                  >
-                    <Text style={styles.cancelText}>Cancel</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -344,11 +330,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
     backgroundColor: 'rgba(0,0,0,0.78)',
   },
   cardBorder: {
-    borderRadius: 30,
+    borderRadius: 26,
     padding: 1.4,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 24 },
@@ -357,12 +344,16 @@ const styles = StyleSheet.create({
     elevation: 30,
   },
   card: {
-    borderRadius: 29,
-    padding: 20,
-    paddingBottom: 20,
+    borderRadius: 25,
+    padding: 17,
+    paddingBottom: 17,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(226,240,249,0.10)',
+  },
+  cardCompact: {
+    padding: 15,
+    paddingBottom: 15,
   },
   topRow: {
     flexDirection: 'row',
@@ -388,9 +379,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -398,72 +389,47 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226,240,249,0.10)',
   },
   jerseyStage: {
-    height: 138,
+    height: 118,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 5,
-    marginBottom: 12,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  jerseyStageCompact: {
+    height: 104,
+    marginBottom: 5,
   },
   luxeHalo: {
     position: 'absolute',
-    width: 174,
-    height: 104,
-    borderRadius: 52,
+    width: 134,
+    height: 134,
+    borderRadius: 67,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.018)',
-    transform: [{ rotate: '-12deg' }],
-  },
-  haloTick: {
-    position: 'absolute',
-    width: 36,
-    height: 2,
-    borderRadius: 1,
-  },
-  haloTickTop: {
-    top: 7,
-    right: 20,
-  },
-  haloTickBottom: {
-    bottom: 7,
-    left: 20,
   },
   luxePlinth: {
     position: 'absolute',
-    width: 214,
-    height: 86,
-    borderRadius: 43,
+    bottom: 14,
+    width: 184,
+    height: 56,
+    borderRadius: 28,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(216,192,140,0.16)',
     backgroundColor: 'rgba(255,255,255,0.025)',
   },
   luxeSweep: {
     position: 'absolute',
-    top: -42,
-    bottom: -42,
-    width: 42,
-  },
-  stageLine: {
-    position: 'absolute',
-    height: 1,
-    width: 174,
-    opacity: 0.72,
-  },
-  stageLineTop: {
-    top: 31,
-    transform: [{ rotate: '-5deg' }],
-  },
-  stageLineBottom: {
-    bottom: 24,
-    transform: [{ rotate: '5deg' }],
+    top: -26,
+    bottom: -26,
+    width: 36,
   },
   successBadge: {
     position: 'absolute',
-    right: 95,
-    bottom: 16,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    left: '50%',
+    bottom: 9,
+    marginLeft: 26,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#DAEEFB',
@@ -475,17 +441,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   title: {
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '900',
     color: 'rgba(218,238,251,0.76)',
     textAlign: 'center',
     letterSpacing: 0,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   teamName: {
-    fontSize: 30,
-    lineHeight: 35,
+    fontSize: 26,
+    lineHeight: 31,
     fontWeight: '900',
     color: '#FFFFFF',
     textAlign: 'center',
@@ -493,27 +459,27 @@ const styles = StyleSheet.create({
   },
   recordPill: {
     alignSelf: 'center',
-    minHeight: 26,
+    minHeight: 24,
     justifyContent: 'center',
-    marginTop: 10,
-    paddingHorizontal: 13,
-    borderRadius: 13,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
     borderColor: 'rgba(226,240,249,0.10)',
   },
   recordText: {
     color: 'rgba(226,240,249,0.62)',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
   },
   body: {
-    marginTop: 13,
+    marginTop: 11,
     marginBottom: 0,
     color: 'rgba(226,240,249,0.58)',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: '800',
     textAlign: 'center',
     letterSpacing: 0,
@@ -521,60 +487,20 @@ const styles = StyleSheet.create({
   errorBody: {
     color: '#FCA5A5',
   },
-  promiseRow: {
+  actionsRow: {
     width: '100%',
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-    marginBottom: 14,
-  },
-  promiseChip: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 14,
+    height: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(218,238,251,0.055)',
-    borderWidth: 1,
-    borderColor: 'rgba(218,238,251,0.10)',
-  },
-  promiseText: {
-    color: 'rgba(218,238,251,0.72)',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
-  actionsStack: {
-    width: '100%',
-    gap: 10,
     marginTop: 18,
   },
-  actionsAfterPromise: {
-    marginTop: 0,
-  },
-  cancelButton: {
-    width: '100%',
-    minHeight: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.035)',
-    borderWidth: 1,
-    borderColor: 'rgba(226,240,249,0.09)',
-  },
-  cancelText: {
-    color: 'rgba(226,240,249,0.70)',
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
   lockButtonWrap: {
-    width: '100%',
-    minHeight: 60,
+    alignSelf: 'center',
+    width: '72%',
+    minWidth: 216,
+    maxWidth: 280,
+    height: 58,
     borderRadius: 18,
     overflow: 'hidden',
     shadowColor: '#8B0A1F',
@@ -583,9 +509,8 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
   },
   lockButton: {
-    flex: 1,
-    minHeight: 60,
-    paddingHorizontal: 18,
+    height: 58,
+    paddingHorizontal: 13,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -596,19 +521,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 9,
+    gap: 8,
   },
   lockText: {
     flexShrink: 1,
     color: '#FFFFFF',
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '900',
     letterSpacing: 0,
   },
   lockedState: {
-    height: 56,
-    borderRadius: 17,
+    height: 52,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

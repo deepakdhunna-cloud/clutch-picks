@@ -130,22 +130,32 @@ describe("computeReliabilityCurve", () => {
     expect(bucket70?.actualWinRate).toBe(0.5);
   });
 
-  it("returns all 10 buckets even when empty", () => {
+  it("returns all buckets even when empty", () => {
     const curve = computeReliabilityCurve([]);
-    expect(curve.length).toBe(10);
+    expect(curve.length).toBe(15);
     for (const bucket of curve) {
       expect(bucket.count).toBe(0);
     }
   });
 
-  it("correctly handles winner prob for away-favored games", () => {
-    // Home prob 0.3 → winner is away at 0.7 → bucket 70-75
+  it("uses the selected outcome probability directly", () => {
+    // Away-selected probability 0.7 → bucket 70-75
     const predictions = [
-      { predictedProb: 0.3, actualOutcome: 0 as const }, // Home lost, away won
+      { predictedProb: 0.7, actualOutcome: 1 as const },
     ];
     const curve = computeReliabilityCurve(predictions);
     const bucket70 = curve.find((b) => b.bucket === "70-75");
     expect(bucket70?.count).toBe(1);
+  });
+
+  it("buckets three-way draw probabilities below 50%", () => {
+    const predictions = [
+      { predictedProb: 0.36, actualOutcome: 1 as const },
+    ];
+    const curve = computeReliabilityCurve(predictions);
+    const bucket35 = curve.find((b) => b.bucket === "35-40");
+    expect(bucket35?.count).toBe(1);
+    expect(bucket35?.actualWinRate).toBe(1);
   });
 });
 

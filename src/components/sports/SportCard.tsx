@@ -2,9 +2,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import Animated, {
-  interpolate,
   withSpring,
-  withSequence,
   withTiming,
   useSharedValue,
   useAnimatedStyle,
@@ -12,6 +10,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Sport, SPORT_META } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import Svg, { Path, Circle, Rect, Defs, Pattern, Line, Ellipse, RadialGradient, Stop, G } from 'react-native-svg';
 
 // ─── JUMBOTRON COLORS ──────────────────────────────────────────
@@ -1292,45 +1291,35 @@ export const SportCard = memo(function SportCard({
   const router = useRouter();
   const meta = SPORT_META[sport];
   const baseColor = meta.color;
+  const {
+    onTouchStart,
+    onTouchMove,
+    onTouchCancel,
+    shouldHandlePress,
+  } = useTapGestureGuard();
 
   const handlePress = useCallback(() => {
+    if (!shouldHandlePress()) return;
     if (onPress) {
       onPress();
     } else {
       router.push(`/sport/${sport}` as any);
     }
-  }, [onPress, router, sport]);
+  }, [onPress, router, shouldHandlePress, sport]);
 
   const scale = useSharedValue(1);
   const selectedProgress = useSharedValue(isSelected ? 1 : 0);
-  const selectionPulse = useSharedValue(0);
 
   useEffect(() => {
-    selectedProgress.value = withTiming(isSelected ? 1 : 0, { duration: isSelected ? 150 : 220 });
-    if (isSelected) {
-      selectionPulse.value = 0;
-      selectionPulse.value = withSequence(
-        withTiming(1, { duration: 120 }),
-        withTiming(0, { duration: 460 })
-      );
-    }
-  }, [isSelected, selectedProgress, selectionPulse]);
+    selectedProgress.value = withTiming(isSelected ? 1 : 0, { duration: isSelected ? 180 : 220 });
+  }, [isSelected, selectedProgress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value + selectionPulse.value * 0.018 }],
+    transform: [{ scale: scale.value }],
   }));
 
   const selectedGlowStyle = useAnimatedStyle(() => ({
-    opacity: selectedProgress.value * 0.9 + selectionPulse.value * 0.26,
-    transform: [{ scale: 1 + selectionPulse.value * 0.045 }],
-  }));
-
-  const selectedSweepStyle = useAnimatedStyle(() => ({
-    opacity: selectionPulse.value,
-    transform: [
-      { translateX: interpolate(selectionPulse.value, [0, 1], [-tileSize * 0.62, tileSize * 1.12]) },
-      { rotate: '-18deg' },
-    ],
+    opacity: selectedProgress.value * 0.42,
   }));
 
   // ═══════════════════════════════════════════════
@@ -1339,11 +1328,15 @@ export const SportCard = memo(function SportCard({
   if (tile) {
     const isDimmed = hasActiveFilter && !isSelected;
     const isChosen = hasActiveFilter && isSelected;
-    const borderColor = isChosen ? 'rgba(122,157,184,0.72)' : LED_BORDER;
+    const borderColor = isChosen ? 'rgba(122,157,184,0.24)' : LED_BORDER;
 
     return (
       <AnimatedPressable
         onPress={handlePress}
+        pressRetentionOffset={6}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchCancel={onTouchCancel}
         onPressIn={() => {
           scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
         }}
@@ -1352,15 +1345,33 @@ export const SportCard = memo(function SportCard({
         }}
         style={[
           animatedStyle,
+          { position: 'relative' },
           isChosen ? {
             shadowColor: JB.blue,
             shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.46,
-            shadowRadius: 16,
-            elevation: 10,
+            shadowOpacity: 0.18,
+            shadowRadius: 12,
+            elevation: 5,
           } : null,
         ]}
       >
+        {isChosen ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                position: 'absolute',
+                left: -10,
+                right: -10,
+                top: -10,
+                bottom: -10,
+                borderRadius: 18,
+                backgroundColor: 'rgba(122,157,184,0.11)',
+              },
+              selectedGlowStyle,
+            ]}
+          />
+        ) : null}
         <View
           style={{
             width: tileSize,
@@ -1375,36 +1386,14 @@ export const SportCard = memo(function SportCard({
         >
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, selectedGlowStyle]}>
             <LinearGradient
-              colors={['rgba(139,10,31,0.24)', 'rgba(122,157,184,0.18)', 'rgba(255,255,255,0.03)']}
-              locations={[0, 0.62, 1]}
+              colors={['rgba(139,10,31,0.12)', 'rgba(122,157,184,0.08)', 'rgba(255,255,255,0.015)']}
+              locations={[0, 0.7, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFillObject}
             />
           </Animated.View>
           <LedTilePanel sport={sport} gameCount={gameCount} size={tileSize} />
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              {
-                position: 'absolute',
-                top: -tileSize * 0.25,
-                bottom: -tileSize * 0.25,
-                width: 20,
-              },
-              selectedSweepStyle,
-            ]}
-          >
-            <LinearGradient
-              colors={['transparent', 'rgba(255,255,255,0.58)', 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-          </Animated.View>
-          {isChosen ? (
-            <View pointerEvents="none" style={{ position: 'absolute', left: 8, right: 8, bottom: 7, height: 2, borderRadius: 1, backgroundColor: JB.blue, opacity: 0.86 }} />
-          ) : null}
         </View>
       </AnimatedPressable>
     );
@@ -1423,6 +1412,10 @@ export const SportCard = memo(function SportCard({
     return (
       <AnimatedPressable
         onPress={handlePress}
+        pressRetentionOffset={6}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchCancel={onTouchCancel}
         onPressIn={() => {
           scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
         }}
@@ -1483,6 +1476,10 @@ export const SportCard = memo(function SportCard({
   return (
     <AnimatedPressable
       onPress={handlePress}
+      pressRetentionOffset={6}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
       className="mb-3 active:opacity-80"
     >
       <View

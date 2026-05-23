@@ -72,6 +72,11 @@ export interface WeightSuggestion {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CONFIDENCE_BUCKETS = [
+  { label: "25-29", min: 25, max: 29, midpoint: 27 },
+  { label: "30-34", min: 30, max: 34, midpoint: 32 },
+  { label: "35-39", min: 35, max: 39, midpoint: 37 },
+  { label: "40-44", min: 40, max: 44, midpoint: 42 },
+  { label: "45-49", min: 45, max: 49, midpoint: 47 },
   { label: "50-54", min: 50, max: 54, midpoint: 52 },
   { label: "55-59", min: 55, max: 59, midpoint: 57 },
   { label: "60-64", min: 60, max: 64, midpoint: 62 },

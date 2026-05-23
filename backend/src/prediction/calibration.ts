@@ -8,12 +8,12 @@
  * displayed for transparency only.
  *
  * ⚠️ HISTORICAL-ELO DATA LEAK (Gap 5 audit, prompt-a):
- * computeAndStoreCalibration reads PredictionResult.homeWinProb. That field
- * is written at prediction time and should reflect the Elo rating a team
- * held when the game tipped off — NOT the current rating. If any backfill
- * ever re-predicts past games with today's Elo, the reliability curves
- * here will be silently biased (predictions will appear better-calibrated
- * than they were). We do not yet persist Elo history per game, so this
+ * computeAndStoreCalibration reads PredictionResult's point-in-time selected
+ * outcome probability (homeWinProb / awayWinProb / drawProb, with confidence
+ * fallback for legacy rows). Those fields should reflect the information a
+ * model held when the game tipped off — NOT the current rating. If any backfill
+ * ever re-predicts past games with today's Elo, the reliability curves here
+ * will be silently biased. We do not yet persist Elo history per game, so this
  * caveat is surfaced via a console warning on every compute call and is
  * included in the /api/calibration response under `warnings`.
  */
@@ -42,6 +42,41 @@ export interface CalibrationMetrics {
 // ─── Core computations ──────────────────────────────────────────────────
 
 const EPS = 1e-15; // Numerical safety for log loss
+
+function normalizeProbability(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const probability = value > 1 ? value / 100 : value;
+  return Math.max(0, Math.min(1, probability));
+}
+
+function selectedOutcomeProbability(row: {
+  predictedWinner: string;
+  predictedOutcome?: string | null;
+  confidence: number;
+  homeWinProb?: number | null;
+  awayWinProb?: number | null;
+  drawProb?: number | null;
+}): number {
+  const fallback = normalizeProbability(row.confidence / 100) ?? 0.5;
+  const predictedOutcome = row.predictedOutcome ?? row.predictedWinner;
+
+  if (predictedOutcome === "home") {
+    return normalizeProbability(row.homeWinProb) ?? fallback;
+  }
+  if (predictedOutcome === "away") {
+    return (
+      normalizeProbability(row.awayWinProb) ??
+      (normalizeProbability(row.homeWinProb) !== null
+        ? 1 - normalizeProbability(row.homeWinProb)!
+        : fallback)
+    );
+  }
+  if (predictedOutcome === "draw") {
+    return normalizeProbability(row.drawProb) ?? fallback;
+  }
+
+  return fallback;
+}
 
 /**
  * Brier score: mean((predicted_prob - actual_outcome)^2)
@@ -78,13 +113,20 @@ export function computeLogLoss(
 }
 
 /**
- * Reliability curve: bucket predictions by confidence, compute actual win rate.
- * Buckets: 50-55, 55-60, 60-65, 65-70, 70-75, 75-80, 80-85, 85-90, 90-95, 95-100.
+ * Reliability curve: bucket predictions by selected-outcome probability,
+ * compute actual win rate.
+ * Buckets include 25-50 for three-way soccer draw reads, then 5-point bands
+ * through 100 for normal binary favorites.
  */
 export function computeReliabilityCurve(
   predictions: Array<{ predictedProb: number; actualOutcome: 0 | 1 }>
 ): ReliabilityBucket[] {
   const BUCKETS = [
+    { label: "25-30", min: 0.25, max: 0.30, midpoint: 0.275 },
+    { label: "30-35", min: 0.30, max: 0.35, midpoint: 0.325 },
+    { label: "35-40", min: 0.35, max: 0.40, midpoint: 0.375 },
+    { label: "40-45", min: 0.40, max: 0.45, midpoint: 0.425 },
+    { label: "45-50", min: 0.45, max: 0.50, midpoint: 0.475 },
     { label: "50-55", min: 0.50, max: 0.55, midpoint: 0.525 },
     { label: "55-60", min: 0.55, max: 0.60, midpoint: 0.575 },
     { label: "60-65", min: 0.60, max: 0.65, midpoint: 0.625 },
@@ -98,10 +140,8 @@ export function computeReliabilityCurve(
   ];
 
   return BUCKETS.map((b) => {
-    // Use winner probability (max of home/away)
     const inBucket = predictions.filter((p) => {
-      const winnerProb = Math.max(p.predictedProb, 1 - p.predictedProb);
-      return winnerProb >= b.min && winnerProb < b.max;
+      return p.predictedProb >= b.min && p.predictedProb < b.max;
     });
 
     const count = inBucket.length;
@@ -129,42 +169,41 @@ export function computeReliabilityCurve(
 export async function computeAndStoreCalibration(
   league: string
 ): Promise<CalibrationMetrics> {
-  // TODO(historical-elo-leak): see file header. PredictionResult.homeWinProb
-  // is assumed point-in-time; if that ever stops being true (e.g. a replay
+  // TODO(historical-elo-leak): see file header. PredictionResult probabilities
+  // are assumed point-in-time; if that ever stops being true (e.g. a replay
   // backfill is added that recomputes past games using current Elo), these
   // reliability curves become meaningless. We log once per call so the leak
   // can be spotted in ops logs.
   console.warn(
-    `[calibration] ${league}: reading homeWinProb as point-in-time. ` +
+    `[calibration] ${league}: reading stored probabilities as point-in-time. ` +
       `If a backfill ever re-predicts past games with current Elo, this curve is biased.`,
   );
 
   const where = league === "ALL"
-    ? { wasCorrect: { not: null }, homeWinProb: { not: null } }
-    : { sport: league, wasCorrect: { not: null }, homeWinProb: { not: null } };
+    ? { wasCorrect: { not: null } }
+    : { sport: league, wasCorrect: { not: null } };
 
   const results = await prisma.predictionResult.findMany({
     where: where as any,
     select: {
+      confidence: true,
       homeWinProb: true,
+      awayWinProb: true,
+      drawProb: true,
       wasCorrect: true,
       predictedWinner: true,
+      predictedOutcome: true,
     },
   });
 
   // Convert to (predictedProb, actualOutcome) pairs
-  // predictedProb = probability that the PREDICTED winner wins
-  // actualOutcome = 1 if they won, 0 if they lost
+  // predictedProb = probability assigned to the selected outcome
+  // actualOutcome = 1 if that selected outcome happened, 0 otherwise
   const pairs = results
-    .filter((r) => r.homeWinProb !== null && r.wasCorrect !== null)
+    .filter((r) => r.wasCorrect !== null)
     .map((r) => {
-      const homeProb = r.homeWinProb!;
-      const winnerProb =
-        r.predictedWinner === "home"
-          ? homeProb
-          : 1 - homeProb;
       return {
-        predictedProb: winnerProb,
+        predictedProb: selectedOutcomeProbability(r),
         actualOutcome: (r.wasCorrect ? 1 : 0) as 0 | 1,
       };
     });

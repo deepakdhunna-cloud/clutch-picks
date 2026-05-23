@@ -151,6 +151,12 @@ export function determineResult(
   return null;
 }
 
+export function actualOutcomeFromScore(homeScore: number, awayScore: number): "home" | "away" | "draw" {
+  if (homeScore > awayScore) return "home";
+  if (awayScore > homeScore) return "away";
+  return "draw";
+}
+
 // Convert a stored PredictionResult row into the 3 model fields we denormalize
 // onto UserPick at settlement. PredictionResult.homeWinProb is 0..1 and may be
 // null on older rows — fall back to deriving from confidence + predictedWinner
@@ -243,6 +249,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
           },
           data: {
             actualWinner: "unavailable",
+            actualOutcome: "unavailable",
             wasCorrect: null,
             resolvedAt: new Date(),
           },
@@ -345,20 +352,23 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
       const gameResult = gameResultMap.get(gameId);
       if (!gameResult || !gameResult.isFinal) continue;
 
-      const actualWinner = gameResult.homeScore > gameResult.awayScore ? "home" : "away";
+      const actualOutcome = actualOutcomeFromScore(gameResult.homeScore, gameResult.awayScore);
+      const actualWinner = actualOutcome;
 
       try {
         // Find unresolved PredictionResult rows for this game
         const records = await prisma.predictionResult.findMany({
           where: { gameId, actualWinner: null },
-          select: { id: true, predictedWinner: true },
+          select: { id: true, predictedWinner: true, predictedOutcome: true },
         });
         for (const rec of records) {
+          const predictedOutcome = rec.predictedOutcome ?? rec.predictedWinner;
           await prisma.predictionResult.update({
             where: { id: rec.id },
             data: {
               actualWinner,
-              wasCorrect: rec.predictedWinner === actualWinner,
+              actualOutcome,
+              wasCorrect: predictedOutcome === actualOutcome,
               resolvedAt: new Date(),
             },
           });

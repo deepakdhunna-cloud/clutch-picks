@@ -147,9 +147,9 @@ export async function runWeeklyCalibration(): Promise<WeeklyCalibrationReport> {
     // See backtesting/calibration data-leak TODO (Gap 5 audit). Historical
     // predictions are recomputed against *current* Elo ratings, which biases
     // reliability curves for weeks where teams' Elo shifted significantly.
-    "HISTORICAL-ELO DATA LEAK: reliability curves are computed from PredictionResult.homeWinProb snapshots " +
+    "HISTORICAL-ELO DATA LEAK: reliability curves are computed from PredictionResult probability snapshots " +
       "(good) but any backtest-style recomputation still uses current Elo (see lib/backtesting.ts TODO). " +
-      "Reported curves are trustworthy only insofar as stored homeWinProb was captured at prediction time.",
+      "Reported curves are trustworthy only insofar as stored probabilities were captured at prediction time.",
   ];
 
   const targets: Array<CalibrationLeague | "ALL"> = [...CALIBRATION_LEAGUES, "ALL"];

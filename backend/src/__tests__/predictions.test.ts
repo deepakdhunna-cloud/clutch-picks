@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { getWeightsForSport, type SportFactorWeights } from "../lib/predictions";
-import { determineResult } from "../lib/resolve-picks";
+import { actualOutcomeFromScore, determineResult } from "../lib/resolve-picks";
 
 // ─── Weight validation ────────────────────────────────────────────────────────
 
@@ -65,5 +65,13 @@ describe("determineResult", () => {
 
   test("invalid pickedTeam returns null", () => {
     expect(determineResult("invalid", 110, 100)).toBeNull();
+  });
+});
+
+describe("actualOutcomeFromScore", () => {
+  test("keeps draw outcomes for prediction calibration", () => {
+    expect(actualOutcomeFromScore(2, 2)).toBe("draw");
+    expect(actualOutcomeFromScore(3, 2)).toBe("home");
+    expect(actualOutcomeFromScore(1, 4)).toBe("away");
   });
 });

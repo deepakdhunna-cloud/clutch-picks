@@ -21,6 +21,7 @@ import { useGames } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
@@ -279,6 +280,7 @@ interface HomeHeaderProps {
   isLoadingGames: boolean;
   router: ReturnType<typeof useRouter>;
   onOpenGame: (game: GameWithPrediction) => void;
+  onWarmGame: (game: GameWithPrediction) => void;
   horizontalPadding: number;
   headerFontSize: number;
   responsive: ReturnType<typeof useResponsive>;
@@ -292,6 +294,13 @@ const StatusFilterRail = memo(function StatusFilterRail({
   statusFilter: 'all' | 'upcoming' | 'final';
   setStatusFilter: (filter: 'all' | 'upcoming' | 'final') => void;
 }) {
+  const {
+    onTouchStart,
+    onTouchMove,
+    onTouchCancel,
+    shouldHandlePress,
+  } = useTapGestureGuard();
+
   return (
     <ScrollView
       horizontal
@@ -310,7 +319,14 @@ const StatusFilterRail = memo(function StatusFilterRail({
         return (
           <Pressable
             key={f.key}
-            onPress={() => setStatusFilter(active ? 'all' : f.key)}
+            onPress={() => {
+              if (!shouldHandlePress()) return;
+              setStatusFilter(active ? 'all' : f.key);
+            }}
+            pressRetentionOffset={6}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchCancel={onTouchCancel}
             style={{ borderRadius: 20, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1 }}
           >
             {active ? (
@@ -406,6 +422,7 @@ const HomeHeader = React.memo(function HomeHeader({
   isLoadingGames,
   router,
   onOpenGame,
+  onWarmGame,
   horizontalPadding,
   headerFontSize,
   responsive,
@@ -415,6 +432,12 @@ const HomeHeader = React.memo(function HomeHeader({
     () => [...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0)),
     [gameCounts]
   );
+  const {
+    onTouchStart: onLiveChipTouchStart,
+    onTouchMove: onLiveChipTouchMove,
+    onTouchCancel: onLiveChipTouchCancel,
+    shouldHandlePress: shouldHandleLiveChipPress,
+  } = useTapGestureGuard();
 
   return (
     <>
@@ -479,7 +502,16 @@ const HomeHeader = React.memo(function HomeHeader({
               decelerationRate="fast"
             >
               {/* All pill */}
-              <Pressable onPress={() => setSelectedLiveSportFilter(null)}>
+              <Pressable
+                onPress={() => {
+                  if (!shouldHandleLiveChipPress()) return;
+                  setSelectedLiveSportFilter(null);
+                }}
+                pressRetentionOffset={6}
+                onTouchStart={onLiveChipTouchStart}
+                onTouchMove={onLiveChipTouchMove}
+                onTouchCancel={onLiveChipTouchCancel}
+              >
                 {!selectedLiveSportFilter ? (
                   <LinearGradient
                     colors={[MAROON, TEAL]}
@@ -502,7 +534,17 @@ const HomeHeader = React.memo(function HomeHeader({
                 const count = liveSportCounts.get(sport) ?? 0;
                 const displayName = displaySport(sport);
                 return (
-                  <Pressable key={sport} onPress={() => setSelectedLiveSportFilter(isChipSelected ? null : sport)}>
+                  <Pressable
+                    key={sport}
+                    onPress={() => {
+                      if (!shouldHandleLiveChipPress()) return;
+                      setSelectedLiveSportFilter(isChipSelected ? null : sport);
+                    }}
+                    pressRetentionOffset={6}
+                    onTouchStart={onLiveChipTouchStart}
+                    onTouchMove={onLiveChipTouchMove}
+                    onTouchCancel={onLiveChipTouchCancel}
+                  >
                     {isChipSelected ? (
                       <LinearGradient
                         colors={[MAROON, TEAL]}
@@ -534,13 +576,20 @@ const HomeHeader = React.memo(function HomeHeader({
             decelerationRate="fast"
           >
             {(showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)).map((game) => (
-              <CompactLiveCard key={game.id} game={game} onPress={() => onOpenGame(game)} />
+              <CompactLiveCard key={game.id} game={game} onPressIn={() => onWarmGame(game)} onPress={() => onOpenGame(game)} />
             ))}
 
             {/* View All button — only show when there are more than 5 and not yet expanded */}
             {!showAllLive && filteredLiveGames.length > 5 ? (
             <Pressable
-              onPress={() => router.push('/live-games' as any)}
+              onPress={() => {
+                if (!shouldHandleLiveChipPress()) return;
+                router.push('/live-games' as any);
+              }}
+              pressRetentionOffset={6}
+              onTouchStart={onLiveChipTouchStart}
+              onTouchMove={onLiveChipTouchMove}
+              onTouchCancel={onLiveChipTouchCancel}
               className="active:opacity-75"
               style={{
                 height: 56,
@@ -582,13 +631,17 @@ const SearchGameCard = memo(function SearchGameCard({
   game,
   index,
   onPress,
+  onPressIn,
 }: {
   game: GameWithPrediction;
   index: number;
   onPress: () => void;
+  onPressIn?: () => void;
 }) {
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport);
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport);
+  const awayAccent = awayColors.accent;
+  const homeAccent = homeColors.accent;
   const isLive = game.status === GameStatus.LIVE;
   const sportMeta = SPORT_META[game.sport];
   const awayScoreLabel = teamScoreText(game, 'away');
@@ -606,12 +659,13 @@ const SearchGameCard = memo(function SearchGameCard({
   return (
     <View>
       <Pressable
+        onPressIn={onPressIn}
         onPress={onPress}
         className="active:opacity-75"
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: `${awayColors.primary}14`,
+          backgroundColor: `${awayAccent}14`,
           borderRadius: 12,
           borderWidth: 1,
           borderColor: 'rgba(255,255,255,0.10)',
@@ -631,7 +685,7 @@ const SearchGameCard = memo(function SearchGameCard({
                 width: 7,
                 height: 7,
                 borderRadius: 3.5,
-                backgroundColor: awayColors.primary,
+                backgroundColor: awayAccent,
                 marginRight: 6,
               }}
             />
@@ -648,7 +702,7 @@ const SearchGameCard = memo(function SearchGameCard({
                 width: 7,
                 height: 7,
                 borderRadius: 3.5,
-                backgroundColor: homeColors.primary,
+                backgroundColor: homeAccent,
                 marginRight: 6,
               }}
             />
@@ -852,6 +906,10 @@ export default function HomeScreen() {
     prefetchGame(game.id, game);
     router.push(`/game/${game.id}` as any);
   }, [prefetchGame, router]);
+
+  const handleWarmGame = useCallback((game: GameWithPrediction) => {
+    prefetchGame(game.id, game);
+  }, [prefetchGame]);
 
   // Derive live games from the same query (no double subscription)
   const liveGamesPreview = useMemo(
@@ -1324,6 +1382,7 @@ export default function HomeScreen() {
             isLoadingGames={isInitialHomeLoading}
             router={router}
             onOpenGame={handleOpenGame}
+            onWarmGame={handleWarmGame}
             horizontalPadding={horizontalPadding}
             headerFontSize={headerFontSize}
             responsive={responsive}
@@ -1474,6 +1533,7 @@ export default function HomeScreen() {
               <SearchGameCard
                 game={item}
                 index={index}
+                onPressIn={() => handleWarmGame(item)}
                 onPress={() => handleSearchGamePress(item)}
               />
             )}

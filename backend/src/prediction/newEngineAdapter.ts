@@ -315,11 +315,15 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
   const gameId = game.id;
   const sport = game.sport;
   const predictedWinner = prediction.predictedWinner;
+  const predictedOutcome = prediction.predictedOutcome ?? predictedWinner;
   const confidence = prediction.confidence;
   const isTossUp = prediction.isTossUp ?? false;
   const homeElo = ctx.homeElo;
   const awayElo = ctx.awayElo;
   const homeWinProb = newPred.homeWinProbability;
+  const awayWinProb = newPred.awayWinProbability;
+  const drawProb = newPred.drawProbability ?? null;
+  const modelVersion = newPred.modelVersion;
 
   enqueueWrite(async () => {
     const existing = await prisma.predictionResult.findUnique({ where: { gameId } });
@@ -332,11 +336,15 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
         data: {
           sport,
           predictedWinner,
+          predictedOutcome,
           confidence,
           isTossUp,
           homeElo,
           awayElo,
           homeWinProb,
+          awayWinProb,
+          drawProb,
+          modelVersion,
         },
       });
       return;
@@ -346,12 +354,17 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
         gameId,
         sport,
         predictedWinner,
+        predictedOutcome,
         confidence,
         isTossUp,
         homeElo,
         awayElo,
         homeWinProb,
+        awayWinProb,
+        drawProb,
+        modelVersion,
         actualWinner: null,
+        actualOutcome: null,
         wasCorrect: null,
         resolvedAt: null,
       },

@@ -44,7 +44,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-const MODEL_VERSION = "2.4.0-consensus-harmonized";
+export const MODEL_VERSION = "2.5.0-audit-and-weak-sport-calibration";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -89,6 +89,95 @@ function dataCoverage(factors: FactorContribution[]): number {
     .filter((f) => f.available)
     .reduce((sum, f) => sum + f.weight, 0);
   return available / total;
+}
+
+function factorByKey(factors: FactorContribution[], key: string): FactorContribution | undefined {
+  return factors.find((f) => f.key === key);
+}
+
+function applyWeakSportCalibration(
+  ctx: GameContext,
+  totalRatingDelta: number,
+  factors: FactorContribution[],
+): { ratingDelta: number; warnings: string[] } {
+  let multiplier = 1;
+  const warnings: string[] = [];
+  const coverage = dataCoverage(factors);
+
+  if (ctx.sport === "MLB") {
+    const starter = factorByKey(factors, "starting_pitcher");
+    const positionInjuries = factorByKey(factors, "injuries_mlb");
+
+    // Live calibration showed MLB was generating too many 60%+ reads from
+    // noisy team-level context. If the starter matchup is missing, pull the
+    // rating edge back toward pick'em instead of letting that weight amplify Elo.
+    if (!starter?.available) {
+      multiplier *= 0.72;
+      warnings.push("MLB starter matchup missing; confidence compressed toward pick'em.");
+    } else if (Math.abs(starter.homeDelta) < 18) {
+      multiplier *= 0.88;
+      warnings.push("MLB starter matchup is close; avoiding a team-stats overclaim.");
+    }
+
+    if (!positionInjuries?.available) {
+      multiplier *= 0.94;
+    }
+    if (!ctx.marketConsensus) {
+      multiplier *= 0.95;
+    }
+    if (coverage < 0.78) {
+      multiplier *= 0.92;
+    }
+
+    multiplier = Math.max(0.58, multiplier);
+  } else if (ctx.sport === "TENNIS") {
+    const ranking = factorByKey(factors, "tennis_ranking_edge");
+    const form = factorByKey(factors, "tennis_recent_form");
+
+    // Tennis has no true home field and ESPN often lacks enough player-level
+    // context. Rankings remain useful, but we should not present ranking-only
+    // reads as strong model signal.
+    multiplier *= 0.78;
+    if (!ranking?.available || !ranking.hasSignal) {
+      multiplier *= 0.60;
+      warnings.push("Tennis ranking signal missing or neutral; confidence compressed.");
+    }
+    if (!form?.available) {
+      multiplier *= 0.86;
+    }
+    if (!ctx.marketConsensus) {
+      multiplier *= 0.92;
+    }
+
+    multiplier = Math.max(0.45, multiplier);
+  } else if (ctx.sport === "MLS") {
+    const fixture = factorByKey(factors, "fixture_congestion");
+    const manager = factorByKey(factors, "manager_change");
+    const stakes = factorByKey(factors, "stakes");
+
+    // MLS underperformance is partly a tracking issue until draw outcomes are
+    // stored correctly, but the league is also high-variance. Keep reads more
+    // conservative when the soccer-specific context is thin.
+    multiplier *= 0.90;
+    if (!fixture?.available && !manager?.available && !stakes?.available) {
+      multiplier *= 0.90;
+      warnings.push("MLS contextual factors are thin; confidence compressed.");
+    }
+    if (!ctx.marketConsensus) {
+      multiplier *= 0.94;
+    }
+
+    multiplier = Math.max(0.70, multiplier);
+  }
+
+  if (multiplier >= 0.995) {
+    return { ratingDelta: totalRatingDelta, warnings };
+  }
+
+  return {
+    ratingDelta: totalRatingDelta * multiplier,
+    warnings,
+  };
 }
 
 function roundTo(value: number, decimals = 3): number {
@@ -602,6 +691,9 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     }
   }
 
+  const weakSportCalibration = applyWeakSportCalibration(ctx, totalRatingDelta, adjustedFactors);
+  totalRatingDelta = weakSportCalibration.ratingDelta;
+
   // 4. Convert to probability using the standard Elo logistic, then blend in
   //    a game-script projection. The factor model still owns the largest vote;
   //    the simulator adds distribution awareness and market data acts as a
@@ -791,6 +883,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       draw: blended.draw,
     }),
     marketProbabilities,
+    extraWarnings: weakSportCalibration.warnings,
   });
   traceCanonicalDecision({
     ctx,

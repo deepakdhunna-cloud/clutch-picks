@@ -62,6 +62,8 @@ const AUTH_STORAGE_KEYS = [
   'clutchpicks_bearer_token',
 ] as const;
 
+const PROFILE_RECENT_PICK_LIMIT = 10;
+
 const ProfileLoadingState = memo(function ProfileLoadingState() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
@@ -182,6 +184,14 @@ function ShareIcon({ size = 14, color = C.TEXT_SECONDARY }: { size?: number; col
   );
 }
 
+function ArrowRightIcon({ size = 16, color = C.TEAL }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5 12h14M13 6l6 6-6 6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 function UserIcon({ size = 40, color = C.TEAL }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -288,6 +298,109 @@ const SignedOutState = memo(function SignedOutState() {
   );
 });
 
+const RecentPicksSummaryTile = memo(function RecentPicksSummaryTile({
+  totalPicks,
+  onPress,
+}: {
+  totalPicks: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${totalPicks} predictions`}
+      style={({ pressed }) => ({
+        width: 124,
+        height: 140,
+        opacity: pressed ? 0.88 : 1,
+        transform: [{ scale: pressed ? 0.985 : 1 }],
+      })}
+    >
+      <LinearGradient
+        colors={[`${C.MAROON}70`, 'rgba(122,157,184,0.08)', `${C.TEAL}28`]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
+      >
+        <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: 'rgba(122,157,184,0.07)', padding: 10, overflow: 'hidden' }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[C.MAROON_DIM, 'rgba(255,255,255,0.018)', 'rgba(122,157,184,0.08)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+          />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>PICKS</Text>
+            <View style={{ width: 26, height: 26, borderRadius: 9, backgroundColor: 'rgba(139,10,31,0.20)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.55)', alignItems: 'center', justifyContent: 'center' }}>
+              <GridIcon size={15} color={C.TEXT_PRIMARY} />
+            </View>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text adjustsFontSizeToFit numberOfLines={1} style={{ maxWidth: 88, fontSize: 42, lineHeight: 46, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{totalPicks}</Text>
+          </View>
+          <View style={{ alignItems: 'center', paddingTop: 7 }}>
+            <Text numberOfLines={1} style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: C.TEXT_SECONDARY, letterSpacing: 1.2, includeFontPadding: false }}>PREDICTIONS</Text>
+            <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 8, lineHeight: 10, fontWeight: '800', color: C.TEXT_MUTED, includeFontPadding: false }}>ALL TIME</Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+});
+
+const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
+  remainingCount,
+  onPress,
+}: {
+  remainingCount: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="View all predictions"
+      style={({ pressed }) => ({
+        width: 104,
+        height: 140,
+        opacity: pressed ? 0.88 : 1,
+        transform: [{ scale: pressed ? 0.985 : 1 }],
+      })}
+    >
+      <LinearGradient
+        colors={[`${C.TEAL}54`, 'rgba(122,157,184,0.08)', `${C.MAROON}28`]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
+      >
+        <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: 'rgba(122,157,184,0.07)', padding: 10, overflow: 'hidden', alignItems: 'center' }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[C.TEAL_DIM, 'rgba(255,255,255,0.018)', 'rgba(139,10,31,0.08)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+          />
+          <Text style={{ alignSelf: 'flex-start', fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>HISTORY</Text>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: C.TEAL_DIM, borderWidth: 1, borderColor: 'rgba(122,157,184,0.34)', alignItems: 'center', justifyContent: 'center' }}>
+              <ArrowRightIcon size={20} color={C.TEAL} />
+            </View>
+          </View>
+          <View style={{ alignItems: 'center', paddingTop: 7 }}>
+            <Text numberOfLines={1} style={{ fontSize: 11, lineHeight: 13, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>View All</Text>
+            <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 8, lineHeight: 10, fontWeight: '800', color: C.TEXT_MUTED, letterSpacing: 0.8, includeFontPadding: false }}>
+              {remainingCount > 0 ? `${remainingCount} MORE` : 'PICKS'}
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+});
+
 // ─── MAIN SCREEN ───
 export default function ProfileScreen() {
   const router = useRouter();
@@ -333,38 +446,43 @@ export default function ProfileScreen() {
     if (!picks || picks.length === 0) return [];
     if (__DEV__) console.log('[Profile] picks count:', picks.length, 'games count:', allGames?.length ?? 0);
     const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
-    const tiles = picks.slice(0, 5).map((p) => {
-      const game = gameMap.get(p.gameId);
-      // Use game data if available, fall back to pick's own fields
-      const pickedAbbr = p.pickedTeam === 'home'
-        ? (game?.homeTeam?.abbreviation ?? p.homeTeam ?? '??')
-        : (game?.awayTeam?.abbreviation ?? p.awayTeam ?? '??');
-      const opponentAbbr = p.pickedTeam === 'home'
-        ? (game?.awayTeam?.abbreviation ?? p.awayTeam ?? '??')
-        : (game?.homeTeam?.abbreviation ?? p.homeTeam ?? '??');
-      const sport = game?.sport ?? p.sport ?? 'NBA';
-      const pickedTeamObj = game
-        ? (p.pickedTeam === 'home' ? game.homeTeam : game.awayTeam)
-        : null;
-      return {
-        id: p.id,
-        gameId: p.gameId,
-        abbreviation: pickedAbbr,
-        opponentAbbr,
-        color: pickedTeamObj?.color ?? '#5A7A8A',
-        result: p.result ?? 'pending',
-        sport,
-        game,
-      };
-    });
+    const tiles = [...picks]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, PROFILE_RECENT_PICK_LIMIT)
+      .map((p) => {
+        const game = gameMap.get(p.gameId);
+        // Use game data if available, fall back to pick's own fields
+        const pickedAbbr = p.pickedTeam === 'home'
+          ? (game?.homeTeam?.abbreviation ?? p.homeTeam ?? '??')
+          : (game?.awayTeam?.abbreviation ?? p.awayTeam ?? '??');
+        const opponentAbbr = p.pickedTeam === 'home'
+          ? (game?.awayTeam?.abbreviation ?? p.awayTeam ?? '??')
+          : (game?.homeTeam?.abbreviation ?? p.homeTeam ?? '??');
+        const sport = game?.sport ?? p.sport ?? 'NBA';
+        const pickedTeamObj = game
+          ? (p.pickedTeam === 'home' ? game.homeTeam : game.awayTeam)
+          : null;
+        return {
+          id: p.id,
+          gameId: p.gameId,
+          abbreviation: pickedAbbr,
+          opponentAbbr,
+          color: pickedTeamObj?.color ?? '#5A7A8A',
+          result: p.result ?? 'pending',
+          sport,
+          game,
+        };
+      });
     if (__DEV__) console.log('[Profile] tiles generated:', tiles.length, tiles.slice(0, 3).map(t => `${t.abbreviation} vs ${t.opponentAbbr} (${t.result})`));
     return tiles;
   }, [picks, allGames]);
 
+  const hiddenPickCount = Math.max((picks?.length ?? 0) - recentPickTiles.length, 0);
+
   const handleRecentPickPress = useCallback((gameId: string, game?: NonNullable<typeof allGames>[number]) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     prefetchGame(gameId, game);
     router.push(`/game/${gameId}` as any);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [prefetchGame, router]);
 
   const formLine = useMemo(() => {
@@ -551,7 +669,7 @@ export default function ProfileScreen() {
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
-          <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/settings'); }}
+          <Pressable onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
           </Pressable>
@@ -559,7 +677,7 @@ export default function ProfileScreen() {
 
         {/* ── 1. ANALYST CARD HERO ── */}
         <Animated.View entering={FadeInDown.duration(500)} style={{ marginHorizontal: 16 }}>
-<View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 4, borderColor: 'rgba(255,255,255,0.14)', position: 'relative' }}>
+<View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(122,157,184,0.16)', position: 'relative' }}>
 
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.GLASS }} />
             <LinearGradient colors={[C.MAROON_GLOW, 'transparent', 'transparent', C.TEAL_DIM]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
@@ -594,9 +712,9 @@ export default function ProfileScreen() {
               {/* Accuracy Rating */}
               <View style={{ paddingVertical: 20 }}>
                 {/* Top divider — visible in middle, fades outward */}
-                <LinearGradient colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1 }} />
+                <LinearGradient colors={['transparent', 'rgba(122,157,184,0.07)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', top: 0, left: 18, right: 18, height: 1 }} />
                 {/* Bottom divider — visible in middle, fades outward */}
-                <LinearGradient colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1 }} />
+                <LinearGradient colors={['transparent', 'rgba(122,157,184,0.06)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', bottom: 0, left: 18, right: 18, height: 1 }} />
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 52, fontWeight: '800', color: '#FFFFFF', lineHeight: 52, letterSpacing: -2 }}>{accuracy}%</Text>
                   <View style={{ alignItems: 'flex-end', paddingBottom: 4 }}>
@@ -652,7 +770,7 @@ export default function ProfileScreen() {
 
         {/* ── 2. EDIT PROFILE + SHARE BUTTONS ── */}
         <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 20 }}>
-          <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/edit-profile'); }}
+          <Pressable onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={{ flex: 1, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
           </Pressable>
@@ -672,120 +790,87 @@ export default function ProfileScreen() {
 
         {/* ── 3. PREDICTIONS + RECENT PICKS ROW ── */}
         <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ marginTop: 28 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ height: 146, flexGrow: 0 }}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
-          >
-            {/* Predictions tile */}
-            <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/picks-history'); }}
-              style={({ pressed }) => ({
-                width: 112,
-                height: 140,
-                backgroundColor: C.GLASS,
-                borderRadius: 18,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.12)',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.88 : 1,
-                transform: [{ scale: pressed ? 0.985 : 1 }],
-              })}
+          <View style={{ height: 146, flexDirection: 'row', paddingLeft: 16 }}>
+            <RecentPicksSummaryTile
+              totalPicks={totalPicks}
+              onPress={() => { router.push('/picks-history'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            />
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flex: 1, height: 146 }}
+              contentContainerStyle={{ paddingLeft: 10, paddingRight: 16, gap: 10 }}
             >
-              <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: C.MAROON_DIM, borderWidth: 1, borderColor: C.MAROON, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                <GridIcon size={18} color={C.TEXT_PRIMARY} />
-              </View>
-              <Text style={{ fontSize: 24, lineHeight: 29, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{totalPicks}</Text>
-              <Text style={{ fontSize: 8.5, lineHeight: 11, fontWeight: '800', color: C.TEXT_MUTED, letterSpacing: 1.4, marginTop: 6, includeFontPadding: false }}>PREDICTIONS</Text>
-            </Pressable>
-
-            {recentPickTiles.map((p) => {
-              const teamColors = getTeamColors(p.abbreviation, p.sport as any, p.color);
-              const jerseyType = sportEnumToJersey(p.sport);
-              const isWin = p.result === 'win';
-              const isLoss = p.result === 'loss';
-              const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
-              const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
-              return (
-                <Pressable
-                  key={p.id}
-                  onPress={() => handleRecentPickPress(p.gameId, p.game)}
-                  onPressIn={() => p.game ? prefetchGame(p.gameId, p.game) : undefined}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${p.abbreviation} versus ${p.opponentAbbr}`}
-                  style={({ pressed }) => ({
-                    width: 124,
-                    height: 140,
-                    opacity: pressed ? 0.88 : 1,
-                    transform: [{ scale: pressed ? 0.985 : 1 }],
-                  })}
-                >
-                  <LinearGradient
-                    colors={[`${teamColors.primary}66`, 'rgba(255,255,255,0.10)', statusColor === C.MAROON ? 'rgba(139,10,31,0.36)' : 'rgba(122,157,184,0.22)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
+              {recentPickTiles.map((p) => {
+                const teamColors = getTeamColors(p.abbreviation, p.sport as any, p.color);
+                const jerseyType = sportEnumToJersey(p.sport);
+                const isWin = p.result === 'win';
+                const isLoss = p.result === 'loss';
+                const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
+                const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => handleRecentPickPress(p.gameId, p.game)}
+                    onPressIn={() => p.game ? prefetchGame(p.gameId, p.game) : undefined}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${p.abbreviation} versus ${p.opponentAbbr}`}
+                    style={({ pressed }) => ({
+                      width: 124,
+                      height: 140,
+                      opacity: pressed ? 0.88 : 1,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    })}
                   >
-                    <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', padding: 10, overflow: 'hidden' }}>
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[`${teamColors.primary}1F`, 'rgba(255,255,255,0.018)', 'rgba(0,0,0,0)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 82 }}
-                      />
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text numberOfLines={1} style={{ flex: 1, fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>{displaySport(p.sport)}</Text>
-                        <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: `${statusColor}22`, borderWidth: 1, borderColor: `${statusColor}44`, marginLeft: 6 }}>
-                          <Text style={{ fontSize: 7.5, lineHeight: 9, fontWeight: '900', color: statusColor, includeFontPadding: false }}>{statusLabel}</Text>
+                    <LinearGradient
+                      colors={[`${teamColors.primary}52`, `${teamColors.secondary}20`, statusColor === C.MAROON ? 'rgba(139,10,31,0.28)' : 'rgba(122,157,184,0.18)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
+                    >
+                      <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: `${teamColors.primary}18`, padding: 10, overflow: 'hidden' }}>
+                        <LinearGradient
+                          pointerEvents="none"
+                          colors={[`${teamColors.primary}24`, `${teamColors.secondary}0E`, 'rgba(0,0,0,0)']}
+                          locations={[0, 0.48, 1]}
+                          start={{ x: 0, y: 0.12 }}
+                          end={{ x: 0.9, y: 0.82 }}
+                          style={{ position: 'absolute', left: -24, right: 0, top: -18, bottom: -18 }}
+                        />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text numberOfLines={1} style={{ flex: 1, fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>{displaySport(p.sport)}</Text>
+                          <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: `${statusColor}22`, borderWidth: 1, borderColor: `${statusColor}44`, marginLeft: 6 }}>
+                            <Text style={{ fontSize: 7.5, lineHeight: 9, fontWeight: '900', color: statusColor, includeFontPadding: false }}>{statusLabel}</Text>
+                          </View>
+                        </View>
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 62 }}>
+                          <View style={{ width: 70, height: 58, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.075)', borderWidth: 1, borderColor: `${teamColors.primary}20` }}>
+                            <JerseyIcon teamCode={p.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={54} sport={jerseyType} />
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'center', paddingTop: 7 }}>
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: '100%', fontSize: 14, lineHeight: 17, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{p.abbreviation}</Text>
+                          <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 9, lineHeight: 11, fontWeight: '700', color: C.TEXT_MUTED, includeFontPadding: false }}>vs {p.opponentAbbr}</Text>
                         </View>
                       </View>
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 62 }}>
-                        <View style={{ width: 70, height: 58, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.075)', borderWidth: 1, borderColor: 'rgba(180,211,235,0.10)' }}>
-                          <JerseyIcon teamCode={p.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={54} sport={jerseyType} />
-                        </View>
-                      </View>
-                      <View style={{ alignItems: 'center', paddingTop: 7 }}>
-                        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: '100%', fontSize: 14, lineHeight: 17, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{p.abbreviation}</Text>
-                        <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 9, lineHeight: 11, fontWeight: '700', color: C.TEXT_MUTED, includeFontPadding: false }}>vs {p.opponentAbbr}</Text>
-                      </View>
-                    </View>
-                  </LinearGradient>
-                </Pressable>
-              );
-            })}
+                    </LinearGradient>
+                  </Pressable>
+                );
+              })}
 
-            {recentPickTiles.length === 0 ? (
-              <View style={{ width: 124, height: 140, backgroundColor: C.GLASS, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 10, color: C.TEXT_MUTED, textAlign: 'center' }}>Make picks to see them here</Text>
-              </View>
-            ) : (
-              <Pressable
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/picks-history'); }}
-                style={({ pressed }) => ({
-                  width: 88,
-                  height: 140,
-                  backgroundColor: C.GLASS,
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: 'rgba(122,157,184,0.2)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  opacity: pressed ? 0.88 : 1,
-                  transform: [{ scale: pressed ? 0.985 : 1 }],
-                })}
-              >
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.TEAL_DIM, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 16, color: C.TEAL, fontWeight: '700' }}>›</Text>
+              {recentPickTiles.length === 0 ? (
+                <View style={{ width: 124, height: 140, backgroundColor: C.GLASS, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 10, color: C.TEXT_MUTED, textAlign: 'center' }}>Make picks to see them here</Text>
                 </View>
-                <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEAL, letterSpacing: 0.5 }}>View All</Text>
-              </Pressable>
-            )}
-          </ScrollView>
+              ) : (
+                <RecentPicksViewAllTile
+                  remainingCount={hiddenPickCount}
+                  onPress={() => { router.push('/picks-history'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                />
+              )}
+            </ScrollView>
+          </View>
         </Animated.View>
 
         {/* ── 4. SIGNATURE CALLS ── */}

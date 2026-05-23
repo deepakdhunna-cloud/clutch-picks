@@ -4,6 +4,13 @@ import { Sport } from '@/types/sports';
 export interface TeamColors {
   primary: string;
   secondary: string;
+  accent?: string;
+}
+
+export interface ResolvedTeamColors {
+  primary: string;
+  secondary: string;
+  accent: string;
 }
 
 // NFL Teams
@@ -804,13 +811,49 @@ function ensureContrast(primary: string, secondary: string): string {
   return rgbToHex(out.r, out.g, out.b);
 }
 
+function relativeLuminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const channel = (value: number) => {
+    const normalized = value / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : Math.pow((normalized + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+}
+
+function contrastRatio(a: string, b: string): number {
+  const l1 = relativeLuminance(a);
+  const l2 = relativeLuminance(b);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function resolveAccentColor(primary: string, secondary: string, explicitAccent?: string): string {
+  if (explicitAccent) return enhanceJerseyColor(explicitAccent);
+
+  const primaryRgb = hexToRgb(primary);
+  const secondaryRgb = hexToRgb(secondary);
+  if (!primaryRgb || !secondaryRgb) return primary;
+
+  const primaryHsl = rgbToHsl(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+  const primaryIsDarkNeutral = primaryHsl.l < 0.34 && primaryHsl.s < 0.36;
+  const secondaryIsReadable = contrastRatio(secondary, '#040608') >= 2;
+
+  return primaryIsDarkNeutral && secondaryIsReadable
+    ? secondary
+    : primary;
+}
+
 // Helper function to get team colors by abbreviation and sport.
 // This is the SINGLE source of truth for jersey colors across the app.
 // It looks colors up in the per-sport maps, falls back to ESPN's color, then
 // runs both colors through enhancement + contrast enforcement so jerseys
 // always look vivid and readable on dark card backgrounds.
 // espnColor is the color from ESPN API, used as fallback for teams not in our color map.
-export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: string): TeamColors {
+export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: string): ResolvedTeamColors {
   // Vibrant fallback so unknown teams don't render as flat gray
   const defaultColors: TeamColors = { primary: '#3B82C4', secondary: '#FFFFFF' };
 
@@ -867,6 +910,7 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
 
   const primary = enhanceJerseyColor(colors.primary);
   const secondary = ensureContrast(primary, enhanceJerseyColor(colors.secondary));
+  const accent = resolveAccentColor(primary, secondary, colors.accent);
 
-  return { primary, secondary };
+  return { primary, secondary, accent };
 }

@@ -7,6 +7,7 @@ import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGrad, Stop }
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useUserPicks } from '@/hooks/usePicks';
+import { usePrefetchGame } from '@/hooks/useGames';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
@@ -87,6 +88,7 @@ function formatTime(dateStr: string): string {
 // ─── PICK CARD ───
 const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index: number }) {
   const router = useRouter();
+  const prefetchGame = usePrefetchGame();
   const teamColors = getTeamColors(item.abbreviation, item.sport as Sport);
   const jerseyType = sportEnumToJersey(item.sport);
   const isWin = item.result === 'win';
@@ -98,7 +100,11 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(Math.min(index * 40, 200))}>
       <Pressable
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/game/${item.gameId}`); }}
+        onPressIn={() => prefetchGame(item.gameId)}
+        onPress={() => {
+          router.push(`/game/${item.gameId}`);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
         style={({ pressed }) => [s.pickCard, {
           borderColor: isWin ? 'rgba(122,157,184,0.12)' : isLoss ? 'rgba(139,10,31,0.12)' : C.BORDER,
           transform: [{ scale: pressed ? 0.97 : 1 }],

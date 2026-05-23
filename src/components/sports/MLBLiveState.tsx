@@ -114,7 +114,7 @@ function ordinal(n: number): string {
 /** Resolve a team's primary color, with a safe fallback. */
 function teamPrimary(abbr: string): string {
   try {
-    return getTeamColors(abbr, 'MLB' as any).primary;
+    return getTeamColors(abbr, 'MLB' as any).accent;
   } catch {
     return '#888888';
   }
@@ -336,6 +336,8 @@ function TeamRoleUnderJersey({
       <Text
         style={styles.jerseyPlayerName}
         numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
       >
         {playerName}
       </Text>
@@ -698,6 +700,7 @@ const styles = StyleSheet.create({
   },
   fieldRow: {
     width: '100%',
+    minHeight: 176,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -705,6 +708,7 @@ const styles = StyleSheet.create({
   },
   teamJerseyColumn: {
     width: 104,
+    minHeight: 172,
     alignItems: 'center',
     paddingTop: 2,
   },
@@ -715,23 +719,28 @@ const styles = StyleSheet.create({
   },
   jerseyRoleBlock: {
     width: 104,
+    height: 46,
     marginTop: -12,
     alignItems: 'center',
   },
   jerseyRoleLabel: {
     fontSize: 9,
+    lineHeight: 11,
     color: 'rgba(255,255,255,0.42)',
     letterSpacing: 1.4,
     fontWeight: '800',
     marginBottom: 2,
     textAlign: 'center',
+    includeFontPadding: false,
   },
   jerseyPlayerName: {
+    height: 29,
     fontSize: 11,
     color: 'white',
     fontWeight: '700',
     lineHeight: 13,
     textAlign: 'center',
+    includeFontPadding: false,
   },
 
   // ---- Dot row ----

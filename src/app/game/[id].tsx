@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Linking,
   StyleSheet,
-  Modal,
   RefreshControl,
   InteractionManager,
 } from 'react-native';
@@ -24,6 +23,7 @@ import Animated, {
   useAnimatedStyle,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
   Easing,
   interpolate,
@@ -59,18 +59,13 @@ import {
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { getWatchSourceUrl } from '@/lib/watch-url';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, ChevronDown, ExternalLink, RadioTower, Tv, X } from 'lucide-react-native';
+import { ExternalLink, Tv } from 'lucide-react-native';
 
 type WatchOptionKind = 'broadcast' | 'streaming';
 type WatchOption = {
   name: string;
   kind: WatchOptionKind;
   note?: string;
-};
-type WatchMenuSection = {
-  title: string;
-  subtitle: string;
-  options: WatchOption[];
 };
 type StreamingRule = {
   match: RegExp;
@@ -221,19 +216,6 @@ function openWatchSource(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
 }
 
-function isSameWatchOption(a: WatchOption | undefined, b: WatchOption): boolean {
-  return a?.kind === b.kind && a.name.toLowerCase() === b.name.toLowerCase();
-}
-
-function watchOptionSubtitle(option: WatchOption, isPrimary: boolean, hasBroadcastInfo: boolean): string {
-  if (!hasBroadcastInfo) return 'Source not listed yet';
-  if (option.kind === 'broadcast') {
-    if (isPrimary) return 'Primary TV broadcast';
-    return option.note && option.note !== 'Listed broadcast' ? option.note : 'TV broadcast source';
-  }
-  return option.note && option.note !== 'Listed stream' ? option.note : 'Streaming source';
-}
-
 function getWatchPopularityRank(option: WatchOption): number {
   if (option.kind === 'broadcast') return 0;
   const match = WATCH_POPULARITY_ORDER.find((rule) => rule.match.test(option.name));
@@ -313,212 +295,58 @@ function getWatchOptions(primaryChannel?: string | null, watchSources?: unknown)
   return sortWatchOptions(makeUniqueWatchOptions([...listedOptions, ...inferStreamingOptions(names)]));
 }
 
+function getTopStreamingOption(primaryChannel?: string | null, watchSources?: unknown): WatchOption | null {
+  const streamingOptions = sortWatchOptions(
+    getWatchOptions(primaryChannel, watchSources).filter((option) => option.kind === 'streaming')
+  );
+  return streamingOptions.find((option) => /youtube tv/i.test(option.name)) ?? streamingOptions[0] ?? null;
+}
+
 function WhereToWatchRow({
   primaryChannel,
   watchSources,
-  venue,
 }: {
   primaryChannel?: string | null;
   watchSources?: unknown;
   venue?: string | null;
 }) {
-  const insets = useSafeAreaInsets();
-  const options = useMemo(() => getWatchOptions(primaryChannel, watchSources), [primaryChannel, watchSources]);
-  const [isMenuVisible, setIsMenuVisible] = useState<boolean>(false);
-
-  const broadcastOptions = useMemo(() => options.filter((option) => option.kind === 'broadcast'), [options]);
-  const streamingOptions = useMemo(() => options.filter((option) => option.kind === 'streaming'), [options]);
-  const primary = options[0];
-  const hasBroadcastInfo = options.length > 0;
-  const menuOptions: WatchOption[] = options.length > 0
-    ? sortWatchOptions(options)
-    : [{ name: 'Broadcast info not listed', kind: 'broadcast', note: 'Source not listed' }];
-  const primaryText = broadcastOptions[0]?.name ?? streamingOptions[0]?.name ?? 'Watch info TBD';
-  const venueText = venue?.trim() ? venue.trim() : 'Venue TBD';
-  const menuSummaryText = hasBroadcastInfo
-    ? `${broadcastOptions.length} broadcast${broadcastOptions.length === 1 ? '' : 's'} · ${streamingOptions.length} stream option${streamingOptions.length === 1 ? '' : 's'}`
-    : 'Broadcast source not listed yet';
-  const sourceCountText = hasBroadcastInfo
-    ? `${broadcastOptions.length} TV · ${streamingOptions.length} stream${streamingOptions.length === 1 ? '' : 's'}`
-    : 'Source TBD';
-  const compactMetaText = venueText === 'Venue TBD' ? sourceCountText : `${sourceCountText} · ${venueText}`;
-  const watchMenuSections: WatchMenuSection[] = hasBroadcastInfo
-    ? [
-        ...(broadcastOptions.length > 0
-          ? [{
-              title: 'TV Broadcast',
-              subtitle: `${broadcastOptions.length} listed source${broadcastOptions.length === 1 ? '' : 's'}`,
-              options: broadcastOptions,
-            }]
-          : []),
-        ...(streamingOptions.length > 0
-          ? [{
-              title: 'Streaming',
-              subtitle: `${streamingOptions.length} option${streamingOptions.length === 1 ? '' : 's'}`,
-              options: streamingOptions,
-            }]
-          : []),
-      ]
-    : [{
-        title: 'Availability',
-        subtitle: 'No source from the league feed yet',
-        options: menuOptions,
-      }];
+  const topStream = useMemo(() => getTopStreamingOption(primaryChannel, watchSources), [primaryChannel, watchSources]);
+  const hasStreamInfo = Boolean(topStream);
+  const primaryText = topStream?.name ?? 'Watch info TBD';
+  const sourceMetaText = hasStreamInfo ? 'Top streaming option' : 'Streaming source not listed yet';
 
   return (
     <View style={styles.watchStrip}>
-      <LinearGradient
-        colors={['rgba(255,255,255,0.025)', 'rgba(255,255,255,0.018)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.watchHubCard}
-      >
+      <View style={styles.watchHubBorder}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={hasBroadcastInfo ? `Open ${menuOptions.length} watch sources` : 'Watch source not listed'}
+          accessibilityLabel={hasStreamInfo ? `Open ${primaryText}` : 'Watch source not listed'}
+          disabled={!topStream}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setIsMenuVisible(true);
+            if (topStream) openWatchSource(topStream.name);
           }}
           style={({ pressed }) => [
-            styles.watchHubHeader,
+            styles.watchHubCard,
             pressed && styles.infoPillPressed,
           ]}
         >
-          <View style={styles.watchHubHeaderIcon}>
-            <Tv size={17} color="#DAEEFB" strokeWidth={2.45} />
-          </View>
-          <View style={styles.watchHubHeaderCopy}>
-            <Text style={styles.watchHubEyebrow}>Watch</Text>
-            <Text style={styles.watchHubTitle} numberOfLines={1}>{primaryText}</Text>
-            <Text style={styles.watchHubSourceMeta} numberOfLines={1}>{compactMetaText}</Text>
-          </View>
-          <View style={styles.watchHubSourcesPill}>
-            <Text style={styles.watchHubSourcesPillText}>Sources</Text>
-            <ChevronDown size={14} color="rgba(226,240,249,0.72)" strokeWidth={2.8} />
+          <View style={styles.watchHubHeader}>
+            <View style={styles.watchHubHeaderIcon}>
+              <Tv size={15} color="#DAEEFB" strokeWidth={2.45} />
+            </View>
+            <View style={styles.watchHubHeaderCopy}>
+              <Text style={styles.watchHubEyebrow}>Watch On</Text>
+              <Text style={styles.watchHubTitle} numberOfLines={1}>{primaryText}</Text>
+              <Text style={styles.watchHubSourceMeta} numberOfLines={1}>{sourceMetaText}</Text>
+            </View>
+            <View style={styles.watchHubSourcesPill}>
+              <Text style={styles.watchHubSourcesPillText}>{hasStreamInfo ? 'Open' : 'TBD'}</Text>
+              {hasStreamInfo ? <ExternalLink size={13} color="rgba(226,240,249,0.72)" strokeWidth={2.6} /> : null}
+            </View>
           </View>
         </Pressable>
-
-        {!hasBroadcastInfo ? (
-          <Text style={styles.watchHubEmpty}>Broadcast info has not been listed yet.</Text>
-        ) : null}
-      </LinearGradient>
-
-      <Modal
-        visible={isMenuVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setIsMenuVisible(false)}
-      >
-        <View style={[styles.watchMenuOverlay, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsMenuVisible(false)} />
-          <LinearGradient
-            colors={['#101820', '#06080C', '#040608']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.watchMenuSheet}
-          >
-            <View style={styles.watchMenuHandle} />
-            <View style={styles.watchMenuHeader}>
-              <View style={styles.watchMenuTitleRow}>
-                <View style={styles.watchMenuHeroIcon}>
-                  <Tv size={22} color="#DAEEFB" strokeWidth={2.4} />
-                </View>
-                <View style={styles.watchMenuTitleCopy}>
-                  <Text style={styles.watchMenuEyebrow}>Watch Hub</Text>
-                  <Text style={styles.watchMenuTitle}>Watch Sources</Text>
-                  <Text style={styles.watchMenuSubtitle}>{menuSummaryText}</Text>
-                </View>
-              </View>
-              <Pressable
-                onPress={() => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setIsMenuVisible(false);
-                }}
-                style={styles.watchMenuClose}
-              >
-                <X size={24} color="rgba(226,240,249,0.82)" strokeWidth={2.8} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.watchMenuList} contentContainerStyle={styles.watchMenuListContent} showsVerticalScrollIndicator={false}>
-              {watchMenuSections.map((section) => (
-                <View key={section.title} style={styles.watchMenuSection}>
-                  <View style={styles.watchMenuSectionHeader}>
-                    <Text style={styles.watchMenuSectionTitle}>{section.title}</Text>
-                    <Text style={styles.watchMenuSectionMeta}>{section.subtitle}</Text>
-                  </View>
-                  <View style={styles.watchMenuSectionCard}>
-                    {section.options.map((opt, index) => {
-                      const isPrimary = isSameWatchOption(primary, opt);
-                      const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : Tv;
-                      const streamRank = opt.kind === 'streaming'
-                        ? streamingOptions.findIndex((stream) => stream.name === opt.name) + 1
-                        : 0;
-                      const sourceSubtitle = watchOptionSubtitle(opt, isPrimary, hasBroadcastInfo);
-                      const actionLabel = !hasBroadcastInfo
-                        ? 'TBD'
-                        : isPrimary
-                          ? 'Primary'
-                          : opt.kind === 'streaming' && streamRank > 0
-                            ? `#${streamRank}`
-                            : 'Open';
-                      return (
-                        <Pressable
-                          key={`${section.title}-${opt.name}-${index}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={hasBroadcastInfo ? `Open ${opt.name}` : 'Watch source not listed'}
-                          disabled={!hasBroadcastInfo}
-                          onPress={() => {
-                            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            setIsMenuVisible(false);
-                            openWatchSource(opt.name);
-                          }}
-                          style={({ pressed }) => [
-                            styles.watchMenuOptionRow,
-                            index === section.options.length - 1 && styles.watchMenuOptionRowLast,
-                            isPrimary && styles.watchMenuPrimaryRow,
-                            pressed && styles.watchMenuOptionPressed,
-                          ]}
-                        >
-                          <View style={[styles.watchMenuSourceIcon, opt.kind === 'streaming' && styles.watchMenuRankIcon]}>
-                            {opt.kind === 'streaming' ? (
-                              <Text style={styles.watchMenuRankText}>{streamRank || index + 1}</Text>
-                            ) : (
-                              <SourceIcon size={17} color="rgba(226,240,249,0.9)" strokeWidth={2.35} />
-                            )}
-                          </View>
-                          <View style={styles.watchMenuOptionCopy}>
-                            <Text style={styles.watchMenuOptionText} numberOfLines={1}>{opt.name}</Text>
-                            <Text style={styles.watchMenuOptionSub} numberOfLines={1}>{sourceSubtitle}</Text>
-                          </View>
-                          <View style={[styles.watchMenuActionPill, isPrimary && styles.watchMenuActionPillPrimary]}>
-                            {isPrimary ? (
-                              <Check size={12} color="#DAEEFB" strokeWidth={3} />
-                            ) : hasBroadcastInfo ? (
-                              <ExternalLink size={12} color="rgba(218,238,251,0.72)" strokeWidth={2.6} />
-                            ) : null}
-                            <Text style={[styles.watchMenuActionText, isPrimary && styles.watchMenuActionTextPrimary]}>
-                              {actionLabel}
-                            </Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-              {hasBroadcastInfo && venueText !== 'Venue TBD' ? (
-                <View style={styles.watchMenuVenueRow}>
-                  <Text style={styles.watchMenuVenueLabel}>Venue</Text>
-                  <Text style={styles.watchMenuVenueText} numberOfLines={1}>{venueText}</Text>
-                </View>
-              ) : null}
-            </ScrollView>
-          </LinearGradient>
-        </View>
-      </Modal>
+      </View>
     </View>
   );
 }
@@ -544,8 +372,9 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   const teamColors = getTeamColors(team.abbreviation, sport as any, team.color);
 
   useEffect(() => {
-    selectionProgress.value = withTiming(isSelected ? 1 : 0, {
-      duration: 300, easing: Easing.inOut(Easing.ease),
+    selectionProgress.value = withSpring(isSelected ? 1 : 0, {
+      damping: 16,
+      stiffness: 210,
     });
   }, [isSelected]);
 
@@ -565,9 +394,11 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   const handlePress = useCallback(() => {
     if (isDisabled) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    scale.value = withTiming(0.95, { duration: 150, easing: Easing.out(Easing.ease) }, () => {
-      scale.value = withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) });
-    });
+    scale.value = withSequence(
+      withTiming(0.92, { duration: 90, easing: Easing.out(Easing.ease) }),
+      withSpring(1.06, { damping: 12, stiffness: 260 }),
+      withSpring(1, { damping: 14, stiffness: 220 })
+    );
     onSelect();
   }, [isDisabled, onSelect, scale]);
 
@@ -883,13 +714,13 @@ function QuarterTable({ game }: { game: Game }) {
         </View>
       </View>
       {[
-        { team: homeTeam, total: teamScoreText(game, 'home'), colors: homeColors, winning: homeWinning, line: homeLine },
-        { team: awayTeam, total: teamScoreText(game, 'away'), colors: awayColors, winning: awayWinning, line: awayLine },
-      ].map(({ team, total, colors, winning, line }, ri) => (
+        { team: homeTeam, total: teamScoreText(game, 'home'), accent: homeColors.accent, winning: homeWinning, line: homeLine },
+        { team: awayTeam, total: teamScoreText(game, 'away'), accent: awayColors.accent, winning: awayWinning, line: awayLine },
+      ].map(({ team, total, accent, winning, line }, ri) => (
         <View key={team.id} style={[styles.tableRow, ri === 0 && { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }]}>
           <View style={styles.tableTeamCell}>
             <View style={{
-              backgroundColor: colors.primary,
+              backgroundColor: accent,
               borderRadius: 6,
               paddingHorizontal: 8,
               paddingVertical: 4,
@@ -913,7 +744,7 @@ function QuarterTable({ game }: { game: Game }) {
             </View>
           ))}
           <View style={[styles.tableScoreCell, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.06)' }]}>
-            <Text style={[styles.tableTotalText, winning && !tied && { color: colors.primary }]}>{total}</Text>
+            <Text style={[styles.tableTotalText, winning && !tied && { color: accent }]}>{total}</Text>
           </View>
         </View>
       ))}
@@ -930,7 +761,7 @@ function CricketHeroTeamStack({
 }: {
   game: Game;
   side: 'home' | 'away';
-  colors: { primary: string; secondary: string };
+  colors: { primary: string; secondary: string; accent?: string };
   jersey: React.ReactNode;
   showScore?: boolean;
 }) {
@@ -938,6 +769,7 @@ function CricketHeroTeamStack({
   if (!role) return <>{jersey}</>;
 
   const batting = role === 'BATTING';
+  const accent = colors.accent ?? colors.primary;
   const score = teamScoreText(game, side);
   const batters = [...(game.cricketState?.currentBatters ?? [])]
     .sort((a, b) => {
@@ -956,7 +788,7 @@ function CricketHeroTeamStack({
           style={[
             styles.cricketHeroScore,
             {
-              color: batting ? colors.primary : 'rgba(255,255,255,0.82)',
+              color: batting ? accent : 'rgba(255,255,255,0.82)',
               opacity: batting ? 1 : 0.72,
             },
           ]}
@@ -966,7 +798,7 @@ function CricketHeroTeamStack({
       ) : null}
       {jersey}
       <View style={styles.cricketHeroPlayerBlock}>
-        <Text style={[styles.cricketHeroRoleText, { color: batting ? colors.primary : 'rgba(255,255,255,0.52)' }]}>
+        <Text style={[styles.cricketHeroRoleText, { color: batting ? accent : 'rgba(255,255,255,0.52)' }]}>
           {batting ? 'BATTING' : 'BOWLING'}
         </Text>
         {batting ? (
@@ -1242,24 +1074,11 @@ function RedactedSection({ title, height, onUnlock }: {
 }
 
 
-// Ensure a team color is visible on dark backgrounds — swap black/very dark for a fallback
-function safeTeamColor(color: string, fallback: string = '#5A7A8A'): string {
-  if (!color) return fallback;
-  const hex = color.replace('#', '');
-  if (hex.length < 6) return fallback;
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  // If luminance is too low, use fallback
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return lum < 0.15 ? fallback : color;
-}
-
-function WinProbBar({ prediction, homeTeam, awayTeam }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam }) {
+function WinProbBar({ prediction, homeTeam, awayTeam, sport }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Sport }) {
   const canonicalProbabilities = getCanonicalWinProbabilities(prediction as Prediction);
   const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away);
-  const hColor = safeTeamColor(homeTeam.color);
-  const aColor = safeTeamColor(awayTeam.color, '#7A9DB8');
+  const hColor = getTeamColors(homeTeam.abbreviation, sport, homeTeam.color).accent;
+  const aColor = getTeamColors(awayTeam.abbreviation, sport, awayTeam.color).accent;
   return (
     <View style={styles.winProbShell}>
       <LinearGradient
@@ -1462,7 +1281,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
 
           {/* Pick Strength */}
           <Pressable
-            onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/confidence-explained', params: { id: gameId } }); }}
+            onPress={(e) => { e.stopPropagation(); router.push({ pathname: '/confidence-explained', params: { id: gameId } }); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             hitSlop={8}
             style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
           >
@@ -1592,13 +1411,13 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
         <View style={styles.projectionTrackerStack}>
           <ProjectionTrackerRow
             label={homeTeam.abbreviation}
-            tone={homeColors.primary}
+            tone={homeColors.accent}
             expected={projection.projectedHomeScore}
             actual={hasActualTotals ? liveHome : undefined}
           />
           <ProjectionTrackerRow
             label={awayTeam.abbreviation}
-            tone={awayColors.primary}
+            tone={awayColors.accent}
             expected={projection.projectedAwayScore}
             actual={hasActualTotals ? liveAway : undefined}
           />
@@ -1699,14 +1518,14 @@ function RecentForm({ game }: { game: Game }) {
       <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Recent Performance</Text>
       <View style={{ gap: 10 }}>
         {[
-          { team: homeTeam, form: prediction.recentFormHome, colors: homeColors },
-          { team: awayTeam, form: prediction.recentFormAway, colors: awayColors },
-        ].map(({ team, form, colors }) => (
+          { team: homeTeam, form: prediction.recentFormHome, accent: homeColors.accent },
+          { team: awayTeam, form: prediction.recentFormAway, accent: awayColors.accent },
+        ].map(({ team, form, accent }) => (
           <View key={team.id} style={styles.formCard}>
             <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 10 }}>
               {/* Team color badge — same as box score */}
               <View style={{
-                backgroundColor: colors.primary,
+                backgroundColor: accent,
                 borderRadius: 6,
                 paddingHorizontal: 8,
                 paddingVertical: 4,
@@ -2120,19 +1939,25 @@ export default function GameDetailScreen() {
   const jerseyType = sportEnumToJersey(game.sport);
   const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
+  const homeAccent = homeColors.accent;
+  const awayAccent = awayColors.accent;
   const scoreTextLength = `${game.homeScore ?? 0}-${game.awayScore ?? 0}`.length;
   const detailScoreboardScale = suspended ? 0.7 : isLiveCricket ? 1.22 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
+  const detailTopInset = Math.max(insets.top, 58);
+  const detailHeaderTopSpacer = 12;
   return (
-    <View style={{ flex: 1, backgroundColor: '#040608' }}>
-      <DetailRefreshPill visible={refreshing && hasGameData} top={insets.top + 10} />
+    <View style={{ flex: 1, backgroundColor: '#040608', overflow: 'hidden' }}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
+        <LinearGradient colors={[hexToRgba(homeAccent, 0.46), hexToRgba(homeAccent, 0.24), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', hexToRgba(awayAccent, 0.22), hexToRgba(awayAccent, 0.42)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
+      </View>
+      <DetailRefreshPill visible={refreshing && hasGameData} top={detailTopInset + 10} />
       {deferredContentReady ? <SilkThreads /> : null}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing && !hasGameData} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={insets.top + 40} />}>
+      <ScrollView style={{ flex: 1, marginTop: detailTopInset }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing && !hasGameData} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
-          <LinearGradient colors={[hexToRgba(homeTeam.color, 0.5), hexToRgba(homeTeam.color, 0.28), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
-          <LinearGradient colors={['transparent', hexToRgba(awayTeam.color, 0.22), hexToRgba(awayTeam.color, 0.45)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
-          <View style={{ height: insets.top + 10 }} />
+          <View style={{ height: detailHeaderTopSpacer }} />
           {/* Top bar — back (absolute left) + centered combined pill */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginBottom: 10, position: 'relative' }}>
             <Pressable onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
@@ -2242,8 +2067,8 @@ export default function GameDetailScreen() {
                     <ArenaScoreboard
                       homeScore={game.homeScore ?? 0}
                       awayScore={game.awayScore ?? 0}
-                      homeColor={homeColors.primary}
-                      awayColor={awayColors.primary}
+                      homeColor={homeAccent}
+                      awayColor={awayAccent}
                       scale={detailScoreboardScale}
                       label={suspended ? 'SUSPENDED' : undefined}
                       displayText={cricketLedScore ?? undefined}
@@ -2322,12 +2147,12 @@ export default function GameDetailScreen() {
           {isLiveCricket && !suspended ? (
             <CricketCurrentOverPanel
               game={game}
-              homeColor={homeColors.primary}
-              awayColor={awayColors.primary}
+              homeColor={homeAccent}
+              awayColor={awayAccent}
               context={cricketContext}
             />
           ) : null}
-          {prediction && isPremium ? <View style={{ paddingTop: 18 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} /></View> : null}
+          {prediction && isPremium ? <View style={{ paddingTop: 18 }}><WinProbBar prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport as Sport} /></View> : null}
           <WhereToWatchRow
             primaryChannel={game.tvChannel}
             watchSources={[game.watchSources, game.broadcasts, game.tvChannels]}
@@ -2689,44 +2514,43 @@ const styles = StyleSheet.create({
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   watchStrip: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 18,
+    marginHorizontal: 18,
+    marginTop: 8,
+    marginBottom: 24,
     position: 'relative',
     zIndex: 40,
     elevation: 40,
   },
-  watchHubCard: {
+  watchHubBorder: {
     borderRadius: 17,
-    padding: 9,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    backgroundColor: 'rgba(255,255,255,0.018)',
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 4,
+    backgroundColor: 'transparent',
+  },
+  watchHubCard: {
+    minHeight: 66,
+    borderRadius: 17,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(218,238,251,0.24)',
+    backgroundColor: 'rgba(122,157,184,0.08)',
+    overflow: 'hidden',
   },
   watchHubHeader: {
     minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 13,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
   },
   watchHubHeaderIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(122,157,184,0.10)',
+    backgroundColor: 'rgba(122,157,184,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.16)',
-    marginRight: 9,
+    borderColor: 'rgba(218,238,251,0.20)',
+    marginRight: 12,
     flexShrink: 0,
   },
   watchHubHeaderCopy: {
@@ -2736,61 +2560,54 @@ const styles = StyleSheet.create({
   },
   watchHubEyebrow: {
     fontSize: 7.5,
+    lineHeight: 9,
     fontWeight: '900',
-    color: 'rgba(148,183,207,0.72)',
+    color: 'rgba(180,211,235,0.62)',
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 2,
+    includeFontPadding: false,
   },
   watchHubTitle: {
-    fontSize: 15.5,
-    lineHeight: 18,
-    color: '#FFFFFF',
+    fontSize: 17,
+    lineHeight: 20,
+    color: 'rgba(255,255,255,0.92)',
     fontWeight: '900',
     letterSpacing: 0,
     includeFontPadding: false,
   },
   watchHubSourceMeta: {
-    fontSize: 9.5,
-    lineHeight: 12,
-    color: 'rgba(226,240,249,0.44)',
+    fontSize: 8,
+    lineHeight: 10,
+    color: 'rgba(226,240,249,0.32)',
     fontWeight: '800',
-    letterSpacing: 0.25,
-    marginTop: 2,
+    letterSpacing: 0.5,
+    marginTop: 3,
     textTransform: 'uppercase',
     includeFontPadding: false,
   },
   watchHubSourcesPill: {
-    minHeight: 30,
-    borderRadius: 15,
-    paddingLeft: 10,
-    paddingRight: 8,
+    height: 34,
+    borderRadius: 17,
+    paddingHorizontal: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    gap: 5,
+    backgroundColor: 'rgba(122,157,184,0.07)',
     borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.12)',
-    marginLeft: 8,
+    borderColor: 'rgba(218,238,251,0.28)',
+    marginLeft: 12,
     flexShrink: 0,
   },
   watchHubSourcesPillText: {
-    color: 'rgba(218,238,251,0.68)',
-    fontSize: 8.5,
-    lineHeight: 11,
+    color: 'rgba(218,238,251,0.76)',
+    fontSize: 9.5,
+    lineHeight: 12,
     fontWeight: '900',
-    letterSpacing: 0.7,
+    letterSpacing: 0.75,
     textTransform: 'uppercase',
     includeFontPadding: false,
-  },
-  watchHubEmpty: {
-    color: 'rgba(226,240,249,0.44)',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0,
-    paddingHorizontal: 9,
-    paddingBottom: 5,
   },
   broadcastCardsRow: {
     flexDirection: 'column',

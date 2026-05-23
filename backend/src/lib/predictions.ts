@@ -2011,10 +2011,13 @@ export async function generatePrediction(
   const _gameId = game.id;
   const _sport = sportKey;
   const _predictedWinner = predictedWinner;
+  const _predictedOutcome = predictedWinner;
   const _confidence = finalConfidence;
   const _isTossUp = isTossUp;
   const _homeElo = homeEloRating;
   const _awayElo = awayEloRating;
+  const _homeWinProb = homeWinProbability / 100;
+  const _awayWinProb = awayWinProbability / 100;
   enqueueWrite(async () => {
     const existing = await prisma.predictionResult.findUnique({ where: { gameId: _gameId } });
     if (existing) return; // already recorded — never overwrite
@@ -2023,11 +2026,17 @@ export async function generatePrediction(
         gameId: _gameId,
         sport: _sport,
         predictedWinner: _predictedWinner,
+        predictedOutcome: _predictedOutcome,
         confidence: _confidence,
         isTossUp: _isTossUp,
         homeElo: _homeElo,
         awayElo: _awayElo,
+        homeWinProb: _homeWinProb,
+        awayWinProb: _awayWinProb,
+        drawProb: null,
+        modelVersion: "legacy-factor-v1",
         actualWinner: null,
+        actualOutcome: null,
         wasCorrect: null,
         resolvedAt: null,
       },

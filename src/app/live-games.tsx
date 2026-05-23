@@ -20,6 +20,7 @@ import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, GameWithPrediction } from '@/types/sports';
 import { useGames } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { TEAL } from '@/lib/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -35,6 +36,12 @@ export default function LiveGamesScreen() {
 
   const translateX = useSharedValue(0);
   const isAnimating = useRef(false);
+  const {
+    onTouchStart: onChipTouchStart,
+    onTouchMove: onChipTouchMove,
+    onTouchCancel: onChipTouchCancel,
+    shouldHandlePress: shouldHandleChipPress,
+  } = useTapGestureGuard();
 
   const { data: todaysGames, refetch, isLoading } = useGames();
   const { refreshing, onRefresh } = useSmoothRefresh(refetch);
@@ -240,7 +247,16 @@ export default function LiveGamesScreen() {
               style={styles.chipScroll}
               contentContainerStyle={styles.chipScrollContent}
             >
-              <Pressable onPress={() => handleChipPress(null)}>
+              <Pressable
+                onPress={() => {
+                  if (!shouldHandleChipPress()) return;
+                  handleChipPress(null);
+                }}
+                pressRetentionOffset={6}
+                onTouchStart={onChipTouchStart}
+                onTouchMove={onChipTouchMove}
+                onTouchCancel={onChipTouchCancel}
+              >
                 <View
                   style={[
                     styles.chip,
@@ -263,7 +279,17 @@ export default function LiveGamesScreen() {
                 const meta = SPORT_META[sport];
                 const bg = meta?.color ?? TEAL;
                 return (
-                  <Pressable key={sport} onPress={() => handleChipPress(isSelected ? null : sport)}>
+                  <Pressable
+                    key={sport}
+                    onPress={() => {
+                      if (!shouldHandleChipPress()) return;
+                      handleChipPress(isSelected ? null : sport);
+                    }}
+                    pressRetentionOffset={6}
+                    onTouchStart={onChipTouchStart}
+                    onTouchMove={onChipTouchMove}
+                    onTouchCancel={onChipTouchCancel}
+                  >
                     <View
                       style={[
                         styles.chip,

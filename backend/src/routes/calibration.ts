@@ -48,8 +48,9 @@ const calibrationRouter = new Hono();
 calibrationRouter.get("/", async (c) => {
   try {
     let raw = await getLatestCalibration();
-    // If nothing is stored, compute fresh on the fly (first-run fallback).
-    if (raw.length === 0) {
+    // If nothing is stored, or the latest snapshot predates the draw-aware
+    // bucket shape, compute fresh on the fly.
+    if (raw.length === 0 || raw.some((m) => m.reliabilityCurve.length < 15)) {
       raw = [];
       for (const league of [...CALIBRATION_LEAGUES, "ALL"] as const) {
         try {
@@ -90,14 +91,14 @@ calibrationRouter.get("/", async (c) => {
       data: {
         generatedAt: new Date().toISOString(),
         description:
-          "Per-league calibration. Brier: lower is better (random=0.25, good<0.22). " +
+          "Per-league selected-outcome calibration. Brier: lower is better (binary random=0.25, good<0.22). " +
           "Log loss: lower is better (random=0.693). " +
           "reliabilityCurve[].calibrationErrorPts is signed: positive means the model is over-confident in that bucket.",
         perLeague,
         warnings: [
           "HISTORICAL-ELO DATA LEAK: backtest-style recomputation in lib/backtesting.ts currently uses " +
             "current Elo, not time-of-game Elo. The numbers shown here are trustworthy only insofar as " +
-            "stored homeWinProb was captured at prediction time. See TODO in lib/backtesting.ts.",
+            "stored PredictionResult probabilities were captured at prediction time. See TODO in lib/backtesting.ts.",
         ],
       },
     });
