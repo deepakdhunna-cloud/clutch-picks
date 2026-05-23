@@ -18,6 +18,8 @@ import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { displayWinProbability, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
+  FadeInDown,
+  FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -1732,6 +1734,60 @@ function PreGameCountdown({ secondsLeft, sport }: { secondsLeft: number; sport?:
   );
 }
 
+const DetailRefreshPill = React.memo(function DetailRefreshPill({ visible, top }: { visible: boolean; top: number }) {
+  if (!visible) return null;
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(180)}
+      exiting={FadeOut.duration(140)}
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top,
+        alignSelf: 'center',
+        zIndex: 60,
+        borderRadius: 999,
+        overflow: 'hidden',
+        shadowColor: '#7A9DB8',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.22,
+        shadowRadius: 18,
+      }}
+    >
+      <LinearGradient
+        colors={['rgba(139,10,31,0.50)', 'rgba(122,157,184,0.34)', 'rgba(4,7,12,0.96)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 999, padding: 1 }}
+      >
+        <View style={{ minHeight: 34, borderRadius: 999, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(4,7,12,0.88)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#7A9DB8' }} />
+          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 0.2 }}>Updating game</Text>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+});
+
+function GameDetailLoading() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
+      <LinearGradient
+        colors={['rgba(139,10,31,0.26)', 'rgba(122,157,184,0.18)', 'rgba(255,255,255,0.04)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 24, padding: 1, width: '100%', maxWidth: 320 }}
+      >
+        <View style={{ minHeight: 158, borderRadius: 23, backgroundColor: 'rgba(4,7,12,0.96)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+          <ActivityIndicator color="#7A9DB8" />
+          <Text style={{ marginTop: 16, color: '#FFFFFF', fontSize: 16, fontWeight: '900' }}>Loading matchup</Text>
+          <Text style={{ marginTop: 5, color: 'rgba(180,211,235,0.56)', fontSize: 12, fontWeight: '800' }}>Getting the board ready</Text>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
+
 export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -1795,7 +1851,7 @@ export default function GameDetailScreen() {
   const { refreshing, onRefresh } = useSmoothRefresh(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     return refetch();
-  });
+  }, { minVisibleMs: 320, maxVisibleMs: 850 });
   const hasGameData = !!game;
 
   useEffect(() => {
@@ -1810,7 +1866,7 @@ export default function GameDetailScreen() {
   // the rules of hooks. Returns +Infinity until we have a valid gameTime
   // and 0 once tip-off has passed.
   const secondsUntilStart = useSecondsUntil(game?.gameTime ?? '');
-  if (isLoading) return <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#7A9DB8" /></View>;
+  if (isLoading) return <GameDetailLoading />;
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
@@ -1848,8 +1904,9 @@ export default function GameDetailScreen() {
   const detailScoreboardScale = suspended ? 0.7 : isLiveCricket ? 1.22 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
   return (
     <View style={{ flex: 1, backgroundColor: '#040608' }}>
+      <DetailRefreshPill visible={refreshing && hasGameData} top={insets.top + 10} />
       {deferredContentReady ? <SilkThreads /> : null}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" colors={['#FFFFFF']} progressViewOffset={insets.top + 40} />}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing && !hasGameData} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={insets.top + 40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#040608' }]} />
           <LinearGradient colors={[hexToRgba(homeTeam.color, 0.5), hexToRgba(homeTeam.color, 0.28), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />

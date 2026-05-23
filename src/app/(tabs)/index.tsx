@@ -3,6 +3,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import Animated, {
   FadeInDown,
+  FadeOut,
   useAnimatedStyle,
   useAnimatedScrollHandler,
   useSharedValue,
@@ -32,6 +33,41 @@ const allSports = Object.values(Sport);
 const HOME_SPORT_INITIAL_GAME_COUNT = 10;
 const HOME_SPORT_GAME_BATCH_COUNT = 10;
 const HOME_BOARD_SCROLL_OFFSET = 300;
+
+const RefreshPill = memo(function RefreshPill({ visible, label }: { visible: boolean; label: string }) {
+  if (!visible) return null;
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(180)}
+      exiting={FadeOut.duration(140)}
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 90,
+        alignSelf: 'center',
+        zIndex: 30,
+        borderRadius: 999,
+        overflow: 'hidden',
+        shadowColor: TEAL,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.22,
+        shadowRadius: 18,
+      }}
+    >
+      <LinearGradient
+        colors={['rgba(139,10,31,0.50)', 'rgba(122,157,184,0.34)', 'rgba(4,7,12,0.96)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 999, padding: 1 }}
+      >
+        <View style={{ minHeight: 34, borderRadius: 999, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(4,7,12,0.88)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: TEAL }} />
+          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 0.2 }}>{label}</Text>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+});
 
 // ─── Paginated sport tile carousel ──────────────────────────────────
 const SportTileCarousel = memo(function SportTileCarousel({
@@ -531,7 +567,7 @@ const HomeHeader = React.memo(function HomeHeader({
       ) : null}
       </View>
 
-      {/* Loading skeleton */}
+      {/* First-load skeleton only. Keep real content on screen during refreshes. */}
       {isLoadingGames ? (
         <View className="px-4 pt-2">
           <GameCardSkeletonList />
@@ -808,7 +844,9 @@ export default function HomeScreen() {
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
   const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames();
-  const { refreshing, onRefresh } = useSmoothRefresh(refetchGames);
+  const hasHomeGameData = (todaysGames?.length ?? 0) > 0;
+  const isInitialHomeLoading = isLoadingGames && !hasHomeGameData;
+  const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });
 
   const handleOpenGame = useCallback((game: GameWithPrediction) => {
     prefetchGame(game.id, game);
@@ -985,7 +1023,7 @@ export default function HomeScreen() {
   }, [getSportVisibilityKey]);
 
   const flatListData = useMemo<FlatListItem[]>(() => {
-    if (!todaysGames?.length || isLoadingGames) return [];
+    if (!todaysGames?.length) return [];
 
     // Step 1: Filter by tab (date + status)
     let tabGames: GameWithPrediction[] = [];
@@ -1062,7 +1100,7 @@ export default function HomeScreen() {
     }
 
     return items;
-  }, [todaysGames, deferredSelectedSportFilter, isLoadingGames, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr, getSportVisibilityKey, visibleSportGameCounts]);
+  }, [todaysGames, deferredSelectedSportFilter, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr, getSportVisibilityKey, visibleSportGameCounts]);
 
 
   // Render item for FlatList
@@ -1235,6 +1273,7 @@ export default function HomeScreen() {
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         pointerEvents="none"
       />
+      <RefreshPill visible={refreshing && hasHomeGameData} label="Updating board" />
       <Animated.FlatList
         key={numColumns}
         ref={flatListRef}
@@ -1259,9 +1298,11 @@ export default function HomeScreen() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={refreshing && !hasHomeGameData}
             onRefresh={onRefresh}
-            tintColor="#fff"
+            tintColor={TEAL}
+            colors={[TEAL]}
+            progressBackgroundColor="#080C10"
           />
         }
         ListHeaderComponent={
@@ -1280,7 +1321,7 @@ export default function HomeScreen() {
             onViewAll={() => flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true })}
             nonLiveGames={nonLiveGames}
             gameCounts={gameCounts}
-            isLoadingGames={isLoadingGames}
+            isLoadingGames={isInitialHomeLoading}
             router={router}
             onOpenGame={handleOpenGame}
             horizontalPadding={horizontalPadding}
