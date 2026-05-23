@@ -59,13 +59,18 @@ import {
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { getWatchSourceUrl } from '@/lib/watch-url';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, ChevronDown, ExternalLink, MapPin, RadioTower, Tv, X } from 'lucide-react-native';
+import { Check, ChevronDown, ExternalLink, RadioTower, Tv, X } from 'lucide-react-native';
 
 type WatchOptionKind = 'broadcast' | 'streaming';
 type WatchOption = {
   name: string;
   kind: WatchOptionKind;
   note?: string;
+};
+type WatchMenuSection = {
+  title: string;
+  subtitle: string;
+  options: WatchOption[];
 };
 type StreamingRule = {
   match: RegExp;
@@ -216,6 +221,19 @@ function openWatchSource(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
 }
 
+function isSameWatchOption(a: WatchOption | undefined, b: WatchOption): boolean {
+  return a?.kind === b.kind && a.name.toLowerCase() === b.name.toLowerCase();
+}
+
+function watchOptionSubtitle(option: WatchOption, isPrimary: boolean, hasBroadcastInfo: boolean): string {
+  if (!hasBroadcastInfo) return 'Source not listed yet';
+  if (option.kind === 'broadcast') {
+    if (isPrimary) return 'Primary TV broadcast';
+    return option.note && option.note !== 'Listed broadcast' ? option.note : 'TV broadcast source';
+  }
+  return option.note && option.note !== 'Listed stream' ? option.note : 'Streaming source';
+}
+
 function getWatchPopularityRank(option: WatchOption): number {
   if (option.kind === 'broadcast') return 0;
   const match = WATCH_POPULARITY_ORDER.find((rule) => rule.match.test(option.name));
@@ -316,16 +334,36 @@ function WhereToWatchRow({
     ? sortWatchOptions(options)
     : [{ name: 'Broadcast info not listed', kind: 'broadcast', note: 'Source not listed' }];
   const primaryText = broadcastOptions[0]?.name ?? streamingOptions[0]?.name ?? 'Watch info TBD';
-  const broadcastText = broadcastOptions.length > 0
-    ? broadcastOptions.map((option) => option.name).join(' · ')
-    : 'TV broadcast not listed';
   const venueText = venue?.trim() ? venue.trim() : 'Venue TBD';
   const menuSummaryText = hasBroadcastInfo
     ? `${broadcastOptions.length} broadcast${broadcastOptions.length === 1 ? '' : 's'} · ${streamingOptions.length} stream option${streamingOptions.length === 1 ? '' : 's'}`
     : 'Broadcast source not listed yet';
   const sourceCountText = hasBroadcastInfo
-    ? `${broadcastOptions.length} TV · ${streamingOptions.length} stream`
+    ? `${broadcastOptions.length} TV · ${streamingOptions.length} stream${streamingOptions.length === 1 ? '' : 's'}`
     : 'Source TBD';
+  const compactMetaText = venueText === 'Venue TBD' ? sourceCountText : `${sourceCountText} · ${venueText}`;
+  const watchMenuSections: WatchMenuSection[] = hasBroadcastInfo
+    ? [
+        ...(broadcastOptions.length > 0
+          ? [{
+              title: 'TV Broadcast',
+              subtitle: `${broadcastOptions.length} listed source${broadcastOptions.length === 1 ? '' : 's'}`,
+              options: broadcastOptions,
+            }]
+          : []),
+        ...(streamingOptions.length > 0
+          ? [{
+              title: 'Streaming',
+              subtitle: `${streamingOptions.length} option${streamingOptions.length === 1 ? '' : 's'}`,
+              options: streamingOptions,
+            }]
+          : []),
+      ]
+    : [{
+        title: 'Availability',
+        subtitle: 'No source from the league feed yet',
+        options: menuOptions,
+      }];
 
   return (
     <View style={styles.watchStrip}>
@@ -335,78 +373,31 @@ function WhereToWatchRow({
         end={{ x: 1, y: 1 }}
         style={styles.watchHubCard}
       >
-        <View style={styles.watchHubHeader}>
-          <View style={styles.watchHubHeaderIcon}>
-            <Tv size={20} color="#DAEEFB" strokeWidth={2.45} />
-          </View>
-          <View style={styles.watchHubHeaderCopy}>
-            <Text style={styles.watchHubEyebrow}>Watch Hub</Text>
-            <Text style={styles.watchHubTitle} numberOfLines={1}>{primaryText}</Text>
-            <Text style={styles.watchHubSourceMeta} numberOfLines={1}>{sourceCountText}</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={hasBroadcastInfo ? `Open ${menuOptions.length} watch sources` : 'Watch source not listed'}
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setIsMenuVisible(true);
-            }}
-            style={({ pressed }) => [
-              styles.watchHubSourcesButton,
-              pressed && styles.infoPillPressed,
-            ]}
-          >
-            <ChevronDown size={18} color="rgba(226,240,249,0.82)" strokeWidth={2.8} />
-          </Pressable>
-        </View>
-
-        <View style={styles.watchHubTile}>
-          <View style={styles.watchHubTileIcon}>
-            <Tv size={15} color="rgba(218,238,251,0.92)" strokeWidth={2.4} />
-          </View>
-          <View style={styles.watchHubTileCopy}>
-            <Text style={styles.watchHubTileLabel}>TV Broadcast</Text>
-            <Text style={styles.watchHubTileValue} numberOfLines={1}>{broadcastText}</Text>
-          </View>
-        </View>
-
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={streamingOptions.length > 0 ? `Open ${streamingOptions.length} streaming options` : 'Streaming services not listed'}
+          accessibilityLabel={hasBroadcastInfo ? `Open ${menuOptions.length} watch sources` : 'Watch source not listed'}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setIsMenuVisible(true);
           }}
           style={({ pressed }) => [
-            styles.watchHubDropdownTile,
+            styles.watchHubHeader,
             pressed && styles.infoPillPressed,
           ]}
         >
-          <View style={styles.watchHubDropdownHeader}>
-            <View style={styles.watchHubDropdownCopy}>
-              <Text style={styles.watchHubTileLabel}>Streaming Services</Text>
-              <Text style={styles.watchHubDropdownValue} numberOfLines={1}>
-                {streamingOptions.length > 0
-                  ? `${streamingOptions.length} option${streamingOptions.length === 1 ? '' : 's'} ranked by popularity`
-                  : 'Streaming service is not listed yet'}
-              </Text>
-            </View>
-            <View style={styles.watchHubDropdownRight}>
-              <Text style={styles.watchHubDropdownCount}>{streamingOptions.length > 0 ? 'View all' : 'TBD'}</Text>
-              <ChevronDown size={16} color="rgba(226,240,249,0.72)" strokeWidth={2.8} />
-            </View>
+          <View style={styles.watchHubHeaderIcon}>
+            <Tv size={17} color="#DAEEFB" strokeWidth={2.45} />
+          </View>
+          <View style={styles.watchHubHeaderCopy}>
+            <Text style={styles.watchHubEyebrow}>Watch</Text>
+            <Text style={styles.watchHubTitle} numberOfLines={1}>{primaryText}</Text>
+            <Text style={styles.watchHubSourceMeta} numberOfLines={1}>{compactMetaText}</Text>
+          </View>
+          <View style={styles.watchHubSourcesPill}>
+            <Text style={styles.watchHubSourcesPillText}>Sources</Text>
+            <ChevronDown size={14} color="rgba(226,240,249,0.72)" strokeWidth={2.8} />
           </View>
         </Pressable>
-
-        <View style={styles.watchHubTile}>
-          <View style={styles.watchHubTileIcon}>
-            <MapPin size={15} color="rgba(218,238,251,0.92)" strokeWidth={2.4} />
-          </View>
-          <View style={styles.watchHubTileCopy}>
-            <Text style={styles.watchHubTileLabel}>Venue</Text>
-            <Text style={styles.watchHubTileValue} numberOfLines={1}>{venueText}</Text>
-          </View>
-        </View>
 
         {!hasBroadcastInfo ? (
           <Text style={styles.watchHubEmpty}>Broadcast info has not been listed yet.</Text>
@@ -452,52 +443,78 @@ function WhereToWatchRow({
             </View>
 
             <ScrollView style={styles.watchMenuList} contentContainerStyle={styles.watchMenuListContent} showsVerticalScrollIndicator={false}>
-              {menuOptions.map((opt, index) => {
-                const isPrimary = index === 0 && !!primary;
-                const sourceSubtitle = opt.note ?? (opt.kind === 'streaming' ? 'Streaming service' : isPrimary ? 'Primary broadcast' : hasBroadcastInfo ? `Broadcast source ${index + 1}` : 'Source not listed');
-                const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : Tv;
-                const streamRank = opt.kind === 'streaming'
-                  ? streamingOptions.findIndex((stream) => stream.name === opt.name) + 1
-                  : 0;
-                return (
-                  <Pressable
-                    key={`${opt.name}-${index}`}
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setIsMenuVisible(false);
-                      if (hasBroadcastInfo) openWatchSource(opt.name);
-                    }}
-                    style={({ pressed }) => [
-                      styles.watchMenuOptionRow,
-                      isPrimary && styles.watchMenuPrimaryRow,
-                      pressed && styles.watchMenuOptionPressed,
-                    ]}
-                  >
-                    <View style={[styles.watchMenuSourceIcon, opt.kind === 'streaming' && styles.watchMenuRankIcon]}>
-                      {opt.kind === 'streaming' ? (
-                        <Text style={styles.watchMenuRankText}>#{streamRank || index + 1}</Text>
-                      ) : (
-                        <SourceIcon size={17} color="rgba(226,240,249,0.9)" strokeWidth={2.35} />
-                      )}
-                    </View>
-                    <View style={styles.watchMenuOptionCopy}>
-                      <Text style={styles.watchMenuOptionText} numberOfLines={1}>{opt.name}</Text>
-                      <Text style={styles.watchMenuOptionSub}>
-                        {streamRank > 0 ? `#${streamRank} most popular · ${sourceSubtitle}` : sourceSubtitle}
-                      </Text>
-                    </View>
-                    {isPrimary ? (
-                      <View style={styles.watchMenuPrimaryBadge}>
-                        <Check size={13} color="#DAEEFB" strokeWidth={3} />
-                      </View>
-                    ) : hasBroadcastInfo ? (
-                      <View style={styles.watchMenuPrimaryBadge}>
-                        <ExternalLink size={13} color="rgba(218,238,251,0.75)" strokeWidth={2.6} />
-                      </View>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
+              {watchMenuSections.map((section) => (
+                <View key={section.title} style={styles.watchMenuSection}>
+                  <View style={styles.watchMenuSectionHeader}>
+                    <Text style={styles.watchMenuSectionTitle}>{section.title}</Text>
+                    <Text style={styles.watchMenuSectionMeta}>{section.subtitle}</Text>
+                  </View>
+                  <View style={styles.watchMenuSectionCard}>
+                    {section.options.map((opt, index) => {
+                      const isPrimary = isSameWatchOption(primary, opt);
+                      const SourceIcon = opt.name.toLowerCase().includes('radio') ? RadioTower : Tv;
+                      const streamRank = opt.kind === 'streaming'
+                        ? streamingOptions.findIndex((stream) => stream.name === opt.name) + 1
+                        : 0;
+                      const sourceSubtitle = watchOptionSubtitle(opt, isPrimary, hasBroadcastInfo);
+                      const actionLabel = !hasBroadcastInfo
+                        ? 'TBD'
+                        : isPrimary
+                          ? 'Primary'
+                          : opt.kind === 'streaming' && streamRank > 0
+                            ? `#${streamRank}`
+                            : 'Open';
+                      return (
+                        <Pressable
+                          key={`${section.title}-${opt.name}-${index}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={hasBroadcastInfo ? `Open ${opt.name}` : 'Watch source not listed'}
+                          disabled={!hasBroadcastInfo}
+                          onPress={() => {
+                            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setIsMenuVisible(false);
+                            openWatchSource(opt.name);
+                          }}
+                          style={({ pressed }) => [
+                            styles.watchMenuOptionRow,
+                            index === section.options.length - 1 && styles.watchMenuOptionRowLast,
+                            isPrimary && styles.watchMenuPrimaryRow,
+                            pressed && styles.watchMenuOptionPressed,
+                          ]}
+                        >
+                          <View style={[styles.watchMenuSourceIcon, opt.kind === 'streaming' && styles.watchMenuRankIcon]}>
+                            {opt.kind === 'streaming' ? (
+                              <Text style={styles.watchMenuRankText}>{streamRank || index + 1}</Text>
+                            ) : (
+                              <SourceIcon size={17} color="rgba(226,240,249,0.9)" strokeWidth={2.35} />
+                            )}
+                          </View>
+                          <View style={styles.watchMenuOptionCopy}>
+                            <Text style={styles.watchMenuOptionText} numberOfLines={1}>{opt.name}</Text>
+                            <Text style={styles.watchMenuOptionSub} numberOfLines={1}>{sourceSubtitle}</Text>
+                          </View>
+                          <View style={[styles.watchMenuActionPill, isPrimary && styles.watchMenuActionPillPrimary]}>
+                            {isPrimary ? (
+                              <Check size={12} color="#DAEEFB" strokeWidth={3} />
+                            ) : hasBroadcastInfo ? (
+                              <ExternalLink size={12} color="rgba(218,238,251,0.72)" strokeWidth={2.6} />
+                            ) : null}
+                            <Text style={[styles.watchMenuActionText, isPrimary && styles.watchMenuActionTextPrimary]}>
+                              {actionLabel}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+              {hasBroadcastInfo && venueText !== 'Venue TBD' ? (
+                <View style={styles.watchMenuVenueRow}>
+                  <Text style={styles.watchMenuVenueLabel}>Venue</Text>
+                  <Text style={styles.watchMenuVenueText} numberOfLines={1}>{venueText}</Text>
+                </View>
+              ) : null}
             </ScrollView>
           </LinearGradient>
         </View>
@@ -2673,41 +2690,43 @@ const styles = StyleSheet.create({
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   watchStrip: {
     marginHorizontal: 16,
-    marginTop: 14,
-    marginBottom: 24,
+    marginTop: 10,
+    marginBottom: 18,
     position: 'relative',
     zIndex: 40,
     elevation: 40,
   },
   watchHubCard: {
-    borderRadius: 22,
-    padding: 14,
-    borderWidth: 1.2,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(255,255,255,0.025)',
+    borderRadius: 17,
+    padding: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(255,255,255,0.018)',
     overflow: 'hidden',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    elevation: 7,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 4,
   },
   watchHubHeader: {
-    minHeight: 48,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    borderRadius: 13,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   watchHubHeaderIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(122,157,184,0.13)',
+    backgroundColor: 'rgba(122,157,184,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.22)',
-    marginRight: 10,
+    borderColor: 'rgba(180,211,235,0.16)',
+    marginRight: 9,
     flexShrink: 0,
   },
   watchHubHeaderCopy: {
@@ -2716,129 +2735,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   watchHubEyebrow: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: '900',
-    color: 'rgba(148,183,207,0.84)',
-    letterSpacing: 1.1,
+    color: 'rgba(148,183,207,0.72)',
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   watchHubTitle: {
-    fontSize: 18,
+    fontSize: 15.5,
+    lineHeight: 18,
     color: '#FFFFFF',
     fontWeight: '900',
     letterSpacing: 0,
+    includeFontPadding: false,
   },
   watchHubSourceMeta: {
-    fontSize: 10,
-    color: 'rgba(226,240,249,0.42)',
+    fontSize: 9.5,
+    lineHeight: 12,
+    color: 'rgba(226,240,249,0.44)',
     fontWeight: '800',
-    letterSpacing: 0.35,
-    marginTop: 3,
+    letterSpacing: 0.25,
+    marginTop: 2,
     textTransform: 'uppercase',
+    includeFontPadding: false,
   },
-  watchHubSourcesButton: {
-    width: 36,
-    height: 36,
+  watchHubSourcesPill: {
+    minHeight: 30,
+    borderRadius: 15,
+    paddingLeft: 10,
+    paddingRight: 8,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.13)',
+    borderColor: 'rgba(180,211,235,0.12)',
     marginLeft: 8,
     flexShrink: 0,
   },
-  watchHubTile: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.035)',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.10)',
-  },
-  watchHubDropdownTile: {
-    marginTop: 10,
-    marginBottom: 10,
-    minHeight: 56,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(3,9,14,0.52)',
-    borderWidth: 1,
-    borderColor: 'rgba(122,157,184,0.12)',
-  },
-  watchHubDropdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  watchHubDropdownCopy: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-  },
-  watchHubDropdownValue: {
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
-  watchHubDropdownRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    flexShrink: 0,
-  },
-  watchHubDropdownCount: {
+  watchHubSourcesPillText: {
     color: 'rgba(218,238,251,0.68)',
-    fontSize: 9,
+    fontSize: 8.5,
+    lineHeight: 11,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     textTransform: 'uppercase',
-  },
-  watchHubTileIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(148,163,184,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.15)',
-    marginRight: 9,
-    flexShrink: 0,
-  },
-  watchHubTileCopy: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-  },
-  watchHubTileLabel: {
-    fontSize: 7,
-    fontWeight: '900',
-    color: 'rgba(148,183,207,0.72)',
-    letterSpacing: 1.05,
-    textTransform: 'uppercase',
-    marginBottom: 3,
-  },
-  watchHubTileValue: {
-    fontSize: 13.5,
-    color: 'rgba(255,255,255,0.91)',
-    fontWeight: '900',
-    letterSpacing: 0,
+    includeFontPadding: false,
   },
   watchHubEmpty: {
     color: 'rgba(226,240,249,0.44)',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0,
-    paddingTop: 2,
+    paddingHorizontal: 9,
+    paddingBottom: 5,
   },
   broadcastCardsRow: {
     flexDirection: 'column',
@@ -3117,7 +3069,7 @@ const styles = StyleSheet.create({
   watchMenuSheet: {
     width: '100%',
     maxWidth: 390,
-    borderRadius: 22,
+    borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -3126,7 +3078,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 30,
     elevation: 22,
-    maxHeight: '48%',
+    maxHeight: '68%',
   },
   watchMenuHandle: {
     alignSelf: 'center',
@@ -3138,11 +3090,11 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   watchMenuHeader: {
-    minHeight: 72,
+    minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 12,
     borderBottomWidth: 1,
@@ -3157,9 +3109,9 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   watchMenuHeroIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(148,163,184,0.08)',
@@ -3188,9 +3140,9 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   watchMenuSubtitle: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: 'rgba(226,240,249,0.42)',
+    color: 'rgba(226,240,249,0.48)',
     marginTop: 3,
   },
   watchMenuClose: {
@@ -3210,27 +3162,59 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   watchMenuList: {
-    maxHeight: 190,
+    maxHeight: 420,
   },
   watchMenuListContent: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 7,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 16,
   },
-  watchMenuOptionRow: {
-    minHeight: 54,
+  watchMenuSection: {
+    gap: 8,
+  },
+  watchMenuSectionHeader: {
+    minHeight: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.032)',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 2,
+  },
+  watchMenuSectionTitle: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '900',
+    letterSpacing: 0.35,
+    textTransform: 'uppercase',
+  },
+  watchMenuSectionMeta: {
+    flexShrink: 0,
+    fontSize: 10,
+    color: 'rgba(226,240,249,0.46)',
+    fontWeight: '800',
+  },
+  watchMenuSectionCard: {
+    borderRadius: 17,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.036)',
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.10)',
+    borderColor: 'rgba(148,163,184,0.12)',
+  },
+  watchMenuOptionRow: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.10)',
+  },
+  watchMenuOptionRowLast: {
+    borderBottomWidth: 0,
   },
   watchMenuPrimaryRow: {
-    backgroundColor: 'rgba(122,157,184,0.09)',
-    borderColor: 'rgba(180,211,235,0.18)',
+    backgroundColor: 'rgba(122,157,184,0.10)',
   },
   watchMenuOptionPressed: {
     opacity: 0.78,
@@ -3241,7 +3225,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   watchMenuOptionText: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.92)',
     letterSpacing: 0,
@@ -3249,28 +3233,27 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   watchMenuOptionSub: {
-    fontSize: 7.5,
-    fontWeight: '800',
-    color: 'rgba(148,183,207,0.58)',
-    letterSpacing: 0.65,
-    textTransform: 'uppercase',
-    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(226,240,249,0.48)',
+    letterSpacing: 0,
+    marginTop: 5,
   },
   watchMenuSourceIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(148,163,184,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(180,211,235,0.16)',
-    marginRight: 10,
+    marginRight: 11,
     flexShrink: 0,
   },
   watchMenuRankIcon: {
-    backgroundColor: 'rgba(139,10,31,0.22)',
-    borderColor: 'rgba(139,10,31,0.38)',
+    backgroundColor: 'rgba(139,10,31,0.26)',
+    borderColor: 'rgba(139,10,31,0.44)',
   },
   watchMenuRankText: {
     color: '#DAEEFB',
@@ -3279,74 +3262,61 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     includeFontPadding: false,
   },
-  watchMenuPrimaryBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(218,238,251,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(218,238,251,0.16)',
-    marginLeft: 9,
-    flexShrink: 0,
-  },
-  watchDropdownRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    alignItems: 'flex-start',
-  },
-  watchDropdownSpacer: {
-    flex: 1,
-    minWidth: 0,
-  },
-  watchOptionsMenu: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(1,4,8,0.98)',
-    borderWidth: 1.25,
-    borderColor: 'rgba(148,163,184,0.22)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.48,
-    shadowRadius: 28,
-    zIndex: 60,
-    elevation: 60,
-  },
-  watchOptionRow: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148,163,184,0.09)',
-  },
-  watchOptionRowLast: {
-    borderBottomWidth: 0,
-  },
-  watchOptionText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13.5,
-    fontWeight: '900',
-    color: 'rgba(255,255,255,0.88)',
-    letterSpacing: -0.12,
-  },
-  watchOptionIcon: {
-    width: 28,
+  watchMenuActionPill: {
+    minWidth: 48,
     height: 28,
-    borderRadius: 10,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(148,163,184,0.08)',
+    gap: 4,
+    paddingHorizontal: 9,
+    borderRadius: 14,
+    backgroundColor: 'rgba(218,238,251,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(180,211,235,0.15)',
-    marginRight: 9,
+    borderColor: 'rgba(218,238,251,0.13)',
+    marginLeft: 10,
     flexShrink: 0,
+  },
+  watchMenuActionPillPrimary: {
+    backgroundColor: 'rgba(122,157,184,0.18)',
+    borderColor: 'rgba(218,238,251,0.22)',
+  },
+  watchMenuActionText: {
+    color: 'rgba(218,238,251,0.68)',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.25,
+  },
+  watchMenuActionTextPrimary: {
+    color: '#DAEEFB',
+  },
+  watchMenuVenueRow: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.024)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.10)',
+  },
+  watchMenuVenueLabel: {
+    fontSize: 10,
+    color: 'rgba(148,183,207,0.7)',
+    fontWeight: '900',
+    letterSpacing: 0.45,
+    textTransform: 'uppercase',
+  },
+  watchMenuVenueText: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'right',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    fontWeight: '800',
   },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
