@@ -820,12 +820,22 @@ export default function HomeScreen() {
   const deferredSelectedLiveSportFilter = useDeferredValue(selectedLiveSportFilter);
   const deferredStatusFilter = useDeferredValue(statusFilter);
 
+  const scrollToHomeBoard = useCallback(() => {
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true });
+    });
+  }, []);
+
   const applySportFilter = useCallback((nextSport: Sport | null) => {
-    if (nextSport !== selectedSportFilter) {
+    const isChanging = nextSport !== selectedSportFilter;
+    if (isChanging) {
       void Haptics.selectionAsync().catch(() => {});
     }
     setSelectedSportFilter(nextSport);
-  }, [selectedSportFilter]);
+    if (isChanging && nextSport) {
+      scrollToHomeBoard();
+    }
+  }, [scrollToHomeBoard, selectedSportFilter]);
 
   useEffect(() => {
     if (!selectedSportFilter) return;
@@ -883,18 +893,17 @@ export default function HomeScreen() {
     },
   });
 
-  // Reset gently when board filters change so the user never lands in the
-  // middle of a shorter slate after chips swap the list underneath them.
+  // Status chips are part of the board controls, so keep that reset. Sport
+  // filters scroll only when a sport is selected; clearing should not pull the
+  // user back down after they have moved elsewhere.
   const didMountFilterRef = useRef(false);
   useEffect(() => {
     if (!didMountFilterRef.current) {
       didMountFilterRef.current = true;
       return;
     }
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true });
-    });
-  }, [selectedSportFilter, statusFilter]);
+    scrollToHomeBoard();
+  }, [scrollToHomeBoard, statusFilter]);
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
   const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames();

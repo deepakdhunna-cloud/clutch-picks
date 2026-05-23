@@ -23,6 +23,7 @@ import {
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { cricketRequiredText, cricketRoleText, cricketStatusText, scorePairText, teamScoreText } from '@/lib/cricket-score';
+import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceUrl } from '@/lib/watch-url';
 import { PredictionBadge } from './PredictionBadge';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
@@ -102,7 +103,7 @@ function getStatusBadge(status: GameStatus) {
 }
 
 // Handle TV channel press
-function handleTvChannelPress(channel: string) {
+function handleWatchSourcePress(channel: string) {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   const url = getWatchSourceUrl(channel);
   Linking.openURL(url);
@@ -259,6 +260,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
+  const watchOption = useMemo(() => getFeaturedWatchOption(game.tvChannel, game.watchSources), [game.tvChannel, game.watchSources]);
   const awayAccent = awayTeamColors.accent ?? awayTeamColors.primary;
   const homeAccent = homeTeamColors.accent ?? homeTeamColors.primary;
   const {
@@ -407,11 +409,11 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 </View>
               </View>
 
-              {game.tvChannel ? (
+              {watchOption ? (
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
-                    handleTvChannelPress(game.tvChannel!);
+                    handleWatchSourcePress(watchOption.name);
                   }}
 
                   style={{
@@ -427,7 +429,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 >
                   <Tv size={10} color="#FFFFFF" />
                   <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4, maxWidth: 104 }}>
-                    {game.tvChannel}
+                    {watchOption.name}
                   </Text>
                 </Pressable>
               ) : (
@@ -602,6 +604,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const { date, time } = useMemo(() => formatScheduledTime(game.gameTime), [game.gameTime]);
   const statusBadge = useMemo(() => getStatusBadge(game.status), [game.status]);
   const displayAnalysis = useMemo(() => displayPredictionAnalysis(game), [game]);
+  const watchOption = useMemo(() => getFeaturedWatchOption(game.tvChannel, game.watchSources), [game.tvChannel, game.watchSources]);
 
   // Get team colors - memoized, pass ESPN color as fallback
   const awayTeamColors = useMemo(() => getTeamColors(game.awayTeam.abbreviation, game.sport, game.awayTeam.color), [game.awayTeam.abbreviation, game.sport, game.awayTeam.color]);
@@ -1200,17 +1203,17 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   )}
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {game.tvChannel ? (
+                    {watchOption ? (
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          handleTvChannelPress(game.tvChannel!);
+                          handleWatchSourcePress(watchOption.name);
                         }}
 
                         style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}
                       >
                         <Tv size={10} color="#FFFFFF" />
-                        <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600', marginLeft: 4 }}>{game.tvChannel}</Text>
+                        <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600', marginLeft: 4, maxWidth: 112 }}>{watchOption.name}</Text>
                       </Pressable>
                     ) : null}
                   </View>

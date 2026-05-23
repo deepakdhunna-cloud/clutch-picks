@@ -50,6 +50,34 @@ const DEFAULT_STATS: GamePickStats = {
   awayPercentage: 0,
 };
 
+function upsertPick(current: Pick[] | undefined, nextPick: Pick): Pick[] {
+  const picks = current ?? [];
+  const existingIndex = picks.findIndex((pick) => pick.gameId === nextPick.gameId);
+  if (existingIndex === -1) return [...picks, nextPick];
+
+  const updated = [...picks];
+  updated[existingIndex] = { ...updated[existingIndex], ...nextPick };
+  return updated;
+}
+
+function removePickFromCache(current: Pick[] | undefined, gameId: string): Pick[] {
+  return current?.filter((pick) => pick.gameId !== gameId) ?? [];
+}
+
+function makeOptimisticPick(data: { gameId: string; pickedTeam: 'home' | 'away'; homeTeam?: string; awayTeam?: string; sport?: string }): Pick {
+  return {
+    id: `optimistic-${data.gameId}`,
+    userId: 'optimistic',
+    gameId: data.gameId,
+    pickedTeam: data.pickedTeam,
+    result: 'pending',
+    homeTeam: data.homeTeam ?? null,
+    awayTeam: data.awayTeam ?? null,
+    sport: data.sport ?? null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // Hook to fetch all user picks with real-time updates
 export function useUserPicks(enabled = true) {
   return useQuery({
@@ -93,13 +121,25 @@ export function useMakePick() {
   return useMutation({
     mutationFn: (data: { gameId: string; pickedTeam: 'home' | 'away'; homeTeam?: string; awayTeam?: string; sport?: string }) =>
       api.post<Pick>('/api/picks', data),
-    onSuccess: (_data, variables) => {
-      // Invalidate picks and stats
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['picks'] });
+      const previousPicks = queryClient.getQueryData<Pick[]>(['picks']);
+      const optimisticPick = makeOptimisticPick(variables);
+      queryClient.setQueriesData<Pick[]>({ queryKey: ['picks'] }, (current) => upsertPick(current, optimisticPick));
+      return { previousPicks };
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueriesData<Pick[]>({ queryKey: ['picks'] }, () => context?.previousPicks ?? []);
+    },
+    onSuccess: (savedPick, variables) => {
+      queryClient.setQueriesData<Pick[]>({ queryKey: ['picks'] }, (current) => upsertPick(current, savedPick ?? makeOptimisticPick(variables)));
       queryClient.invalidateQueries({ queryKey: ['picks'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      // Invalidate batch pick stats (single query, not per-game)
       queryClient.invalidateQueries({ queryKey: ['allPickStats'] });
-      // DON'T invalidate ['games'] — it's expensive and unnecessary for a pick action
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['allPickStats'] });
     },
   });
 }
@@ -114,13 +154,14 @@ export function useRemovePick() {
     onMutate: async ({ gameId }) => {
       await queryClient.cancelQueries({ queryKey: ['picks'] });
       const previousPicks = queryClient.getQueryData<Pick[]>(['picks']);
-      queryClient.setQueryData<Pick[]>(['picks'], (current) => current?.filter((pick) => pick.gameId !== gameId) ?? []);
+      queryClient.setQueriesData<Pick[]>({ queryKey: ['picks'] }, (current) => removePickFromCache(current, gameId));
       return { previousPicks };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previousPicks) {
-        queryClient.setQueryData(['picks'], context.previousPicks);
-      }
+      queryClient.setQueriesData<Pick[]>({ queryKey: ['picks'] }, () => context?.previousPicks ?? []);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.setQueriesData<Pick[]>({ queryKey: ['picks'] }, (current) => removePickFromCache(current, variables.gameId));
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['picks'] });

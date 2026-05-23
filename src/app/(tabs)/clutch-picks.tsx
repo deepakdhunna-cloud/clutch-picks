@@ -529,7 +529,7 @@ export default function ClutchPicksScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#010101' }}>
-      <StatusBar hidden />
+      <StatusBar style="light" hidden={false} />
       <ClutchPicksBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ErrorBoundary onGoBack={() => router.back()}>

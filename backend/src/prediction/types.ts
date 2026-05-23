@@ -98,6 +98,12 @@ export type CanonicalEngineRead = {
   warnings?: string[];
 };
 
+export type CanonicalEngineWeights = {
+  factor: number;
+  projection: number;
+  market: number;
+};
+
 export type CanonicalPredictionResult = {
   eventId: string;
   marketType: CanonicalMarketType;
@@ -258,9 +264,9 @@ export type HonestPrediction = {
   modelVersion: string;
   generatedAt: string;          // ISO timestamp
   dataSources: string[];
-  // Post-hoc market comparison. NOT used as a prediction input — populated
-  // after the model already decided. isDivergent === true when model and
-  // market differ by more than 10 percentage points on the home-win prob.
+  // Market comparison from the same consensus snapshot used by the engine
+  // when available. If no market snapshot was available to the engine, this
+  // stays undefined rather than inventing a comparison.
   marketComparison?: {
     modelHomeProb: number;
     marketHomeProb: number;

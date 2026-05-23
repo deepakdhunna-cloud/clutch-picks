@@ -1,6 +1,7 @@
 import type {
   CanonicalEngineRead,
   CanonicalFinalPick,
+  CanonicalEngineWeights,
   CanonicalMarketType,
   CanonicalPredictionResult,
   CanonicalProbabilities,
@@ -151,6 +152,7 @@ export function buildCanonicalPredictionResult(args: {
   modelVersion: string;
   blendedProbabilities?: CanonicalProbabilities;
   marketProbabilities?: CanonicalProbabilities;
+  engineWeights?: CanonicalEngineWeights;
   extraWarnings?: string[];
 }): CanonicalPredictionResult {
   const engineProjection = args.rawProjection ?? args.projection;
@@ -172,12 +174,17 @@ export function buildCanonicalPredictionResult(args: {
     away: engineProjection.awayWinProbability,
     draw: final.draw !== undefined ? engineProjection.drawProbability : undefined,
   });
+  const engineWeights = args.engineWeights ?? {
+    factor: args.marketProbabilities ? 0.8 : 0.86,
+    projection: 0.14,
+    market: args.marketProbabilities ? 0.06 : 0,
+  };
 
   const breakdown: CanonicalEngineRead[] = [
     engineRead({
       engine: "factor-model-v1",
       probabilities: normalizeCanonicalProbabilities(args.factorProbabilities),
-      weight: args.marketProbabilities ? 0.8 : 0.86,
+      weight: roundTo(engineWeights.factor),
       inputs: {
         factorCount: args.factors.length,
         availableFactorCount,
@@ -186,7 +193,7 @@ export function buildCanonicalPredictionResult(args: {
     engineRead({
       engine: engineProjection.engine,
       probabilities: projectionProbabilities,
-      weight: 0.14,
+      weight: roundTo(engineWeights.projection),
       inputs: {
         iterations: engineProjection.iterations,
         projectedHomeScore: engineProjection.projectedHomeScore,
@@ -200,7 +207,7 @@ export function buildCanonicalPredictionResult(args: {
       engineRead({
         engine: "market-calibration",
         probabilities: normalizeCanonicalProbabilities(args.marketProbabilities),
-        weight: 0.06,
+        weight: roundTo(engineWeights.market),
         inputs: {
           source: "SharpAPI consensus",
           usedAsSmallCalibrationOnly: true,

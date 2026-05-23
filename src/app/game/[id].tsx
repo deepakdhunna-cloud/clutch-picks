@@ -57,249 +57,13 @@ import {
   teamScoreText,
 } from '@/lib/cricket-score';
 import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceUrl } from '@/lib/watch-url';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExternalLink, Tv } from 'lucide-react-native';
 
-type WatchOptionKind = 'broadcast' | 'streaming';
-type WatchOption = {
-  name: string;
-  kind: WatchOptionKind;
-  note?: string;
-};
-type StreamingRule = {
-  match: RegExp;
-  options: WatchOption[];
-};
-
-const UNKNOWN_WATCH_LABELS = new Set([
-  'tbd',
-  'tba',
-  'n/a',
-  'na',
-  'none',
-  'not listed',
-  'broadcast info not listed',
-  'watch info tbd',
-]);
-
-const DIRECT_STREAMING_SOURCE_RE = /(mlb\.tv|espn\+|espn plus|peacock|paramount\+|prime video|amazon prime|apple tv\+|youtube tv|hulu|fubo|sling|directv stream|nba league pass|league pass|nfl\+|willow)/i;
-
-const WATCH_POPULARITY_ORDER: Array<{ match: RegExp; rank: number }> = [
-  { match: /youtube tv/i, rank: 10 },
-  { match: /hulu/i, rank: 20 },
-  { match: /peacock/i, rank: 30 },
-  { match: /prime video|amazon/i, rank: 40 },
-  { match: /espn\+|espn plus/i, rank: 45 },
-  { match: /paramount/i, rank: 50 },
-  { match: /apple tv/i, rank: 55 },
-  { match: /\bmax\b/i, rank: 60 },
-  { match: /fubo/i, rank: 70 },
-  { match: /directv/i, rank: 80 },
-  { match: /sling/i, rank: 90 },
-  { match: /mlb\.tv|mlb app/i, rank: 100 },
-  { match: /nba league pass|league pass/i, rank: 105 },
-  { match: /nfl\+/i, rank: 110 },
-  { match: /fox sports/i, rank: 120 },
-  { match: /nbc sports/i, rank: 125 },
-  { match: /cbs sports/i, rank: 130 },
-  { match: /abc app/i, rank: 135 },
-  { match: /regional sports/i, rank: 145 },
-  { match: /willow/i, rank: 150 },
-];
-
-const STREAMING_RULES: StreamingRule[] = [
-  {
-    match: /\bmlb\.tv\b/i,
-    options: [{ name: 'MLB.TV', kind: 'streaming', note: 'Official stream' }],
-  },
-  {
-    match: /\bmlb network\b/i,
-    options: [
-      { name: 'MLB app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Fubo', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bespn\+|espn plus\b/i,
-    options: [{ name: 'ESPN+', kind: 'streaming', note: 'Official stream' }],
-  },
-  {
-    match: /\bespn|espn2|espnu|acc network|sec network\b/i,
-    options: [
-      { name: 'ESPN app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Sling TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bfox|fs1|fs2|big ten network|btn\b/i,
-    options: [
-      { name: 'FOX Sports app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Fubo', kind: 'streaming', note: 'Live TV' },
-      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\babc\b/i,
-    options: [
-      { name: 'ABC app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bnbc|usa network|peacock\b/i,
-    options: [
-      { name: 'Peacock', kind: 'streaming', note: 'Official stream' },
-      { name: 'NBC Sports app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bcbs|paramount\+\b/i,
-    options: [
-      { name: 'Paramount+', kind: 'streaming', note: 'Official stream' },
-      { name: 'CBS Sports app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\btnt|tbs|tru tv|trutv\b/i,
-    options: [
-      { name: 'Max', kind: 'streaming', note: 'Sports add-on' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Hulu + Live TV', kind: 'streaming', note: 'Live TV' },
-      { name: 'Sling TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bprime video|amazon\b/i,
-    options: [{ name: 'Prime Video', kind: 'streaming', note: 'Official stream' }],
-  },
-  {
-    match: /\bapple|apple tv\+\b/i,
-    options: [{ name: 'Apple TV+', kind: 'streaming', note: 'Official stream' }],
-  },
-  {
-    match: /\bnba tv\b/i,
-    options: [
-      { name: 'NBA League Pass', kind: 'streaming', note: 'League stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bnfl network|nfl\+\b/i,
-    options: [
-      { name: 'NFL+', kind: 'streaming', note: 'Official stream' },
-      { name: 'YouTube TV', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-  {
-    match: /\bwillow\b/i,
-    options: [{ name: 'Willow TV', kind: 'streaming', note: 'Cricket stream' }],
-  },
-  {
-    match: /\bfanduel|bally sports|yes network|\byes\b|sny|nesn|masn|marquee|root sports|altitude|monumental|sportsnet\b/i,
-    options: [
-      { name: 'Regional sports app', kind: 'streaming', note: 'TV provider stream' },
-      { name: 'DIRECTV Stream', kind: 'streaming', note: 'Live TV' },
-      { name: 'Fubo', kind: 'streaming', note: 'Live TV' },
-    ],
-  },
-];
-
 function openWatchSource(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
-}
-
-function getWatchPopularityRank(option: WatchOption): number {
-  if (option.kind === 'broadcast') return 0;
-  const match = WATCH_POPULARITY_ORDER.find((rule) => rule.match.test(option.name));
-  return match?.rank ?? 999;
-}
-
-function sortWatchOptions(options: WatchOption[]): WatchOption[] {
-  return [...options].sort((a, b) => {
-    const kindDelta = a.kind === b.kind ? 0 : a.kind === 'broadcast' ? -1 : 1;
-    if (kindDelta !== 0) return kindDelta;
-    const rankDelta = getWatchPopularityRank(a) - getWatchPopularityRank(b);
-    if (rankDelta !== 0) return rankDelta;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-function watchKindForName(name: string): WatchOptionKind {
-  return DIRECT_STREAMING_SOURCE_RE.test(name) ? 'streaming' : 'broadcast';
-}
-
-function splitWatchString(value: string): string[] {
-  if (/^https?:\/\//i.test(value.trim())) return [value.trim()];
-  return value
-    .split(/\s*(?:,|;|\||\/)\s*/g)
-    .map((source) => source.trim())
-    .filter(Boolean);
-}
-
-function collectWatchNames(source: unknown): string[] {
-  if (!source) return [];
-  if (typeof source === 'string') return splitWatchString(source);
-  if (Array.isArray(source)) return source.flatMap((item) => collectWatchNames(item));
-  if (typeof source === 'object') {
-    const maybe = source as {
-      name?: unknown;
-      displayName?: unknown;
-      shortName?: unknown;
-      label?: unknown;
-      names?: unknown;
-    };
-    const direct = [maybe.name, maybe.displayName, maybe.shortName, maybe.label].find((value): value is string => typeof value === 'string' && value.trim().length > 0);
-    return direct ? splitWatchString(direct) : collectWatchNames(maybe.names);
-  }
-  return [];
-}
-
-function makeUniqueWatchOptions(options: WatchOption[]): WatchOption[] {
-  const seen = new Set<string>();
-  return options.reduce<WatchOption[]>((result, option) => {
-    const cleaned = option.name.replace(/\s+/g, ' ').trim();
-    const key = cleaned.toLowerCase();
-    if (!cleaned || UNKNOWN_WATCH_LABELS.has(key)) return result;
-    if (seen.has(key)) return result;
-    seen.add(key);
-    result.push({ ...option, name: cleaned });
-    return result;
-  }, []);
-}
-
-function inferStreamingOptions(names: string[]): WatchOption[] {
-  return makeUniqueWatchOptions(
-    names.flatMap((name) => (
-      STREAMING_RULES
-        .filter((rule) => rule.match.test(name))
-        .flatMap((rule) => rule.options)
-    ))
-  );
-}
-
-function getWatchOptions(primaryChannel?: string | null, watchSources?: unknown): WatchOption[] {
-  const names = [...collectWatchNames(primaryChannel), ...collectWatchNames(watchSources)];
-  const listedOptions = names.map((name) => ({
-    name,
-    kind: watchKindForName(name),
-    note: watchKindForName(name) === 'streaming' ? 'Listed stream' : 'Listed broadcast',
-  }));
-  return sortWatchOptions(makeUniqueWatchOptions([...listedOptions, ...inferStreamingOptions(names)]));
-}
-
-function getTopStreamingOption(primaryChannel?: string | null, watchSources?: unknown): WatchOption | null {
-  const streamingOptions = sortWatchOptions(
-    getWatchOptions(primaryChannel, watchSources).filter((option) => option.kind === 'streaming')
-  );
-  return streamingOptions.find((option) => /youtube tv/i.test(option.name)) ?? streamingOptions[0] ?? null;
 }
 
 function WhereToWatchRow({
@@ -308,23 +72,22 @@ function WhereToWatchRow({
 }: {
   primaryChannel?: string | null;
   watchSources?: unknown;
-  venue?: string | null;
 }) {
-  const topStream = useMemo(() => getTopStreamingOption(primaryChannel, watchSources), [primaryChannel, watchSources]);
-  const hasStreamInfo = Boolean(topStream);
-  const primaryText = topStream?.name ?? 'Watch info TBD';
-  const sourceMetaText = hasStreamInfo ? 'Top streaming option' : 'Streaming source not listed yet';
+  const watchOption = useMemo(() => getFeaturedWatchOption(primaryChannel, watchSources), [primaryChannel, watchSources]);
+  const hasWatchInfo = Boolean(watchOption);
+  const primaryText = watchOption?.name ?? 'Watch info TBD';
+  const sourceMetaText = watchOption?.note ?? 'Source not listed yet';
 
   return (
     <View style={styles.watchStrip}>
       <View style={styles.watchHubBorder}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={hasStreamInfo ? `Open ${primaryText}` : 'Watch source not listed'}
-          disabled={!topStream}
+          accessibilityLabel={hasWatchInfo ? `Open ${primaryText}` : 'Watch source not listed'}
+          disabled={!watchOption}
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            if (topStream) openWatchSource(topStream.name);
+            if (watchOption) openWatchSource(watchOption.name);
           }}
           style={({ pressed }) => [
             styles.watchHubCard,
@@ -341,8 +104,8 @@ function WhereToWatchRow({
               <Text style={styles.watchHubSourceMeta} numberOfLines={1}>{sourceMetaText}</Text>
             </View>
             <View style={styles.watchHubSourcesPill}>
-              <Text style={styles.watchHubSourcesPillText}>{hasStreamInfo ? 'Open' : 'TBD'}</Text>
-              {hasStreamInfo ? <ExternalLink size={13} color="rgba(226,240,249,0.72)" strokeWidth={2.6} /> : null}
+              <Text style={styles.watchHubSourcesPillText}>{hasWatchInfo ? 'Open' : 'TBD'}</Text>
+              {hasWatchInfo ? <ExternalLink size={13} color="rgba(226,240,249,0.72)" strokeWidth={2.6} /> : null}
             </View>
           </View>
         </Pressable>
@@ -429,12 +192,15 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
 
           {showSelectionLabel ? (
             <Animated.View style={[{
-              marginTop: 2,
+              marginTop: 7,
+              marginBottom: 5,
+              minWidth: isDisabled ? 92 : 116,
+              alignItems: 'center',
               backgroundColor: `${teamColors.primary}20`,
-              paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6,
+              paddingHorizontal: 13, paddingVertical: 4, borderRadius: 8,
               borderWidth: 1, borderColor: `${teamColors.primary}40`,
             }, labelStyle]}>
-              <Text style={{ fontSize: 8, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.1 }}>{isDisabled ? 'YOUR PICK' : 'TAP TO REMOVE'}</Text>
+              <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.2 }}>{isDisabled ? 'YOUR PICK' : 'TAP TO REMOVE'}</Text>
             </Animated.View>
           ) : null}
         </View>
@@ -1991,12 +1757,12 @@ export default function GameDetailScreen() {
               bar) to focus attention on the LED countdown. */}
           <View style={{ position: 'relative' }}>
           <View style={styles.teamNamesRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.teamName} numberOfLines={1}>{homeTeam.name}</Text>
+            <View style={styles.teamNameCell}>
+              <Text style={styles.teamName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.74}>{homeTeam.name}</Text>
               <Text style={styles.teamRecord}>{homeTeam.record}</Text>
             </View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={[styles.teamName, { color: '#fff' }]} numberOfLines={1}>{awayTeam.name}</Text>
+            <View style={[styles.teamNameCell, styles.teamNameCellAway]}>
+              <Text style={[styles.teamName, { color: '#fff', textAlign: 'right' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.74}>{awayTeam.name}</Text>
               <Text style={[styles.teamRecord, { color: '#ffffff' }]}>{awayTeam.record}</Text>
             </View>
           </View>
@@ -2163,7 +1929,6 @@ export default function GameDetailScreen() {
           <WhereToWatchRow
             primaryChannel={game.tvChannel}
             watchSources={[game.watchSources, game.broadcasts, game.tvChannels]}
-            venue={game.venue}
           />
         </View>
         <View style={styles.content}>
@@ -2281,16 +2046,18 @@ const styles = StyleSheet.create({
   followIcon: { fontSize: 13 },
   followText: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.9)' },
   detailWarmup: { minHeight: 160, alignItems: 'center', justifyContent: 'center' },
-  teamNamesRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 12, gap: 12 },
-  teamName: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: -0.3, lineHeight: 22 },
-  teamRecord: { fontSize: 12, color: '#ffffff', marginTop: 2 },
+  teamNamesRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 18, gap: 22 },
+  teamNameCell: { flex: 1, minWidth: 0 },
+  teamNameCellAway: { alignItems: 'flex-end' },
+  teamName: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: 0, lineHeight: 23 },
+  teamRecord: { fontSize: 12, color: '#ffffff', marginTop: 3 },
   jerseyRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 16 },
-  cricketHeroTeamColumn: { width: 106, alignItems: 'center' },
+  cricketHeroTeamColumn: { width: 110, alignItems: 'center' },
   cricketHeroScore: { fontSize: 30, lineHeight: 34, fontFamily: 'VT323_400Regular', letterSpacing: 1, marginBottom: 1 },
-  cricketHeroPlayerBlock: { width: 112, minHeight: 43, marginTop: -2, alignItems: 'center', justifyContent: 'flex-start' },
-  cricketHeroBatterStack: { width: '100%', marginTop: 2, gap: 1 },
-  cricketHeroRoleText: { fontSize: 8, lineHeight: 10, fontWeight: '900', letterSpacing: 1.1, textAlign: 'center' },
-  cricketHeroPlayerName: { color: 'rgba(255,255,255,0.76)', fontSize: 10.5, lineHeight: 12.5, fontWeight: '800', textAlign: 'center' },
+  cricketHeroPlayerBlock: { width: 124, minHeight: 52, marginTop: 3, alignItems: 'center', justifyContent: 'flex-start' },
+  cricketHeroBatterStack: { width: '100%', marginTop: 4, gap: 2 },
+  cricketHeroRoleText: { fontSize: 8, lineHeight: 12, fontWeight: '900', letterSpacing: 1.2, textAlign: 'center' },
+  cricketHeroPlayerName: { color: 'rgba(255,255,255,0.76)', fontSize: 11, lineHeight: 15, fontWeight: '800', textAlign: 'center' },
   cricketLivePanel: { marginHorizontal: 16, marginTop: 12, minHeight: 72, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(2,3,5,0.32)', padding: 10, flexDirection: 'row', alignItems: 'stretch', gap: 10 },
   cricketTargetBlock: { width: 86, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.34)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   cricketTargetBlockWide: { flex: 1, width: undefined },

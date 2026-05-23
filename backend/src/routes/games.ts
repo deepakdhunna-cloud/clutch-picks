@@ -1062,6 +1062,11 @@ function applyLiveAdjustmentIfNeeded(game: Game, pregamePrediction: GamePredicti
 }
 
 async function annotateMarketComparison(game: Game, prediction: GamePrediction): Promise<void> {
+  // New-engine predictions already carry the exact market snapshot used by
+  // the engine in translateNewEnginePrediction. Do not re-fetch here and risk
+  // showing a comparison that was not part of the canonical decision.
+  if (prediction.marketComparison || prediction.canonicalResult) return;
+
   try {
     const market = await fetchMarketConsensus(
       game.sport,

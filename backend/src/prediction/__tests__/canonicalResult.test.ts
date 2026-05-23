@@ -108,6 +108,47 @@ describe("canonical prediction result", () => {
     expect(result.canonicalResult.finalProbability).toBeLessThanOrEqual(1);
   });
 
+  it("reports the actual coverage-dependent engine weights used by the blend", () => {
+    const result = predictGame(makeNBAContext({
+      marketConsensus: {
+        lines: [
+          {
+            sportsbook: "Pinnacle",
+            homeAmerican: -120,
+            awayAmerican: 110,
+            homeDecimal: 1.83,
+            awayDecimal: 2.1,
+            homeImpliedProb: 0.545,
+            awayImpliedProb: 0.476,
+            fetchedAt: "2026-05-21T12:00:00.000Z",
+          },
+          {
+            sportsbook: "Book",
+            homeAmerican: -118,
+            awayAmerican: 108,
+            homeDecimal: 1.85,
+            awayDecimal: 2.08,
+            homeImpliedProb: 0.541,
+            awayImpliedProb: 0.481,
+            fetchedAt: "2026-05-21T12:00:00.000Z",
+          },
+        ],
+        pinnacleLine: null,
+        noVigHomeProb: 0.534,
+        noVigAwayProb: 0.466,
+        avgHomeProb: 0.543,
+        avgAwayProb: 0.479,
+      },
+    }));
+
+    const reads = new Map(result.canonicalResult.engineBreakdown.map((read) => [read.engine, read]));
+
+    expect(reads.get("factor-model-v1")?.weight).toBeCloseTo(0.76, 3);
+    expect(reads.get("game-script-v1")?.weight).toBeCloseTo(0.14, 3);
+    expect(reads.get("market-calibration")?.weight).toBeCloseTo(0.1, 3);
+    expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
+  });
+
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {
     const ctx = makeNBAContext();
     const canonical = buildCanonicalPredictionResult({

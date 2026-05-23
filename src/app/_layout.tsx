@@ -320,7 +320,7 @@ export default function RootLayout() {
         <SplashProvider>
           <ErrorBoundary>
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <StatusBar style="light" />
+              <StatusBar style="light" hidden={false} />
               <RootLayoutNav colorScheme={colorScheme} fontsReady={fontsReady} />
             </GestureHandlerRootView>
           </ErrorBoundary>

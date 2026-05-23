@@ -22,7 +22,7 @@
  * - Market can calibrate probability, but never overrides the model vote
  */
 
-import type { GameContext, FactorContribution, HonestPrediction, LeagueKey, SimulationProjection } from "./types";
+import type { GameContext, FactorContribution, HonestPrediction, LeagueKey, SimulationProjection, CanonicalEngineWeights } from "./types";
 import { getConfidenceBand } from "./types";
 import { ratingDeltaToHomeWinProb, applySoccerDrawAdjustment } from "./probability";
 import { simulateGameProjection } from "./simulation";
@@ -251,7 +251,7 @@ function blendModelProjectionAndMarket(args: {
   projectionAwayProb: number;
   projectionDrawProb?: number;
   coverage: number;
-}): { home: number; away: number; draw?: number } {
+}): { home: number; away: number; draw?: number; weights: CanonicalEngineWeights } {
   const {
     ctx,
     factorHomeProb,
@@ -266,6 +266,11 @@ function blendModelProjectionAndMarket(args: {
   const projectionWeight = clamp(0.08 + coverage * 0.06, 0.08, 0.14);
   const marketWeight = hasMarket ? clamp(0.06 + coverage * 0.04, 0.06, 0.10) : 0;
   const factorWeight = 1 - projectionWeight - marketWeight;
+  const weights = {
+    factor: factorWeight,
+    projection: projectionWeight,
+    market: marketWeight,
+  };
 
   if (SOCCER_LEAGUES.has(ctx.sport)) {
     const marketDraw =
@@ -291,7 +296,7 @@ function blendModelProjectionAndMarket(args: {
       nonMarketDraw * (1 - marketWeight) + marketDrawNorm * marketWeight,
       nonMarketAway * (1 - marketWeight) + marketAway * marketWeight,
     );
-    return preserveNonMarketOutcome({
+    const preserved = preserveNonMarketOutcome({
       home,
       away,
       draw,
@@ -299,6 +304,7 @@ function blendModelProjectionAndMarket(args: {
       nonMarketAway,
       nonMarketDraw,
     });
+    return { ...preserved, weights };
   }
 
   const [marketHome, marketAway] = hasMarket
@@ -312,12 +318,13 @@ function blendModelProjectionAndMarket(args: {
     nonMarketHome * (1 - marketWeight) + marketHome * marketWeight,
     nonMarketAway * (1 - marketWeight) + marketAway * marketWeight,
   );
-  return preserveNonMarketOutcome({
+  const preserved = preserveNonMarketOutcome({
     home,
     away,
     nonMarketHome,
     nonMarketAway,
   });
+  return { ...preserved, weights };
 }
 
 function projectionScoreThreshold(sport: string): number {
@@ -883,6 +890,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       draw: blended.draw,
     }),
     marketProbabilities,
+    engineWeights: blended.weights,
     extraWarnings: weakSportCalibration.warnings,
   });
   traceCanonicalDecision({

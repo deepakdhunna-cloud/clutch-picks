@@ -91,7 +91,12 @@ export function getPredictionDisplay(input: PredictionDisplayInput): PredictionD
     };
   }
 
-  const teamSide = finalPick === 'away' || prediction.predictedWinner === 'away' ? 'away' : 'home';
+  const teamSide =
+    finalPick === 'home' || finalPick === 'away'
+      ? finalPick
+      : prediction.predictedWinner === 'away'
+        ? 'away'
+        : 'home';
   const team = teamSide === 'home' ? homeTeam : awayTeam;
   const confidenceText = formatConfidence(confidence);
 

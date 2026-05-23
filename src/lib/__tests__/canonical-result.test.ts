@@ -93,6 +93,25 @@ describe('canonical UI result helpers', () => {
     expect(projectionDisplay.contextText).not.toContain('simulated');
   });
 
+  it('does not let a stale legacy winner override a canonical home pick', () => {
+    const game = makeGame();
+    game.prediction!.predictedWinner = 'away';
+    game.prediction!.predictedOutcome = 'away';
+    game.prediction!.canonicalResult = {
+      ...game.prediction!.canonicalResult!,
+      finalPick: 'home',
+      finalProbability: 0.61,
+      confidence: 61,
+      probabilities: { home: 0.61, away: 0.39 },
+    };
+
+    const display = getGamePredictionDisplay(game);
+
+    expect(display.outcome).toBe('home');
+    expect(display.badgeLabel).toBe('HOM');
+    expect(display.team?.abbreviation).toBe('HOM');
+  });
+
   it('hides raw simulation counts from projection copy', () => {
     expect(cleanProjectionCopy('8,000 simulated scripts aligned to the final pick')).toBe(
       'Expected-score model aligned to the final pick',

@@ -191,6 +191,26 @@ function recentFormString(form: GameContext["homeForm"] | undefined): string {
   return form.results.join("-");
 }
 
+function bestBookForPick(
+  market: GameContext["marketConsensus"] | undefined | null,
+  pickedSide: "home" | "away",
+): { sportsbook: string; american: number } | null {
+  const bestBook = market?.lines
+    ?.slice()
+    .sort((a, b) =>
+      pickedSide === "home"
+        ? b.homeAmerican - a.homeAmerican
+        : b.awayAmerican - a.awayAmerican,
+    )[0];
+
+  return bestBook
+    ? {
+        sportsbook: bestBook.sportsbook,
+        american: pickedSide === "home" ? bestBook.homeAmerican : bestBook.awayAmerican,
+      }
+    : null;
+}
+
 /**
  * Build a GamePrediction from a HonestPrediction + Game shell.
  * Confidence is deliberately the RAW max probability — no ceilings, no
@@ -274,6 +294,12 @@ export function translateNewEnginePrediction(
     homeStreak: ctx?.homeForm?.streak ?? 0,
     awayStreak: ctx?.awayForm?.streak ?? 0,
     isTossUp: Math.abs(homeProbPct - awayProbPct) < 5,
+    marketComparison: newPred.marketComparison
+      ? {
+          ...newPred.marketComparison,
+          bestBook: bestBookForPick(ctx?.marketConsensus, predictedWinner),
+        }
+      : undefined,
   };
 }
 

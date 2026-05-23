@@ -8,6 +8,7 @@ import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { cricketRequiredText, cricketRoleText, cricketStatusText, teamScoreText } from '@/lib/cricket-score';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { getFeaturedWatchOption } from '@/lib/watch-options';
 
 const CARD_WIDTH = 300;
 const CARD_HEIGHT = 165;
@@ -52,6 +53,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
   const suspensionReason = suspendedReasonText(game);
   const awayWinning = awayScore > homeScore;
   const homeWinning = homeScore > awayScore;
+  const watchOption = useMemo(() => getFeaturedWatchOption(game.tvChannel, game.watchSources), [game.tvChannel, game.watchSources]);
 
   return (
     <View style={{
@@ -301,7 +303,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               })()}
             </View>
             {/* Right: TV channel badge */}
-            {game.tvChannel ? (
+            {watchOption ? (
               <View style={{
                 backgroundColor: 'rgba(255,255,255,0.12)',
                 paddingHorizontal: 7,
@@ -310,7 +312,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.22)',
               }}>
-                <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', maxWidth: 104 }}>{game.tvChannel}</Text>
+                <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', maxWidth: 104 }}>{watchOption.name}</Text>
               </View>
             ) : null}
           </View>
