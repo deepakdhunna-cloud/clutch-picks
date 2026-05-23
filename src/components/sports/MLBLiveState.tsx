@@ -197,6 +197,8 @@ type MLBLiveCenterStackProps = {
   awayScore: number;
   homeJersey: React.ReactNode;
   awayJersey: React.ReactNode;
+  homeIsSelected?: boolean;
+  awayIsSelected?: boolean;
 };
 
 export function MLBLiveCenterStack({
@@ -207,6 +209,8 @@ export function MLBLiveCenterStack({
   awayScore,
   homeJersey,
   awayJersey,
+  homeIsSelected = false,
+  awayIsSelected = false,
 }: MLBLiveCenterStackProps) {
   const homeBatting = liveState.inningHalf === 'bottom';
   const battingTeamAbbr = homeBatting ? homeTeamAbbr : awayTeamAbbr;
@@ -270,6 +274,7 @@ export function MLBLiveCenterStack({
             liveState={liveState}
             teamAbbr={homeTeamAbbr}
             isHome={true}
+            isSelected={homeIsSelected}
           />
         </View>
 
@@ -296,6 +301,7 @@ export function MLBLiveCenterStack({
             liveState={liveState}
             teamAbbr={awayTeamAbbr}
             isHome={false}
+            isSelected={awayIsSelected}
           />
         </View>
       </View>
@@ -309,10 +315,14 @@ function TeamRoleUnderJersey({
   liveState,
   teamAbbr,
   isHome,
-}: TeamRoleUnderJerseyProps) {
+  isSelected = false,
+}: TeamRoleUnderJerseyProps & { isSelected?: boolean }) {
+  const pickColor = teamPrimary(teamAbbr);
+
   if (liveState.betweenInnings) {
     return (
       <View style={styles.jerseyRoleBlock}>
+        {isSelected ? <LivePickBadge color={pickColor} /> : null}
         <Text style={styles.jerseyRoleLabel}>
           ON DECK
         </Text>
@@ -330,6 +340,7 @@ function TeamRoleUnderJersey({
 
   return (
     <View style={styles.jerseyRoleBlock}>
+      {isSelected ? <LivePickBadge color={pickColor} /> : null}
       <Text style={styles.jerseyRoleLabel}>
         {role}
       </Text>
@@ -341,6 +352,14 @@ function TeamRoleUnderJersey({
       >
         {playerName}
       </Text>
+    </View>
+  );
+}
+
+function LivePickBadge({ color }: { color: string }) {
+  return (
+    <View style={[styles.livePickBadge, { backgroundColor: `${color}24`, borderColor: `${color}66` }]}>
+      <Text style={styles.livePickBadgeText}>YOUR PICK</Text>
     </View>
   );
 }
@@ -700,7 +719,7 @@ const styles = StyleSheet.create({
   },
   fieldRow: {
     width: '100%',
-    minHeight: 176,
+    minHeight: 188,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -708,7 +727,7 @@ const styles = StyleSheet.create({
   },
   teamJerseyColumn: {
     width: 104,
-    minHeight: 172,
+    minHeight: 184,
     alignItems: 'center',
     paddingTop: 2,
   },
@@ -719,9 +738,27 @@ const styles = StyleSheet.create({
   },
   jerseyRoleBlock: {
     width: 104,
-    height: 46,
-    marginTop: -12,
+    minHeight: 62,
+    marginTop: -4,
     alignItems: 'center',
+  },
+  livePickBadge: {
+    minWidth: 88,
+    height: 19,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  livePickBadgeText: {
+    fontSize: 8,
+    lineHeight: 10,
+    color: 'rgba(235,246,255,0.92)',
+    letterSpacing: 1,
+    fontWeight: '900',
+    includeFontPadding: false,
   },
   jerseyRoleLabel: {
     fontSize: 9,

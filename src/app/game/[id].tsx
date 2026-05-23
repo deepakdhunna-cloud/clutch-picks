@@ -359,6 +359,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   isDisabled,
   jerseyType,
   sport,
+  showSelectionLabel = true,
 }: {
   team: GameTeam;
   isSelected: boolean;
@@ -366,6 +367,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   isDisabled: boolean;
   jerseyType: ReturnType<typeof sportEnumToJersey>;
   sport: string;
+  showSelectionLabel?: boolean;
 }) {
   const scale = useSharedValue(1);
   const selectionProgress = useSharedValue(isSelected ? 1 : 0);
@@ -425,15 +427,16 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
             />
           </Animated.View>
 
-          {/* "YOUR PICK" label — fades in smoothly */}
-          <Animated.View style={[{
-            marginTop: 2,
-            backgroundColor: `${teamColors.primary}20`,
-            paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6,
-            borderWidth: 1, borderColor: `${teamColors.primary}40`,
-          }, labelStyle]}>
-            <Text style={{ fontSize: 8, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.1 }}>{isDisabled ? 'YOUR PICK' : 'TAP TO REMOVE'}</Text>
-          </Animated.View>
+          {showSelectionLabel ? (
+            <Animated.View style={[{
+              marginTop: 2,
+              backgroundColor: `${teamColors.primary}20`,
+              paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6,
+              borderWidth: 1, borderColor: `${teamColors.primary}40`,
+            }, labelStyle]}>
+              <Text style={{ fontSize: 8, fontWeight: '900', color: teamColors.primary, letterSpacing: 1.1 }}>{isDisabled ? 'YOUR PICK' : 'TAP TO REMOVE'}</Text>
+            </Animated.View>
+          ) : null}
         </View>
       </Animated.View>
     </Pressable>
@@ -2006,12 +2009,15 @@ export default function GameDetailScreen() {
                 awayTeamAbbr={awayTeam.abbreviation}
                 homeScore={game.homeScore ?? 0}
                 awayScore={game.awayScore ?? 0}
+                homeIsSelected={userPick?.pickedTeam === 'home'}
+                awayIsSelected={userPick?.pickedTeam === 'away'}
                 homeJersey={
                   <TappableJerseyHero
                     team={homeTeam}
                     isSelected={userPick?.pickedTeam === 'home'}
                     onSelect={() => {}}
                     isDisabled={true}
+                    showSelectionLabel={false}
                     jerseyType={jerseyType}
                     sport={game.sport}
                   />
@@ -2022,6 +2028,7 @@ export default function GameDetailScreen() {
                     isSelected={userPick?.pickedTeam === 'away'}
                     onSelect={() => {}}
                     isDisabled={true}
+                    showSelectionLabel={false}
                     jerseyType={jerseyType}
                     sport={game.sport}
                   />

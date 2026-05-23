@@ -1,12 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import { useMemo } from 'react';
-import {
-  APP_STORE_SCREENSHOT_MODE,
-  getScreenshotAllPickStats,
-  getScreenshotPicks,
-  getScreenshotStats,
-} from '@/lib/app-store-screenshot-mode';
 
 // Types for picks
 export interface Pick {
@@ -61,14 +55,12 @@ export function useUserPicks(enabled = true) {
   return useQuery({
     queryKey: ['picks'],
     queryFn: async () => {
-      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotPicks();
-
       const result = await api.get<Pick[]>('/api/picks');
       return result ?? [];
     },
     enabled,
-    staleTime: APP_STORE_SCREENSHOT_MODE ? Infinity : 30000,
-    refetchInterval: APP_STORE_SCREENSHOT_MODE ? false : 60000,
+    staleTime: 30000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: false,
   });
 }
@@ -78,8 +70,6 @@ export function useUserStats(enabled = true) {
   return useQuery({
     queryKey: ['stats'],
     queryFn: async () => {
-      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotStats();
-
       const result = await api.get<UserStats>('/api/picks/stats');
       return result ?? {
         picksMade: 0,
@@ -90,8 +80,8 @@ export function useUserStats(enabled = true) {
       };
     },
     enabled,
-    staleTime: APP_STORE_SCREENSHOT_MODE ? Infinity : 30000,
-    refetchInterval: APP_STORE_SCREENSHOT_MODE ? false : 60000,
+    staleTime: 30000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: false,
   });
 }
@@ -146,15 +136,13 @@ export function useGamePick(gameId: string) {
   return useQuery({
     queryKey: ['picks'],
     queryFn: async () => {
-      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotPicks();
-
       const result = await api.get<Pick[]>('/api/picks');
       return result ?? [];
     },
     select: selector,
     enabled: gameId.length > 0,
-    staleTime: APP_STORE_SCREENSHOT_MODE ? Infinity : 30000,
-    refetchInterval: APP_STORE_SCREENSHOT_MODE ? false : 60000,
+    staleTime: 30000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: false,
   });
 }
@@ -186,15 +174,13 @@ export function useGamePickStats(gameId: string) {
   return useQuery({
     queryKey: ['allPickStats'],
     queryFn: async () => {
-      if (APP_STORE_SCREENSHOT_MODE) return getScreenshotAllPickStats();
-
       const result = await api.get<AllPickStatsMap>('/api/picks/all-stats');
       return result ?? {};
     },
     select: selector,
     enabled: gameId.length > 0,
-    staleTime: APP_STORE_SCREENSHOT_MODE ? Infinity : 60000,
-    refetchInterval: APP_STORE_SCREENSHOT_MODE ? false : 120000,
+    staleTime: 60000,
+    refetchInterval: 120000,
     refetchIntervalInBackground: false,
   });
 }
