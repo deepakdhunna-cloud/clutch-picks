@@ -10,7 +10,7 @@
  *   4. Sums weighted deltas into a total rating advantage
  *   5. Converts to probability via the Elo logistic
  *   6. Blends in game-script simulation + a small market calibration anchor
- *   7. Harmonizes the public projection to the final consensus outcome
+ *   7. Preserves projection as its own expected-score read
  *   8. Returns the prediction with all factors, projection, confidence, and band
  *
  * GROUND RULES (Section 0):
@@ -44,7 +44,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.5.1-coverage-form-weather-calibration";
+export const MODEL_VERSION = "2.6.0-neutral-factor-projection-truth";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -181,25 +181,9 @@ function applyWeakSportCalibration(
   };
 }
 
-function roundTo(value: number, decimals = 3): number {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
-
 function topOutcome(home: number, away: number, draw?: number): ConsensusOutcome {
   if (draw !== undefined && draw >= home && draw >= away) return "draw";
   return home >= away ? "home" : "away";
-}
-
-function rankedOutcomes(home: number, away: number, draw?: number): Array<{ side: ConsensusOutcome; value: number }> {
-  const values: Array<{ side: ConsensusOutcome; value: number }> = [
-    { side: "home", value: home },
-    { side: "away", value: away },
-  ];
-  if (draw !== undefined) {
-    values.push({ side: "draw", value: draw });
-  }
-  return values.sort((a, b) => b.value - a.value);
 }
 
 function preserveNonMarketOutcome(args: {
@@ -328,213 +312,6 @@ function blendModelProjectionAndMarket(args: {
   return { ...preserved, weights };
 }
 
-function projectionScoreThreshold(sport: string): number {
-  if (sport === "NBA" || sport === "NCAAB") return 0.5;
-  if (sport === "NFL" || sport === "NCAAF") return 0.35;
-  if (sport === "IPL") return 2.5;
-  return 0.15;
-}
-
-function projectionProbabilityRead(
-  projection: SimulationProjection,
-  includeDraw: boolean,
-): { side: ConsensusOutcome; edge: number } | null {
-  const ranked = rankedOutcomes(
-    projection.homeWinProbability,
-    projection.awayWinProbability,
-    includeDraw ? projection.drawProbability : undefined,
-  );
-  const top = ranked[0];
-  const second = ranked[1];
-  if (!top || !second) return null;
-
-  const edge = top.value - second.value;
-  if (edge < 0.015) return null;
-  return { side: top.side, edge };
-}
-
-function projectionScoreRead(
-  sport: string,
-  projection: SimulationProjection,
-  includeDraw: boolean,
-): ConsensusOutcome | null {
-  const scoreEdge = projection.projectedSpread;
-  if (Math.abs(scoreEdge) < projectionScoreThreshold(sport)) {
-    return includeDraw ? "draw" : null;
-  }
-  return scoreEdge > 0 ? "home" : "away";
-}
-
-function coherentProjectionOutcome(
-  sport: string,
-  projection: SimulationProjection,
-  includeDraw: boolean,
-): { side: ConsensusOutcome; edge: number } | null {
-  const probabilityRead = projectionProbabilityRead(projection, includeDraw);
-  const scoreSide = projectionScoreRead(sport, projection, includeDraw);
-  if (!probabilityRead || !scoreSide || probabilityRead.side !== scoreSide) {
-    return null;
-  }
-  return probabilityRead;
-}
-
-function promoteThreeWayOutcome(args: {
-  home: number;
-  away: number;
-  draw: number;
-  side: ConsensusOutcome;
-  minEdge: number;
-}): { home: number; away: number; draw: number } {
-  const values = {
-    home: args.home,
-    away: args.away,
-    draw: args.draw,
-  };
-  const nextBest = Math.max(
-    args.side === "home" ? 0 : values.home,
-    args.side === "away" ? 0 : values.away,
-    args.side === "draw" ? 0 : values.draw,
-  );
-  values[args.side] = Math.max(values[args.side], nextBest + args.minEdge);
-  const [home, draw, away] = normalizeThreeWay(values.home, values.draw, values.away);
-  return { home, away, draw };
-}
-
-function reconcileWithProjection(args: {
-  sport: string;
-  home: number;
-  away: number;
-  draw?: number;
-  projection: SimulationProjection;
-  gameId: string;
-}): { home: number; away: number; draw?: number } {
-  const includeDraw = args.draw !== undefined;
-  const projectionRead = coherentProjectionOutcome(args.sport, args.projection, includeDraw);
-  if (!projectionRead) return { home: args.home, away: args.away, draw: args.draw };
-
-  const blendedSide = topOutcome(args.home, args.away, args.draw);
-  if (projectionRead.side === blendedSide) return { home: args.home, away: args.away, draw: args.draw };
-
-  const reconciledEdge = clamp(projectionRead.edge, 0.002, includeDraw ? 0.12 : 0.18);
-  let reconciled: { home: number; away: number; draw?: number };
-  if (includeDraw) {
-    reconciled = promoteThreeWayOutcome({
-      home: args.home,
-      away: args.away,
-      draw: args.draw ?? 0,
-      side: projectionRead.side,
-      minEdge: reconciledEdge,
-    });
-  } else {
-    const home = projectionRead.side === "home" ? 0.5 + reconciledEdge / 2 : 0.5 - reconciledEdge / 2;
-    reconciled = { home, away: 1 - home };
-  }
-
-  console.warn(
-    `[projection-consensus] ${args.gameId} ${args.sport}: blended=${blendedSide} ` +
-    `but coherent projection=${projectionRead.side}; using projection-backed side ` +
-    `(${Math.round(reconciled.home * 1000) / 10}-${Math.round(reconciled.away * 1000) / 10}` +
-    `${reconciled.draw !== undefined ? `-${Math.round(reconciled.draw * 1000) / 10}` : ""})`,
-  );
-
-  return reconciled;
-}
-
-function scoreAlignedWithOutcome(
-  sport: string,
-  projection: SimulationProjection,
-  outcome: ConsensusOutcome,
-): boolean {
-  if (outcome === "draw") {
-    return Math.abs(projection.projectedSpread) < projectionScoreThreshold(sport);
-  }
-  return outcome === "home"
-    ? projection.projectedSpread > 0
-    : projection.projectedSpread < 0;
-}
-
-function alignProjectedScores(
-  sport: string,
-  projection: SimulationProjection,
-  outcome: ConsensusOutcome,
-): Pick<SimulationProjection, "projectedHomeScore" | "projectedAwayScore" | "projectedSpread" | "projectedTotal"> {
-  if (scoreAlignedWithOutcome(sport, projection, outcome)) {
-    return {
-      projectedHomeScore: projection.projectedHomeScore,
-      projectedAwayScore: projection.projectedAwayScore,
-      projectedSpread: projection.projectedSpread,
-      projectedTotal: projection.projectedTotal,
-    };
-  }
-
-  const total = Math.max(0, projection.projectedHomeScore + projection.projectedAwayScore);
-  if (outcome === "draw") {
-    const tiedScore = roundTo(total / 2, 1);
-    return {
-      projectedHomeScore: tiedScore,
-      projectedAwayScore: tiedScore,
-      projectedSpread: 0,
-      projectedTotal: roundTo(tiedScore * 2, 1),
-    };
-  }
-
-  const side = outcome === "home" ? 1 : -1;
-  const minimumSpread = Math.max(0.1, projectionScoreThreshold(sport));
-  const spreadMagnitude = Math.max(Math.abs(projection.projectedSpread), minimumSpread);
-  const targetSpread = side * spreadMagnitude;
-  const projectedHomeScore = roundTo(Math.max(0, (total + targetSpread) / 2), 1);
-  const projectedAwayScore = roundTo(Math.max(0, (total - targetSpread) / 2), 1);
-  return {
-    projectedHomeScore,
-    projectedAwayScore,
-    projectedSpread: roundTo(projectedHomeScore - projectedAwayScore, 1),
-    projectedTotal: roundTo(projectedHomeScore + projectedAwayScore, 1),
-  };
-}
-
-export function harmonizeProjectionWithConsensus(args: {
-  sport: string;
-  projection: SimulationProjection;
-  homeWinProbability: number;
-  awayWinProbability: number;
-  drawProbability?: number;
-}): SimulationProjection {
-  const outcome = topOutcome(args.homeWinProbability, args.awayWinProbability, args.drawProbability);
-  const scoreFields = alignProjectedScores(args.sport, args.projection, outcome);
-  const alignedHomeProb = roundTo(args.homeWinProbability);
-  const alignedAwayProb = roundTo(args.awayWinProbability);
-  const alignedDrawProb = args.drawProbability !== undefined ? roundTo(args.drawProbability) : undefined;
-  const probabilityChanged =
-    Math.abs(args.projection.homeWinProbability - alignedHomeProb) > 0.0005 ||
-    Math.abs(args.projection.awayWinProbability - alignedAwayProb) > 0.0005 ||
-    (alignedDrawProb !== undefined &&
-      Math.abs((args.projection.drawProbability ?? 0) - alignedDrawProb) > 0.0005);
-  const scoreChanged =
-    scoreFields.projectedHomeScore !== args.projection.projectedHomeScore ||
-    scoreFields.projectedAwayScore !== args.projection.projectedAwayScore ||
-    scoreFields.projectedSpread !== args.projection.projectedSpread;
-  const signals = probabilityChanged || scoreChanged
-    ? [
-        {
-          key: "engine-consensus",
-          label: "Engine consensus",
-          value: outcome === "home" ? 1 : outcome === "away" ? -1 : 0,
-          evidence: "Prediction, projected score, and simulator probability were reconciled to one final outcome",
-        },
-        ...args.projection.signals.filter((signal) => signal.key !== "engine-consensus"),
-      ].slice(0, 5)
-    : args.projection.signals;
-
-  return {
-    ...args.projection,
-    homeWinProbability: alignedHomeProb,
-    awayWinProbability: alignedAwayProb,
-    drawProbability: alignedDrawProb,
-    ...scoreFields,
-    signals,
-  };
-}
-
 /**
  * Redistribute weight from unavailable factors proportionally to available ones.
  *
@@ -584,81 +361,21 @@ export function normalizeWeightsToOne(factors: FactorContribution[]): FactorCont
 }
 
 /**
- * Pool weight from "no-signal" factors into the best available directional
- * anchor so a real edge isn't diluted by empty slots on light-data nights.
+ * Keep the factor blend honest after unavailable-data redistribution.
  *
- * A factor with hasSignal=false (no evidence pushing in either direction)
- * previously reserved its weight slice and contributed 0 to the weighted
- * Elo delta. That artificially muted the rating_diff signal: for a 200 Elo
- * favorite on a night with no injuries / no b2b / no net rating data, the
- * final probability landed near 60% instead of the 77% Elo itself implies.
- * Tennis exposed the mirror-image bug: many new players start at the same
- * neutral Elo, so pooling into a zero Elo delta drowned out ranking signal.
+ * `hasSignal=false` means the factor has no side-specific evidence. That is
+ * different from "missing." A confirmed neutral read like equal rest, no
+ * back-to-back, normal travel, or no reported injury edge should remain a
+ * neutral vote. Donating that weight into Elo made ordinary games look more
+ * certain than the evidence supported.
  *
- * The user-facing math (from the original FIX THE BLEND spec):
- *   final = effectiveEloWeight * eloProb + signaledWeight * factorAvg
- * In rating-delta space the equivalent is: give unsignaled factors' weight to
- * rating_diff when it has a real directional edge, otherwise to the strongest
- * available signaled factor, then aggregate contributions as usual.
- *
- * Non-directional signals with hasSignal=true (for example adverse tennis
- * weather that raises variance without favoring either player) keep their
- * weight as a zero-delta confidence drag instead of donating it to a side.
- *
- * Invariants:
- *   - available=false factors have already been zeroed by redistributeWeights
- *     before this runs — they won't double-count.
- *   - Total weight is preserved (we only move weight, never drop it).
+ * Unavailable factors are already handled by `redistributeWeights()` before
+ * this step. This function intentionally preserves the post-redistribution
+ * weights so neutral evidence compresses confidence instead of amplifying the
+ * nearest directional anchor.
  */
 export function blendFactors(factors: FactorContribution[]): FactorContribution[] {
-  const ratingIdx = factors.findIndex((f) => f.key === "rating_diff");
-
-  const hasDirectionalSignal = (factor: FactorContribution): boolean =>
-    factor.available && factor.hasSignal && Math.abs(factor.homeDelta) > 0.001;
-  const retainsNonDirectionalWeight = (factor: FactorContribution): boolean =>
-    factor.available && factor.hasSignal && factor.key === "tennis_conditions";
-
-  let anchorIdx =
-    ratingIdx >= 0 && hasDirectionalSignal(factors[ratingIdx]!)
-      ? ratingIdx
-      : -1;
-
-  if (anchorIdx === -1) {
-    let bestImpact = 0;
-    factors.forEach((factor, index) => {
-      if (!hasDirectionalSignal(factor)) return;
-      const impact = Math.abs(factor.homeDelta * factor.weight);
-      if (impact > bestImpact) {
-        bestImpact = impact;
-        anchorIdx = index;
-      }
-    });
-  }
-
-  if (anchorIdx === -1) {
-    // No directional signal in this set — keep the factors intact so the
-    // caller still gets a valid 50/50 output instead of accidental data loss.
-    return factors;
-  }
-
-  let pooled = 0;
-  const result = factors.map((f, i) => {
-    if (i === anchorIdx) return { ...f };
-    if (f.available && !hasDirectionalSignal(f) && !retainsNonDirectionalWeight(f) && f.weight > 0) {
-      pooled += f.weight;
-      return { ...f, weight: 0 };
-    }
-    return { ...f };
-  });
-
-  if (pooled > 0) {
-    result[anchorIdx] = {
-      ...result[anchorIdx]!,
-      weight: result[anchorIdx]!.weight + pooled,
-    };
-  }
-
-  return result;
+  return factors;
 }
 
 /**
@@ -691,9 +408,8 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   }
   const normalizedFactors = normalizeWeightsToOne(redistributedFactors);
 
-  // 2c. Pool weight from "no-signal" factors into rating_diff. Without this,
-  //     a light-data night with a strong Elo edge compresses toward 50%.
-  //     See blendFactors doc-comment for the full math.
+  // 2c. Preserve neutral factors as neutral votes. Missing inputs were already
+  //     redistributed above; confirmed no-edge inputs should not amplify Elo.
   const adjustedFactors = blendFactors(normalizedFactors);
 
   // 3. Sum weighted deltas → total rating advantage for home
@@ -747,17 +463,9 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     coverage: rawCoverage,
   });
 
-  const reconciled = reconcileWithProjection({
-    sport: ctx.sport,
-    home: blended.home,
-    away: blended.away,
-    draw: blended.draw,
-    projection: rawProjection,
-    gameId: ctx.game.id,
-  });
-  homeWinProb = reconciled.home;
-  awayWinProb = reconciled.away;
-  drawProb = reconciled.draw;
+  homeWinProb = blended.home;
+  awayWinProb = blended.away;
+  drawProb = blended.draw;
 
   // 6. Determine winner and confidence
   // For soccer: max of home/draw/away. For others: max of home/away.
@@ -783,13 +491,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     }
   }
 
-  const projection = harmonizeProjectionWithConsensus({
-    sport: ctx.sport,
-    projection: rawProjection,
-    homeWinProbability: homeWinProb,
-    awayWinProbability: awayWinProb,
-    drawProbability: drawProb,
-  });
+  const projection = rawProjection;
 
   // 7. Collect unavailable factors for display
   const unavailableFactors = adjustedFactors
@@ -806,6 +508,15 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   }
   if (ctx.marketConsensus) {
     dataSources.push("SharpAPI market consensus");
+  }
+  if (ctx.sportsDataIO?.homeAdvanced || ctx.sportsDataIO?.awayAdvanced) {
+    dataSources.push("SportsDataIO team stats");
+  }
+  if (ctx.sportsDataIO?.homeLineup || ctx.sportsDataIO?.awayLineup) {
+    dataSources.push("SportsDataIO depth charts");
+  }
+  if (ctx.sportsDataIO?.homeInjuries || ctx.sportsDataIO?.awayInjuries) {
+    dataSources.push("SportsDataIO injury feed");
   }
 
   // 9. Market comparison after the blend. Market consensus already had a
@@ -852,19 +563,6 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       );
     }
   }
-  const finalOutcome = topOutcome(homeWinProb, awayWinProb, drawProb);
-  const projectionOutcome = topOutcome(
-    projection.homeWinProbability,
-    projection.awayWinProbability,
-    projection.drawProbability,
-  );
-  if (finalOutcome !== projectionOutcome) {
-    console.error(
-      `[prediction-invariant] projection outcome ${projectionOutcome} does not match final outcome ` +
-      `${finalOutcome} for ${ctx.game.id} ${ctx.sport}`,
-    );
-  }
-
   const generatedAt = new Date().toISOString();
   const marketProbabilities =
     market && Number.isFinite(market.noVigHomeProb)

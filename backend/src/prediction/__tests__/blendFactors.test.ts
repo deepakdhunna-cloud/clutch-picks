@@ -2,9 +2,9 @@
  * Tests for the factor-blending math.
  *
  * Covers:
- *   (a) blendFactors with all hasSignal=false → rating_diff absorbs the pool
- *       so the final Elo delta equals the Elo-only prediction.
- *   (b) Partial signal — weight moves only from no-signal factors.
+ *   (a) blendFactors preserves available no-edge factors as neutral votes
+ *       so Elo does not absorb unrelated weight.
+ *   (b) Partial signal — directional and neutral factors keep their weights.
  *   (c) Soccer H + D + A sums to 1.0 after the fix runs end-to-end.
  *   (d) NBA / NHL / MLS factor weights sum to exactly 1.0 after normalization.
  */
@@ -80,10 +80,10 @@ function makeHoopsContext(homeElo: number, awayElo: number, sport: "NBA" | "NHL"
   };
 }
 
-// ─── (a) all hasSignal=false → only Elo contributes ─────────────────────
+// ─── (a) all hasSignal=false → neutral factors stay neutral ─────────────
 
-describe("blendFactors — all hasSignal=false", () => {
-  it("pools every other factor's weight into rating_diff so Elo gets full 1.0", () => {
+describe("blendFactors — neutral factors", () => {
+  it("keeps no-edge factors as neutral confidence drag instead of donating to Elo", () => {
     const factors: FactorContribution[] = [
       f("rating_diff", 200, 0.40, true, true),
       f("rest_diff", 0, 0.05, true, false),
@@ -96,25 +96,26 @@ describe("blendFactors — all hasSignal=false", () => {
     ];
     const blended = blendFactors(factors);
     const rating = blended.find((x) => x.key === "rating_diff")!;
-    expect(rating.weight).toBeCloseTo(1.0, 6);
+    expect(rating.weight).toBeCloseTo(0.40, 6);
 
-    // Elo delta contribution equals the full 200 (no dilution).
+    // Neutral no-edge factors should keep the model closer to pick'em than
+    // pure Elo would, instead of manufacturing extra confidence.
     const totalDelta = blended.reduce(
       (sum, x) => sum + (x.available ? x.homeDelta * x.weight : 0),
       0,
     );
-    expect(totalDelta).toBeCloseTo(200, 6);
+    expect(totalDelta).toBeCloseTo(80, 6);
 
-    // Probability equals pure-Elo probability.
     const blendedProb = ratingDeltaToHomeWinProb(totalDelta);
     const eloOnlyProb = ratingDeltaToHomeWinProb(200);
-    expect(blendedProb).toBeCloseTo(eloOnlyProb, 6);
+    expect(blendedProb).toBeGreaterThan(0.5);
+    expect(blendedProb).toBeLessThan(eloOnlyProb);
   });
 
-  it("predictGame on a 200 Elo NBA gap lands within 2pp of pure-Elo probability on a zero-signal night", () => {
+  it("predictGame on a 200 Elo NBA gap is strong but below pure Elo on a zero-signal night", () => {
     // Home 1600, away 1400; NBA home bonus is ~90, so eloDelta = 290.
-    // With zero signal on every other factor, rating_diff should absorb
-    // essentially all the weight and the prediction should track pure Elo.
+    // With zero side-specific support elsewhere, neutral factors should keep
+    // the read below pure Elo instead of acting like extra Elo evidence.
     const ctx = makeHoopsContext(1600, 1400, "NBA");
     const pred = predictGame(ctx);
 
@@ -122,14 +123,15 @@ describe("blendFactors — all hasSignal=false", () => {
     const eloDelta = base.find((x) => x.key === "rating_diff")!.homeDelta;
     const pureEloProb = ratingDeltaToHomeWinProb(eloDelta);
 
-    expect(Math.abs(pred.homeWinProbability - pureEloProb)).toBeLessThan(0.02);
+    expect(pred.homeWinProbability).toBeGreaterThan(0.60);
+    expect(pred.homeWinProbability).toBeLessThan(pureEloProb);
   });
 });
 
-// ─── (b) partial signal — weight moves only from no-signal factors ──────
+// ─── (b) partial signal — weights stay attached to their evidence ───────
 
 describe("blendFactors — partial signal", () => {
-  it("only unsignaled factors donate weight; signaled non-Elo factors keep theirs", () => {
+  it("keeps signaled and no-edge factors at their assigned weights", () => {
     const factors: FactorContribution[] = [
       f("rating_diff", 150, 0.40, true, true),
       f("net_rating", 40, 0.11, true, true),     // real net-rating data
@@ -143,16 +145,13 @@ describe("blendFactors — partial signal", () => {
     const blended = blendFactors(factors);
 
     const rating = blended.find((x) => x.key === "rating_diff")!;
-    // Pool: 0.19 + 0.08 + 0.04 + 0.05 + 0.03 = 0.39 moved to rating_diff.
-    expect(rating.weight).toBeCloseTo(0.40 + 0.39, 6);
+    expect(rating.weight).toBeCloseTo(0.40, 6);
 
-    // Signaled non-Elo factors untouched.
     expect(blended.find((x) => x.key === "net_rating")!.weight).toBeCloseTo(0.11, 6);
     expect(blended.find((x) => x.key === "recent_form")!.weight).toBeCloseTo(0.10, 6);
 
-    // Unsignaled factors zeroed.
     for (const key of ["injuries_nba", "back_to_back", "rotation_fatigue", "rest_diff", "travel"]) {
-      expect(blended.find((x) => x.key === key)!.weight).toBe(0);
+      expect(blended.find((x) => x.key === key)!.weight).toBeGreaterThan(0);
     }
 
     // Total weight preserved.
@@ -168,15 +167,15 @@ describe("blendFactors — partial signal", () => {
       f("rating_diff", 100, 0.40, true, true),
       f("net_rating", 30, 0.11, true, true),
       f("some_unavail", 0, 0, false, false),    // already zeroed
-      f("injuries_nba", 0, 0.49, true, false),  // no signal → pools
+      f("injuries_nba", 0, 0.49, true, false),  // confirmed no edge
     ];
     const blended = blendFactors(factors);
-    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBeCloseTo(0.89, 6);
-    expect(blended.find((x) => x.key === "injuries_nba")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBeCloseTo(0.40, 6);
+    expect(blended.find((x) => x.key === "injuries_nba")!.weight).toBeCloseTo(0.49, 6);
     expect(blended.find((x) => x.key === "some_unavail")!.weight).toBe(0);
   });
 
-  it("pools into the strongest non-Elo signal when Elo is neutral", () => {
+  it("does not donate neutral Elo or format weight into a tennis ranking edge", () => {
     const factors: FactorContribution[] = [
       f("rating_diff", 0, 0.40, true, true),
       f("tennis_ranking_edge", -120, 0.16, true, true),
@@ -188,11 +187,11 @@ describe("blendFactors — partial signal", () => {
 
     const blended = blendFactors(factors);
 
-    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBe(0);
-    expect(blended.find((x) => x.key === "tennis_ranking_edge")!.weight).toBeCloseTo(0.16 + 0.40 + 0.05 + 0.03 + 0.04, 6);
-    expect(blended.find((x) => x.key === "rest_diff")!.weight).toBe(0);
-    expect(blended.find((x) => x.key === "travel")!.weight).toBe(0);
-    expect(blended.find((x) => x.key === "tennis_match_format")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBeCloseTo(0.40, 6);
+    expect(blended.find((x) => x.key === "tennis_ranking_edge")!.weight).toBeCloseTo(0.16, 6);
+    expect(blended.find((x) => x.key === "rest_diff")!.weight).toBeCloseTo(0.05, 6);
+    expect(blended.find((x) => x.key === "travel")!.weight).toBeCloseTo(0.03, 6);
+    expect(blended.find((x) => x.key === "tennis_match_format")!.weight).toBeCloseTo(0.04, 6);
   });
 
   it("keeps available non-directional signal weight as a confidence drag", () => {
@@ -205,10 +204,10 @@ describe("blendFactors — partial signal", () => {
 
     const blended = blendFactors(factors);
 
-    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBeCloseTo(0.96, 6);
+    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBeCloseTo(0.40, 6);
     expect(blended.find((x) => x.key === "tennis_conditions")!.weight).toBeCloseTo(0.04, 6);
-    expect(blended.find((x) => x.key === "rest_diff")!.weight).toBe(0);
-    expect(blended.find((x) => x.key === "recent_form")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "rest_diff")!.weight).toBeCloseTo(0.05, 6);
+    expect(blended.find((x) => x.key === "recent_form")!.weight).toBeCloseTo(0.51, 6);
   });
 
   it("returns factors unchanged if rating_diff is missing (safety)", () => {

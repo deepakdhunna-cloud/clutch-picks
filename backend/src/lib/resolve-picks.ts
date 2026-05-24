@@ -6,6 +6,7 @@
 import { prisma } from "../prisma";
 import { notifyPickResult, checkStreakMilestone, calculateWinStreak } from "./notification-jobs";
 import { fetchWithTimeout } from "./fetch-with-timeout";
+import { gradeResolvedPrediction } from "../prediction/grading";
 
 const ESPN_ENDPOINTS: Record<string, string> = {
   NFL: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
@@ -455,6 +456,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
             actualOutcome: "unavailable",
             wasCorrect: null,
             resolvedAt: new Date(),
+            settledBy: "void-unavailable",
           },
         });
         if (result.count > 0) {
@@ -562,18 +564,26 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
         // Find unresolved PredictionResult rows for this game
         const records = await prisma.predictionResult.findMany({
           where: { gameId, actualWinner: null },
-          select: { id: true, predictedWinner: true, predictedOutcome: true },
+          select: {
+            id: true,
+            predictedWinner: true,
+            predictedOutcome: true,
+            confidence: true,
+            homeWinProb: true,
+            awayWinProb: true,
+            drawProb: true,
+          },
         });
         for (const rec of records) {
-          const predictedOutcome = rec.predictedOutcome ?? rec.predictedWinner;
+          const grade = gradeResolvedPrediction(rec, {
+            actualOutcome,
+            homeScore: gameResult.homeScore,
+            awayScore: gameResult.awayScore,
+            settledBy: "espn-scoreboard",
+          });
           await prisma.predictionResult.update({
             where: { id: rec.id },
-            data: {
-              actualWinner,
-              actualOutcome,
-              wasCorrect: predictedOutcome === actualOutcome,
-              resolvedAt: new Date(),
-            },
+            data: grade,
           });
         }
       } catch (err) {

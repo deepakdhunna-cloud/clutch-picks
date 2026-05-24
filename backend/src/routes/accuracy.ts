@@ -37,6 +37,11 @@ accuracyRouter.get("/accuracy", async (c) => {
       modelVersion: true,
       predictedOutcome: true,
       actualOutcome: true,
+      selectedOutcomeProb: true,
+      brierScore: true,
+      logLoss: true,
+      dataCoverage: true,
+      signalCoverage: true,
     },
   });
 
@@ -59,6 +64,14 @@ accuracyRouter.get("/accuracy", async (c) => {
   // --- Draw-aware audit ---
   let drawResolved = 0;
   let drawCorrect = 0;
+  let brierSum = 0;
+  let brierCount = 0;
+  let logLossSum = 0;
+  let logLossCount = 0;
+  let dataCoverageSum = 0;
+  let dataCoverageCount = 0;
+  let signalCoverageSum = 0;
+  let signalCoverageCount = 0;
 
   // --- Overall ---
   let totalResolved = 0;
@@ -68,6 +81,22 @@ accuracyRouter.get("/accuracy", async (c) => {
     totalResolved++;
     const correct = row.wasCorrect === true;
     if (correct) totalCorrect++;
+    if (typeof row.brierScore === "number") {
+      brierSum += row.brierScore;
+      brierCount++;
+    }
+    if (typeof row.logLoss === "number") {
+      logLossSum += row.logLoss;
+      logLossCount++;
+    }
+    if (typeof row.dataCoverage === "number") {
+      dataCoverageSum += row.dataCoverage;
+      dataCoverageCount++;
+    }
+    if (typeof row.signalCoverage === "number") {
+      signalCoverageSum += row.signalCoverage;
+      signalCoverageCount++;
+    }
 
     // Bucket
     const bucket = BUCKETS.find((b) => row.confidence >= b.min && row.confidence <= b.max);
@@ -136,6 +165,10 @@ accuracyRouter.get("/accuracy", async (c) => {
         totalResolved,
         totalCorrect,
         overallAccuracy: totalResolved > 0 ? Math.round((totalCorrect / totalResolved) * 100) : null,
+        brierScore: brierCount > 0 ? Math.round((brierSum / brierCount) * 10000) / 10000 : null,
+        logLoss: logLossCount > 0 ? Math.round((logLossSum / logLossCount) * 10000) / 10000 : null,
+        avgDataCoverage: dataCoverageCount > 0 ? Math.round((dataCoverageSum / dataCoverageCount) * 1000) / 1000 : null,
+        avgSignalCoverage: signalCoverageCount > 0 ? Math.round((signalCoverageSum / signalCoverageCount) * 1000) / 1000 : null,
       },
       perSport,
       tossUp: {

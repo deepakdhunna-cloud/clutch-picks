@@ -173,6 +173,9 @@ model PredictionResult {
   id               String    @id @default(cuid())
   gameId           String    @unique
   sport            String
+  scheduledStart   DateTime?
+  homeTeam         String?
+  awayTeam         String?
   predictedWinner  String
   predictedOutcome String?
   actualWinner     String?
@@ -186,12 +189,34 @@ model PredictionResult {
   awayWinProb      Float?    // 0..1 — point-in-time away probability
   drawProb         Float?    // 0..1 — point-in-time draw probability for three-way sports
   modelVersion     String?   // engine/version that produced this row
+  selectedOutcomeProb Float? // 0..1 — probability assigned to the predicted outcome
+  brierScore       Float?    // per-row selected-outcome Brier contribution
+  logLoss          Float?    // per-row selected-outcome log-loss contribution
+  finalHomeScore   Int?
+  finalAwayScore   Int?
+  marketHomeProb   Float?
+  marketAwayProb   Float?
+  marketDrawProb   Float?
+  marketDivergence Float?
+  dataCoverage     Float?
+  signalCoverage   Float?
+  agreementScore   Float?
+  edgeRating       Float?
+  valueRating      Float?
+  riskScore        Float?
+  tagsJson         String?
+  dataSourcesJson  String?
+  gradeVersion     String?
+  gradedAt         DateTime?
+  settledBy        String?
   createdAt        DateTime  @default(now())
   resolvedAt       DateTime?
 
   @@index([sport])
   @@index([wasCorrect])
   @@index([createdAt])
+  @@index([gradedAt])
+  @@index([scheduledStart])
   @@index([sport, wasCorrect])
   @@index([modelVersion])
   @@index([predictedOutcome])

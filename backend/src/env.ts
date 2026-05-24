@@ -41,7 +41,13 @@ const envSchema = z.object({
   // Required in production so release predictions keep their market
   // calibration and value-comparison surface.
   SHARPAPI_KEY: z.string().optional(),
-  // Apify runs the Twitter scraper actor for beat-writer ingestion.
+  // SportsDataIO supplies verified schedules, rosters, injuries, stats, and
+  // betting feeds. Required in production so the engine can move off fragile
+  // public-only data sources as each sport adapter is wired in.
+  SPORTSDATAIO_API_KEY: z.string().optional(),
+  // Apify runs the Twitter/X scraper actor for beat-writer ingestion.
+  // Required in production so the injury/news pipeline can use beat-writer
+  // social signals instead of RSS alone.
   APIFY_API_KEY: z.string().optional(),
   // Verified data-source feeds for factors that must not rely on mock values.
   // Required in production so release predictions keep the full verified-data
@@ -106,6 +112,8 @@ const envSchema = z.object({
   const requiredInProduction: Array<keyof typeof value> = [
     "RESEND_API_KEY",
     "SHARPAPI_KEY",
+    "SPORTSDATAIO_API_KEY",
+    "APIFY_API_KEY",
     "REVENUECAT_SECRET_KEY",
     "REVENUECAT_WEBHOOK_AUTH",
     "APPLE_TEAM_ID",
@@ -161,6 +169,7 @@ export const features = {
   openai: !!env.OPENAI_API_KEY,
   anthropic: !!env.ANTHROPIC_API_KEY,
   sharpapi: !!env.SHARPAPI_KEY,
+  sportsDataIO: !!env.SPORTSDATAIO_API_KEY,
   apify: !!env.APIFY_API_KEY,
   revenuecat: !!env.REVENUECAT_SECRET_KEY,
   sentry: !!env.SENTRY_DSN,
@@ -202,7 +211,8 @@ export function printEnvReport(): void {
   const f = features;
   console.log("[env] integrations:");
   console.log(
-    `  openai=${onOff(f.openai)}  sharpapi=${onOff(f.sharpapi)}  apify=${onOff(f.apify)}  anthropic=${onOff(f.anthropic)}`,
+    `  openai=${onOff(f.openai)}  sharpapi=${onOff(f.sharpapi)}  sportsdataio=${onOff(f.sportsDataIO)}  ` +
+      `apify=${onOff(f.apify)}  anthropic=${onOff(f.anthropic)}`,
   );
   console.log(`  revenuecat=${onOff(f.revenuecat)}  sentry=${onOff(f.sentry)}`);
   console.log("[env] verified data feeds:");

@@ -19,6 +19,7 @@
  */
 
 import { prisma } from "../prisma";
+import { selectedOutcomeProbability } from "./grading";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -42,41 +43,6 @@ export interface CalibrationMetrics {
 // ─── Core computations ──────────────────────────────────────────────────
 
 const EPS = 1e-15; // Numerical safety for log loss
-
-function normalizeProbability(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  const probability = value > 1 ? value / 100 : value;
-  return Math.max(0, Math.min(1, probability));
-}
-
-function selectedOutcomeProbability(row: {
-  predictedWinner: string;
-  predictedOutcome?: string | null;
-  confidence: number;
-  homeWinProb?: number | null;
-  awayWinProb?: number | null;
-  drawProb?: number | null;
-}): number {
-  const fallback = normalizeProbability(row.confidence / 100) ?? 0.5;
-  const predictedOutcome = row.predictedOutcome ?? row.predictedWinner;
-
-  if (predictedOutcome === "home") {
-    return normalizeProbability(row.homeWinProb) ?? fallback;
-  }
-  if (predictedOutcome === "away") {
-    return (
-      normalizeProbability(row.awayWinProb) ??
-      (normalizeProbability(row.homeWinProb) !== null
-        ? 1 - normalizeProbability(row.homeWinProb)!
-        : fallback)
-    );
-  }
-  if (predictedOutcome === "draw") {
-    return normalizeProbability(row.drawProb) ?? fallback;
-  }
-
-  return fallback;
-}
 
 /**
  * Brier score: mean((predicted_prob - actual_outcome)^2)

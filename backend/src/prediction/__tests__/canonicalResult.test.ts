@@ -69,7 +69,7 @@ function projection(overrides: Partial<SimulationProjection> = {}): SimulationPr
 }
 
 describe("canonical prediction result", () => {
-  it("predictGame exposes one canonical answer mirrored by legacy fields and projection", () => {
+  it("predictGame exposes one canonical answer mirrored by legacy fields", () => {
     const result = predictGame(makeNBAContext());
     const canonical = result.canonicalResult;
 
@@ -79,14 +79,9 @@ describe("canonical prediction result", () => {
         : result.predictedWinner?.teamId === "2"
           ? "away"
           : "none";
-    const projectionPick =
-      result.projection!.homeWinProbability >= result.projection!.awayWinProbability
-        ? "home"
-        : "away";
 
     expect(canonical.eventId).toBe(result.gameId);
     expect(canonical.finalPick).toBe(legacyPick);
-    expect(canonical.finalPick).toBe(projectionPick);
     expect(canonical.confidence).toBe(result.confidence);
     expect(canonical.probabilities.home).toBeCloseTo(result.homeWinProbability, 3);
     expect(canonical.probabilities.away).toBeCloseTo(result.awayWinProbability, 3);

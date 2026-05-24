@@ -18,6 +18,7 @@ import {
   getLatestCalibration,
   computeAndStoreCalibration,
 } from "../prediction/calibration";
+import { buildGradebookSummary } from "../prediction/grading";
 import {
   runWeeklyCalibration,
   CALIBRATION_LEAGUES,
@@ -106,6 +107,92 @@ calibrationRouter.get("/", async (c) => {
     console.error("[calibration] Error:", e);
     return c.json(
       { error: { message: "Failed to retrieve calibration data", code: "CALIBRATION_ERROR" } },
+      500,
+    );
+  }
+});
+
+// ─── GET /api/calibration/gradebook ─────────────────────────────────────────
+
+calibrationRouter.get("/gradebook", async (c) => {
+  try {
+    const sport = c.req.query("sport") || undefined;
+    const modelVersion = c.req.query("modelVersion") || undefined;
+    const limitRaw = Number(c.req.query("limit") ?? 5000);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.max(100, Math.min(10_000, Math.floor(limitRaw)))
+      : 5000;
+
+    const where = {
+      wasCorrect: { not: null },
+      ...(sport ? { sport } : {}),
+      ...(modelVersion ? { modelVersion } : {}),
+    };
+
+    const [
+      rows,
+      totalSnapshots,
+      pending,
+      resolved,
+      graded,
+      voided,
+      missingGrade,
+    ] = await Promise.all([
+      prisma.predictionResult.findMany({
+        where: where as any,
+        select: {
+          sport: true,
+          modelVersion: true,
+          confidence: true,
+          wasCorrect: true,
+          selectedOutcomeProb: true,
+          brierScore: true,
+          logLoss: true,
+          marketDivergence: true,
+          dataCoverage: true,
+          signalCoverage: true,
+        },
+        orderBy: { resolvedAt: "desc" },
+        take: limit,
+      }),
+      prisma.predictionResult.count(),
+      prisma.predictionResult.count({ where: { actualWinner: null } }),
+      prisma.predictionResult.count({ where: { wasCorrect: { not: null } } }),
+      prisma.predictionResult.count({ where: { gradedAt: { not: null } } }),
+      prisma.predictionResult.count({ where: { actualOutcome: "unavailable" } }),
+      prisma.predictionResult.count({
+        where: {
+          wasCorrect: { not: null },
+          OR: [{ selectedOutcomeProb: null }, { brierScore: null }, { logLoss: null }],
+        },
+      }),
+    ]);
+
+    return c.json({
+      data: {
+        generatedAt: new Date().toISOString(),
+        description:
+          "Pregame prediction gradebook. Rows are captured before games start, settled after finals, and scored with selected-outcome Brier/log-loss.",
+        filters: {
+          sport: sport ?? null,
+          modelVersion: modelVersion ?? null,
+          limit,
+        },
+        coverage: {
+          totalSnapshots,
+          pending,
+          resolved,
+          graded,
+          voided,
+          missingGrade,
+        },
+        summary: buildGradebookSummary(rows),
+      },
+    });
+  } catch (e) {
+    console.error("[calibration] Gradebook error:", e);
+    return c.json(
+      { error: { message: "Failed to retrieve gradebook", code: "GRADEBOOK_ERROR" } },
       500,
     );
   }

@@ -27,6 +27,7 @@ import {
   putCachedLLMNarrative,
 } from "./narrativeCache";
 import { deriveSeasonContext } from "./seasonContext";
+import { selectedOutcomeProbability } from "./grading";
 
 /**
  * Map a new-engine factor (FactorContribution) into the old PredictionFactor
@@ -306,10 +307,23 @@ export function translateNewEnginePrediction(
   };
 }
 
+const SNAPSHOT_FREEZE_MS = 5 * 60 * 1000;
+
+export function shouldPersistPredictionSnapshot(
+  game: Pick<Game, "status" | "gameTime">,
+  now = new Date(),
+): boolean {
+  if (game.status !== "SCHEDULED") return false;
+  const scheduledStart = new Date(game.gameTime).getTime();
+  if (!Number.isFinite(scheduledStart)) return false;
+  return scheduledStart - now.getTime() > SNAPSHOT_FREEZE_MS;
+}
+
 /**
  * Run the new engine end-to-end for an ESPN-shaped Game and return a
- * GamePrediction. Persists a PredictionResult row on first generation
- * for the game (create-once, never overwrite).
+ * GamePrediction. Persists a PredictionResult only while the event is still
+ * safely pregame; live/final cold-cache predictions are display-only so they
+ * cannot poison the gradebook.
  */
 export async function runNewEnginePrediction(game: Game): Promise<GamePrediction> {
   const ctx = await buildGameContext(game);
@@ -353,35 +367,25 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
   const awayWinProb = newPred.awayWinProbability;
   const drawProb = newPred.drawProbability ?? null;
   const modelVersion = newPred.modelVersion;
+  const scheduledStart = new Date(game.gameTime);
+  const decisionProfile = newPred.canonicalResult.decisionProfile;
+  const selectedProb = selectedOutcomeProbability({
+    predictedWinner,
+    predictedOutcome,
+    confidence,
+    homeWinProb,
+    awayWinProb,
+    drawProb,
+  });
 
-  enqueueWrite(async () => {
-    const existing = await prisma.predictionResult.findUnique({ where: { gameId } });
-    if (existing) {
-      if (existing.actualWinner !== null || existing.wasCorrect !== null || existing.resolvedAt !== null) {
-        return;
-      }
-      await prisma.predictionResult.update({
-        where: { gameId },
-        data: {
-          sport,
-          predictedWinner,
-          predictedOutcome,
-          confidence,
-          isTossUp,
-          homeElo,
-          awayElo,
-          homeWinProb,
-          awayWinProb,
-          drawProb,
-          modelVersion,
-        },
-      });
-      return;
-    }
-    await prisma.predictionResult.create({
-      data: {
-        gameId,
+  if (shouldPersistPredictionSnapshot(game)) {
+    enqueueWrite(async () => {
+      const existing = await prisma.predictionResult.findUnique({ where: { gameId } });
+      const data = {
         sport,
+        scheduledStart: Number.isFinite(scheduledStart.getTime()) ? scheduledStart : null,
+        homeTeam: game.homeTeam.abbreviation,
+        awayTeam: game.awayTeam.abbreviation,
         predictedWinner,
         predictedOutcome,
         confidence,
@@ -392,13 +396,42 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
         awayWinProb,
         drawProb,
         modelVersion,
-        actualWinner: null,
-        actualOutcome: null,
-        wasCorrect: null,
-        resolvedAt: null,
-      },
+        selectedOutcomeProb: selectedProb,
+        marketHomeProb: ctx.marketConsensus?.noVigHomeProb ?? null,
+        marketAwayProb: ctx.marketConsensus?.noVigAwayProb ?? null,
+        marketDrawProb: ctx.marketConsensus?.noVigDrawProb ?? null,
+        marketDivergence: newPred.marketComparison?.divergence ?? null,
+        dataCoverage: decisionProfile?.dataCoverage ?? null,
+        signalCoverage: decisionProfile?.signalCoverage ?? null,
+        agreementScore: decisionProfile?.agreementScore ?? null,
+        edgeRating: decisionProfile?.edgeRating ?? null,
+        valueRating: decisionProfile?.valueRating ?? null,
+        riskScore: decisionProfile?.riskScore ?? null,
+        tagsJson: decisionProfile ? JSON.stringify(decisionProfile.tags) : null,
+        dataSourcesJson: JSON.stringify(newPred.dataSources),
+      };
+      if (existing) {
+        if (existing.actualWinner !== null || existing.wasCorrect !== null || existing.resolvedAt !== null) {
+          return;
+        }
+        await prisma.predictionResult.update({
+          where: { gameId },
+          data,
+        });
+        return;
+      }
+      await prisma.predictionResult.create({
+        data: {
+          gameId,
+          ...data,
+          actualWinner: null,
+          actualOutcome: null,
+          wasCorrect: null,
+          resolvedAt: null,
+        },
+      });
     });
-  });
+  }
 
   // Fire-and-forget LLM enrichment. setImmediate defers the work until
   // after Hono has serialized and sent the current response, so this

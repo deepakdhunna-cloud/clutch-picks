@@ -3,7 +3,7 @@ import { predictGame } from "../index";
 import { simulateGameProjection } from "../simulation";
 import { computeBaseFactors } from "../factors/base";
 import { computeTennisFactors } from "../factors/tennis";
-import { blendFactors, harmonizeProjectionWithConsensus, normalizeWeightsToOne } from "../index";
+import { blendFactors, normalizeWeightsToOne } from "../index";
 import type { GameContext } from "../types";
 import type { Game, Team } from "../../types/sports";
 import { GameStatus, League, Sport } from "../../types/sports";
@@ -331,51 +331,6 @@ describe("game-script simulation", () => {
     expect(projection.signals.some((signal) => signal.key === "rating-consensus-anchor")).toBe(true);
   });
 
-  it("harmonizes public projection probabilities and score to the final consensus winner", () => {
-    const ctx = makeNBAContext();
-    const factors = blendFactors(normalizeWeightsToOne(computeBaseFactors(ctx)));
-    const rawProjection = simulateGameProjection(ctx, 120, factors);
-
-    const aligned = harmonizeProjectionWithConsensus({
-      sport: "NBA",
-      projection: rawProjection,
-      homeWinProbability: 0.46,
-      awayWinProbability: 0.54,
-    });
-
-    expect(aligned.homeWinProbability).toBe(0.46);
-    expect(aligned.awayWinProbability).toBe(0.54);
-    expect(aligned.projectedSpread).toBeLessThan(0);
-    expect(aligned.projectedAwayScore).toBeGreaterThan(aligned.projectedHomeScore);
-    expect(aligned.signals[0]?.key).toBe("engine-consensus");
-  });
-
-  it("harmonizes soccer draw consensus without leaving a team-score lean", () => {
-    const ctx = makeNBAContext();
-    const factors = blendFactors(normalizeWeightsToOne(computeBaseFactors(ctx)));
-    const rawProjection = {
-      ...simulateGameProjection(ctx, 60, factors),
-      drawProbability: 0.16,
-      projectedHomeScore: 2.1,
-      projectedAwayScore: 1.2,
-      projectedSpread: 0.9,
-      projectedTotal: 3.3,
-    };
-
-    const aligned = harmonizeProjectionWithConsensus({
-      sport: "EPL",
-      projection: rawProjection,
-      homeWinProbability: 0.32,
-      awayWinProbability: 0.31,
-      drawProbability: 0.37,
-    });
-
-    expect(aligned.drawProbability).toBe(0.37);
-    expect(aligned.projectedSpread).toBe(0);
-    expect(aligned.projectedHomeScore).toBe(aligned.projectedAwayScore);
-    expect(aligned.signals[0]?.key).toBe("engine-consensus");
-  });
-
   it("is wired into predictGame and exposes projection metadata", () => {
     const prediction = predictGame(makeNBAContext());
 
@@ -419,8 +374,8 @@ describe("game-script simulation", () => {
     expect(prediction.projection!.projectedTotal).toBeGreaterThanOrEqual(2);
     expect(prediction.projection!.projectedTotal).toBeLessThanOrEqual(3);
     expect(prediction.awayWinProbability).toBeGreaterThan(prediction.homeWinProbability);
-    expect(prediction.confidence).toBeGreaterThan(55);
-    expect(prediction.confidence).toBeLessThan(60);
+    expect(prediction.confidence).toBeGreaterThan(51);
+    expect(prediction.confidence).toBeLessThan(55);
     expect(prediction.projection!.signals.some((s) => s.key === "legacy-consensus")).toBe(false);
     expect(prediction.dataSources).toContain("game-script simulation");
     expect(prediction.confidence).toBe(

@@ -191,7 +191,8 @@ export type GameContext = {
   homeElo: number;
   awayElo: number;
 
-  // ESPN data — all fetched upstream, factors never fetch
+  // Provider data — fetched upstream, factors never fetch. ESPN remains the
+  // fallback; verified provider fields can replace or augment it.
   homeForm: TeamRecentForm;
   awayForm: TeamRecentForm;
   homeExtended: TeamExtendedStats;
@@ -240,6 +241,17 @@ export type GameContext = {
   // new engine, plus for final model-vs-market divergence reporting. null
   // when SHARPAPI_KEY unset or fetch failed.
   marketConsensus?: MarketConsensus | null;
+
+  // SportsDataIO enrichment coverage for fields that replaced or augmented
+  // ESPN fallbacks. Used for data-source attribution only.
+  sportsDataIO?: {
+    homeAdvanced: boolean;
+    awayAdvanced: boolean;
+    homeLineup: boolean;
+    awayLineup: boolean;
+    homeInjuries: boolean;
+    awayInjuries: boolean;
+  };
 
   /** ISO date string of the game */
   gameDate: string;

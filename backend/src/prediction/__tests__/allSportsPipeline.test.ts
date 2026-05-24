@@ -237,18 +237,6 @@ function configureSport(ctx: GameContext): GameContext {
   return ctx;
 }
 
-function expectedProjectionPick(result: ReturnType<typeof predictGame>): "home" | "away" | "draw" {
-  const projection = result.projection!;
-  if (
-    projection.drawProbability !== undefined &&
-    projection.drawProbability >= projection.homeWinProbability &&
-    projection.drawProbability >= projection.awayWinProbability
-  ) {
-    return "draw";
-  }
-  return projection.homeWinProbability >= projection.awayWinProbability ? "home" : "away";
-}
-
 const cases: Array<{ sport: Sport; expectedFactor: string }> = [
   { sport: Sport.NFL, expectedFactor: "starting_qb" },
   { sport: Sport.NBA, expectedFactor: "net_rating" },
@@ -288,6 +276,9 @@ describe("all supported sports prediction pipeline", () => {
       expect(canonical.engineBreakdown.map((read) => read.engine)).toContain("factor-model-v1");
       expect(canonical.engineBreakdown.map((read) => read.engine)).toContain("game-script-v1");
       expect(canonical.engineBreakdown.at(-1)?.engine).toBe("orchestrator-v1");
+      const projectionRead = canonical.engineBreakdown.find((read) => read.engine === "game-script-v1");
+      expect(projectionRead?.probabilities?.home).toBeCloseTo(result.projection!.homeWinProbability, 3);
+      expect(projectionRead?.probabilities?.away).toBeCloseTo(result.projection!.awayWinProbability, 3);
 
       if (canonical.finalPick === "home") {
         expect(result.predictedWinner?.teamId).toBe(ctx.game.homeTeam.id);
@@ -298,9 +289,6 @@ describe("all supported sports prediction pipeline", () => {
       }
 
       expect(canonical.finalPick).not.toBe("none");
-      if (canonical.finalPick !== "none") {
-        expect(expectedProjectionPick(result)).toBe(canonical.finalPick);
-      }
     });
   }
 });

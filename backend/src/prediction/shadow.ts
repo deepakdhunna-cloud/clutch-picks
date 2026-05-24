@@ -28,6 +28,13 @@ import {
   fetchFixtureCongestion,
 } from "../lib/espnStats";
 import { fetchGameInjuries, toTeamInjuryReport, mergePlayerAvailability } from "../lib/espnInjuries";
+import {
+  fetchSportsDataIOAdvancedMetrics,
+  fetchSportsDataIOLineup,
+  fetchSportsDataIOInjuries,
+  mergeAdvancedMetrics,
+  mergeInjuryReports,
+} from "../lib/sportsDataIO";
 // fetchTeamShootingRecent removed — stats.nba.com IP-blocks Railway
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 import {
@@ -167,8 +174,11 @@ export async function buildGameContext(
     homeForm, awayForm,
     homeExtended, awayExtended,
     gameInjuries,
-    homeAdvanced, awayAdvanced,
-    homeLineup, awayLineup,
+    homeAdvancedEspn, awayAdvancedEspn,
+    homeLineupEspn, awayLineupEspn,
+    homeSportsDataIOAdvanced, awaySportsDataIOAdvanced,
+    homeSportsDataIOLineup, awaySportsDataIOLineup,
+    homeSportsDataIOInjuries, awaySportsDataIOInjuries,
     weather,
     homePlateUmpire,
     homeFixtureCongestion, awayFixtureCongestion,
@@ -191,6 +201,12 @@ export async function buildGameContext(
     fetchAdvancedMetrics(game.awayTeam.id, sport),
     fetchStartingLineup(game.homeTeam.id, sport, gameDate),
     fetchStartingLineup(game.awayTeam.id, sport, gameDate),
+    fetchSportsDataIOAdvancedMetrics(sport, String(game.homeTeam.abbreviation ?? ""), gameDate),
+    fetchSportsDataIOAdvancedMetrics(sport, String(game.awayTeam.abbreviation ?? ""), gameDate),
+    fetchSportsDataIOLineup(sport, String(game.homeTeam.abbreviation ?? "")),
+    fetchSportsDataIOLineup(sport, String(game.awayTeam.abbreviation ?? "")),
+    fetchSportsDataIOInjuries(sport, String(game.homeTeam.abbreviation ?? "")),
+    fetchSportsDataIOInjuries(sport, String(game.awayTeam.abbreviation ?? "")),
     fetchGameWeather(game.venue ?? "", gameDate, sport),
     sport === "MLB" ? lookupHomePlateUmpireBias(game.homeTeam.id, gameDate) : Promise.resolve(null),
     // Fixture congestion — only soccer; other sports ignore.
@@ -231,15 +247,21 @@ export async function buildGameContext(
       : Promise.resolve(null),
   ]);
 
-  // Translate PlayerInjury[] → TeamInjuryReport, then merge in
-  // PlayerAvailability rows from the ingestion pipeline. The merger
-  // de-dupes by playerName (ESPN wins on conflict) and tags the result
-  // with source="merged" / "player-availability" / "espn-summary" /
-  // "unavailable" so downstream telemetry can attribute signal origin.
+  // Translate PlayerInjury[] → TeamInjuryReport, then merge SportsDataIO and
+  // PlayerAvailability rows. Each provider is conservative: no source is
+  // allowed to invent availability, and duplicate players collapse to the
+  // highest-severity bucket once.
   const homeInjuriesEspn = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
   const awayInjuriesEspn = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
-  const homeInjuries = mergePlayerAvailability(homeInjuriesEspn, homeAvailability);
-  const awayInjuries = mergePlayerAvailability(awayInjuriesEspn, awayAvailability);
+  const homeInjuriesSportsDataIO = mergeInjuryReports(homeInjuriesEspn, homeSportsDataIOInjuries);
+  const awayInjuriesSportsDataIO = mergeInjuryReports(awayInjuriesEspn, awaySportsDataIOInjuries);
+  const homeInjuries = mergePlayerAvailability(homeInjuriesSportsDataIO, homeAvailability);
+  const awayInjuries = mergePlayerAvailability(awayInjuriesSportsDataIO, awayAvailability);
+
+  const homeAdvanced = mergeAdvancedMetrics(homeAdvancedEspn, homeSportsDataIOAdvanced);
+  const awayAdvanced = mergeAdvancedMetrics(awayAdvancedEspn, awaySportsDataIOAdvanced);
+  const homeLineup = homeSportsDataIOLineup ?? homeLineupEspn;
+  const awayLineup = awaySportsDataIOLineup ?? awayLineupEspn;
 
   // Manager-change data comes from an optional verified feed. If it is not
   // configured, both values resolve null and the factor is redistributed.
@@ -348,6 +370,14 @@ export async function buildGameContext(
     uclPedigree,
     uclTravel,
     marketConsensus,
+    sportsDataIO: {
+      homeAdvanced: !!homeSportsDataIOAdvanced,
+      awayAdvanced: !!awaySportsDataIOAdvanced,
+      homeLineup: !!homeSportsDataIOLineup,
+      awayLineup: !!awaySportsDataIOLineup,
+      homeInjuries: !!homeSportsDataIOInjuries,
+      awayInjuries: !!awaySportsDataIOInjuries,
+    },
     gameDate: gameDate.toISOString(),
   };
 }

@@ -1304,7 +1304,7 @@ async function addPredictionToGame(game: Game): Promise<Game> {
 
 // Background prediction generation - non-blocking
 function generatePredictionsInBackground(games: Game[]): void {
-  const gamesNeedingPredictions = games.filter(g => !g.prediction);
+  const gamesNeedingPredictions = games.filter(g => !g.prediction && g.status === "SCHEDULED");
   if (gamesNeedingPredictions.length === 0) return;
 
   // Run in background, don't await

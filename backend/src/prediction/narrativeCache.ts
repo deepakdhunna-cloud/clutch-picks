@@ -25,7 +25,7 @@ import type { NarrativeSeasonContext } from "./seasonContext";
 
 // ─── Version hash ──────────────────────────────────────────────────────
 
-const NARRATIVE_STYLE_VERSION = "bar-friend-v8-projection-consensus";
+const NARRATIVE_STYLE_VERSION = "bar-friend-v9-projection-truth";
 
 /**
  * Stable hash of the prediction-level bits that should invalidate a

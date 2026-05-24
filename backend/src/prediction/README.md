@@ -2,8 +2,8 @@
 
 `predictGame(ctx)` is the single pregame engine entry point. It computes factor
 ratings, runs the game-script simulation/projection, applies the small market
-calibration vote when available, reconciles any projection disagreement, and
-returns one `canonicalResult`.
+calibration vote when available, preserves projection disagreement as a
+separate engine read, and returns one `canonicalResult`.
 
 The canonical object lives on `HonestPrediction.canonicalResult` and is carried
 through the API as `GamePrediction.canonicalResult`. UI surfaces must read the
@@ -34,6 +34,8 @@ The orchestrator uses `factor-simulation-market-consensus-v1`:
 - game-script simulation runs 50,000 deterministic game scripts and contributes distribution plus expected-score context
 - market consensus is optional and only a small calibration input
 - if sub-engines disagree, the disagreement remains in `engineBreakdown`
+- the score projection remains the simulator's expected-score read instead of
+  being rewritten to match the final pick
 - the final displayed answer comes from the `orchestrator-v1` read
 
 Live games keep the pregame canonical result. Scoreboard state can update, but
