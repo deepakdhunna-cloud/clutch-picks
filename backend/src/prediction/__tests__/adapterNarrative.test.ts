@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
   buildAdapterNarrative,
+  translateNewEnginePrediction,
   enrichPredictionWithLLMNarrative,
   __resetLLMEnrichmentDedupeForTests,
 } from "../newEngineAdapter";
@@ -199,6 +200,56 @@ describe("buildAdapterNarrative", () => {
 
     expect(narrative.toLowerCase()).toContain("playoff");
     expect(narrative.toLowerCase()).toContain("repeatable matchup edges");
+  });
+});
+
+describe("translateNewEnginePrediction", () => {
+  it("wires unified decision profile ratings into legacy API fields", () => {
+    const canonicalResult = makeCanonicalResult({
+      eventId: "g1",
+      sport: "NBA",
+      finalPick: "home",
+      home: 0.64,
+      away: 0.36,
+      confidence: 64,
+    });
+    canonicalResult.decisionProfile = {
+      version: "unified-decision-profile-v1",
+      pick: "home",
+      probability: 0.64,
+      confidence: 64,
+      dataCoverage: 0.82,
+      signalCoverage: 0.64,
+      agreementScore: 86,
+      hiddenEdgeScore: 71,
+      upsetScore: 42,
+      riskScore: 35,
+      edgeRating: 8,
+      valueRating: 7,
+      lowDataWarning: false,
+      engineDivergence: true,
+      factorPick: "home",
+      projectionPick: "home",
+      marketPick: "away",
+      marketDelta: 0.09,
+      tags: ["model-consensus", "hidden-edge", "market-disagreement"],
+      thesis: ["Unified read: home at 64%."],
+      watchouts: ["Outside consensus leans away."],
+    };
+    const prediction = makePred({
+      factors: makeFactorsForEnrichment(),
+      canonicalResult,
+      confidence: 64,
+      homeWinProbability: 0.64,
+      awayWinProbability: 0.36,
+    });
+
+    const translated = translateNewEnginePrediction(makeGame(), prediction, 0, 0, makeMLBCtx());
+
+    expect(translated.edgeRating).toBe(8);
+    expect(translated.valueRating).toBe(7);
+    expect(translated.lowDataWarning).toBe(false);
+    expect(translated.ensembleDivergence).toBe(true);
   });
 });
 

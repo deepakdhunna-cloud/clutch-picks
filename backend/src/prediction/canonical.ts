@@ -9,6 +9,7 @@ import type {
   GameContext,
   SimulationProjection,
 } from "./types";
+import { buildDecisionProfile } from "./decisionProfile";
 
 export const CANONICAL_RECONCILIATION_METHOD =
   "factor-simulation-market-consensus-v1";
@@ -228,6 +229,21 @@ export function buildCanonicalPredictionResult(args: {
     );
   }
 
+  const decisionProfile = buildDecisionProfile({
+    ctx: args.ctx,
+    factors: args.factors,
+    factorProbabilities: normalizeCanonicalProbabilities(args.factorProbabilities),
+    projectionProbabilities,
+    finalProbabilities: final,
+    projection: engineProjection,
+    marketProbabilities: args.marketProbabilities
+      ? normalizeCanonicalProbabilities(args.marketProbabilities)
+      : undefined,
+    engineWeights,
+    warnings,
+    confidence: args.confidence,
+  });
+
   breakdown.push(
     engineRead({
       engine: "orchestrator-v1",
@@ -258,6 +274,7 @@ export function buildCanonicalPredictionResult(args: {
     finalProbability: roundTo(finalProbability),
     confidence: roundConfidence(args.confidence),
     probabilities: final,
+    decisionProfile,
     projectedScore: {
       home: args.projection.projectedHomeScore,
       away: args.projection.projectedAwayScore,
@@ -502,6 +519,7 @@ export function traceCanonicalDecision(args: {
       finalProbability: args.canonicalResult.finalProbability,
       confidence: args.canonicalResult.confidence,
       probabilities: args.canonicalResult.probabilities,
+      decisionProfile: args.canonicalResult.decisionProfile,
     },
     uiCanonicalObject: args.canonicalResult,
   });

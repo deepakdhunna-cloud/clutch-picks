@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  isFreshTennisExplorerLiveMatch,
   parseTennisExplorerMatchDetail,
   parseTennisExplorerMatchRows,
 } from "../tennisExplorer";
@@ -30,9 +31,35 @@ describe("Tennis Explorer supplemental live parser", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe("3204336");
+    expect(rows[0]?.status).toBe("LIVE");
     expect(rows[0]?.homeSeed).toBe(7);
     expect(rows[0]?.homeLinescores).toEqual([5]);
     expect(rows[0]?.awayLinescores).toEqual([5]);
+  });
+
+  test("finds near-term scheduled rows before scores exist", () => {
+    const rows = parseTennisExplorerMatchRows(`
+      <tr class="head flags">
+        <td class="t-name" colspan="2"><a href="/french-open/2026/atp-men/">French Open</a></td>
+      </tr>
+      <tr id="r10" class="one bott">
+        <td class="first time" rowspan="2">11:00</td>
+        <td class="t-name"><a href="/player/kecmanovic/">Kecmanovic M.</a></td>
+        <td class="nbr">&nbsp;</td>
+        <td class="score nbr">&nbsp;</td>
+        <td rowspan="2"><a href="/match-detail/?id=3211687">info</a></td>
+      </tr>
+      <tr id="r10b" class="one">
+        <td class="t-name"><a href="/player/marozsan/">Marozsan F.</a></td>
+        <td class="nbr">&nbsp;</td>
+        <td class="score nbr">&nbsp;</td>
+      </tr>
+    `, "ATP", "2026-05-24");
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("SCHEDULED");
+    expect(rows[0]?.homeSets).toBeUndefined();
+    expect(rows[0]?.homeLinescores).toEqual([]);
   });
 
   test("marks interrupted detail pages as suspended with no announced time", () => {
@@ -68,5 +95,55 @@ describe("Tennis Explorer supplemental live parser", () => {
     expect(match.quarter).toBe("Suspended");
     expect(match.suspension?.resumeText).toBe("No time announced");
     expect(match.suspension?.reasonText).toBe("Reason not reported");
+  });
+
+  test("only treats recent scored rows as trusted supplemental live matches", () => {
+    const [candidate] = parseTennisExplorerMatchRows(`
+      <tr class="head flags">
+        <td class="t-name" colspan="2"><a href="/challenger/2026/atp-men/">Challenger</a></td>
+      </tr>
+      <tr id="r122" class="one bott">
+        <td class="first time" rowspan="2">14:00</td>
+        <td class="t-name"><a href="/player/first/">First P.</a></td>
+        <td class="result">1</td><td class="score">2</td>
+        <td rowspan="2"><a href="/match-detail/?id=3204337">info</a></td>
+      </tr>
+      <tr id="r122b" class="one">
+        <td class="t-name"><a href="/player/second/">Second P.</a></td>
+        <td class="result">0</td><td class="score">3</td>
+      </tr>
+    `, "ATP", "2026-05-23");
+
+    const match = parseTennisExplorerMatchDetail(`
+      <th class="plName" colspan="2"><a href="/player/first">First Player</a></th>
+      <td class="gScore"><span>(2-3)</span></td>
+      <th class="plName" colspan="2"><a href="/player/second">Second Player</a></th>
+    `, candidate!);
+
+    expect(isFreshTennisExplorerLiveMatch(match, new Date("2026-05-23T16:00:00.000Z"))).toBe(true);
+    expect(isFreshTennisExplorerLiveMatch(match, new Date("2026-05-24T00:30:00.000Z"))).toBe(false);
+  });
+
+  test("keeps scheduled supplemental rows only near their start time", () => {
+    const [candidate] = parseTennisExplorerMatchRows(`
+      <tr class="head flags">
+        <td class="t-name" colspan="2"><a href="/french-open/2026/atp-men/">French Open</a></td>
+      </tr>
+      <tr id="r10" class="one bott">
+        <td class="first time" rowspan="2">11:00</td>
+        <td class="t-name"><a href="/player/kecmanovic/">Kecmanovic M.</a></td>
+        <td class="nbr">&nbsp;</td><td class="score nbr">&nbsp;</td>
+        <td rowspan="2"><a href="/match-detail/?id=3211687">info</a></td>
+      </tr>
+      <tr id="r10b" class="one">
+        <td class="t-name"><a href="/player/marozsan/">Marozsan F.</a></td>
+        <td class="nbr">&nbsp;</td><td class="score nbr">&nbsp;</td>
+      </tr>
+    `, "ATP", "2026-05-24");
+
+    const match = parseTennisExplorerMatchDetail("", candidate!);
+
+    expect(isFreshTennisExplorerLiveMatch(match, new Date("2026-05-23T12:00:00.000Z"))).toBe(true);
+    expect(isFreshTennisExplorerLiveMatch(match, new Date("2026-05-24T13:00:00.000Z"))).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { MAROON, TEAL, TEAL_DARK } from '@/lib/theme';
 import { teamScoreText } from '@/lib/cricket-score';
+import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import * as Haptics from 'expo-haptics';
 
 // Memoize all sports array
@@ -912,6 +913,7 @@ export default function HomeScreen() {
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });
 
   const handleOpenGame = useCallback((game: GameWithPrediction) => {
+    if (!claimGameNavigation(game.id)) return;
     prefetchGame(game.id, game);
     router.push(`/game/${game.id}` as any);
   }, [prefetchGame, router]);

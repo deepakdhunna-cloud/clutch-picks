@@ -12,6 +12,20 @@ that object. Legacy fields such as `predictedWinner`, `confidence`,
 `homeWinProbability`, and `projection.*WinProbability` are mirrored for older
 components, but they are not the source of truth.
 
+## Unified Decision Profile
+
+Every canonical result now also carries `decisionProfile`, a compact read on
+what the unified system actually sees:
+
+- cross-engine agreement between factors, game-script projection, and optional market calibration
+- non-Elo hidden support from injuries, rest, matchup, form, venue, weather, and sport-specific factors
+- market disagreement and model-vs-consensus delta when market data exists
+- upset/watchout scoring from projection volatility, disagreement, and underdog pressure
+- data and signal coverage so thin slates do not masquerade as strong edges
+
+The adapter maps this profile into `edgeRating`, `valueRating`,
+`lowDataWarning`, and `ensembleDivergence` for existing app surfaces.
+
 ## Reconciliation
 
 The orchestrator uses `factor-simulation-market-consensus-v1`:

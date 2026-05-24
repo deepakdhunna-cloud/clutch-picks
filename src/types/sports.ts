@@ -121,6 +121,7 @@ export interface CricketScoreState {
 export interface Game {
   id: string;
   sport: Sport;
+  source?: 'espn' | 'tennis-explorer';
   homeTeam: Team;
   awayTeam: Team;
   gameTime: string; // ISO date string
@@ -187,6 +188,40 @@ export interface CanonicalProbabilities {
   draw?: number; // 0..1
 }
 
+export type CanonicalDecisionTag =
+  | 'model-consensus'
+  | 'hidden-edge'
+  | 'upset-watch'
+  | 'market-disagreement'
+  | 'thin-data'
+  | 'volatile-script'
+  | 'low-conviction'
+  | 'chalk';
+
+export interface CanonicalDecisionProfile {
+  version: 'unified-decision-profile-v1';
+  pick: CanonicalFinalPick;
+  probability: number;
+  confidence: number;
+  dataCoverage: number;
+  signalCoverage: number;
+  agreementScore: number;
+  hiddenEdgeScore: number;
+  upsetScore: number;
+  riskScore: number;
+  edgeRating: number;
+  valueRating: number;
+  lowDataWarning: boolean;
+  engineDivergence: boolean;
+  factorPick: CanonicalFinalPick;
+  projectionPick: CanonicalFinalPick;
+  marketPick?: CanonicalFinalPick;
+  marketDelta?: number;
+  tags: CanonicalDecisionTag[];
+  thesis: string[];
+  watchouts: string[];
+}
+
 export interface CanonicalPredictionResult {
   eventId: string;
   marketType: 'moneyline' | 'three_way_result';
@@ -194,6 +229,7 @@ export interface CanonicalPredictionResult {
   finalProbability: number; // 0..1
   confidence: number; // 0..100
   probabilities: CanonicalProbabilities;
+  decisionProfile?: CanonicalDecisionProfile;
   projectedScore?: {
     home: number;
     away: number;

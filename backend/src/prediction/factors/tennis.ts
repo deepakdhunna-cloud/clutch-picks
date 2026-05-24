@@ -147,35 +147,35 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
       : "Singles format carries no side-specific format adjustment",
   });
 
-  let conditionsDelta = 0;
+  let conditionsVolatility = 0;
   let conditionsEvidence = "Weather data unavailable for tennis venue";
   const conditionsAvailable = ctx.weather !== null && !ctx.weather.isDomed;
   if (ctx.weather && !ctx.weather.isDomed) {
     const parts: string[] = [];
     if (ctx.weather.windSpeed > 16) {
-      conditionsDelta += 4;
+      conditionsVolatility += 4;
       parts.push(`wind ${Math.round(ctx.weather.windSpeed)} mph`);
     }
     if (ctx.weather.temperature > 88) {
-      conditionsDelta += 3;
+      conditionsVolatility += 3;
       parts.push(`heat ${Math.round(ctx.weather.temperature)}F`);
     }
     if (ctx.weather.precipitation > 0.35) {
-      conditionsDelta += 3;
+      conditionsVolatility += 3;
       parts.push(`rain probability ${Math.round(ctx.weather.precipitation * 100)}%`);
     }
-    conditionsDelta = clamp(conditionsDelta, 0, 9);
+    conditionsVolatility = clamp(conditionsVolatility, 0, 9);
     conditionsEvidence = parts.length > 0
-      ? `Outdoor conditions increase tennis volatility: ${parts.join(", ")}`
+      ? `Outdoor conditions increase tennis volatility without favoring either player: ${parts.join(", ")}`
       : `Outdoor conditions mild (${Math.round(ctx.weather.temperature)}F, wind ${Math.round(ctx.weather.windSpeed)} mph)`;
   }
   factors.push({
     key: "tennis_conditions",
     label: "Outdoor conditions",
-    homeDelta: conditionsDelta,
+    homeDelta: 0,
     weight: 0.04,
     available: conditionsAvailable,
-    hasSignal: conditionsAvailable && conditionsDelta !== 0,
+    hasSignal: conditionsAvailable && conditionsVolatility > 0,
     evidence: conditionsEvidence,
   });
 

@@ -249,6 +249,7 @@ export function translateNewEnginePrediction(
 
   const marketFavorite: "home" | "away" =
     game.marketFavorite ?? predictedWinner;
+  const decisionProfile = newPred.canonicalResult.decisionProfile;
 
   return {
     id: `pred-${game.id}`,
@@ -287,13 +288,15 @@ export function translateNewEnginePrediction(
         }
       : undefined,
     factors: newPred.factors.map(translateFactor),
-    edgeRating: 0,
-    valueRating: 0,
+    edgeRating: decisionProfile?.edgeRating ?? 5,
+    valueRating: decisionProfile?.valueRating ?? 5,
     recentFormHome: recentFormString(ctx?.homeForm),
     recentFormAway: recentFormString(ctx?.awayForm),
     homeStreak: ctx?.homeForm?.streak ?? 0,
     awayStreak: ctx?.awayForm?.streak ?? 0,
     isTossUp: Math.abs(homeProbPct - awayProbPct) < 5,
+    lowDataWarning: decisionProfile?.lowDataWarning ?? false,
+    ensembleDivergence: decisionProfile?.engineDivergence ?? false,
     marketComparison: newPred.marketComparison
       ? {
           ...newPred.marketComparison,

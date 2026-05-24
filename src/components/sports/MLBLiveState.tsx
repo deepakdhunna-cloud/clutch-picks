@@ -199,6 +199,9 @@ type MLBLiveCenterStackProps = {
   awayJersey: React.ReactNode;
   homeIsSelected?: boolean;
   awayIsSelected?: boolean;
+  statusLabel?: string;
+  statusReason?: string;
+  statusDetail?: string;
 };
 
 export function MLBLiveCenterStack({
@@ -211,6 +214,9 @@ export function MLBLiveCenterStack({
   awayJersey,
   homeIsSelected = false,
   awayIsSelected = false,
+  statusLabel,
+  statusReason,
+  statusDetail,
 }: MLBLiveCenterStackProps) {
   const homeBatting = liveState.inningHalf === 'bottom';
   const battingTeamAbbr = homeBatting ? homeTeamAbbr : awayTeamAbbr;
@@ -260,6 +266,9 @@ export function MLBLiveCenterStack({
           homeColor={homeColor}
           awayColor={awayColor}
           scale={scoreboardScale}
+          label={statusLabel}
+          subLabel={statusReason}
+          detailLabel={statusDetail}
         />
       </View>
 

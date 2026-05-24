@@ -42,7 +42,7 @@ const ESPN_ENDPOINTS = {
   TENNIS: "https://www.espn.com/tennis/scoreboard/_/date",
 } as const;
 
-type SportKey = keyof typeof ESPN_ENDPOINTS;
+export type SportKey = keyof typeof ESPN_ENDPOINTS;
 
 // Batch process with concurrency limit
 async function batchProcess<T, R>(items: T[], fn: (item: T) => Promise<R>, concurrency: number = 5): Promise<R[]> {
@@ -128,6 +128,8 @@ export interface GamePrediction {
   homeStreak: number;
   awayStreak: number;
   isTossUp?: boolean;
+  lowDataWarning?: boolean;
+  ensembleDivergence?: boolean;
   drawProbability?: number;
   projection?: {
     engine: string;
@@ -162,6 +164,7 @@ export interface GamePrediction {
 export interface Game {
   id: string;
   sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL" | "UCL" | "IPL" | "TENNIS";
+  source?: "espn" | "tennis-explorer";
   homeTeam: GameTeam;
   awayTeam: GameTeam;
   gameTime: string;
@@ -511,24 +514,69 @@ const gameById = new Map<string, Game>();
 // from all hitting ESPN simultaneously. Second caller waits for the first's promise.
 const inFlight = new Map<string, Promise<Game[]>>();
 
+type ScoreboardGameIdentity = {
+  id: string;
+  sport: string;
+  source?: string;
+  status?: string;
+  homeScore?: number;
+  awayScore?: number;
+};
+
+const TRUSTED_SCOREBOARD_SPORTS = new Set<string>(Object.keys(ESPN_ENDPOINTS));
+
+function isTrustedEspnEventId(id: string): boolean {
+  return /^\d+$/.test(id);
+}
+
+function isTrustedTennisSupplementalGame(game: ScoreboardGameIdentity): boolean {
+  return (
+    game.sport === "TENNIS" &&
+    game.source === "tennis-explorer" &&
+    /^tennis-explorer-\d+$/.test(game.id) &&
+    (game.status === "LIVE" || game.status === "SCHEDULED")
+  );
+}
+
+export function isVerifiedScoreboardGame(game: ScoreboardGameIdentity): boolean {
+  if (!TRUSTED_SCOREBOARD_SPORTS.has(game.sport)) return false;
+  if (!isTrustedEspnEventId(game.id) && !isTrustedTennisSupplementalGame(game)) return false;
+
+  if (game.status === "LIVE" || game.status === "FINAL") {
+    const scores = [game.homeScore, game.awayScore].filter((score): score is number => score !== undefined);
+    if (scores.some((score) => !Number.isFinite(score) || score < 0)) return false;
+  }
+
+  return true;
+}
+
+function filterVerifiedScoreboardGames<T extends ScoreboardGameIdentity>(games: T[]): T[] {
+  return games.filter(isVerifiedScoreboardGame);
+}
+
 function getCachedData(cacheKey: string): Game[] | null {
   const entry = cache.get(cacheKey);
   if (!entry) return null;
+  const verifiedData = filterVerifiedScoreboardGames(entry.data);
+  if (verifiedData.length !== entry.data.length) {
+    cache.set(cacheKey, { data: verifiedData, timestamp: entry.timestamp });
+  }
   const now = Date.now();
   // Adaptive TTL: shorter when entry contains any live game so scores/situation
   // refresh on a near-real-time cadence. Falls back to the 60s default otherwise.
-  const ttl = entry.data.some((g) => g.status === "LIVE") ? LIVE_CACHE_TTL_MS : CACHE_TTL_MS;
+  const ttl = verifiedData.some((g) => g.status === "LIVE") ? LIVE_CACHE_TTL_MS : CACHE_TTL_MS;
   if (now - entry.timestamp > ttl) {
     cache.delete(cacheKey);
     return null;
   }
-  return entry.data;
+  return verifiedData;
 }
 
 function setCacheData(cacheKey: string, data: Game[]): void {
-  cache.set(cacheKey, { data, timestamp: Date.now() });
+  const verifiedData = filterVerifiedScoreboardGames(data);
+  cache.set(cacheKey, { data: verifiedData, timestamp: Date.now() });
   // Keep secondary game-ID index fresh
-  for (const game of data) {
+  for (const game of verifiedData) {
     gameById.set(game.id, game);
   }
 }
@@ -1472,8 +1520,18 @@ function cricketBool(value: boolean | number | undefined): boolean {
 function extractCricketInnings(competitor: ESPNCompetitor): CricketInningsScore | undefined {
   const parsed = parseCricketScoreText(competitor.score);
   const lines = competitor.linescores ?? [];
+  const currentBattingLine = lines.find((ls) => cricketBool(ls.isCurrent) && cricketBool(ls.isBatting));
+  const activeBattingLine = currentBattingLine ?? lines.find((ls) =>
+    cricketBool(ls.isBatting) && !/complete/i.test(ls.description ?? "")
+  );
+  const matchingScoreLine = lines.find((ls) =>
+    typeof parsed.runs === "number" &&
+    ls.runs === parsed.runs &&
+    (typeof parsed.wickets !== "number" || ls.wickets === parsed.wickets)
+  );
   const line =
-    lines.find((ls) => cricketBool(ls.isCurrent) || cricketBool(ls.isBatting)) ??
+    activeBattingLine ??
+    matchingScoreLine ??
     [...lines].reverse().find((ls) =>
       typeof ls.runs === "number" ||
       typeof ls.wickets === "number" ||
@@ -1506,14 +1564,14 @@ function extractCricketInnings(competitor: ESPNCompetitor): CricketInningsScore 
     wickets,
     overs,
     maxOvers,
-    isBatting: cricketBool(line?.isBatting) || cricketBool(line?.isCurrent),
+    isBatting: Boolean(activeBattingLine),
     description: line?.description,
     scoreText,
     detailText: oversText ? `${oversText}${maxOversText ? `/${maxOversText}` : ""} ov` : undefined,
   };
 }
 
-function buildCricketScoreState(
+export function buildCricketScoreState(
   home: ESPNCompetitor,
   away: ESPNCompetitor,
   status: ESPNStatus,
@@ -1553,6 +1611,19 @@ function cricketStatusLine(
   if (!innings) return undefined;
   const abbr = cricketState.battingSide === "home" ? homeAbbr : awayAbbr;
   return [abbr, innings.scoreText, innings.detailText].filter(Boolean).join(" ");
+}
+
+export function extractESPNLinescores(
+  competitor: { linescores?: Array<{ value?: number; runs?: number }> },
+  sport: SportKey,
+): number[] | undefined {
+  if (!competitor.linescores || competitor.linescores.length === 0) return undefined;
+  return competitor.linescores.map((line) => (
+    sport === "IPL" && typeof line.runs === "number" ? line.runs :
+    typeof line.value === "number" ? line.value :
+    typeof line.runs === "number" ? line.runs :
+    0
+  ));
 }
 
 function parseMlbLiveState({
@@ -1720,16 +1791,8 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     ? cricketStatusLine(cricketState, homeTeam.abbreviation, awayTeam.abbreviation) ?? rawQuarter
     : undefined;
 
-  const extractLinescores = (c: ESPNCompetitor): number[] | undefined => {
-    if (!c.linescores || c.linescores.length === 0) return undefined;
-    return c.linescores.map((ls) => (
-      typeof ls.value === "number" ? ls.value :
-      typeof ls.runs === "number" ? ls.runs :
-      0
-    ));
-  };
-  const homeLinescores = extractLinescores(homeCompetitor);
-  const awayLinescores = extractLinescores(awayCompetitor);
+  const homeLinescores = extractESPNLinescores(homeCompetitor, sport);
+  const awayLinescores = extractESPNLinescores(awayCompetitor, sport);
 
   const liveState = parseMlbLiveState({
     sport,
@@ -2121,18 +2184,19 @@ function transformTennisExplorerMatch(match: TennisExplorerLiveMatch): Game {
   const game: Game = {
     id: match.id,
     sport: "TENNIS",
+    source: "tennis-explorer",
     homeTeam: teams.homeTeam,
     awayTeam: teams.awayTeam,
     gameTime: match.gameTime,
-    status: "LIVE",
+    status: match.status,
     venue: match.venue,
-    homeScore: match.homeSets,
-    awayScore: match.awaySets,
-    quarter: match.quarter,
-    clock: match.clock,
-    statusLabel: match.suspension?.display,
-    statusDetail: match.suspension?.resumeText,
-    suspension: match.suspension,
+    homeScore: match.status === "LIVE" ? match.homeSets : undefined,
+    awayScore: match.status === "LIVE" ? match.awaySets : undefined,
+    quarter: match.status === "LIVE" ? match.quarter : undefined,
+    clock: match.status === "LIVE" ? match.clock : undefined,
+    statusLabel: match.status === "LIVE" ? match.suspension?.display : undefined,
+    statusDetail: match.status === "LIVE" ? match.suspension?.resumeText : undefined,
+    suspension: match.status === "LIVE" ? match.suspension : undefined,
     seasonContext: deriveSeasonContext({
       sport: "TENNIS",
       gameTime: match.gameTime,
@@ -2142,7 +2206,7 @@ function transformTennisExplorerMatch(match: TennisExplorerLiveMatch): Game {
     homeLinescores: match.homeLinescores,
     awayLinescores: match.awayLinescores,
   };
-  const cachedPrediction = pickFreshestPrediction(game.id, true);
+  const cachedPrediction = pickFreshestPrediction(game.id, match.status === "LIVE");
   return cachedPrediction ? attachPredictionToGame(game, cachedPrediction) : game;
 }
 
@@ -2266,7 +2330,7 @@ async function fetchTennisGamesFromESPN(date?: string): Promise<Game[]> {
     const supplementalGames = (await fetchTennisExplorerLiveMatches(date).catch(() => []))
       .map(transformTennisExplorerMatch)
       .filter((game) => !espnSignatures.has(tennisGameSignature(game)));
-    const games = [...espnGames, ...supplementalGames]
+    const games = filterVerifiedScoreboardGames([...espnGames, ...supplementalGames])
       .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
 
     for (const game of games) {
@@ -2394,7 +2458,7 @@ async function fetchGamesFromESPN(sport: SportKey, date?: string, fullList = fal
       (event) => transformESPNEvent(event, sport),
       8 // Process 8 games at a time
     );
-    const games: Game[] = resolved.filter((g): g is Game => g !== null);
+    const games: Game[] = filterVerifiedScoreboardGames(resolved.filter((g): g is Game => g !== null));
     // Populate gameId → sport index for fast /id/:id lookups
     for (const game of games) {
       gameIdToSport.set(game.id, sport);
@@ -2748,8 +2812,11 @@ gamesRouter.get("/id/:id", async (c) => {
     // adaptive list cache (LIVE_CACHE_TTL_MS) governs freshness.
     const indexedGame = gameById.get(gameId);
     if (indexedGame && indexedGame.status !== "LIVE") {
-      const gameWithPrediction = await ensurePrediction(indexedGame);
-      return c.json({ data: gameWithPrediction });
+      if (isVerifiedScoreboardGame(indexedGame)) {
+        const gameWithPrediction = await ensurePrediction(indexedGame);
+        return c.json({ data: gameWithPrediction });
+      }
+      gameById.delete(gameId);
     }
 
     // Fetch today's games (will use cache if available)
@@ -2891,6 +2958,7 @@ gamesRouter.get("/:sport", async (c) => {
 interface LiveScore {
   id: string;
   sport: string;
+  source?: Game["source"];
   homeTeam: { abbreviation: string; name: string };
   awayTeam: { abbreviation: string; name: string };
   homeScore: number;
@@ -2952,6 +3020,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
             .map((game): LiveScore => ({
               id: game.id,
               sport,
+              source: game.source,
               homeTeam: {
                 abbreviation: game.homeTeam.abbreviation,
                 name: game.homeTeam.name,
@@ -3064,7 +3133,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
     })
   );
 
-  const data = results.flat();
+  const data = filterVerifiedScoreboardGames(results.flat());
 
   // Update activeSports to only sports with games still in-progress. FINAL
   // updates are sent once for games that were live on the previous tick.
@@ -3101,7 +3170,8 @@ export async function lookupGameById(gameId: string): Promise<Game | null> {
 
   const indexedGame = gameById.get(gameId);
   if (indexedGame && indexedGame.status !== "LIVE") {
-    return ensurePrediction(indexedGame);
+    if (isVerifiedScoreboardGame(indexedGame)) return ensurePrediction(indexedGame);
+    gameById.delete(gameId);
   }
 
   const todayStr = new Date().toISOString().split("T")[0]!;

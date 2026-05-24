@@ -3,12 +3,14 @@ import { AppState, AppStateStatus } from 'react-native';
 import EventSource, { CustomEvent } from 'react-native-sse';
 import { notifyManager, useQueryClient } from '@tanstack/react-query';
 import { GameStatus, type GameWithPrediction } from '@/types/sports';
+import { filterVerifiedGames, isUnverifiedScoreboardGame } from '@/lib/verified-games';
 
 type SSEEvents = 'scores';
 
 export interface LiveScore {
   id: string;
   sport: string;
+  source?: GameWithPrediction['source'];
   homeTeam: { abbreviation: string; name: string };
   awayTeam: { abbreviation: string; name: string };
   homeScore: number;
@@ -232,7 +234,9 @@ function mergeLiveScoresIntoArray<T extends GameWithPrediction>(
   scoreMap: Map<string, LiveScore>,
 ): T[] {
   let changed = false;
-  const updated = games.map((game) => {
+  const verifiedGames = filterVerifiedGames(games);
+  if (verifiedGames.length !== games.length) changed = true;
+  const updated = verifiedGames.map((game) => {
     const next = mergeLiveScore(game, scoreMap);
     if (next !== game) changed = true;
     return next as T;
@@ -247,7 +251,7 @@ function mergeLiveScoresIntoQueryData(old: unknown, scoreMap: Map<string, LiveSc
     let changed = false;
     const updatedBuckets = old.map((bucket) => {
       const typedBucket = bucket as { games: GameWithPrediction[] };
-      const nextGames = mergeLiveScoresIntoArray(typedBucket.games, scoreMap);
+      const nextGames = mergeLiveScoresIntoArray(typedBucket.games ?? [], scoreMap);
       if (nextGames === typedBucket.games) return bucket;
       changed = true;
       return { ...typedBucket, games: nextGames };
@@ -280,7 +284,10 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
 
   const applyScoresToCache = useCallback((scores: LiveScore[]) => {
     if (scores.length === 0) return;
-    const scoreMap = new Map(scores.map((s) => [s.id, s]));
+    const verifiedScores = scores.filter((score) => !isUnverifiedScoreboardGame(score));
+    const hasUnverifiedScores = verifiedScores.length !== scores.length;
+    if (verifiedScores.length === 0 && !hasUnverifiedScores) return;
+    const scoreMap = new Map(verifiedScores.map((s) => [s.id, s]));
 
     notifyManager.batch(() => {
       queryClient.setQueriesData({ queryKey: ['games'] }, (old) =>
@@ -291,6 +298,10 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
       );
 
       for (const score of scores) {
+        if (isUnverifiedScoreboardGame(score)) {
+          queryClient.setQueryData(['game', score.id], null);
+          continue;
+        }
         queryClient.setQueryData(['game', score.id], (old) => {
           if (!old) return old;
           return mergeLiveScore(old as GameWithPrediction, scoreMap);
@@ -298,7 +309,7 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
       }
     });
 
-    for (const score of scores) {
+    for (const score of verifiedScores) {
       if (score.status === GameStatus.FINAL) {
         queryClient.invalidateQueries({
           queryKey: ['game', score.id],

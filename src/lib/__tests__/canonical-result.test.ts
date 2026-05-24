@@ -2,6 +2,8 @@ import { getCanonicalConfidence, getCanonicalTeam, getCanonicalWinProbabilities 
 import { cleanProjectionCopy, getProjectionDisplay } from '../projection-display';
 import { getGamePredictionDisplay } from '../prediction-display';
 import { displayPredictionAnalysis } from '../narrative-display';
+import { displayWinProbability } from '../display-confidence';
+import { resolvePickResultForDisplay } from '../pick-resolution-display';
 import { GameStatus, Sport, type GameWithPrediction } from '@/types/sports';
 
 function makeGame(): GameWithPrediction {
@@ -154,6 +156,8 @@ describe('canonical UI result helpers', () => {
     expect(display.outcome).toBe('draw');
     expect(display.badgeLabel).toBe('DRAW');
     expect(display.team).toBeNull();
+    expect(getCanonicalWinProbabilities(game.prediction)).toEqual({ home: 30, away: 30, draw: 40 });
+    expect(displayWinProbability(30, 30, 40)).toEqual({ home: 30, away: 30, draw: 40 });
 
     const projectionDisplay = getProjectionDisplay({
       sport: game.sport,
@@ -197,5 +201,19 @@ describe('canonical UI result helpers', () => {
       projection: game.prediction!.projection!,
     });
     expect(projectionDisplay.leanText).toBe('Toss-Up 52%');
+  });
+});
+
+describe('pick result display fallback', () => {
+  it('resolves a pending pick from a final game already loaded in the app', () => {
+    expect(resolvePickResultForDisplay(
+      { pickedTeam: 'away', result: 'pending' },
+      { status: 'FINAL', homeScore: 196, awayScore: 200 },
+    )).toBe('win');
+
+    expect(resolvePickResultForDisplay(
+      { pickedTeam: 'home', result: null },
+      { status: 'FINAL', homeScore: 196, awayScore: 200 },
+    )).toBe('loss');
   });
 });

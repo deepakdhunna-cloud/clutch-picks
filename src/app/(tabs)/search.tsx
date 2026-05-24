@@ -14,7 +14,6 @@ import { Search, ChevronRight, Plus, Zap, Lock } from 'lucide-react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSubscription } from '@/lib/subscription-context';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
@@ -33,6 +32,8 @@ import {
   getCanonicalWinProbabilities,
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
+import { pruneFollowedGamesForReset, readFollowedGameIds } from '@/lib/followed-games';
+import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import {
   GLASS_BOTTOM_NAV_FADE_HEIGHT,
   GLASS_BOTTOM_NAV_HEIGHT,
@@ -91,6 +92,7 @@ function useGameDetailActions() {
   }, [prefetchGame]);
 
   const openGame = useCallback((game: GameWithPrediction) => {
+    if (!claimGameNavigation(game.id)) return;
     warmGame(game);
     router.push({ pathname: '/game/[id]', params: { id: game.id } });
     fireLightHaptic();
@@ -140,14 +142,6 @@ const ArenaHeader = memo(function ArenaHeader({
         end={{ x: 1, y: 1 }}
         style={{ padding: 16, minHeight: 116, justifyContent: 'center' }}
       >
-        <LinearGradient
-          pointerEvents="none"
-          colors={['rgba(255,255,255,0.14)', hexWithAlpha(accent, 0.32), 'rgba(255,255,255,0)']}
-          locations={[0, 0.42, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1 }}
-        />
         <View
           pointerEvents="none"
           style={{
@@ -173,7 +167,6 @@ const ArenaHeader = memo(function ArenaHeader({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-        <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, bottom: 14, height: 1, backgroundColor: 'rgba(255,255,255,0.055)' }} />
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1, minWidth: 0, paddingRight: right ? 14 : 0 }}>
@@ -190,7 +183,7 @@ const ArenaHeader = memo(function ArenaHeader({
 // ─── SEARCH BAR ───
 const searchBarOuter = {
   paddingHorizontal: ARENA_SIDE_PADDING,
-  paddingTop: 12,
+  paddingTop: 28,
   marginBottom: 18,
 } as const;
 const searchBarInner = {
@@ -2045,6 +2038,9 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   const canonicalProbabilities = getCanonicalWinProbabilities(p);
   const homeWP = canonicalProbabilities.home;
   const awayWP = canonicalProbabilities.away;
+  const drawWP = canonicalProbabilities.draw;
+  const isDrawRead = predictionDisplay.outcome === 'draw' || (drawWP !== undefined && drawWP >= homeWP && drawWP >= awayWP);
+  const drawProbabilityLabel = typeof drawWP === 'number' ? `${drawWP}%` : `${conf}%`;
   const winnerSide = predictionDisplay.teamSide ?? (homeWP >= awayWP ? 'home' : 'away');
   const winner = winnerSide === 'home' ? home : away;
   const loser = winnerSide === 'home' ? away : home;
@@ -2200,11 +2196,15 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
     } else if (isMatinee) {
       hl = `Early window, clean setup`;
       tags.push(displaySport(sport));
-      dt = `Matinee matchup: ${away.abbreviation} at ${home.abbreviation}. The model leans ${winner.abbreviation} with a ${Math.max(homeWP, awayWP)}% win probability.`;
+      dt = isDrawRead
+        ? `Matinee matchup: ${away.abbreviation} at ${home.abbreviation}. The model has draw as the top result at ${drawProbabilityLabel}, with both sides close enough to stay live.`
+        : `Matinee matchup: ${away.abbreviation} at ${home.abbreviation}. The model leans ${winner.abbreviation} with a ${Math.max(homeWP, awayWP)}% win probability.`;
     } else {
       hl = `${away.abbreviation} at ${home.abbreviation}`;
-      tags.push(displaySport(sport), `${Math.max(homeWP, awayWP)}% WIN PROB`);
-      dt = `${away.abbreviation} (${away.record}) travels to face ${home.abbreviation} (${home.record}) tonight. The model sees a ${conf >= 60 ? 'clear' : 'slight'} edge for ${winner.abbreviation}. ${conf < 58 ? 'Tight matchup; late information still matters.' : 'The data is leaning one direction.'}`;
+      tags.push(displaySport(sport), isDrawRead ? `${drawProbabilityLabel} DRAW` : `${Math.max(homeWP, awayWP)}% WIN PROB`);
+      dt = isDrawRead
+        ? `${away.abbreviation} (${away.record}) travels to face ${home.abbreviation} (${home.record}) tonight. The model has the draw as the top outcome, so finishing quality and late pressure matter more than a straight side lean.`
+        : `${away.abbreviation} (${away.record}) travels to face ${home.abbreviation} (${home.record}) tonight. The model sees a ${conf >= 60 ? 'clear' : 'slight'} edge for ${winner.abbreviation}. ${conf < 58 ? 'Tight matchup; late information still matters.' : 'The data is leaning one direction.'}`;
     }
   }
 
@@ -2970,9 +2970,8 @@ export default function MyArenaScreen() {
 
   const loadFollowedGames = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem('clutch_followed_games');
-      const parsed = raw ? JSON.parse(raw) : [];
-      const next = new Set<string>(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+      const parsed = await readFollowedGameIds();
+      const next = new Set<string>(parsed);
       setFgi((prev) => {
         if (prev.size === next.size && Array.from(prev).every((id) => next.has(id))) return prev;
         return next;
@@ -2981,6 +2980,22 @@ export default function MyArenaScreen() {
       setFgi(new Set());
     }
   }, []);
+
+  useEffect(() => {
+    if (!contentReady || !allGames?.length) return;
+    let cancelled = false;
+    void pruneFollowedGamesForReset(allGames).then((ids) => {
+      if (cancelled) return;
+      const next = new Set(ids);
+      setFgi((prev) => {
+        if (prev.size === next.size && Array.from(prev).every((id) => next.has(id))) return prev;
+        return next;
+      });
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [allGames, contentReady]);
 
   useFocusEffect(useCallback(() => {
     let active = true;

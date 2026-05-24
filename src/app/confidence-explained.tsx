@@ -8,6 +8,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGame } from '@/hooks/useGames';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
+import { displayWinProbability } from '@/lib/display-confidence';
+import { getCanonicalWinProbabilities } from '@/lib/canonical-result';
 import { getPredictionDisplay } from '@/lib/prediction-display';
 import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 
@@ -145,6 +147,10 @@ export default function ConfidenceExplainedScreen() {
   });
   const tier = getTier(pred.confidence, predictionDisplay.isTossUp);
   const currentTierIdx = TIERS.indexOf(tier);
+  const canonicalProbabilities = getCanonicalWinProbabilities(pred as unknown as Prediction);
+  const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away, canonicalProbabilities.draw);
+  const hasDraw = typeof dp.draw === 'number';
+  const drawColor = '#C9BDA8';
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -181,12 +187,22 @@ export default function ConfidenceExplainedScreen() {
             {/* Mini win prob bar */}
             <View style={{ marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 9, fontWeight: '700', color: TEAL }}>{game.homeTeam.abbreviation} {pred.homeWinProbability}%</Text>
-                <Text style={{ fontSize: 9, fontWeight: '700', color: MAROON }}>{pred.awayWinProbability}% {game.awayTeam.abbreviation}</Text>
+                <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: TEAL }} numberOfLines={1}>{game.homeTeam.abbreviation} {dp.home}%</Text>
+                {hasDraw ? (
+                  <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: drawColor, textAlign: 'center' }} numberOfLines={1}>Draw {dp.draw}%</Text>
+                ) : null}
+                <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: MAROON, textAlign: 'right' }} numberOfLines={1}>{dp.away}% {game.awayTeam.abbreviation}</Text>
               </View>
               <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', overflow: 'hidden' }}>
-                <View style={{ flex: pred.homeWinProbability, backgroundColor: TEAL, borderRadius: 3 }} />
-                <View style={{ flex: pred.awayWinProbability, backgroundColor: MAROON, borderRadius: 3 }} />
+                <View style={{ flex: dp.home, backgroundColor: TEAL, borderRadius: 3 }} />
+                {hasDraw ? (
+                  <>
+                    <View style={{ width: 2, backgroundColor: BG }} />
+                    <View style={{ flex: dp.draw, backgroundColor: drawColor }} />
+                    <View style={{ width: 2, backgroundColor: BG }} />
+                  </>
+                ) : null}
+                <View style={{ flex: dp.away, backgroundColor: MAROON, borderRadius: 3 }} />
               </View>
             </View>
 

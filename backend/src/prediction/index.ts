@@ -44,7 +44,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.5.0-audit-and-weak-sport-calibration";
+export const MODEL_VERSION = "2.5.1-coverage-form-weather-calibration";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -99,10 +99,10 @@ function applyWeakSportCalibration(
   ctx: GameContext,
   totalRatingDelta: number,
   factors: FactorContribution[],
+  coverage: number,
 ): { ratingDelta: number; warnings: string[] } {
   let multiplier = 1;
   const warnings: string[] = [];
-  const coverage = dataCoverage(factors);
 
   if (ctx.sport === "MLB") {
     const starter = factorByKey(factors, "starting_pitcher");
@@ -127,6 +127,7 @@ function applyWeakSportCalibration(
     }
     if (coverage < 0.78) {
       multiplier *= 0.92;
+      warnings.push("MLB data coverage is thin; confidence compressed.");
     }
 
     multiplier = Math.max(0.58, multiplier);
@@ -600,6 +601,10 @@ export function normalizeWeightsToOne(factors: FactorContribution[]): FactorCont
  * rating_diff when it has a real directional edge, otherwise to the strongest
  * available signaled factor, then aggregate contributions as usual.
  *
+ * Non-directional signals with hasSignal=true (for example adverse tennis
+ * weather that raises variance without favoring either player) keep their
+ * weight as a zero-delta confidence drag instead of donating it to a side.
+ *
  * Invariants:
  *   - available=false factors have already been zeroed by redistributeWeights
  *     before this runs — they won't double-count.
@@ -610,6 +615,8 @@ export function blendFactors(factors: FactorContribution[]): FactorContribution[
 
   const hasDirectionalSignal = (factor: FactorContribution): boolean =>
     factor.available && factor.hasSignal && Math.abs(factor.homeDelta) > 0.001;
+  const retainsNonDirectionalWeight = (factor: FactorContribution): boolean =>
+    factor.available && factor.hasSignal && factor.key === "tennis_conditions";
 
   let anchorIdx =
     ratingIdx >= 0 && hasDirectionalSignal(factors[ratingIdx]!)
@@ -637,7 +644,7 @@ export function blendFactors(factors: FactorContribution[]): FactorContribution[
   let pooled = 0;
   const result = factors.map((f, i) => {
     if (i === anchorIdx) return { ...f };
-    if (f.available && !hasDirectionalSignal(f) && f.weight > 0) {
+    if (f.available && !hasDirectionalSignal(f) && !retainsNonDirectionalWeight(f) && f.weight > 0) {
       pooled += f.weight;
       return { ...f, weight: 0 };
     }
@@ -666,6 +673,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   const sportFactorFn = SPORT_FACTORS[ctx.sport];
   const sportFactors = sportFactorFn ? sportFactorFn(ctx) : [];
   const allFactors = [...baseFactors, ...sportFactors];
+  const rawCoverage = dataCoverage(allFactors);
 
   // 2. Redistribute weight from unavailable factors (unavailable → 0,
   //    available factors scale up proportionally to fill the budget).
@@ -698,7 +706,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     }
   }
 
-  const weakSportCalibration = applyWeakSportCalibration(ctx, totalRatingDelta, adjustedFactors);
+  const weakSportCalibration = applyWeakSportCalibration(ctx, totalRatingDelta, adjustedFactors, rawCoverage);
   totalRatingDelta = weakSportCalibration.ratingDelta;
 
   // 4. Convert to probability using the standard Elo logistic, then blend in
@@ -736,7 +744,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     projectionHomeProb: rawProjection.homeWinProbability,
     projectionAwayProb: rawProjection.awayWinProbability,
     projectionDrawProb: rawProjection.drawProbability,
-    coverage: dataCoverage(allFactors),
+    coverage: rawCoverage,
   });
 
   const reconciled = reconcileWithProjection({

@@ -58,9 +58,9 @@ describe("determineResult", () => {
     expect(determineResult("away", 110, 100)).toBe("loss");
   });
 
-  test("tie returns null (unresolved)", () => {
-    expect(determineResult("home", 100, 100)).toBeNull();
-    expect(determineResult("away", 100, 100)).toBeNull();
+  test("tie/draw settles a home-away user pick as a loss", () => {
+    expect(determineResult("home", 100, 100)).toBe("loss");
+    expect(determineResult("away", 100, 100)).toBe("loss");
   });
 
   test("invalid pickedTeam returns null", () => {

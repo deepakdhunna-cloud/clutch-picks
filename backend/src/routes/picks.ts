@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { resolvePicks } from "../lib/resolve-picks";
 
 const picksRouter = new Hono<{
   Variables: {
@@ -56,6 +57,54 @@ function summarizePickStats(picks: Array<{ result: string | null }>) {
 }
 
 const EMPTY_PICK_STATS = summarizePickStats([]);
+const PICK_RESOLUTION_KICK_INTERVAL_MS = 15 * 1000;
+const STALE_PENDING_PICK_MS = 5 * 60 * 1000;
+let lastPickResolutionKickAt = 0;
+let pickResolutionKickInFlight: Promise<{ resolved: number; skipped: number }> | null = null;
+
+async function maybeResolveStalePendingPicks(picks: Array<{ result: string | null; createdAt: Date }>): Promise<boolean> {
+  const now = Date.now();
+  const hasStalePending = picks.some((pick) => {
+    if (pick.result !== null) return false;
+    return now - pick.createdAt.getTime() >= STALE_PENDING_PICK_MS;
+  });
+  if (!hasStalePending) return false;
+
+  if (pickResolutionKickInFlight) {
+    const result = await pickResolutionKickInFlight;
+    return result.resolved > 0;
+  }
+
+  if (now - lastPickResolutionKickAt < PICK_RESOLUTION_KICK_INTERVAL_MS) return false;
+
+  lastPickResolutionKickAt = now;
+  pickResolutionKickInFlight = resolvePicks()
+    .then((result) => {
+      const { resolved, skipped } = result;
+      if (resolved > 0) {
+        console.log(`[picks] stale pending resolver settled ${resolved} picks (${skipped} skipped)`);
+      }
+      return result;
+    })
+    .catch((error) => {
+      console.error("[picks] stale pending resolver failed:", error);
+      return { resolved: 0, skipped: 0 };
+    })
+    .finally(() => {
+      pickResolutionKickInFlight = null;
+    });
+
+  const result = await pickResolutionKickInFlight;
+  return result.resolved > 0;
+}
+
+function listUserPicks(userId: string, take?: number) {
+  return prisma.userPick.findMany({
+    where: { odId: userId },
+    orderBy: { createdAt: "desc" },
+    ...(take ? { take } : {}),
+  });
+}
 
 // POST /api/picks - Create or update a pick
 picksRouter.post("/", zValidator("json", createPickSchema), async (c) => {
@@ -138,12 +187,11 @@ picksRouter.get("/", async (c) => {
   }
 
   try {
-    const picks = await prisma.userPick.findMany({
-      where: { odId: user.id },
-      orderBy: { createdAt: "desc" },
-    });
+    const picks = await listUserPicks(user.id);
+    const didResolve = await maybeResolveStalePendingPicks(picks);
+    const responsePicks = didResolve ? await listUserPicks(user.id) : picks;
 
-    return c.json({ data: picks });
+    return c.json({ data: responsePicks });
   } catch (error) {
     console.error("Error fetching picks:", error);
     return c.json({ error: { message: "Failed to fetch picks", code: "FETCH_FAILED" } }, 500);
@@ -158,12 +206,11 @@ picksRouter.get("/stats", async (c) => {
   }
 
   try {
-    const picks = await prisma.userPick.findMany({
-      where: { odId: user.id },
-      orderBy: { createdAt: "desc" },
-    });
+    const picks = await listUserPicks(user.id);
+    const didResolve = await maybeResolveStalePendingPicks(picks);
+    const responsePicks = didResolve ? await listUserPicks(user.id) : picks;
 
-    return c.json({ data: summarizePickStats(picks) });
+    return c.json({ data: summarizePickStats(responsePicks) });
   } catch (error) {
     console.error("Error fetching stats:", error);
     return c.json({ error: { message: "Failed to fetch stats", code: "FETCH_FAILED" } }, 500);
@@ -216,12 +263,11 @@ picksRouter.get("/stats/:userId", async (c) => {
       return c.json({ data: EMPTY_PICK_STATS });
     }
 
-    const picks = await prisma.userPick.findMany({
-      where: { odId: userId },
-      orderBy: { createdAt: "desc" },
-    });
+    const picks = await listUserPicks(userId);
+    const didResolve = await maybeResolveStalePendingPicks(picks);
+    const responsePicks = didResolve ? await listUserPicks(userId) : picks;
 
-    return c.json({ data: summarizePickStats(picks) });
+    return c.json({ data: summarizePickStats(responsePicks) });
   } catch (error) {
     console.error("Error fetching user stats:", error);
     return c.json({ error: { message: "Failed to fetch stats", code: "FETCH_FAILED" } }, 500);
@@ -261,12 +307,10 @@ picksRouter.get("/user/:userId", async (c) => {
       if (!isFollowing) return c.json({ data: [] });
     }
 
-    const picks = await prisma.userPick.findMany({
-      where: { odId: userId },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
-    return c.json({ data: picks });
+    const picks = await listUserPicks(userId, 20);
+    const didResolve = await maybeResolveStalePendingPicks(picks);
+    const responsePicks = didResolve ? await listUserPicks(userId, 20) : picks;
+    return c.json({ data: responsePicks });
   } catch (error) {
     console.error("Error fetching user picks:", error);
     return c.json({ error: { message: "Failed to fetch picks", code: "FETCH_FAILED" } }, 500);

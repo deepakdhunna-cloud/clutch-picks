@@ -7,11 +7,13 @@ import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGrad, Stop }
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useUserPicks } from '@/hooks/usePicks';
-import { usePrefetchGame } from '@/hooks/useGames';
+import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
+import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -102,6 +104,7 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
       <Pressable
         onPressIn={() => prefetchGame(item.gameId)}
         onPress={() => {
+          if (!claimGameNavigation(item.gameId)) return;
           router.push(`/game/${item.gameId}`);
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
@@ -192,12 +195,22 @@ function StatRing({ value, label, color, total }: { value: number; label: string
 export default function PicksHistoryScreen() {
   const router = useRouter();
   const { data: picks, isLoading } = useUserPicks();
+  const { data: allGames } = useGames();
   const [filter, setFilter] = useState<'all' | 'win' | 'loss' | 'pending'>('all');
   const deferredFilter = useDeferredValue(filter);
 
+  const displayPicks = useMemo(() => {
+    if (!picks) return [];
+    const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
+    return picks.map((p) => ({
+      ...p,
+      result: resolvePickResultForDisplay(p, gameMap.get(p.gameId)),
+    }));
+  }, [picks, allGames]);
+
   const allTiles = useMemo<PickTile[]>(() => {
-    if (!picks || picks.length === 0) return [];
-    return [...picks]
+    if (displayPicks.length === 0) return [];
+    return [...displayPicks]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map((p) => ({
         id: p.id,
@@ -209,7 +222,7 @@ export default function PicksHistoryScreen() {
         createdAt: p.createdAt,
         time: formatTime(p.createdAt),
       }));
-  }, [picks]);
+  }, [displayPicks]);
 
   const sections = useMemo<PickSection[]>(() => {
     const filtered = deferredFilter === 'all' ? allTiles : allTiles.filter(t => t.result === deferredFilter);
@@ -232,12 +245,12 @@ export default function PicksHistoryScreen() {
   }, [allTiles, deferredFilter]);
 
   const summary = useMemo(() => {
-    if (!picks) return { total: 0, wins: 0, losses: 0, pending: 0, rate: 0 };
-    const wins = picks.filter(p => p.result === 'win').length;
-    const losses = picks.filter(p => p.result === 'loss').length;
+    if (!displayPicks.length) return { total: 0, wins: 0, losses: 0, pending: 0, rate: 0 };
+    const wins = displayPicks.filter(p => p.result === 'win').length;
+    const losses = displayPicks.filter(p => p.result === 'loss').length;
     const decided = wins + losses;
-    return { total: picks.length, wins, losses, pending: picks.length - decided, rate: decided > 0 ? Math.round((wins / decided) * 100) : 0 };
-  }, [picks]);
+    return { total: displayPicks.length, wins, losses, pending: displayPicks.length - decided, rate: decided > 0 ? Math.round((wins / decided) * 100) : 0 };
+  }, [displayPicks]);
 
   const filters: { key: typeof filter; label: string; count: number; color: string }[] = [
     { key: 'all', label: 'All', count: summary.total, color: C.TEXT },

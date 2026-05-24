@@ -16,6 +16,15 @@ const ESPN_ENDPOINTS: Record<string, string> = {
   NCAAF: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
   NCAAB: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
   EPL: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+  UCL: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+  IPL: "https://site.api.espn.com/apis/site/v2/sports/cricket/8048/scoreboard",
+};
+
+const ESPN_TENNIS_SCOREBOARD = "https://www.espn.com/tennis/scoreboard/_/date";
+const TENNIS_EXPLORER_BASE_URL = "https://www.tennisexplorer.com";
+const TENNIS_EXPLORER_FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (compatible; ClutchPicksBot/1.0)",
+  "Accept": "text/html,application/xhtml+xml",
 };
 
 export interface FinalGameResult {
@@ -25,20 +34,200 @@ export interface FinalGameResult {
   isFinal: boolean;
 }
 
-// Fetch a specific game by ID from ESPN. Searches across all sports and ±3 days.
-export async function fetchGameResult(gameId: string): Promise<FinalGameResult | null> {
+type TeamResultHint = {
+  homeTeam?: string | null;
+  awayTeam?: string | null;
+};
+
+function normalizeTeamHint(value?: string | null): string | null {
+  return value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || null;
+}
+
+function competitionMatchesTeamHint(
+  competition: { competitors?: Array<{ homeAway?: string; team?: { abbreviation?: string; shortDisplayName?: string; displayName?: string; name?: string } }> },
+  teamHint?: TeamResultHint,
+): boolean {
+  const homeHint = normalizeTeamHint(teamHint?.homeTeam);
+  const awayHint = normalizeTeamHint(teamHint?.awayTeam);
+  if (!homeHint || !awayHint) return false;
+
+  const home = competition.competitors?.find((c) => c.homeAway === "home");
+  const away = competition.competitors?.find((c) => c.homeAway === "away");
+  const homeNames = [
+    home?.team?.abbreviation,
+    home?.team?.shortDisplayName,
+    home?.team?.displayName,
+    home?.team?.name,
+  ].map(normalizeTeamHint);
+  const awayNames = [
+    away?.team?.abbreviation,
+    away?.team?.shortDisplayName,
+    away?.team?.displayName,
+    away?.team?.name,
+  ].map(normalizeTeamHint);
+
+  return homeNames.includes(homeHint) && awayNames.includes(awayHint);
+}
+
+function sportsToSearch(sportHint?: string | null): string[] {
+  const normalized = sportHint?.toUpperCase();
+  const sports = Object.keys(ESPN_ENDPOINTS);
+  if (!normalized || !ESPN_ENDPOINTS[normalized]) return sports;
+  return [normalized, ...sports.filter((sport) => sport !== normalized)];
+}
+
+function datesAroundToday(): string[] {
   const today = new Date();
   const datesToSearch: string[] = [];
-
   for (let offset = -3; offset <= 1; offset++) {
     const d = new Date(today);
     d.setDate(d.getDate() + offset);
     datesToSearch.push(d.toISOString().split("T")[0]!);
   }
+  return datesToSearch;
+}
 
-  for (const sport of Object.keys(ESPN_ENDPOINTS)) {
+function stripTags(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#039;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseEspnFitTennisState(html: string): any | null {
+  const marker = /window\['__espnfitt__'\]\s*=\s*/.exec(html);
+  if (!marker || marker.index === undefined) return null;
+
+  const start = marker.index + marker[0].length;
+  const end = html.indexOf(";</script>", start);
+  const fallbackEnd = html.indexOf("</script>", start);
+  const sliceEnd = end >= 0 ? end : fallbackEnd;
+  if (sliceEnd < 0) return null;
+
+  const raw = html.slice(start, sliceEnd).replace(/;\s*$/, "");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function tennisLineValue(line: any): number | null {
+  const parsed = Number(line?.v);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function tennisSetScores(competitor: any): number[] {
+  return (competitor?.lnescrs ?? [])
+    .map((line: any) => tennisLineValue(line))
+    .filter((value: number | null): value is number => value !== null);
+}
+
+function tennisSetsWon(competitor: any, opponent: any): number {
+  const explicitSetWins = (competitor?.lnescrs ?? []).filter((line: any) => line?.w === true).length;
+  if (explicitSetWins > 0) return explicitSetWins;
+
+  const ownScores = tennisSetScores(competitor);
+  const opponentScores = tennisSetScores(opponent);
+  if (ownScores.length === 0 && opponentScores.length === 0) {
+    if (competitor?.wnr === true) return 1;
+    if (opponent?.wnr === true) return 0;
+  }
+
+  let sets = 0;
+  for (let i = 0; i < Math.min(ownScores.length, opponentScores.length); i++) {
+    if (ownScores[i]! > opponentScores[i]!) sets++;
+  }
+  return sets;
+}
+
+function finalTennisResultFromCompetition(gameId: string, competition: any): FinalGameResult | null {
+  const status = competition?.status;
+  const isFinal = String(status?.state ?? "").toLowerCase() === "post" || status?.completed === true;
+  if (!isFinal) return null;
+
+  const competitors = competition?.competitors ?? [];
+  const home = competitors.find((c: any) => c?.homeAway === "home") ?? competitors[0];
+  const away = competitors.find((c: any) => c?.homeAway === "away") ?? competitors.find((c: any) => c !== home);
+  if (!home || !away) return null;
+
+  return {
+    gameId,
+    homeScore: tennisSetsWon(home, away),
+    awayScore: tennisSetsWon(away, home),
+    isFinal: true,
+  };
+}
+
+async function fetchEspnTennisGameResult(gameId: string): Promise<FinalGameResult | null> {
+  for (const date of datesAroundToday()) {
+    try {
+      const url = `${ESPN_TENNIS_SCOREBOARD}/${date.replace(/-/g, "")}`;
+      const res = await fetchWithTimeout(url, { timeoutMs: 25000 });
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const state = parseEspnFitTennisState(html);
+      const competitions = Object.values(state?.page?.content?.scoreboard?.competitions ?? {});
+      const competition = competitions.find((c: any) => c?.id === gameId);
+      if (!competition) continue;
+
+      const result = finalTennisResultFromCompetition(gameId, competition);
+      if (!result) {
+        console.log(`[resolve-diag] gameId=${gameId} sport=TENNIS date=${date}: found event but not final`);
+      }
+      return result;
+    } catch {
+      // Try the next date.
+    }
+  }
+  return null;
+}
+
+async function fetchTennisExplorerGameResult(gameId: string): Promise<FinalGameResult | null> {
+  const sourceId = gameId.match(/^tennis-explorer-(\d+)$/)?.[1];
+  if (!sourceId) return null;
+
+  try {
+    const res = await fetchWithTimeout(`${TENNIS_EXPLORER_BASE_URL}/match-detail/?id=${sourceId}`, {
+      headers: TENNIS_EXPLORER_FETCH_HEADERS,
+      timeoutMs: 25000,
+    });
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    const scoreText = stripTags(html.match(/<td\b[^>]*class=["'][^"']*\bgScore\b[^"']*["'][^>]*>\s*<span>([\s\S]*?)<\/span>/i)?.[1] ?? "");
+    const scoreMatch = scoreText.match(/(\d+)\s*-\s*(\d+)/);
+    if (!scoreMatch) return null;
+
+    const homeScore = Number(scoreMatch[1]);
+    const awayScore = Number(scoreMatch[2]);
+    if (!Number.isFinite(homeScore) || !Number.isFinite(awayScore)) return null;
+    if (Math.max(homeScore, awayScore) < 2) return null;
+
+    return { gameId, homeScore, awayScore, isFinal: true };
+  } catch {
+    return null;
+  }
+}
+
+// Fetch a specific game by ID from ESPN. Searches across all sports and ±3 days.
+export async function fetchGameResult(gameId: string, sportHint?: string | null, teamHint?: TeamResultHint): Promise<FinalGameResult | null> {
+  if (sportHint?.toUpperCase() === "TENNIS" || gameId.startsWith("tennis-explorer-")) {
+    const tennisResult = gameId.startsWith("tennis-explorer-")
+      ? await fetchTennisExplorerGameResult(gameId)
+      : await fetchEspnTennisGameResult(gameId);
+    return tennisResult;
+  }
+
+  for (const sport of sportsToSearch(sportHint)) {
     const baseUrl = ESPN_ENDPOINTS[sport]!;
-    for (const date of datesToSearch) {
+    for (const date of datesAroundToday()) {
       try {
         const params = new URLSearchParams({ dates: date.replace(/-/g, "") });
         if (sport === "NCAAB") { params.set("groups", "50"); params.set("limit", "300"); }
@@ -57,7 +246,8 @@ export async function fetchGameResult(gameId: string): Promise<FinalGameResult |
 
         if (!data.events) continue;
 
-        const event = data.events.find((e) => e.id === gameId);
+        const event = data.events.find((e) => e.id === gameId)
+          ?? data.events.find((e) => competitionMatchesTeamHint(e.competitions?.[0] ?? {}, teamHint));
         if (!event) continue;
 
         const competition = event.competitions[0];
@@ -144,7 +334,9 @@ export function determineResult(
   homeScore: number,
   awayScore: number
 ): "win" | "loss" | null {
-  if (homeScore === awayScore) return null; // Tie — leave unresolved
+  if (homeScore === awayScore) {
+    return pickedTeam === "home" || pickedTeam === "away" ? "loss" : null;
+  }
   const homeWon = homeScore > awayScore;
   if (pickedTeam === "home") return homeWon ? "win" : "loss";
   if (pickedTeam === "away") return homeWon ? "loss" : "win";
@@ -197,7 +389,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
   try {
     const unresolvedPicks = await prisma.userPick.findMany({
       where: { result: null },
-      select: { id: true, gameId: true, pickedTeam: true, odId: true, homeTeam: true, awayTeam: true },
+      select: { id: true, gameId: true, pickedTeam: true, odId: true, homeTeam: true, awayTeam: true, sport: true },
     });
 
     // Also pull unresolved PredictionResult rows for calibration data (independent of user picks).
@@ -205,7 +397,7 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
     const calibrationCutoff = new Date(Date.now() - 30 * 60 * 1000);
     const unresolvedPredictions = await prisma.predictionResult.findMany({
       where: { actualWinner: null, createdAt: { lt: calibrationCutoff } },
-      select: { gameId: true, createdAt: true },
+      select: { gameId: true, sport: true, createdAt: true },
     });
 
     if (unresolvedPicks.length === 0 && unresolvedPredictions.length === 0) {
@@ -219,12 +411,23 @@ export async function resolvePicks(): Promise<{ resolved: number; skipped: numbe
     ])];
     console.log(`[resolve-picks] Checking ${uniqueGameIds.length} unique games (${unresolvedPicks.length} user picks, ${unresolvedPredictions.length} calibration rows)`);
     const gameResultMap = new Map<string, FinalGameResult | null>();
+    const gameSportHints = new Map<string, string>();
+    const gameTeamHints = new Map<string, TeamResultHint>();
+    for (const pick of unresolvedPicks) {
+      if (pick.sport) gameSportHints.set(pick.gameId, pick.sport);
+      if (pick.homeTeam && pick.awayTeam && !gameTeamHints.has(pick.gameId)) {
+        gameTeamHints.set(pick.gameId, { homeTeam: pick.homeTeam, awayTeam: pick.awayTeam });
+      }
+    }
+    for (const prediction of unresolvedPredictions) {
+      if (!gameSportHints.has(prediction.gameId)) gameSportHints.set(prediction.gameId, prediction.sport);
+    }
     const pickGameIdSet = new Set(unresolvedPicks.map((p) => p.gameId));
     const staleUnavailableCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     for (const gameId of uniqueGameIds) {
       try {
-        const result = await fetchGameResult(gameId);
+        const result = await fetchGameResult(gameId, gameSportHints.get(gameId), gameTeamHints.get(gameId));
         gameResultMap.set(gameId, result);
       } catch (err) {
         console.error(`[resolve-picks] Error fetching game ${gameId}:`, err);

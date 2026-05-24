@@ -25,6 +25,10 @@ const NON_SOCCER_REST_CAP_DAYS = 14;
 const SOCCER_REST_CAP_DAYS = 10;
 const warnedStaleRest = new Set<string>();
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 export function __resetRestWarningCacheForTests(): void {
   warnedStaleRest.clear();
 }
@@ -127,15 +131,23 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
   // Source: FiveThirtyEight's Elo model uses a similar "team quality + recent
   // adjustment" structure, though they bake it into K-factor rather than
   // separating it as a factor.
-  const homeFormWinRate = ctx.homeForm.wins / Math.max(ctx.homeForm.results.length, 1);
-  const awayFormWinRate = ctx.awayForm.wins / Math.max(ctx.awayForm.results.length, 1);
-  const formDiff = homeFormWinRate - awayFormWinRate;
-  // Scale: 0.1 win-rate difference → 40 Elo points
-  const formDelta = formDiff * 400;
-
   const homeResults = ctx.homeForm.results.length;
   const awayResults = ctx.awayForm.results.length;
   const formAvailable = homeResults >= 3 && awayResults >= 3;
+  const homeFormWinRate = ctx.homeForm.wins / Math.max(homeResults, 1);
+  const awayFormWinRate = ctx.awayForm.wins / Math.max(awayResults, 1);
+  const formDiff = homeFormWinRate - awayFormWinRate;
+  const minFormSample = Math.min(homeResults, awayResults);
+  const formSampleScale = formAvailable ? clamp(minFormSample / 10, 0.35, 1) : 0;
+  const sosDiff = clamp(
+    (ctx.homeExtended.strengthOfSchedule ?? 0.5) -
+      (ctx.awayExtended.strengthOfSchedule ?? 0.5),
+    -0.15,
+    0.15,
+  );
+  const scheduleAdjustedFormDiff = (formDiff * formSampleScale) + (sosDiff * 0.25);
+  // Scale: 0.1 adjusted win-rate difference → 40 Elo points.
+  const formDelta = scheduleAdjustedFormDiff * 400;
 
   factors.push({
     key: "recent_form",
@@ -143,9 +155,9 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: formAvailable ? formDelta : 0,
     weight: 0.10,
     available: formAvailable,
-    hasSignal: formAvailable && formDiff !== 0,
+    hasSignal: formAvailable && Math.abs(scheduleAdjustedFormDiff) > 0.001,
     evidence: formAvailable
-      ? `Home L10: ${ctx.homeForm.wins}-${ctx.homeForm.losses} (${(homeFormWinRate * 100).toFixed(0)}%), Away L10: ${ctx.awayForm.wins}-${ctx.awayForm.losses} (${(awayFormWinRate * 100).toFixed(0)}%)`
+      ? `Home L10: ${ctx.homeForm.wins}-${ctx.homeForm.losses} (${(homeFormWinRate * 100).toFixed(0)}%), Away L10: ${ctx.awayForm.wins}-${ctx.awayForm.losses} (${(awayFormWinRate * 100).toFixed(0)}%); sample ${minFormSample}/10, SOS adj ${(sosDiff * 100).toFixed(1)} pts`
       : `Insufficient recent games (home: ${homeResults}, away: ${awayResults})`,
   });
 

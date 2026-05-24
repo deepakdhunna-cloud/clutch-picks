@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { predictGame } from "../index";
 import { simulateGameProjection } from "../simulation";
 import { computeBaseFactors } from "../factors/base";
+import { computeTennisFactors } from "../factors/tennis";
 import { blendFactors, harmonizeProjectionWithConsensus, normalizeWeightsToOne } from "../index";
 import type { GameContext } from "../types";
 import type { Game, Team } from "../../types/sports";
@@ -425,5 +426,28 @@ describe("game-script simulation", () => {
     expect(prediction.confidence).toBe(
       Math.round(Math.max(prediction.homeWinProbability, prediction.awayWinProbability) * 1000) / 10,
     );
+  });
+
+  it("treats adverse tennis weather as variance instead of home-side edge", () => {
+    const ctx = makeTennisContext({
+      weather: {
+        temperature: 94,
+        windSpeed: 21,
+        precipitation: 0.48,
+        isDomed: false,
+      },
+    });
+    const factors = blendFactors(normalizeWeightsToOne([
+      ...computeBaseFactors(ctx),
+      ...computeTennisFactors(ctx),
+    ]));
+    const conditions = factors.find((factor) => factor.key === "tennis_conditions")!;
+    const projection = simulateGameProjection(ctx, -80, factors);
+
+    expect(conditions.available).toBe(true);
+    expect(conditions.hasSignal).toBe(true);
+    expect(conditions.homeDelta).toBe(0);
+    expect(conditions.weight).toBeGreaterThan(0);
+    expect(projection.signals.some((signal) => signal.key === "tennis-weather-volatility")).toBe(true);
   });
 });

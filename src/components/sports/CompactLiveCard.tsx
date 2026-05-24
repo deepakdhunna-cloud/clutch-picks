@@ -188,7 +188,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               isHighlighted={false}
               sport={game.sport}
             />
-            <View style={{ marginLeft: 8, flex: 1 }}>
+            <View style={{ marginLeft: 10, flex: 1 }}>
               <Text style={{
               color: suspended || awayWinning || awayBatting
                 ? '#FFFFFF'
@@ -199,19 +199,35 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               }} numberOfLines={1}>
                 {game.awayTeam.city || game.awayTeam.abbreviation}
               </Text>
-              {game.awayTeam.record ? (
-                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: '500', marginTop: 1 }}>
-                  {game.awayTeam.record}
-                </Text>
-              ) : null}
-              {awayCricketRole ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: awayBatting ? awayAccent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
-                  <Text style={{ color: awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 0.9 }}>
-                    {awayCricketRole}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                {game.awayTeam.record ? (
+                  <Text style={{ color: 'rgba(255,255,255,0.42)', fontSize: 10, fontWeight: '600' }}>
+                    {game.awayTeam.record}
                   </Text>
-                </View>
-              ) : null}
+                ) : null}
+                {awayCricketRole ? (
+                  <>
+                    {game.awayTeam.record ? (
+                      <Text style={{ color: 'rgba(255,255,255,0.22)', fontSize: 10, fontWeight: '600', marginHorizontal: 6 }}>·</Text>
+                    ) : null}
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: awayBatting ? `${awayAccent}24` : 'rgba(255,255,255,0.06)',
+                      borderRadius: 999,
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderWidth: 1,
+                      borderColor: awayBatting ? `${awayAccent}55` : 'rgba(255,255,255,0.12)',
+                    }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: awayBatting ? awayAccent : 'rgba(255,255,255,0.5)', marginRight: 5 }} />
+                      <Text style={{ color: awayBatting ? '#FFFFFF' : 'rgba(255,255,255,0.6)', fontSize: 8.5, fontWeight: '900', letterSpacing: 0.8 }}>
+                        {awayCricketRole}
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
             </View>
             <Text style={{
               color: isCricket
@@ -220,6 +236,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               fontSize: 20,
               fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
+              marginLeft: 8,
               opacity: suspended ? 0.55 : isCricket ? awayBatting ? 1 : 0.72 : awayWinning ? 1 : 0.35,
             }}>
               {awayScoreLabel}
@@ -237,7 +254,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               isHighlighted={false}
               sport={game.sport}
             />
-            <View style={{ marginLeft: 8, flex: 1 }}>
+            <View style={{ marginLeft: 10, flex: 1 }}>
               <Text style={{
               color: suspended || homeWinning || homeBatting
                 ? '#FFFFFF'
@@ -248,19 +265,35 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               }} numberOfLines={1}>
                 {game.homeTeam.city || game.homeTeam.abbreviation}
               </Text>
-              {game.homeTeam.record ? (
-                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: '500', marginTop: 1 }}>
-                  {game.homeTeam.record}
-                </Text>
-              ) : null}
-              {homeCricketRole ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: homeBatting ? homeAccent : 'rgba(255,255,255,0.38)', marginRight: 4 }} />
-                  <Text style={{ color: homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.46)', fontSize: 7, fontWeight: '900', letterSpacing: 0.9 }}>
-                    {homeCricketRole}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                {game.homeTeam.record ? (
+                  <Text style={{ color: 'rgba(255,255,255,0.42)', fontSize: 10, fontWeight: '600' }}>
+                    {game.homeTeam.record}
                   </Text>
-                </View>
-              ) : null}
+                ) : null}
+                {homeCricketRole ? (
+                  <>
+                    {game.homeTeam.record ? (
+                      <Text style={{ color: 'rgba(255,255,255,0.22)', fontSize: 10, fontWeight: '600', marginHorizontal: 6 }}>·</Text>
+                    ) : null}
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: homeBatting ? `${homeAccent}24` : 'rgba(255,255,255,0.06)',
+                      borderRadius: 999,
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderWidth: 1,
+                      borderColor: homeBatting ? `${homeAccent}55` : 'rgba(255,255,255,0.12)',
+                    }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: homeBatting ? homeAccent : 'rgba(255,255,255,0.5)', marginRight: 5 }} />
+                      <Text style={{ color: homeBatting ? '#FFFFFF' : 'rgba(255,255,255,0.6)', fontSize: 8.5, fontWeight: '900', letterSpacing: 0.8 }}>
+                        {homeCricketRole}
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
             </View>
             <Text style={{
               color: isCricket
@@ -269,6 +302,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
               fontSize: 20,
               fontFamily: 'VT323_400Regular',
               letterSpacing: -0.5,
+              marginLeft: 8,
               opacity: suspended ? 0.55 : isCricket ? homeBatting ? 1 : 0.72 : homeWinning ? 1 : 0.35,
             }}>
               {homeScoreLabel}

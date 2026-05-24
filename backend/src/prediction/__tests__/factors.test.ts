@@ -145,6 +145,52 @@ describe("base factors", () => {
     expect(form.homeDelta).toBeGreaterThan(0); // Home 8-2 vs Away 4-6
   });
 
+  it("recent form shrinks short samples instead of treating them like full L10 data", () => {
+    const ctx = makeContext({
+      homeForm: {
+        results: ["W", "W", "W"],
+        formString: "W-W-W",
+        streak: 3, avgScore: 110, avgAllowed: 102, wins: 3, losses: 0,
+      },
+      awayForm: {
+        results: ["L", "L", "L"],
+        formString: "L-L-L",
+        streak: -3, avgScore: 100, avgAllowed: 108, wins: 0, losses: 3,
+      },
+      homeExtended: { ...makeContext().homeExtended, strengthOfSchedule: 0.5 },
+      awayExtended: { ...makeContext().awayExtended, strengthOfSchedule: 0.5 },
+    });
+
+    const factors = computeBaseFactors(ctx);
+    const form = factors.find((f) => f.key === "recent_form")!;
+    expect(form.available).toBe(true);
+    expect(form.homeDelta).toBeGreaterThan(0);
+    expect(form.homeDelta).toBeLessThan(160);
+  });
+
+  it("recent form can separate equal records with strength-of-schedule context", () => {
+    const evenForm = {
+      results: ["W", "L", "W", "L", "W", "L", "W", "L", "W", "L"] as Array<"W" | "L" | "D">,
+      formString: "W-L-W-L-W-L-W-L-W-L",
+      streak: -1,
+      avgScore: 105,
+      avgAllowed: 105,
+      wins: 5,
+      losses: 5,
+    };
+    const ctx = makeContext({
+      homeForm: evenForm,
+      awayForm: evenForm,
+      homeExtended: { ...makeContext().homeExtended, strengthOfSchedule: 0.62 },
+      awayExtended: { ...makeContext().awayExtended, strengthOfSchedule: 0.47 },
+    });
+
+    const factors = computeBaseFactors(ctx);
+    const form = factors.find((f) => f.key === "recent_form")!;
+    expect(form.homeDelta).toBeGreaterThan(0);
+    expect(form.hasSignal).toBe(true);
+  });
+
   it("travel: positive when away on long road trip", () => {
     const ctx = makeContext();
     const factors = computeBaseFactors(ctx);
@@ -238,6 +284,25 @@ describe("MLB factors", () => {
     const early = factors.find((f) => f.key === "early_season_mlb")!;
     expect(early.available).toBe(false);
     expect(early.evidence).toContain("games played");
+  });
+
+  it("predictGame compresses MLB confidence when raw data coverage is thin", () => {
+    const base = makeContext();
+    const ctx = makeContext({
+      sport: "MLB",
+      game: {
+        ...base.game,
+        sport: Sport.MLB,
+      },
+      homeLineup: null,
+      awayLineup: null,
+      weather: null,
+      homePlateUmpire: null,
+      marketConsensus: null,
+    });
+
+    const prediction = predictGame(ctx);
+    expect(prediction.canonicalResult.warnings).toContain("MLB data coverage is thin; confidence compressed.");
   });
 });
 

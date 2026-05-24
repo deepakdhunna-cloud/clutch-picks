@@ -65,10 +65,74 @@ export function scorePairText(game: CricketGameLike): string {
   return `${game.awayScore ?? 0} - ${game.homeScore ?? 0}`;
 }
 
+function sideRuns(game: CricketGameLike, side: Side): number | undefined {
+  return game.cricketState?.[side]?.runs ?? (side === 'home' ? game.homeScore : game.awayScore);
+}
+
+function oppositeSide(side: Side): Side {
+  return side === 'home' ? 'away' : 'home';
+}
+
+function cricketOversToBalls(overs: number | undefined): number | null {
+  if (overs === undefined || !Number.isFinite(overs)) return null;
+  const completedOvers = Math.trunc(overs);
+  const ballsInCurrentOver = Math.min(6, Math.max(0, Math.round((overs - completedOvers) * 10)));
+  return completedOvers * 6 + ballsInCurrentOver;
+}
+
+function cricketBallsLimit(maxOvers: number | undefined): number {
+  return Math.round((maxOvers ?? 20) * 6);
+}
+
+function cricketInningsComplete(innings: CricketScoreState[Side] | undefined): boolean {
+  if (!innings) return false;
+  if (/complete/i.test(innings.description ?? '')) return true;
+  if (typeof innings.wickets === 'number' && innings.wickets >= 10) return true;
+  const ballsBowled = cricketOversToBalls(innings.overs);
+  return ballsBowled !== null && ballsBowled >= cricketBallsLimit(innings.maxOvers);
+}
+
+export function cricketFirstInningsSide(game: CricketGameLike): Side | null {
+  if (!isCricketGame(game)) return null;
+  const target = game.cricketState?.target;
+  if (typeof target !== 'number' || !Number.isFinite(target) || target <= 1) return null;
+
+  const targetRuns = target - 1;
+  const homeRuns = sideRuns(game, 'home');
+  const awayRuns = sideRuns(game, 'away');
+  const homeMatchesTarget = homeRuns === targetRuns;
+  const awayMatchesTarget = awayRuns === targetRuns;
+
+  if (homeMatchesTarget && !awayMatchesTarget) return 'home';
+  if (awayMatchesTarget && !homeMatchesTarget) return 'away';
+
+  const homeComplete = cricketInningsComplete(game.cricketState?.home);
+  const awayComplete = cricketInningsComplete(game.cricketState?.away);
+  if (homeComplete && !awayComplete) return 'home';
+  if (awayComplete && !homeComplete) return 'away';
+
+  return null;
+}
+
+export function cricketBattingSide(game: CricketGameLike): Side | null {
+  if (!isCricketGame(game)) return null;
+
+  const firstInningsSide = cricketFirstInningsSide(game);
+  if (firstInningsSide) return oppositeSide(firstInningsSide);
+
+  const activeByFlag = (['home', 'away'] as const).filter((side) => (
+    game.cricketState?.[side]?.isBatting === true &&
+    !cricketInningsComplete(game.cricketState?.[side])
+  ));
+  if (activeByFlag.length === 1) return activeByFlag[0] ?? null;
+
+  return game.cricketState?.battingSide ?? inferCricketBattingSide(game);
+}
+
 export function cricketStatusText(game: CricketGameLike): string | null {
   if (!isCricketGame(game)) return null;
 
-  const side = game.cricketState?.battingSide;
+  const side = cricketBattingSide(game);
   if (side) {
     const innings = game.cricketState?.[side];
     const team = side === 'home' ? game.homeTeam : game.awayTeam;
@@ -83,7 +147,7 @@ export function cricketStatusText(game: CricketGameLike): string | null {
 
 export function cricketOversText(game: CricketGameLike): string | null {
   if (!isCricketGame(game)) return null;
-  const side = game.cricketState?.battingSide;
+  const side = cricketBattingSide(game);
   const innings = side ? game.cricketState?.[side] : undefined;
   return innings?.detailText ?? game.clock ?? null;
 }
@@ -99,17 +163,17 @@ export function cricketInningsPlateText(game: CricketGameLike): string | null {
 
 export function cricketLedScoreText(game: CricketGameLike): string | null {
   if (!isCricketGame(game)) return null;
-  const battingSide = game.cricketState?.battingSide ?? inferCricketBattingSide(game);
+  const battingSide = cricketBattingSide(game);
   if (!battingSide) return cricketScoreboardText(game);
   return cricketTeamScoreText(game, battingSide);
 }
 
 export function cricketInningsContext(game: CricketGameLike): { label: string; value: string; detail: string } | null {
   if (!isCricketGame(game)) return null;
-  const battingSide = game.cricketState?.battingSide ?? inferCricketBattingSide(game);
+  const battingSide = cricketBattingSide(game);
   if (!battingSide) return null;
 
-  const firstInningsSide: Side = battingSide === 'home' ? 'away' : 'home';
+  const firstInningsSide: Side = cricketFirstInningsSide(game) ?? oppositeSide(battingSide);
   const firstInnings = game.cricketState?.[firstInningsSide];
   if (typeof firstInnings?.runs !== 'number' || firstInnings.runs <= 0) {
     const battingInnings = game.cricketState?.[battingSide];
@@ -134,23 +198,12 @@ export function cricketInningsContext(game: CricketGameLike): { label: string; v
   };
 }
 
-function cricketOversToBalls(overs: number | undefined): number | null {
-  if (overs === undefined || !Number.isFinite(overs)) return null;
-  const completedOvers = Math.trunc(overs);
-  const ballsInCurrentOver = Math.min(6, Math.max(0, Math.round((overs - completedOvers) * 10)));
-  return completedOvers * 6 + ballsInCurrentOver;
-}
-
-function cricketBallsLimit(maxOvers: number | undefined): number {
-  return Math.round((maxOvers ?? 20) * 6);
-}
-
 export function cricketRequiredText(game: CricketGameLike): string | null {
   if (!isCricketGame(game)) return null;
-  const battingSide = game.cricketState?.battingSide ?? inferCricketBattingSide(game);
+  const battingSide = cricketBattingSide(game);
   if (!battingSide) return null;
 
-  const bowlingSide: Side = battingSide === 'home' ? 'away' : 'home';
+  const bowlingSide: Side = oppositeSide(battingSide);
   const battingInnings = game.cricketState?.[battingSide];
   const bowlingInnings = game.cricketState?.[bowlingSide];
   const battingRuns = battingInnings?.runs ?? (battingSide === 'home' ? game.homeScore : game.awayScore);
@@ -169,9 +222,22 @@ export function cricketRequiredText(game: CricketGameLike): string | null {
 
 export function cricketRoleText(game: CricketGameLike, side: Side): 'BATTING' | 'BOWLING' | null {
   if (!isCricketGame(game)) return null;
-  const battingSide = game.cricketState?.battingSide ?? inferCricketBattingSide(game);
+  const battingSide = cricketBattingSide(game);
   if (!battingSide) return null;
   return side === battingSide ? 'BATTING' : 'BOWLING';
+}
+
+export function cricketInningsRuns(game: CricketGameLike, side: Side): Array<number | null> | null {
+  if (!isCricketGame(game)) return null;
+  const battingSide = cricketBattingSide(game);
+  const firstInningsSide = cricketFirstInningsSide(game);
+  const runs = sideRuns(game, side);
+  if (typeof runs !== 'number') return null;
+
+  if (firstInningsSide && side === firstInningsSide) return [runs, null];
+  if (firstInningsSide && side === battingSide) return [null, runs];
+  if (side === battingSide) return [runs];
+  return null;
 }
 
 function formatBatterLine(batter: NonNullable<CricketScoreState['currentBatters']>[number]): string {

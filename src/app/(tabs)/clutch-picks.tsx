@@ -32,6 +32,7 @@ import {
   GLASS_BOTTOM_NAV_SCROLL_PADDING,
 } from '@/components/GlassBottomNav';
 import { MAROON, TEAL } from '@/lib/theme';
+import { claimGameNavigation } from '@/lib/game-navigation-guard';
 
 function getClutchPicksBottomPadding(bottomInset: number) {
   return GLASS_BOTTOM_NAV_HEIGHT
@@ -186,9 +187,12 @@ const TopPickCard = memo(function TopPickCard({
   const canonicalProbabilities = getCanonicalWinProbabilities(game.prediction);
   const realHome = canonicalProbabilities.home;
   const realAway = canonicalProbabilities.away;
-  const dp = displayWinProbability(realHome, realAway);
-  const awayPct = realAway;
-  const homePct = realHome;
+  const dp = displayWinProbability(realHome, realAway, canonicalProbabilities.draw);
+  const hasDraw = typeof dp.draw === 'number';
+  const drawColor = '#C9BDA8';
+  const awayPct = dp.away;
+  const homePct = dp.home;
+  const drawPct = dp.draw ?? 0;
 
   const isAwayPick = predictionDisplay.outcome === 'away';
   const isHomePick = predictionDisplay.outcome === 'home';
@@ -412,24 +416,37 @@ const TopPickCard = memo(function TopPickCard({
                     colors={[chartColors.away, `${chartColors.away}CC`]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={{ width: `${awayPct}%`, borderTopLeftRadius: 3, borderBottomLeftRadius: 3 }}
+                    style={{ flex: awayPct, borderTopLeftRadius: 3, borderBottomLeftRadius: 3 }}
                   />
                   <View style={{ width: 2, backgroundColor: 'rgba(0,0,0,0.9)' }} />
+                  {hasDraw ? (
+                    <>
+                      <View style={{ flex: drawPct, backgroundColor: drawColor }} />
+                      <View style={{ width: 2, backgroundColor: 'rgba(0,0,0,0.9)' }} />
+                    </>
+                  ) : null}
                   <LinearGradient
                     colors={[`${chartColors.home}CC`, chartColors.home]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={{ flex: 1, borderTopRightRadius: 3, borderBottomRightRadius: 3 }}
+                    style={{ flex: homePct, borderTopRightRadius: 3, borderBottomRightRadius: 3 }}
                   />
                 </View>
                 {/* Labels */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
                     <View style={{ width: 6, height: 6, borderRadius: 2, backgroundColor: chartColors.away }} />
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{game.awayTeam.abbreviation}</Text>
                     <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{dp.away}%</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  {hasDraw ? (
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minWidth: 0 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 2, backgroundColor: drawColor }} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>Draw</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{dp.draw}%</Text>
+                    </View>
+                  ) : null}
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, minWidth: 0 }}>
                     <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{dp.home}%</Text>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{game.homeTeam.abbreviation}</Text>
                     <View style={{ width: 6, height: 6, borderRadius: 2, backgroundColor: chartColors.home }} />
@@ -496,6 +513,7 @@ export default function ClutchPicksScreen() {
   }, [prefetchGame]);
 
   const handleGamePress = useCallback((game: GameWithPrediction) => {
+    if (!claimGameNavigation(game.id)) return;
     handleGameWarm(game);
     router.push(`/game/${game.id}` as any);
   }, [handleGameWarm, router]);

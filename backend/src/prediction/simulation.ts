@@ -99,6 +99,31 @@ function meaningfulMarginThreshold(sport: string): number {
   return 0.25;
 }
 
+function tennisWeatherVolatility(ctx: GameContext): { boost: number; evidence: string } | null {
+  if (ctx.sport !== "TENNIS" || !ctx.weather || ctx.weather.isDomed) return null;
+
+  const parts: string[] = [];
+  let boost = 0;
+  if (ctx.weather.windSpeed > 16) {
+    boost += 0.08;
+    parts.push(`wind ${Math.round(ctx.weather.windSpeed)} mph`);
+  }
+  if (ctx.weather.temperature > 88) {
+    boost += 0.05;
+    parts.push(`heat ${Math.round(ctx.weather.temperature)}F`);
+  }
+  if (ctx.weather.precipitation > 0.35) {
+    boost += 0.08;
+    parts.push(`rain probability ${Math.round(ctx.weather.precipitation * 100)}%`);
+  }
+  if (boost <= 0) return null;
+
+  return {
+    boost: clamp(boost, 0, 0.18),
+    evidence: `Outdoor conditions increase tennis upset variance: ${parts.join(", ")}`,
+  };
+}
+
 function anchorMarginToRatingEdge(args: {
   sport: string;
   homeMean: number;
@@ -279,6 +304,17 @@ function buildScoreModel(
       label: "Weather volatility",
       value: round(weatherDelta, 2),
       evidence: "Weather compresses scoring and increases upset volatility",
+    });
+  }
+
+  const tennisWeather = tennisWeatherVolatility(ctx);
+  if (tennisWeather) {
+    marginSd *= 1 + tennisWeather.boost;
+    signals.push({
+      key: "tennis-weather-volatility",
+      label: "Tennis weather volatility",
+      value: round(tennisWeather.boost, 3),
+      evidence: tennisWeather.evidence,
     });
   }
 

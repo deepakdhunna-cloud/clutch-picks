@@ -34,7 +34,8 @@ export type FactorContribution = {
   available: boolean;
   /**
    * true when the factor has actual evidence pushing the delta in a direction
-   * (injuries reported, net rating computed, goalie confirmed, etc.), false
+   * (injuries reported, net rating computed, goalie confirmed, etc.) or a real
+   * non-directional volatility signal that should retain its weight. false
    * when it's a neutral / no-data / "no change" fallback. Effectively neutral
    * factors donate their weight to the strongest directional anchor during
    * aggregation instead of diluting the pick with a zero contribution.
@@ -104,6 +105,40 @@ export type CanonicalEngineWeights = {
   market: number;
 };
 
+export type CanonicalDecisionTag =
+  | "model-consensus"
+  | "hidden-edge"
+  | "upset-watch"
+  | "market-disagreement"
+  | "thin-data"
+  | "volatile-script"
+  | "low-conviction"
+  | "chalk";
+
+export type CanonicalDecisionProfile = {
+  version: "unified-decision-profile-v1";
+  pick: CanonicalFinalPick;
+  probability: number;
+  confidence: number;
+  dataCoverage: number;
+  signalCoverage: number;
+  agreementScore: number;
+  hiddenEdgeScore: number;
+  upsetScore: number;
+  riskScore: number;
+  edgeRating: number;
+  valueRating: number;
+  lowDataWarning: boolean;
+  engineDivergence: boolean;
+  factorPick: CanonicalFinalPick;
+  projectionPick: CanonicalFinalPick;
+  marketPick?: CanonicalFinalPick;
+  marketDelta?: number;
+  tags: CanonicalDecisionTag[];
+  thesis: string[];
+  watchouts: string[];
+};
+
 export type CanonicalPredictionResult = {
   eventId: string;
   marketType: CanonicalMarketType;
@@ -111,6 +146,7 @@ export type CanonicalPredictionResult = {
   finalProbability: number; // 0..1
   confidence: number; // 0..100, rounded to one decimal
   probabilities: CanonicalProbabilities;
+  decisionProfile?: CanonicalDecisionProfile;
   projectedScore?: {
     home: number;
     away: number;

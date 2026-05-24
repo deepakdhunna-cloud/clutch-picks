@@ -9,6 +9,12 @@ import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { cleanProjectionCopy, getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import { getPredictionDisplay } from '@/lib/prediction-display';
 import {
+  decisionProfileHeadline,
+  decisionProfileSubline,
+  decisionProfileTags,
+  decisionTagLabel,
+} from '@/lib/decision-profile-display';
+import {
   getCanonicalConfidence,
   getCanonicalResult,
   getCanonicalWinProbabilities,
@@ -53,6 +59,7 @@ interface GamePrediction {
   valueRating: number;
   homeWinProbability: number;
   awayWinProbability: number;
+  drawProbability?: number;
   factors: PredictionFactor[];
   isTossUp?: boolean;
   projection?: {
@@ -391,6 +398,8 @@ export default function GameAnalysisScreen() {
   const awayEdgeCount = sorted.filter(f => f.awayScore > f.homeScore + 0.3).length;
   const neutralCount = sorted.length - homeEdgeCount - awayEdgeCount;
   const canonical = getCanonicalResult(prediction as unknown as Prediction);
+  const decisionProfile = canonical?.decisionProfile ?? null;
+  const decisionTags = decisionProfileTags(decisionProfile);
   const predictionDisplay = getPredictionDisplay({
     prediction: prediction as unknown as Prediction,
     homeTeam,
@@ -468,7 +477,27 @@ export default function GameAnalysisScreen() {
               {/* Win probability bar */}
               {(() => {
                 const canonicalProbabilities = getCanonicalWinProbabilities(prediction as unknown as Prediction);
-                const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away);
+                const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away, canonicalProbabilities.draw);
+                const hasDraw = typeof dp.draw === 'number';
+                const drawColor = '#C9BDA8';
+                if (hasDraw) {
+                  return (
+                    <View style={{ marginTop: 4, gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[s.probTeam, { color: TEAL, flex: 1, width: undefined }]} numberOfLines={1}>{homeTeam.abbreviation} {dp.home}%</Text>
+                        <Text style={[s.probTeam, { color: drawColor, flex: 1, width: undefined, textAlign: 'center' }]} numberOfLines={1}>Draw {dp.draw}%</Text>
+                        <Text style={[s.probTeam, { color: MAROON, flex: 1, width: undefined, textAlign: 'right' }]} numberOfLines={1}>{dp.away}% {awayTeam.abbreviation}</Text>
+                      </View>
+                      <View style={s.probBar}>
+                        <View style={[s.probFill, { flex: dp.home, backgroundColor: TEAL }]} />
+                        <View style={{ width: 2, backgroundColor: '#040608' }} />
+                        <View style={[s.probFill, { flex: dp.draw, backgroundColor: drawColor }]} />
+                        <View style={{ width: 2, backgroundColor: '#040608' }} />
+                        <View style={[s.probFill, { flex: dp.away, backgroundColor: MAROON }]} />
+                      </View>
+                    </View>
+                  );
+                }
                 return (
                   <View style={s.probRow}>
                     <Text style={[s.probTeam, { color: TEAL }]}>{homeTeam.abbreviation} {dp.home}%</Text>
@@ -500,6 +529,60 @@ export default function GameAnalysisScreen() {
             <Text style={s.edgeTileLabel}>{awayTeam.abbreviation} Edges</Text>
           </View>
         </View>
+
+        {decisionProfile ? (
+          <View style={s.decisionCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sectionLabel}>Unified Decision Profile</Text>
+                <Text style={s.decisionHeadline}>{decisionProfileHeadline(decisionProfile)}</Text>
+                <Text style={s.decisionSubline}>{decisionProfileSubline(decisionProfile)}</Text>
+              </View>
+              <View style={s.decisionScoreBadge}>
+                <Text style={s.decisionScore}>{decisionProfile.edgeRating}/10</Text>
+                <Text style={s.decisionScoreLabel}>EDGE</Text>
+              </View>
+            </View>
+
+            <View style={s.decisionMetricRow}>
+              <View style={s.decisionMetric}>
+                <Text style={s.decisionMetricValue}>{decisionProfile.valueRating}/10</Text>
+                <Text style={s.decisionMetricLabel}>Value</Text>
+              </View>
+              <View style={s.decisionMetric}>
+                <Text style={s.decisionMetricValue}>{Math.round(decisionProfile.agreementScore)}%</Text>
+                <Text style={s.decisionMetricLabel}>Agreement</Text>
+              </View>
+              <View style={s.decisionMetric}>
+                <Text style={s.decisionMetricValue}>{Math.round(decisionProfile.upsetScore)}</Text>
+                <Text style={s.decisionMetricLabel}>Upset</Text>
+              </View>
+            </View>
+
+            {decisionTags.length > 0 ? (
+              <View style={s.decisionTagRow}>
+                {decisionTags.map((tag) => (
+                  <View
+                    key={tag}
+                    style={[
+                      s.decisionTag,
+                      tag === 'upset-watch' ? { borderColor: 'rgba(139,10,31,0.38)', backgroundColor: 'rgba(139,10,31,0.18)' } : null,
+                    ]}
+                  >
+                    <Text style={s.decisionTagText}>{decisionTagLabel(tag)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {decisionProfile.thesis[0] ? (
+              <Text style={s.decisionBody}>{decisionProfile.thesis[0]}</Text>
+            ) : null}
+            {decisionProfile.watchouts[0] ? (
+              <Text style={s.decisionWatchout}>{decisionProfile.watchouts[0]}</Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Model Summary */}
         <View style={s.summaryCard}>
@@ -645,6 +728,53 @@ const s = StyleSheet.create({
   },
   edgeCount: { fontSize: 26, fontWeight: '900', lineHeight: 30 },
   edgeTileLabel: { fontSize: 9, fontWeight: '700', color: '#6B7C94', marginTop: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
+
+  decisionCard: {
+    backgroundColor: 'rgba(122,157,184,0.065)',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(122,157,184,0.18)',
+    marginBottom: 20,
+  },
+  decisionHeadline: { fontSize: 18, fontWeight: '900', color: '#FFFFFF', marginTop: 8, lineHeight: 23 },
+  decisionSubline: { fontSize: 12, color: '#A1B3C9', fontWeight: '700', marginTop: 4 },
+  decisionScoreBadge: {
+    minWidth: 62,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  decisionScore: { fontSize: 17, fontWeight: '900', color: '#FFFFFF', lineHeight: 21 },
+  decisionScoreLabel: { fontSize: 7, fontWeight: '800', color: '#6B7C94', letterSpacing: 0.8, marginTop: 2 },
+  decisionMetricRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  decisionMetric: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  decisionMetricValue: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  decisionMetricLabel: { fontSize: 8, fontWeight: '800', color: '#6B7C94', marginTop: 3, textTransform: 'uppercase' },
+  decisionTagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 },
+  decisionTag: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(122,157,184,0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(122,157,184,0.22)',
+  },
+  decisionTagText: { color: '#D8E6F2', fontSize: 10, fontWeight: '800' },
+  decisionBody: { fontSize: 12, color: '#D8E6F2', lineHeight: 18, marginTop: 12, fontWeight: '600' },
+  decisionWatchout: { fontSize: 12, color: '#A1B3C9', lineHeight: 18, marginTop: 7 },
 
   summaryCard: {
     backgroundColor: 'rgba(255,255,255,0.02)',

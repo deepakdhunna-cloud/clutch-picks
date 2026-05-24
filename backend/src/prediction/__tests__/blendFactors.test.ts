@@ -195,6 +195,22 @@ describe("blendFactors — partial signal", () => {
     expect(blended.find((x) => x.key === "tennis_match_format")!.weight).toBe(0);
   });
 
+  it("keeps available non-directional signal weight as a confidence drag", () => {
+    const factors: FactorContribution[] = [
+      f("rating_diff", 120, 0.40, true, true),
+      f("tennis_conditions", 0, 0.04, true, true),
+      f("rest_diff", 0, 0.05, true, false),
+      f("recent_form", 0, 0.51, true, false),
+    ];
+
+    const blended = blendFactors(factors);
+
+    expect(blended.find((x) => x.key === "rating_diff")!.weight).toBeCloseTo(0.96, 6);
+    expect(blended.find((x) => x.key === "tennis_conditions")!.weight).toBeCloseTo(0.04, 6);
+    expect(blended.find((x) => x.key === "rest_diff")!.weight).toBe(0);
+    expect(blended.find((x) => x.key === "recent_form")!.weight).toBe(0);
+  });
+
   it("returns factors unchanged if rating_diff is missing (safety)", () => {
     const factors: FactorContribution[] = [
       f("some_factor", 0, 0.5, true, false),

@@ -12,9 +12,12 @@ export function displayEdgeRating(rawEdge: number): number {
 
 export function displayWinProbability(
   homeProb: number,
-  awayProb: number
-): { home: number; away: number } {
-  return { home: homeProb, away: awayProb };
+  awayProb: number,
+  drawProb?: number
+): { home: number; away: number; draw?: number } {
+  return drawProb !== undefined
+    ? { home: homeProb, away: awayProb, draw: drawProb }
+    : { home: homeProb, away: awayProb };
 }
 
 /**

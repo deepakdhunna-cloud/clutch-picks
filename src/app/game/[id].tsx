@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Linking,
+  Modal,
   StyleSheet,
   RefreshControl,
   InteractionManager,
@@ -48,7 +49,9 @@ import {
   getCanonicalWinProbabilities,
 } from '@/lib/canonical-result';
 import {
+  cricketBattingSide,
   cricketInningsContext,
+  cricketInningsRuns,
   cricketLedScoreText,
   cricketOversText,
   cricketRequiredText,
@@ -56,14 +59,25 @@ import {
   cricketStatusText,
   teamScoreText,
 } from '@/lib/cricket-score';
-import { isSuspendedGame, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { getFeaturedWatchOption } from '@/lib/watch-options';
-import { getWatchSourceUrl } from '@/lib/watch-url';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ExternalLink, Tv } from 'lucide-react-native';
+import { getWatchSourceAppUrl, getWatchSourceUrl } from '@/lib/watch-url';
+import { readFollowedGameIds, toggleFollowedGame } from '@/lib/followed-games';
+import { ExternalLink, Globe, Smartphone, Tv } from 'lucide-react-native';
 
-function openWatchSource(source: string) {
+function openWatchInWeb(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
+}
+
+function openWatchInApp(source: string) {
+  const appUrl = getWatchSourceAppUrl(source);
+  if (!appUrl) {
+    openWatchInWeb(source);
+    return;
+  }
+  // Try the app scheme; if the app isn't installed Linking.openURL rejects
+  // and we silently fall back to the web URL so the user always lands somewhere.
+  void Linking.openURL(appUrl).catch(() => openWatchInWeb(source));
 }
 
 function WhereToWatchRow({
@@ -74,9 +88,36 @@ function WhereToWatchRow({
   watchSources?: unknown;
 }) {
   const watchOption = useMemo(() => getFeaturedWatchOption(primaryChannel, watchSources), [primaryChannel, watchSources]);
+  const [routePickerOpen, setRoutePickerOpen] = useState(false);
   const hasWatchInfo = Boolean(watchOption);
   const primaryText = watchOption?.name ?? 'Watch info TBD';
   const sourceMetaText = watchOption?.note ?? 'Source not listed yet';
+  const hasAppUrl = useMemo(() => Boolean(watchOption && getWatchSourceAppUrl(watchOption.name)), [watchOption]);
+
+  const handleOpenPress = useCallback(() => {
+    if (!watchOption) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // If we don't have an app deep link, skip the chooser and open the web URL directly.
+    if (!hasAppUrl) {
+      openWatchInWeb(watchOption.name);
+      return;
+    }
+    setRoutePickerOpen(true);
+  }, [hasAppUrl, watchOption]);
+
+  const handleRouteApp = useCallback(() => {
+    if (!watchOption) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRoutePickerOpen(false);
+    openWatchInApp(watchOption.name);
+  }, [watchOption]);
+
+  const handleRouteWeb = useCallback(() => {
+    if (!watchOption) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRoutePickerOpen(false);
+    openWatchInWeb(watchOption.name);
+  }, [watchOption]);
 
   return (
     <View style={styles.watchStrip}>
@@ -85,10 +126,7 @@ function WhereToWatchRow({
           accessibilityRole="button"
           accessibilityLabel={hasWatchInfo ? `Open ${primaryText}` : 'Watch source not listed'}
           disabled={!watchOption}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            if (watchOption) openWatchSource(watchOption.name);
-          }}
+          onPress={handleOpenPress}
           style={({ pressed }) => [
             styles.watchHubCard,
             pressed && styles.infoPillPressed,
@@ -110,6 +148,96 @@ function WhereToWatchRow({
           </View>
         </Pressable>
       </View>
+
+      <Modal
+        visible={routePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRoutePickerOpen(false)}
+        statusBarTranslucent
+      >
+        <Pressable
+          onPress={() => setRoutePickerOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: '#0B1119',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 14,
+              paddingBottom: 38,
+              borderTopWidth: 1,
+              borderColor: 'rgba(218,238,251,0.16)',
+            }}
+          >
+            <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(218,238,251,0.28)', alignSelf: 'center', marginBottom: 14 }} />
+            <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(180,211,235,0.62)', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 4 }}>Open {primaryText}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', marginBottom: 18 }}>How would you like to watch?</Text>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${primaryText} in the app`}
+              onPress={handleRouteApp}
+              style={({ pressed }) => ({
+                height: 72,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 16,
+                borderRadius: 16,
+                backgroundColor: '#DAEEFB',
+                marginBottom: 12,
+                opacity: pressed ? 0.86 : 1,
+              })}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(11,17,25,0.14)', marginRight: 14 }}>
+                <Smartphone size={18} color="#0B1119" strokeWidth={2.6} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: '#0B1119' }}>Open in App</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(11,17,25,0.62)', marginTop: 2 }}>Launches the native app if installed</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${primaryText} in the browser`}
+              onPress={handleRouteWeb}
+              style={({ pressed }) => ({
+                height: 72,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 16,
+                borderRadius: 16,
+                backgroundColor: '#1B2433',
+                borderWidth: 1,
+                borderColor: 'rgba(218,238,251,0.20)',
+                marginBottom: 12,
+                opacity: pressed ? 0.86 : 1,
+              })}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.22)', marginRight: 14 }}>
+                <Globe size={18} color="#DAEEFB" strokeWidth={2.6} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF' }}>Open in Browser</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(218,238,251,0.55)', marginTop: 2 }}>Opens the website in Safari</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+              onPress={() => setRoutePickerOpen(false)}
+              style={({ pressed }) => ({ height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 6, opacity: pressed ? 0.86 : 1 })}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '800', color: 'rgba(218,238,251,0.62)' }}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -244,6 +372,7 @@ interface GamePrediction {
   createdAt: string;
   homeWinProbability: number;
   awayWinProbability: number;
+  drawProbability?: number;
   factors: PredictionFactor[];
   edgeRating: number;
   valueRating: number;
@@ -294,6 +423,14 @@ interface Game {
   marketFavorite?: 'home' | 'away';
   quarter?: string;
   clock?: string;
+  statusLabel?: string;
+  statusDetail?: string;
+  suspension?: {
+    display: string;
+    resumeText: string;
+    reasonText: string;
+    source?: string;
+  };
   seasonContext?: {
     phase: string;
     label: string;
@@ -450,8 +587,8 @@ function getPeriodConfig(sport: Game['sport'], periodCount: number): { headers: 
 
 function QuarterTable({ game }: { game: Game }) {
   const { homeTeam, awayTeam } = game;
-  const homeLine = game.homeLinescores ?? [];
-  const awayLine = game.awayLinescores ?? [];
+  const homeLine = game.sport === 'IPL' ? cricketInningsRuns(game, 'home') ?? game.homeLinescores ?? [] : game.homeLinescores ?? [];
+  const awayLine = game.sport === 'IPL' ? cricketInningsRuns(game, 'away') ?? game.awayLinescores ?? [] : game.awayLinescores ?? [];
   const periodCount = Math.max(homeLine.length, awayLine.length);
   const { headers, totalLabel } = getPeriodConfig(game.sport, periodCount);
 
@@ -462,7 +599,7 @@ function QuarterTable({ game }: { game: Game }) {
   const awayWinning = (game.awayScore ?? 0) > (game.homeScore ?? 0);
   const tied = (game.homeScore ?? 0) === (game.awayScore ?? 0);
 
-  const cellValue = (line: number[], i: number): string => {
+  const cellValue = (line: Array<number | null>, i: number): string => {
     if (i >= line.length) return '';
     const v = line[i];
     return typeof v === 'number' ? String(v) : '';
@@ -616,7 +753,7 @@ function CricketCurrentOverPanel({
 }) {
   const currentOver = game.cricketState?.currentOver;
   if (!currentOver && !context) return null;
-  const battingColor = game.cricketState?.battingSide === 'away' ? awayColor : homeColor;
+  const battingColor = cricketBattingSide(game) === 'away' ? awayColor : homeColor;
   const ballSlots = currentOver?.balls?.length ? currentOver.balls : [];
 
   return (
@@ -845,7 +982,9 @@ function RedactedSection({ title, height, onUnlock }: {
 
 function WinProbBar({ prediction, homeTeam, awayTeam, sport }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Sport }) {
   const canonicalProbabilities = getCanonicalWinProbabilities(prediction as Prediction);
-  const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away);
+  const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away, canonicalProbabilities.draw);
+  const hasDraw = typeof dp.draw === 'number';
+  const drawColor = '#C9BDA8';
   const hColor = getTeamColors(homeTeam.abbreviation, sport, homeTeam.color).accent;
   const aColor = getTeamColors(awayTeam.abbreviation, sport, awayTeam.color).accent;
   return (
@@ -859,11 +998,18 @@ function WinProbBar({ prediction, homeTeam, awayTeam, sport }: { prediction: Gam
         <View style={styles.winProbCard}>
           <View style={styles.winProbHeader}>
             <Text style={[styles.winProbTeamLabel, { color: hColor }]} numberOfLines={1}>{homeTeam.abbreviation} {dp.home}%</Text>
-            <Text style={styles.winProbTitle}>Win Probability</Text>
+            <Text style={[styles.winProbTitle, hasDraw ? { color: drawColor } : null]}>{hasDraw ? `Draw ${dp.draw}%` : 'Win Probability'}</Text>
             <Text style={[styles.winProbTeamLabel, { color: aColor, textAlign: 'right' }]} numberOfLines={1}>{dp.away}% {awayTeam.abbreviation}</Text>
           </View>
           <View style={styles.winProbTrack}>
             <View style={[styles.winProbFill, { flex: dp.home, backgroundColor: hColor }]} />
+            {hasDraw ? (
+              <>
+                <View style={{ width: 1, backgroundColor: 'rgba(4,7,12,0.9)' }} />
+                <View style={[styles.winProbFill, { flex: dp.draw, backgroundColor: drawColor }]} />
+                <View style={{ width: 1, backgroundColor: 'rgba(4,7,12,0.9)' }} />
+              </>
+            ) : null}
             <View style={[styles.winProbFill, { flex: dp.away, backgroundColor: aColor }]} />
           </View>
         </View>
@@ -1344,91 +1490,6 @@ function RecentForm({ game }: { game: Game }) {
   );
 }
 
-const SilkThreads = React.memo(function SilkThreads() {
-  // 5 threads, each with independent animation
-  const threads = useMemo(() => [
-    { top: '8%', rotate: '1.5deg', color: 'rgba(139,10,31,0.06)', duration: 18000, delay: 0 },
-    { top: '22%', rotate: '-0.8deg', color: 'rgba(122,157,184,0.04)', duration: 22000, delay: 4000 },
-    { top: '42%', rotate: '0.5deg', color: 'rgba(255,255,255,0.02)', duration: 25000, delay: 8000 },
-    { top: '62%', rotate: '-1.2deg', color: 'rgba(139,10,31,0.04)', duration: 20000, delay: 12000 },
-    { top: '78%', rotate: '0.8deg', color: 'rgba(122,157,184,0.03)', duration: 24000, delay: 6000 },
-  ], []);
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {threads.map((t, i) => (
-        <SilkThread key={i} {...t} />
-      ))}
-    </View>
-  );
-});
-
-const SilkThread = React.memo(function SilkThread({
-  top, rotate, color, duration, delay,
-}: {
-  top: string; rotate: string; color: string; duration: number; delay: number;
-}) {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      translateX.value = withRepeat(
-        withTiming(20, { duration, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-      translateY.value = withRepeat(
-        withTiming(25, { duration: duration * 1.2, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-      opacity.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: duration * 0.15, easing: Easing.out(Easing.ease) }),
-          withTiming(1, { duration: duration * 0.7 }),
-          withTiming(0, { duration: duration * 0.15, easing: Easing.in(Easing.ease) })
-        ),
-        -1,
-        false
-      );
-    }, delay);
-    return () => clearTimeout(timeout);
-  }, [delay, duration, opacity, translateX, translateY]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { rotate },
-    ],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        style,
-        {
-          position: 'absolute',
-          top: top as any,
-          left: '-50%',
-          width: '200%',
-          height: 1,
-        },
-      ]}
-    >
-      <LinearGradient
-        colors={['transparent', color, color, 'transparent']}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 0 }}
-        style={{ flex: 1 }}
-      />
-    </Animated.View>
-  );
-});
-
 // ── Pre-game scoreboard countdown ────────────────────────────────────────────
 // Shows ONLY in the 10 minutes before tip-off. After 0:00 the countdown
 // disappears and the normal SCHEDULED display takes over until the backend
@@ -1626,8 +1687,7 @@ export default function GameDetailScreen() {
     if (!id) return;
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem('clutch_followed_games');
-        const list: string[] = raw ? JSON.parse(raw) : [];
+        const list = await readFollowedGameIds();
         setFollowed(list.includes(id));
       } catch {}
     })();
@@ -1638,15 +1698,7 @@ export default function GameDetailScreen() {
     if (!id) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const raw = await AsyncStorage.getItem('clutch_followed_games');
-      const list: string[] = raw ? JSON.parse(raw) : [];
-      let updated: string[];
-      if (list.includes(id)) {
-        updated = list.filter(gId => gId !== id);
-      } else {
-        updated = [...list, id];
-      }
-      await AsyncStorage.setItem('clutch_followed_games', JSON.stringify(updated));
+      const updated = await toggleFollowedGame(id);
       setFollowed(updated.includes(id));
     } catch {}
   }, [id]);
@@ -1685,6 +1737,7 @@ export default function GameDetailScreen() {
   const predictionFactors = prediction?.factors ?? [];
   const isLive = game.status === 'LIVE';
   const suspended = isSuspendedGame(game);
+  const suspensionStatus = suspendedLabel(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
   const cricketLiveStatus = cricketStatusText(game);
@@ -1723,7 +1776,6 @@ export default function GameDetailScreen() {
         <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
       </View>
       <DetailRefreshPill visible={refreshing && hasGameData} top={detailTopInset + 10} />
-      {deferredContentReady ? <SilkThreads /> : null}
       <ScrollView style={{ flex: 1, marginTop: detailTopInset }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing && !hasGameData} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
           <View style={{ height: detailHeaderTopSpacer }} />
@@ -1732,7 +1784,7 @@ export default function GameDetailScreen() {
             <Pressable onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
             {/* Combined pill: LIVE indicator (if live) | sport badge | follow toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
-              {isLive ? (<><LivePulseDot /><Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>LIVE</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
+              {isLive ? (<><LivePulseDot /><Text style={{ fontSize: suspended ? 10 : 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>{suspended ? suspensionStatus.toUpperCase() : 'LIVE'}</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
               <View style={{ backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' }}>
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
               </View>
@@ -1799,6 +1851,9 @@ export default function GameDetailScreen() {
                     sport={game.sport}
                   />
                 }
+                statusLabel={suspended ? suspensionStatus : undefined}
+                statusReason={suspended ? suspensionReason : undefined}
+                statusDetail={suspended ? suspensionTime : undefined}
               />
             ) : (
             <View style={[styles.jerseyRow, { zIndex: 1 }]}>
@@ -1834,6 +1889,11 @@ export default function GameDetailScreen() {
                   styles.scorePanel,
                   (game.status === 'LIVE' || game.status === 'FINAL') ? styles.scorePanelBoard : null,
                 ]}>
+                  {isLive && !suspended && cricketRequired ? (
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.cricketRequiredLineAbove}>
+                      {cricketRequired}
+                    </Text>
+                  ) : null}
                   {isCountingDown ? (
                     <PreGameCountdown secondsLeft={secondsUntilStart} sport={game.sport} />
                   ) : (game.status === 'LIVE' || game.status === 'FINAL') ? (
@@ -1843,7 +1903,7 @@ export default function GameDetailScreen() {
                       homeColor={homeAccent}
                       awayColor={awayAccent}
                       scale={detailScoreboardScale}
-                      label={suspended ? 'SUSPENDED' : undefined}
+                      label={suspended ? suspensionStatus : undefined}
                       displayText={cricketLedScore ?? undefined}
                       subLabel={suspended ? suspensionReason : undefined}
                       detailLabel={suspended ? suspensionTime : undefined}
@@ -1855,14 +1915,7 @@ export default function GameDetailScreen() {
                       : null;
                     if (timeStr) {
                       return (
-                        <>
-                          <Text style={styles.scoreClock}>{timeStr}</Text>
-                          {cricketRequired ? (
-                            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.cricketRequiredLine}>
-                              {cricketRequired}
-                            </Text>
-                          ) : null}
-                        </>
+                        <Text style={styles.scoreClock}>{timeStr}</Text>
                       );
                     }
                     // For non-live games, show the status (SCHEDULED / FINAL / etc.)
@@ -2083,6 +2136,7 @@ const styles = StyleSheet.create({
   scoreClock: { fontSize: 22, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
   cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
+  cricketRequiredLineAbove: { maxWidth: 220, color: '#FFFFFF', fontSize: 11.5, lineHeight: 14, fontWeight: '900', letterSpacing: 1.4, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },
   winProbShell: {
     paddingHorizontal: 18,
@@ -2382,6 +2436,114 @@ const styles = StyleSheet.create({
     letterSpacing: 0.75,
     textTransform: 'uppercase',
     includeFontPadding: false,
+  },
+  watchRouteBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    justifyContent: 'flex-end',
+  },
+  watchRouteSheet: {
+    backgroundColor: '#0B1119',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 38,
+    borderTopWidth: 1,
+    borderColor: 'rgba(218,238,251,0.16)',
+  },
+  watchRouteGrabber: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(218,238,251,0.28)',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  watchRouteEyebrow: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: 'rgba(180,211,235,0.62)',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  watchRouteTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  watchRouteOption: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#1B2433',
+    borderWidth: 1,
+    borderColor: 'rgba(218,238,251,0.20)',
+    marginBottom: 12,
+  },
+  watchRouteOptionPrimary: {
+    backgroundColor: '#DAEEFB',
+    borderColor: '#DAEEFB',
+  },
+  watchRouteOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122,157,184,0.22)',
+    marginRight: 14,
+  },
+  watchRouteOptionIconPrimary: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(11,17,25,0.14)',
+    marginRight: 14,
+  },
+  watchRouteOptionCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  watchRouteOptionTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  watchRouteOptionTitlePrimary: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0B1119',
+  },
+  watchRouteOptionSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(218,238,251,0.55)',
+    marginTop: 2,
+  },
+  watchRouteOptionSubPrimary: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(11,17,25,0.62)',
+    marginTop: 2,
+  },
+  watchRouteCancel: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginTop: 6,
+  },
+  watchRouteCancelText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: 'rgba(218,238,251,0.62)',
   },
   broadcastCardsRow: {
     flexDirection: 'column',

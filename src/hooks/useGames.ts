@@ -4,6 +4,7 @@ import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { useCallback, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 import { enrichCricketLiveGame, enrichCricketLiveGames } from '@/lib/cricket-live-enrichment';
+import { filterVerifiedGames, isUnverifiedScoreboardGame } from '@/lib/verified-games';
 
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 3000; // fast fallback when SSE drops, without hammering JS/network
@@ -38,7 +39,8 @@ function findGameInData(data: unknown, gameId: string): GameWithPrediction | und
 
   const record = data as Record<string, unknown>;
   if (record.id === gameId && record.homeTeam && record.awayTeam) {
-    return data as GameWithPrediction;
+    const game = data as GameWithPrediction;
+    return isUnverifiedScoreboardGame(game) ? undefined : game;
   }
 
   const nestedGames = record.games;
@@ -66,7 +68,7 @@ function findCachedGame(queryClient: ReturnType<typeof useQueryClient>, gameId: 
 }
 
 function seedGameDetailCache(queryClient: ReturnType<typeof useQueryClient>, gameId: string, game?: GameWithPrediction) {
-  if (!game) return;
+  if (!game || isUnverifiedScoreboardGame(game)) return;
   queryClient.setQueryData<GameWithPrediction | null>(['game', gameId], (current) => current ?? game);
 }
 
@@ -95,6 +97,7 @@ function scheduleGameDetailWarmup(
           const enriched = await enrichCricketLiveGame(result ?? null);
           const current = findCachedGame(queryClient, gameId);
           if (!enriched) return current ?? null;
+          if (isUnverifiedScoreboardGame(enriched)) return null;
           return current ? mergeGameData(current, enriched) : enriched;
         },
         staleTime: GAME_DETAIL_STALE_TIME,
@@ -138,7 +141,7 @@ async function fetchGamesForDates(dates: string[]): Promise<DatedGamesResult> {
     games.push(...(result.value ?? []));
   });
 
-  return { games: await enrichCricketLiveGames(games), successfulDates };
+  return { games: filterVerifiedGames(await enrichCricketLiveGames(games)), successfulDates };
 }
 
 function mergeGameData(previous: GameWithPrediction, incoming: GameWithPrediction): GameWithPrediction {
@@ -159,8 +162,8 @@ function mergeGameData(previous: GameWithPrediction, incoming: GameWithPredictio
 
 function dedupeGames(games: GameWithPrediction[], previousGames?: GameWithPrediction[]): GameWithPrediction[] {
   const byId = new Map<string, GameWithPrediction>();
-  const previousById = new Map((previousGames ?? []).map((game) => [game.id, game]));
-  for (const game of games) {
+  const previousById = new Map(filterVerifiedGames(previousGames).map((game) => [game.id, game]));
+  for (const game of filterVerifiedGames(games)) {
     const existing = byId.get(game.id) ?? previousById.get(game.id);
     byId.set(game.id, existing ? mergeGameData(existing, game) : game);
   }
@@ -169,7 +172,7 @@ function dedupeGames(games: GameWithPrediction[], previousGames?: GameWithPredic
 
 function gamesOutsideDates(games: GameWithPrediction[] | undefined, dates: Set<string>): GameWithPrediction[] {
   if (!games) return [];
-  return games.filter((game) => !dates.has(formatLocalDate(new Date(game.gameTime))));
+  return filterVerifiedGames(games).filter((game) => !dates.has(formatLocalDate(new Date(game.gameTime))));
 }
 
 function mergeFetchedGames(
@@ -252,8 +255,9 @@ export function useGames() {
     },
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
+    select: filterVerifiedGames,
     refetchInterval: (query) => {
-      const games = query.state.data;
+      const games = filterVerifiedGames(query.state.data);
       // Burst-poll while predictions are still being generated server-side.
       // This is the dominant case right after first paint / sport-filter
       // changes — without it the user stares at empty cards for up to 20s.
@@ -326,12 +330,13 @@ export function useGamesBySport(sport: string, date?: string) {
         ? `/api/games/${sport.toLowerCase()}?date=${date}`
         : `/api/games/${sport.toLowerCase()}`;
       const result = await api.get<GameWithPrediction[]>(url);
-      return enrichCricketLiveGames(result ?? []);
+      return filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
     },
     enabled: !!sport,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => liveAwareInterval(query.state.data),
+    select: filterVerifiedGames,
+    refetchInterval: (query) => liveAwareInterval(filterVerifiedGames(query.state.data)),
     refetchIntervalInBackground: false,
   });
 }
@@ -342,12 +347,13 @@ export function useGamesByDate(date: string) {
     queryKey: ['games', 'date', date],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction[]>(`/api/games/date/${date}`);
-      return enrichCricketLiveGames(result ?? []);
+      return filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
     },
     enabled: !!date,
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => liveAwareInterval(query.state.data),
+    select: filterVerifiedGames,
+    refetchInterval: (query) => liveAwareInterval(filterVerifiedGames(query.state.data)),
     refetchIntervalInBackground: false,
   });
 }
@@ -426,6 +432,7 @@ export function useGame(gameId: string) {
       const enriched = await enrichCricketLiveGame(result ?? null);
       const current = findCachedGame(queryClient, gameId);
       if (!enriched) return current ?? null;
+      if (isUnverifiedScoreboardGame(enriched)) return null;
       return current ? mergeGameData(current, enriched) : enriched;
     },
     enabled: !!gameId,
@@ -486,14 +493,17 @@ export function useWeekGamesBySport(sport: string) {
           const games = await api.get<GameWithPrediction[]>(
             `/api/games/${sport.toLowerCase()}?date=${date}`
           );
-          return { date, games: await enrichCricketLiveGames(games ?? []) };
+          return { date, games: filterVerifiedGames(await enrichCricketLiveGames(games ?? [])) };
         })
       );
     },
     enabled: !!sport,
     staleTime: GAME_DETAIL_STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => liveAwareBucketInterval(query.state.data),
+    refetchInterval: (query) => liveAwareBucketInterval(query.state.data?.map((bucket) => ({
+      ...bucket,
+      games: filterVerifiedGames(bucket.games),
+    }))),
     refetchIntervalInBackground: false,
   });
 }
@@ -532,11 +542,12 @@ export function useTopPicks() {
     queryKey: ['topPicks'],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction[]>('/api/games/top-picks');
-      return enrichCricketLiveGames(result ?? []);
+      return filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
     },
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => liveAwareInterval(query.state.data),
+    select: filterVerifiedGames,
+    refetchInterval: (query) => liveAwareInterval(filterVerifiedGames(query.state.data)),
     refetchIntervalInBackground: false,
   });
 }

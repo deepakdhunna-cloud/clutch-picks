@@ -3,6 +3,8 @@ import type { TennisTour } from "./tennisStats";
 export interface TennisExplorerLiveMatch {
   id: string;
   sourceId: string;
+  source: "tennis-explorer";
+  status: "LIVE" | "SCHEDULED";
   tour: TennisTour;
   homeName: string;
   awayName: string;
@@ -12,8 +14,8 @@ export interface TennisExplorerLiveMatch {
   awayRank?: number;
   homeSeed?: number;
   awaySeed?: number;
-  homeSets: number;
-  awaySets: number;
+  homeSets?: number;
+  awaySets?: number;
   homeLinescores?: number[];
   awayLinescores?: number[];
   gameTime: string;
@@ -40,8 +42,9 @@ interface TennisExplorerCandidate {
   awayShortName: string;
   homeSeed?: number;
   awaySeed?: number;
-  homeSets: number;
-  awaySets: number;
+  status: "LIVE" | "SCHEDULED";
+  homeSets?: number;
+  awaySets?: number;
   homeLinescores: number[];
   awayLinescores: number[];
 }
@@ -54,6 +57,10 @@ const TENNIS_EXPLORER_FETCH_HEADERS = {
 
 const tennisExplorerCache = new Map<string, { data: TennisExplorerLiveMatch[]; timestamp: number }>();
 const TENNIS_EXPLORER_CACHE_TTL_MS = 45 * 1000;
+const TENNIS_EXPLORER_LIVE_WINDOW_MS = 10 * 60 * 60 * 1000;
+const TENNIS_EXPLORER_FUTURE_GRACE_MS = 2 * 60 * 60 * 1000;
+const TENNIS_EXPLORER_SCHEDULED_WINDOW_MS = 54 * 60 * 60 * 1000;
+const TENNIS_EXPLORER_SCHEDULED_STALE_MS = 90 * 60 * 1000;
 
 function decodeHtml(text: string): string {
   return text
@@ -168,17 +175,19 @@ export function parseTennisExplorerMatchRows(html: string, tour: TennisTour, sou
 
     const resultCellsHome = extractCells(row, "result");
     const resultCellsAway = extractCells(nextRow, "result");
-    const homeSets = numericText(resultCellsHome[0]) ?? -1;
-    const awaySets = numericText(resultCellsAway[0]) ?? -1;
-    if (homeSets < 0 || awaySets < 0) continue;
+    const parsedHomeSets = numericText(resultCellsHome[0]);
+    const parsedAwaySets = numericText(resultCellsAway[0]);
 
     const scoreCellsHome = extractCells(row, "score").map(numericText).filter((value): value is number => value !== null);
     const scoreCellsAway = extractCells(nextRow, "score").map(numericText).filter((value): value is number => value !== null);
     const hasPartialScore = scoreCellsHome.length > 0 || scoreCellsAway.length > 0;
-    const looksCompleted = homeSets >= 2 || awaySets >= 2;
-    if (!hasPartialScore || looksCompleted) continue;
+    const hasSetTotals = parsedHomeSets !== null && parsedAwaySets !== null;
+    const looksCompleted = (parsedHomeSets ?? 0) >= 2 || (parsedAwaySets ?? 0) >= 2;
+    if (hasPartialScore && (!hasSetTotals || looksCompleted)) continue;
+    if (!hasPartialScore && hasSetTotals) continue;
 
     const timeText = stripTags(extractCells(row, "time")[0] ?? "");
+    const status = hasPartialScore ? "LIVE" : "SCHEDULED";
 
     candidates.push({
       id: idMatch[1],
@@ -191,8 +200,9 @@ export function parseTennisExplorerMatchRows(html: string, tour: TennisTour, sou
       awayShortName: away.name,
       homeSeed: home.seed,
       awaySeed: away.seed,
-      homeSets,
-      awaySets,
+      status,
+      homeSets: parsedHomeSets ?? undefined,
+      awaySets: parsedAwaySets ?? undefined,
       homeLinescores: scoreCellsHome,
       awayLinescores: scoreCellsAway,
     });
@@ -269,6 +279,8 @@ export function parseTennisExplorerMatchDetail(html: string, candidate: TennisEx
   return {
     id: `tennis-explorer-${candidate.id}`,
     sourceId: candidate.id,
+    source: "tennis-explorer",
+    status: candidate.status,
     tour: candidate.tour,
     homeName,
     awayName,
@@ -284,7 +296,7 @@ export function parseTennisExplorerMatchDetail(html: string, candidate: TennisEx
     awayLinescores: awayLinescores.length > 0 ? awayLinescores : undefined,
     gameTime: parseExplorerDate(candidate.sourceDate, candidate.timeText),
     venue: [candidate.tournament, candidate.surface].filter(Boolean).join(" · "),
-    quarter: suspended ? "Suspended" : "In Progress",
+    quarter: candidate.status === "LIVE" ? suspended ? "Suspended" : "In Progress" : "Scheduled",
     clock: suspended ? resumeText : undefined,
     suspended,
     suspension: suspended
@@ -296,6 +308,24 @@ export function parseTennisExplorerMatchDetail(html: string, candidate: TennisEx
         }
       : undefined,
   };
+}
+
+export function isFreshTennisExplorerLiveMatch(match: TennisExplorerLiveMatch, now = new Date()): boolean {
+  if (match.source !== "tennis-explorer") return false;
+  const startTime = new Date(match.gameTime).getTime();
+  const nowTime = now.getTime();
+  if (!Number.isFinite(startTime) || !Number.isFinite(nowTime)) return false;
+
+  if (match.status === "SCHEDULED") {
+    if (nowTime - startTime > TENNIS_EXPLORER_SCHEDULED_STALE_MS) return false;
+    return startTime - nowTime <= TENNIS_EXPLORER_SCHEDULED_WINDOW_MS;
+  }
+
+  if (match.homeSets === undefined || match.awaySets === undefined) return false;
+  const hasScore = Boolean(match.homeLinescores?.length || match.awayLinescores?.length);
+  if (!hasScore) return false;
+  if (startTime - nowTime > TENNIS_EXPLORER_FUTURE_GRACE_MS) return false;
+  return nowTime - startTime <= TENNIS_EXPLORER_LIVE_WINDOW_MS;
 }
 
 async function fetchText(url: string): Promise<string | null> {
@@ -344,7 +374,8 @@ export async function fetchTennisExplorerLiveMatches(date?: string): Promise<Ten
     }
   }
 
-  const data = await fetchDetails(Array.from(uniqueCandidates.values()));
+  const data = (await fetchDetails(Array.from(uniqueCandidates.values())))
+    .filter((match) => isFreshTennisExplorerLiveMatch(match));
   tennisExplorerCache.set(cacheKey, { data, timestamp: Date.now() });
   return data;
 }

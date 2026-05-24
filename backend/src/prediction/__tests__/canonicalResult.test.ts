@@ -90,6 +90,11 @@ describe("canonical prediction result", () => {
     expect(canonical.confidence).toBe(result.confidence);
     expect(canonical.probabilities.home).toBeCloseTo(result.homeWinProbability, 3);
     expect(canonical.probabilities.away).toBeCloseTo(result.awayWinProbability, 3);
+    expect(canonical.decisionProfile?.version).toBe("unified-decision-profile-v1");
+    expect(canonical.decisionProfile?.pick).toBe(canonical.finalPick);
+    expect(canonical.decisionProfile?.edgeRating).toBeGreaterThanOrEqual(1);
+    expect(canonical.decisionProfile?.valueRating).toBeGreaterThanOrEqual(1);
+    expect(canonical.decisionProfile?.thesis.length).toBeGreaterThan(0);
     expect(canonical.engineBreakdown.map((read) => read.engine)).toContain("factor-model-v1");
     expect(canonical.engineBreakdown.map((read) => read.engine)).toContain("game-script-v1");
     expect(canonical.engineBreakdown[canonical.engineBreakdown.length - 1]?.engine).toBe("orchestrator-v1");
@@ -147,6 +152,8 @@ describe("canonical prediction result", () => {
     expect(reads.get("game-script-v1")?.weight).toBeCloseTo(0.14, 3);
     expect(reads.get("market-calibration")?.weight).toBeCloseTo(0.1, 3);
     expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
+    expect(result.canonicalResult.decisionProfile?.marketPick).toBeDefined();
+    expect(result.canonicalResult.decisionProfile?.marketDelta).toBeTypeOf("number");
   });
 
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {

@@ -2,6 +2,7 @@ import { Sport } from '@/types/sports';
 import {
   cricketBattersText,
   cricketBowlerText,
+  cricketInningsRuns,
   cricketInningsPlateText,
   cricketInningsContext,
   cricketLedScoreText,
@@ -76,6 +77,10 @@ describe('cricket score display helpers', () => {
 
   it('uses the batting score with wickets for the cricket led score', () => {
     expect(cricketLedScoreText(makeCricketGame())).toBe('128/3');
+  });
+
+  it('keeps the batting score in IN1 before a chase target exists', () => {
+    expect(cricketInningsRuns(makeCricketGame(), 'home')).toEqual([128]);
   });
 
   it('shows first innings context when the opening innings is complete', () => {
@@ -174,6 +179,51 @@ describe('cricket score display helpers', () => {
       value: '181',
       detail: 'MI 180/6',
     });
+  });
+
+  it('corrects stale batting side when target data identifies a chase', () => {
+    const game = makeCricketGame();
+    game.homeTeam = { abbreviation: 'LSG' };
+    game.awayTeam = { abbreviation: 'PBKS' };
+    game.homeScore = 196;
+    game.awayScore = 66;
+    game.homeScoreDisplay = '196/6';
+    game.awayScoreDisplay = '66/2';
+    game.cricketState = {
+      home: {
+        runs: 196,
+        wickets: 6,
+        overs: 20,
+        maxOvers: 20,
+        scoreText: '196/6',
+        detailText: '20 ov',
+        isBatting: true,
+      },
+      away: {
+        runs: 66,
+        wickets: 2,
+        overs: 7.4,
+        maxOvers: 20,
+        scoreText: '66/2',
+        detailText: '7.4/20 ov',
+        isBatting: true,
+      },
+      battingSide: 'home',
+      innings: 2,
+      target: 197,
+    };
+
+    expect(cricketLedScoreText(game)).toBe('66/2');
+    expect(cricketOversText(game)).toBe('7.4/20 ov');
+    expect(cricketRequiredText(game)).toBe('Need 131 off 74 balls');
+    expect(cricketRoleText(game, 'away')).toBe('BATTING');
+    expect(cricketInningsContext(game)).toEqual({
+      label: 'TARGET',
+      value: '197',
+      detail: 'LSG 196/6',
+    });
+    expect(cricketInningsRuns(game, 'home')).toEqual([196, null]);
+    expect(cricketInningsRuns(game, 'away')).toEqual([null, 66]);
   });
 
   it('counts 13.6 as a completed over for chase requirements', () => {
