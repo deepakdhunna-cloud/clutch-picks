@@ -204,13 +204,15 @@ export function buildCanonicalPredictionResult(args: {
   ];
 
   if (args.marketProbabilities) {
+    const marketSourceLabel = args.ctx.marketConsensus?.sourceLabel ?? "SharpAPI consensus";
     breakdown.push(
       engineRead({
         engine: "market-calibration",
         probabilities: normalizeCanonicalProbabilities(args.marketProbabilities),
         weight: roundTo(engineWeights.market),
         inputs: {
-          source: "SharpAPI consensus",
+          source: marketSourceLabel,
+          fallback: Boolean(args.ctx.marketConsensus?.isFallback),
           usedAsSmallCalibrationOnly: true,
         },
       }),
@@ -260,7 +262,7 @@ export function buildCanonicalPredictionResult(args: {
   const notes = [
     "Factors provide the primary model read; simulation/projection contributes game-script distribution.",
     args.marketProbabilities
-      ? "Market consensus is a small calibration input and never overrides the model vote."
+      ? `${args.ctx.marketConsensus?.sourceLabel ?? "Market consensus"} is a small calibration input and never overrides the model vote.`
       : "No market calibration was included for this event.",
   ];
   if (projectionPick !== finalPick) {

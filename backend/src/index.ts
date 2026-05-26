@@ -30,6 +30,7 @@ import { shadowRouter } from "./routes/shadow";
 import { webhooksRouter } from "./routes/webhooks";
 import { verifiedFeedsRouter } from "./routes/verified-feeds";
 import { createHealthRouter } from "./routes/health";
+import { MODEL_VERSION as PREDICTION_ENGINE_VERSION } from "./prediction/index";
 import { deleteUserAccount } from "./lib/deleteAccount";
 import { isManagedUploadFilename, managedUploadUrl, uploadsDir } from "./lib/uploads";
 import { prisma } from "./prisma";
@@ -270,6 +271,20 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 app.route("/", createHealthRouter({
   isShuttingDown: () => isShuttingDown,
   prisma,
+  metadata: {
+    serviceName: env.SERVICE_NAME,
+    predictionEngineVersion: PREDICTION_ENGINE_VERSION,
+    gitCommit:
+      process.env.RAILWAY_GIT_COMMIT_SHA ??
+      process.env.GIT_COMMIT_SHA ??
+      process.env.GIT_COMMIT ??
+      null,
+    appVersion: process.env.APP_VERSION ?? null,
+    buildNumber:
+      process.env.EXPO_IOS_BUILD_NUMBER ??
+      process.env.BUILD_NUMBER ??
+      null,
+  },
 }));
 
 // File upload endpoint (authenticated, validated)

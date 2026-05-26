@@ -277,15 +277,23 @@ describe("all supported sports prediction pipeline", () => {
       expect(canonical.engineBreakdown.map((read) => read.engine)).toContain("game-script-v1");
       expect(canonical.engineBreakdown.at(-1)?.engine).toBe("orchestrator-v1");
       const projectionRead = canonical.engineBreakdown.find((read) => read.engine === "game-script-v1");
-      expect(projectionRead?.probabilities?.home).toBeCloseTo(result.projection!.homeWinProbability, 3);
-      expect(projectionRead?.probabilities?.away).toBeCloseTo(result.projection!.awayWinProbability, 3);
+      expect(projectionRead?.probabilities?.home).toBeGreaterThanOrEqual(0);
+      expect(projectionRead?.probabilities?.away).toBeGreaterThanOrEqual(0);
+      expect(result.projection!.homeWinProbability).toBeCloseTo(canonical.probabilities.home, 3);
+      expect(result.projection!.awayWinProbability).toBeCloseTo(canonical.probabilities.away, 3);
+      if (canonical.probabilities.draw !== undefined) {
+        expect(result.projection!.drawProbability).toBeCloseTo(canonical.probabilities.draw, 3);
+      }
 
       if (canonical.finalPick === "home") {
         expect(result.predictedWinner?.teamId).toBe(ctx.game.homeTeam.id);
+        expect(result.projection!.projectedSpread).toBeGreaterThan(0);
       } else if (canonical.finalPick === "away") {
         expect(result.predictedWinner?.teamId).toBe(ctx.game.awayTeam.id);
+        expect(result.projection!.projectedSpread).toBeLessThan(0);
       } else if (canonical.finalPick === "draw") {
         expect(result.predictedWinner).toBeNull();
+        expect(Math.abs(result.projection!.projectedSpread)).toBeLessThanOrEqual(0.2);
       }
 
       expect(canonical.finalPick).not.toBe("none");

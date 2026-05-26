@@ -237,10 +237,14 @@ export type GameContext = {
   uclPedigree?: { home: number; away: number } | null;
   uclTravel?: { distanceKm: number; homeCity: string; awayCity: string } | null;
 
-  // Market consensus (SharpAPI). Used as a small calibration anchor by the
-  // new engine, plus for final model-vs-market divergence reporting. null
-  // when SHARPAPI_KEY unset or fetch failed.
+  // Market consensus. SharpAPI is preferred. When SharpAPI is unavailable but
+  // the route-level game carries ESPN odds metadata, the engine builds a
+  // conservative fallback from that displayed favorite/spread/total so market
+  // data is not shown to users while being ignored by the model.
   marketConsensus?: MarketConsensus | null;
+  marketFavorite?: "home" | "away";
+  marketSpread?: number;
+  marketOverUnder?: number;
 
   // SportsDataIO enrichment coverage for fields that replaced or augmented
   // ESPN fallbacks. Used for data-source attribution only.

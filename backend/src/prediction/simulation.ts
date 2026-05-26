@@ -192,7 +192,26 @@ function buildScoreModel(
     NBA: 4.5, NCAAB: 3.8, NFL: 4.9, NCAAF: 5.8, MLB: 1.15, NHL: 0.8,
     MLS: 0.56, EPL: 0.56, UCL: 0.6, IPL: 15, TENNIS: 0.55,
   };
-  const expectedMargin = (totalRatingDelta / 100) * (marginPer100Elo[ctx.sport] ?? 2.5);
+  let expectedMargin = (totalRatingDelta / 100) * (marginPer100Elo[ctx.sport] ?? 2.5);
+  if (
+    ctx.marketFavorite &&
+    typeof ctx.marketSpread === "number" &&
+    Number.isFinite(ctx.marketSpread) &&
+    Math.abs(ctx.marketSpread) >= 0.1
+  ) {
+    const marketMargin =
+      ctx.marketFavorite === "home"
+        ? Math.abs(ctx.marketSpread)
+        : -Math.abs(ctx.marketSpread);
+    const previousMargin = expectedMargin;
+    expectedMargin = previousMargin * 0.78 + marketMargin * 0.22;
+    signals.push({
+      key: "market-spread-anchor",
+      label: "Market spread anchor",
+      value: round(expectedMargin - previousMargin, 2),
+      evidence: `Displayed market spread anchors projected margin toward ${ctx.marketFavorite} by ${round(expectedMargin - previousMargin, 1)} points`,
+    });
+  }
 
   const currentMargin = homeMean - awayMean;
   const hasScoreBaseline =
@@ -331,6 +350,21 @@ function buildScoreModel(
       label: "Total environment",
       value: round(totalShift, 3),
       evidence: `Recent offense/defense trend moves projected total ${totalShift >= 0 ? "+" : ""}${round(totalShift * 100, 1)}%`,
+    });
+  }
+
+  if (
+    typeof ctx.marketOverUnder === "number" &&
+    Number.isFinite(ctx.marketOverUnder) &&
+    ctx.marketOverUnder > 0
+  ) {
+    const previousTotal = totalMean;
+    totalMean = previousTotal * 0.65 + ctx.marketOverUnder * 0.35;
+    signals.push({
+      key: "market-total-anchor",
+      label: "Market total anchor",
+      value: round(totalMean - previousTotal, 2),
+      evidence: `Displayed total anchors projected scoring environment ${round(totalMean - previousTotal, 1)} points toward ${round(ctx.marketOverUnder, 1)}`,
     });
   }
 

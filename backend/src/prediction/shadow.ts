@@ -48,6 +48,7 @@ import {
   lookupUclTravelInfo,
 } from "../lib/uclVerifiedData";
 import { fetchMarketConsensus } from "../lib/sharpApi";
+import { buildMarketConsensusFromGameOdds } from "./market";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "./seasonContext";
 import type { SoccerStakes } from "./types";
 import { createInitialVersion } from "../lib/ingestion/predictionVersions";
@@ -151,6 +152,9 @@ export async function buildGameContext(
     awayTeam: any;
     gameTime: string;
     venue: string;
+    spread?: number;
+    overUnder?: number;
+    marketFavorite?: "home" | "away";
     seasonContext?: NarrativeSeasonContext | null;
   },
 ): Promise<GameContext> {
@@ -183,7 +187,7 @@ export async function buildGameContext(
     homePlateUmpire,
     homeFixtureCongestion, awayFixtureCongestion,
     leagueStandings,
-    marketConsensus,
+    sharpMarketConsensus,
     homeAvailability, awayAvailability,
     uclPedigree,
     uclTravel,
@@ -216,7 +220,8 @@ export async function buildGameContext(
     sport === "EPL" || sport === "MLS"
       ? fetchLeagueStandings(sport as SoccerLeague)
       : Promise.resolve(null),
-    // Market consensus — all sports. Feature-flagged; returns null if no key.
+    // Market consensus — SharpAPI is preferred. If unavailable, route-level
+    // ESPN odds metadata is converted to a conservative fallback below.
     fetchMarketConsensus(sport, game.homeTeam.name, game.awayTeam.name, gameDate),
     // PlayerAvailability rows from Apify ingestion. ESPN summary returns
     // empty for soccer; PA is the sole source there. For NBA/NHL/MLB it
@@ -262,6 +267,15 @@ export async function buildGameContext(
   const awayAdvanced = mergeAdvancedMetrics(awayAdvancedEspn, awaySportsDataIOAdvanced);
   const homeLineup = homeSportsDataIOLineup ?? homeLineupEspn;
   const awayLineup = awaySportsDataIOLineup ?? awayLineupEspn;
+  const marketConsensus =
+    sharpMarketConsensus ??
+    buildMarketConsensusFromGameOdds({
+      sport,
+      marketFavorite: game.marketFavorite,
+      spread: game.spread,
+      overUnder: game.overUnder,
+      fetchedAt: new Date().toISOString(),
+    });
 
   // Manager-change data comes from an optional verified feed. If it is not
   // configured, both values resolve null and the factor is redistributed.
@@ -370,6 +384,9 @@ export async function buildGameContext(
     uclPedigree,
     uclTravel,
     marketConsensus,
+    marketFavorite: game.marketFavorite,
+    marketSpread: game.spread,
+    marketOverUnder: game.overUnder,
     sportsDataIO: {
       homeAdvanced: !!homeSportsDataIOAdvanced,
       awayAdvanced: !!awaySportsDataIOAdvanced,
@@ -397,7 +414,17 @@ export async function buildGameContext(
  * response path.
  */
 export function runShadowPrediction(
-  game: { id: string; sport: string; homeTeam: any; awayTeam: any; gameTime: string; venue: string },
+  game: {
+    id: string;
+    sport: string;
+    homeTeam: any;
+    awayTeam: any;
+    gameTime: string;
+    venue: string;
+    spread?: number;
+    overUnder?: number;
+    marketFavorite?: "home" | "away";
+  },
   oldPrediction: {
     predictedWinner: string;
     homeWinProbability: number;

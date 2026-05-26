@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { predictGame } from "../index";
+import { predictGame, reconcileProjectionToFinal } from "../index";
 import { buildCanonicalPredictionResult, normalizeCanonicalProbabilities } from "../canonical";
+import { buildMarketConsensusFromGameOdds } from "../market";
 import type { GameContext, SimulationProjection } from "../types";
 import type { Game, Team } from "../../types/sports";
 import { GameStatus, League, Sport } from "../../types/sports";
@@ -149,6 +150,71 @@ describe("canonical prediction result", () => {
     expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
     expect(result.canonicalResult.decisionProfile?.marketPick).toBeDefined();
     expect(result.canonicalResult.decisionProfile?.marketDelta).toBeTypeOf("number");
+  });
+
+  it("builds a market fallback from displayed ESPN odds metadata", () => {
+    const market = buildMarketConsensusFromGameOdds({
+      sport: "NBA",
+      marketFavorite: "away",
+      spread: 2.5,
+      overUnder: 222.5,
+      fetchedAt: "2026-05-26T00:00:00.000Z",
+    });
+
+    expect(market).not.toBeNull();
+    expect(market?.source).toBe("espn-odds");
+    expect(market?.sourceLabel).toBe("ESPN odds fallback");
+    expect(market?.isFallback).toBe(true);
+    expect(market?.marketFavorite).toBe("away");
+    expect(market?.spread).toBe(2.5);
+    expect(market?.overUnder).toBe(222.5);
+    expect(market?.noVigAwayProb ?? 0).toBeGreaterThan(market?.noVigHomeProb ?? 1);
+    expect((market?.noVigHomeProb ?? 0) + (market?.noVigAwayProb ?? 0)).toBeCloseTo(1, 3);
+  });
+
+  it("includes ESPN odds fallback as market calibration and flags market disagreement", () => {
+    const market = buildMarketConsensusFromGameOdds({
+      sport: "NBA",
+      marketFavorite: "away",
+      spread: 2.5,
+      overUnder: 222.5,
+      fetchedAt: "2026-05-26T00:00:00.000Z",
+    });
+    const result = predictGame(makeNBAContext({
+      marketConsensus: market,
+      marketFavorite: "away",
+      marketSpread: 2.5,
+      marketOverUnder: 222.5,
+    }));
+    const reads = new Map(result.canonicalResult.engineBreakdown.map((read) => [read.engine, read]));
+
+    expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
+    expect(reads.get("market-calibration")?.inputs?.source).toBe("ESPN odds fallback");
+    expect(reads.get("market-calibration")?.inputs?.fallback).toBe(true);
+    expect(result.dataSources).toContain("ESPN odds fallback");
+    expect(result.canonicalResult.decisionProfile?.marketPick).toBe("away");
+    expect(result.canonicalResult.decisionProfile?.tags).toContain("market-disagreement");
+  });
+
+  it("reconciles public projection probabilities and score to the final pick", () => {
+    const reconciled = reconcileProjectionToFinal({
+      sport: "NBA",
+      projection: projection({
+        homeWinProbability: 0.42,
+        awayWinProbability: 0.58,
+        projectedHomeScore: 99,
+        projectedAwayScore: 103,
+        projectedSpread: -4,
+        projectedTotal: 202,
+      }),
+      finalProbabilities: { home: 0.64, away: 0.36 },
+    });
+
+    expect(reconciled.homeWinProbability).toBeCloseTo(0.64, 3);
+    expect(reconciled.awayWinProbability).toBeCloseTo(0.36, 3);
+    expect(reconciled.projectedSpread).toBeGreaterThan(0);
+    expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
+    expect(reconciled.signals[0]?.key).toBe("orchestrator-projection-reconciliation");
   });
 
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {

@@ -2,7 +2,7 @@
 
 `predictGame(ctx)` is the single pregame engine entry point. It computes factor
 ratings, runs the game-script simulation/projection, applies the small market
-calibration vote when available, preserves projection disagreement as a
+calibration vote when available, preserves raw projection disagreement as a
 separate engine read, and returns one `canonicalResult`.
 
 The canonical object lives on `HonestPrediction.canonicalResult` and is carried
@@ -34,9 +34,32 @@ The orchestrator uses `factor-simulation-market-consensus-v1`:
 - game-script simulation runs 50,000 deterministic game scripts and contributes distribution plus expected-score context
 - market consensus is optional and only a small calibration input
 - if sub-engines disagree, the disagreement remains in `engineBreakdown`
-- the score projection remains the simulator's expected-score read instead of
-  being rewritten to match the final pick
+- the public score projection is reconciled to the final orchestrator pick,
+  while the raw simulator read remains in `engineBreakdown` and
+  `simulationSummary`
 - the final displayed answer comes from the `orchestrator-v1` read
+
+## Engine Contract
+
+These rules are release gates for this engine. A change that violates one of
+these rules is not ready to ship.
+
+- One source of truth: API and UI surfaces must use `canonicalResult` for the
+  final pick, confidence, and displayed win probabilities.
+- Market data cannot be displayed and ignored. If ESPN provides a favorite,
+  spread, or total and SharpAPI consensus is unavailable, the engine builds a
+  conservative market fallback from the displayed odds metadata and marks it as
+  fallback market calibration.
+- Projection and simulation are separate reads. Raw simulation can disagree,
+  but the public projection object must be reconciled to the final pick so the
+  card does not show one winner in the pick and another winner in the projected
+  score.
+- Thin-data, market-disagreement, and engine-divergence spots must remain
+  visible through `decisionProfile.tags`, `warnings`, and `engineBreakdown`.
+- Confidence is the selected outcome probability. The engine does not inflate
+  confidence to create stronger-looking picks.
+- Release checks must cover the prediction/projection/simulation/market
+  contract, not only a single game example.
 
 Live games keep the pregame canonical result. Scoreboard state can update, but
 it does not rewrite the betting-facing pick, confidence, or projection simply

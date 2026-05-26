@@ -5,6 +5,27 @@ export interface HealthDeps {
   isShuttingDown: () => boolean;
   prisma: Pick<PrismaClient, "$queryRaw">;
   dbTimeoutMs?: number;
+  metadata?: HealthMetadata;
+}
+
+export interface HealthMetadata {
+  serviceName?: string;
+  predictionEngineVersion?: string;
+  gitCommit?: string | null;
+  appVersion?: string | null;
+  buildNumber?: string | null;
+}
+
+function healthPayload(
+  status: string,
+  isShuttingDown: boolean,
+  metadata?: HealthMetadata,
+): { status: string; isShuttingDown: boolean; build?: HealthMetadata } {
+  return {
+    status,
+    isShuttingDown,
+    ...(metadata ? { build: metadata } : {}),
+  };
 }
 
 // /health  = liveness, no DB. Fast so Railway can poll aggressively.
@@ -17,14 +38,14 @@ export function createHealthRouter(deps: HealthDeps) {
 
   router.get("/health", (c) => {
     if (deps.isShuttingDown()) {
-      return c.json({ status: "shutting-down", isShuttingDown: true }, 503);
+      return c.json(healthPayload("shutting-down", true, deps.metadata), 503);
     }
-    return c.json({ status: "ok", isShuttingDown: false });
+    return c.json(healthPayload("ok", false, deps.metadata));
   });
 
   router.get("/ready", async (c) => {
     if (deps.isShuttingDown()) {
-      return c.json({ status: "shutting-down", isShuttingDown: true }, 503);
+      return c.json(healthPayload("shutting-down", true, deps.metadata), 503);
     }
 
     const startedAt = performance.now();
@@ -42,12 +63,21 @@ export function createHealthRouter(deps: HealthDeps) {
       if (responseTimeMs > 500) {
         console.warn(`[health] /ready slow: db ping took ${responseTimeMs}ms`);
       }
-      return c.json({ status: "ready", db: "ok", responseTimeMs });
+      return c.json({
+        ...healthPayload("ready", false, deps.metadata),
+        db: "ok",
+        responseTimeMs,
+      });
     } catch (err) {
       const responseTimeMs = Math.round(performance.now() - startedAt);
       const message = err instanceof Error ? err.message : String(err);
       return c.json(
-        { status: "not-ready", db: "error", error: message, responseTimeMs },
+        {
+          ...healthPayload("not-ready", false, deps.metadata),
+          db: "error",
+          error: message,
+          responseTimeMs,
+        },
         503,
       );
     } finally {

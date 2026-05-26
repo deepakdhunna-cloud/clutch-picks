@@ -32,6 +32,33 @@ describe("GET /health", () => {
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("shutting-down");
   });
+
+  test("includes build metadata when provided", async () => {
+    const router = createHealthRouter({
+      isShuttingDown: () => false,
+      prisma: fakePrisma(async () => [{ one: 1 }]),
+      metadata: {
+        serviceName: "web",
+        predictionEngineVersion: "test-engine",
+        gitCommit: "abc123",
+        appVersion: "1.1.1",
+        buildNumber: "36",
+      },
+    });
+    const res = await router.request("/health");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      status: "ok",
+      isShuttingDown: false,
+      build: {
+        serviceName: "web",
+        predictionEngineVersion: "test-engine",
+        gitCommit: "abc123",
+        appVersion: "1.1.1",
+        buildNumber: "36",
+      },
+    });
+  });
 });
 
 describe("GET /ready", () => {

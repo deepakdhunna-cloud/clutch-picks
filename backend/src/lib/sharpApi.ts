@@ -36,6 +36,12 @@ export interface MarketConsensus {
   noVigDrawProb?: number;
   avgHomeProb: number;             // simple mean across books
   avgAwayProb: number;
+  source?: "sharpapi" | "espn-odds";
+  sourceLabel?: string;
+  isFallback?: boolean;
+  marketFavorite?: "home" | "away";
+  spread?: number;
+  overUnder?: number;
 }
 
 // ─── Sport key mapping ─────────────────────────────────────────────────────
@@ -313,5 +319,8 @@ export function buildConsensus(lines: MarketLine[]): MarketConsensus {
     noVigDrawProb,
     avgHomeProb,
     avgAwayProb,
+    source: "sharpapi",
+    sourceLabel: "SharpAPI consensus",
+    isFallback: false,
   };
 }

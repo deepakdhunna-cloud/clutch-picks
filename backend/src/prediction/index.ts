@@ -10,7 +10,8 @@
  *   4. Sums weighted deltas into a total rating advantage
  *   5. Converts to probability via the Elo logistic
  *   6. Blends in game-script simulation + a small market calibration anchor
- *   7. Preserves projection as its own expected-score read
+ *   7. Reconciles public projection to the final pick while preserving raw
+ *      simulator disagreement in canonical engineBreakdown
  *   8. Returns the prediction with all factors, projection, confidence, and band
  *
  * GROUND RULES (Section 0):
@@ -20,6 +21,7 @@
  * - No probability clamps beyond [0, 1]
  * - No fabricated data
  * - Market can calibrate probability, but never overrides the model vote
+ * - Displayed odds metadata must be part of the engine context or marked absent
  */
 
 import type { GameContext, FactorContribution, HonestPrediction, LeagueKey, SimulationProjection, CanonicalEngineWeights } from "./types";
@@ -44,7 +46,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.6.0-neutral-factor-projection-truth";
+export const MODEL_VERSION = "2.7.0-market-fallback-projection-contract";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -65,6 +67,7 @@ const SPORT_FACTORS: Record<string, (ctx: GameContext) => FactorContribution[]> 
 const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
 
 type ConsensusOutcome = "home" | "away" | "draw";
+type ProjectionOutcome = ConsensusOutcome | "none";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -184,6 +187,148 @@ function applyWeakSportCalibration(
 function topOutcome(home: number, away: number, draw?: number): ConsensusOutcome {
   if (draw !== undefined && draw >= home && draw >= away) return "draw";
   return home >= away ? "home" : "away";
+}
+
+function finalOutcomeFromProbabilities(
+  home: number,
+  away: number,
+  draw?: number,
+): ProjectionOutcome {
+  if (draw !== undefined && draw >= home && draw >= away) return "draw";
+  if (draw === undefined && Math.abs(home - away) < 0.001) return "none";
+  return home >= away ? "home" : "away";
+}
+
+function roundTo(value: number, decimals = 3): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function meaningfulProjectionSpreadThreshold(sport: string): number {
+  if (sport === "NBA" || sport === "NCAAB") return 0.6;
+  if (sport === "NFL" || sport === "NCAAF") return 0.45;
+  if (sport === "IPL") return 3;
+  if (sport === "MLB" || sport === "NHL" || SOCCER_LEAGUES.has(sport)) return 0.12;
+  if (sport === "TENNIS") return 0.08;
+  return 0.25;
+}
+
+function projectionMinimumScore(sport: string): number {
+  if (sport === "NBA") return 75;
+  if (sport === "NCAAB") return 45;
+  if (sport === "IPL") return 80;
+  return 0;
+}
+
+function projectedScoreOutcome(
+  sport: string,
+  homeScore: number,
+  awayScore: number,
+): ProjectionOutcome {
+  const margin = homeScore - awayScore;
+  if (Math.abs(margin) < meaningfulProjectionSpreadThreshold(sport)) {
+    return SOCCER_LEAGUES.has(sport) ? "draw" : "none";
+  }
+  return margin > 0 ? "home" : "away";
+}
+
+function scoresForTargetSpread(args: {
+  sport: string;
+  total: number;
+  spread: number;
+}): { home: number; away: number } {
+  const minScore = projectionMinimumScore(args.sport);
+  let home = (args.total + args.spread) / 2;
+  let away = (args.total - args.spread) / 2;
+
+  if (home < minScore) {
+    away += minScore - home;
+    home = minScore;
+  }
+  if (away < minScore) {
+    home += minScore - away;
+    away = minScore;
+  }
+
+  return {
+    home: roundTo(home, 1),
+    away: roundTo(away, 1),
+  };
+}
+
+export function reconcileProjectionToFinal(args: {
+  sport: string;
+  projection: SimulationProjection;
+  finalProbabilities: { home: number; away: number; draw?: number };
+}): SimulationProjection {
+  const finalPick = finalOutcomeFromProbabilities(
+    args.finalProbabilities.home,
+    args.finalProbabilities.away,
+    args.finalProbabilities.draw,
+  );
+  const threshold = meaningfulProjectionSpreadThreshold(args.sport);
+  const rawScorePick = projectedScoreOutcome(
+    args.sport,
+    args.projection.projectedHomeScore,
+    args.projection.projectedAwayScore,
+  );
+
+  let projectedHomeScore = args.projection.projectedHomeScore;
+  let projectedAwayScore = args.projection.projectedAwayScore;
+  let projectedSpread = args.projection.projectedSpread;
+  let projectedTotal = args.projection.projectedTotal;
+  let scoreAdjusted = false;
+
+  if (finalPick !== "none" && rawScorePick !== finalPick) {
+    const targetSpread =
+      finalPick === "home"
+        ? threshold
+        : finalPick === "away"
+          ? -threshold
+          : 0;
+    const reconciledScores = scoresForTargetSpread({
+      sport: args.sport,
+      total: projectedTotal,
+      spread: targetSpread,
+    });
+    projectedHomeScore = reconciledScores.home;
+    projectedAwayScore = reconciledScores.away;
+    projectedSpread = roundTo(projectedHomeScore - projectedAwayScore, 1);
+    projectedTotal = roundTo(projectedHomeScore + projectedAwayScore, 1);
+    scoreAdjusted = true;
+  }
+
+  const probabilityAdjusted =
+    Math.abs(args.projection.homeWinProbability - args.finalProbabilities.home) > 0.005 ||
+    Math.abs(args.projection.awayWinProbability - args.finalProbabilities.away) > 0.005 ||
+    (
+      args.finalProbabilities.draw !== undefined &&
+      Math.abs((args.projection.drawProbability ?? 0) - args.finalProbabilities.draw) > 0.005
+    );
+  const signals = [...args.projection.signals];
+  if (probabilityAdjusted || scoreAdjusted) {
+    signals.unshift({
+      key: "orchestrator-projection-reconciliation",
+      label: "Projection reconciliation",
+      value: roundTo(args.finalProbabilities.home - args.finalProbabilities.away, 3),
+      evidence: "Public projection is aligned to the orchestrator final pick; raw simulator disagreement remains in engineBreakdown",
+    });
+  }
+
+  return {
+    ...args.projection,
+    homeWinProbability: roundTo(args.finalProbabilities.home),
+    awayWinProbability: roundTo(args.finalProbabilities.away),
+    drawProbability:
+      args.finalProbabilities.draw !== undefined
+        ? roundTo(args.finalProbabilities.draw)
+        : undefined,
+    projectedHomeScore,
+    projectedAwayScore,
+    projectedSpread,
+    projectedTotal,
+    signals: signals.slice(0, 5),
+  };
 }
 
 function preserveNonMarketOutcome(args: {
@@ -491,7 +636,15 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     }
   }
 
-  const projection = rawProjection;
+  const projection = reconcileProjectionToFinal({
+    sport: ctx.sport,
+    projection: rawProjection,
+    finalProbabilities: {
+      home: homeWinProb,
+      away: awayWinProb,
+      draw: drawProb,
+    },
+  });
 
   // 7. Collect unavailable factors for display
   const unavailableFactors = adjustedFactors
@@ -507,7 +660,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     dataSources.push("Open-Meteo weather");
   }
   if (ctx.marketConsensus) {
-    dataSources.push("SharpAPI market consensus");
+    dataSources.push(ctx.marketConsensus.sourceLabel ?? "SharpAPI market consensus");
   }
   if (ctx.sportsDataIO?.homeAdvanced || ctx.sportsDataIO?.awayAdvanced) {
     dataSources.push("SportsDataIO team stats");
@@ -521,7 +674,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
 
   // 9. Market comparison after the blend. Market consensus already had a
   //    small calibration vote above; this block reports the remaining gap
-  //    between the final model probability and Pinnacle's de-vigged number.
+  //    between the final model probability and the market snapshot used.
   let marketComparison: HonestPrediction["marketComparison"];
   const market = ctx.marketConsensus ?? null;
   if (market && Number.isFinite(market.noVigHomeProb)) {
