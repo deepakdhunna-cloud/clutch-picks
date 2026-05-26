@@ -196,6 +196,17 @@ const TopPickCard = memo(function TopPickCard({
   const awayPct = dp.away;
   const homePct = dp.home;
   const drawPct = dp.draw ?? 0;
+  const confidenceParams = {
+    id: game.id,
+    confidence: String(Math.round(conf)),
+    pickLabel: predictionDisplay.label,
+    homeAbbr: game.homeTeam.abbreviation,
+    awayAbbr: game.awayTeam.abbreviation,
+    homeProb: String(realHome),
+    awayProb: String(realAway),
+    ...(hasDraw ? { drawProb: String(drawPct) } : {}),
+    isTossUp: predictionDisplay.isTossUp ? '1' : '0',
+  };
 
   const isAwayPick = predictionDisplay.outcome === 'away';
   const isHomePick = predictionDisplay.outcome === 'home';
@@ -414,7 +425,10 @@ const TopPickCard = memo(function TopPickCard({
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>PICK STRENGTH</Text>
                   <Pressable
-                    onPress={(e) => { e.stopPropagation(); router.push('/confidence-tiers'); }}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push({ pathname: '/confidence-explained', params: confidenceParams });
+                    }}
                     hitSlop={8}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 }}
                   >

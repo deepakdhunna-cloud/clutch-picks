@@ -1076,6 +1076,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
   const SEGS = 10;
   const conf = getCanonicalConfidence(prediction as Prediction);
   const filledSegs = Math.round((conf / 100) * SEGS);
+  const winProbabilities = getCanonicalWinProbabilities(prediction as Prediction);
 
   // Tier mapping (canonical — single source of truth in display-confidence.ts)
   const tier = getConfidenceTier(conf, predictionDisplay.isTossUp);
@@ -1205,7 +1206,24 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
 
           {/* Pick Strength */}
           <Pressable
-            onPress={(e) => { e.stopPropagation(); router.push({ pathname: '/confidence-explained', params: { id: gameId } }); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push({
+                pathname: '/confidence-explained',
+                params: {
+                  id: gameId,
+                  confidence: String(Math.round(conf)),
+                  pickLabel: winnerName,
+                  homeAbbr: homeTeam.abbreviation,
+                  awayAbbr: awayTeam.abbreviation,
+                  homeProb: String(winProbabilities.home),
+                  awayProb: String(winProbabilities.away),
+                  ...(winProbabilities.draw !== undefined ? { drawProb: String(winProbabilities.draw) } : {}),
+                  isTossUp: predictionDisplay.isTossUp ? '1' : '0',
+                },
+              });
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
             hitSlop={8}
             style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
           >

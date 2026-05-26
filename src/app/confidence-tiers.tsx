@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
 import { CONFIDENCE_TIER_DEFINITIONS } from '@/lib/display-confidence';
 
@@ -52,15 +51,15 @@ export default function ConfidenceTiersScreen() {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
           {/* Intro */}
-          <Animated.View entering={FadeInDown.duration(400)} style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: 24 }}>
             <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 20 }}>
               Every prediction is powered by 20+ data factors including Elo ratings, recent form, injuries, advanced metrics, and more. The confidence percentage reflects how strongly the model favors one team — the tier label tells you what that number means.
             </Text>
-          </Animated.View>
+          </View>
 
           {/* Tier cards */}
           {TIERS.map((tier, i) => (
-            <Animated.View key={i} entering={FadeInDown.delay(100 + i * 80).duration(400)} style={{ marginBottom: 12 }}>
+            <View key={i} style={{ marginBottom: 12 }}>
               <View style={{
                 backgroundColor: 'rgba(255,255,255,0.02)',
                 borderRadius: 18,
@@ -99,15 +98,15 @@ export default function ConfidenceTiersScreen() {
                 {/* Description */}
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 18 }}>{tier.desc}</Text>
               </View>
-            </Animated.View>
+            </View>
           ))}
 
           {/* Disclaimer */}
-          <Animated.View entering={FadeInDown.delay(600).duration(400)} style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 8 }}>
             <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
               Predictions are for entertainment purposes only. Not financial or gambling advice. Confidence reflects model certainty, not guaranteed outcomes.
             </Text>
-          </Animated.View>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>

@@ -1,34 +1,23 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useSubscription } from '@/lib/subscription-context';
-import { useGame } from '@/hooks/useGames';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
 import { CONFIDENCE_TIER_DEFINITIONS, displayWinProbability, getConfidenceTier } from '@/lib/display-confidence';
-import { getCanonicalWinProbabilities } from '@/lib/canonical-result';
-import { getPredictionDisplay } from '@/lib/prediction-display';
-import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 
-
-interface Game {
-  id: string;
-  homeTeam: { name: string; abbreviation: string };
-  awayTeam: { name: string; abbreviation: string };
-  prediction?: {
-    canonicalResult?: CanonicalPredictionResult;
-    predictedWinner: 'home' | 'away';
-    predictedOutcome?: 'home' | 'away' | 'draw';
-    confidence: number;
-    homeWinProbability: number;
-    awayWinProbability: number;
-    drawProbability?: number;
-    isTossUp?: boolean;
-  };
-}
+type ConfidenceParams = {
+  id?: string;
+  confidence?: string;
+  pickLabel?: string;
+  homeAbbr?: string;
+  awayAbbr?: string;
+  homeProb?: string;
+  awayProb?: string;
+  drawProb?: string;
+  isTossUp?: string;
+};
 
 const TIERS = CONFIDENCE_TIER_DEFINITIONS;
 
@@ -76,66 +65,44 @@ function ConfidenceFallback({
   );
 }
 
+function parseNumberParam(value: string | string[] | undefined): number | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseBoolParam(value: string | string[] | undefined): boolean {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === '1' || raw === 'true';
+}
+
 export default function ConfidenceExplainedScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<ConfidenceParams>();
   const router = useRouter();
-  const { isPremium } = useSubscription();
 
-  const { data: game, isLoading, isFetching, error } = useGame(id ?? '') as {
-    data: Game | null | undefined;
-    isLoading: boolean;
-    isFetching: boolean;
-    error: unknown;
-  };
+  const confidence = parseNumberParam(params.confidence);
+  const homeProb = parseNumberParam(params.homeProb);
+  const awayProb = parseNumberParam(params.awayProb);
+  const drawProb = parseNumberParam(params.drawProb);
+  const pickLabel = Array.isArray(params.pickLabel) ? params.pickLabel[0] : params.pickLabel;
+  const homeAbbr = Array.isArray(params.homeAbbr) ? params.homeAbbr[0] : params.homeAbbr;
+  const awayAbbr = Array.isArray(params.awayAbbr) ? params.awayAbbr[0] : params.awayAbbr;
+  const isTossUp = parseBoolParam(params.isTossUp);
 
-  useEffect(() => {
-    if (!isPremium) router.back();
-  }, [isPremium, router]);
-
-  if (!isPremium) return null;
-
-  if (isLoading && !game) {
-    return (
-      <ConfidenceFallback
-        title="Loading confidence"
-        message="Getting the latest pick context."
-        loading
-        onBack={() => router.back()}
-      />
-    );
-  }
-
-  if (error || !game) {
+  if (confidence === null || homeProb === null || awayProb === null || !homeAbbr || !awayAbbr) {
     return (
       <ConfidenceFallback
         title="Confidence unavailable"
-        message="We could not load this game right now."
+        message="This game did not include enough confidence data to show the breakdown."
         onBack={() => router.back()}
       />
     );
   }
 
-  if (!game.prediction) {
-    return (
-      <ConfidenceFallback
-        title={isFetching ? 'Confidence is warming up' : 'Confidence unavailable'}
-        message={isFetching ? 'The pick is still being prepared for this game.' : 'There is no prediction available for this game yet.'}
-        loading={isFetching}
-        onBack={() => router.back()}
-      />
-    );
-  }
-
-  const pred = game.prediction;
-  const predictionDisplay = getPredictionDisplay({
-    prediction: pred as unknown as Prediction,
-    homeTeam: game.homeTeam,
-    awayTeam: game.awayTeam,
-  });
-  const tier = getConfidenceTier(pred.confidence, predictionDisplay.isTossUp);
+  const tier = getConfidenceTier(confidence, isTossUp);
   const currentTierIdx = TIERS.findIndex((item) => item.label === tier.label);
-  const canonicalProbabilities = getCanonicalWinProbabilities(pred as unknown as Prediction);
-  const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away, canonicalProbabilities.draw);
+  const dp = displayWinProbability(homeProb, awayProb, drawProb ?? undefined);
   const hasDraw = typeof dp.draw === 'number';
   const drawColor = '#C9BDA8';
 
@@ -152,33 +119,33 @@ export default function ConfidenceExplainedScreen() {
           </Pressable>
           <View>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: -0.5 }}>Pick Confidence</Text>
-            <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{game.awayTeam.abbreviation} vs {game.homeTeam.abbreviation}</Text>
+            <Text style={{ fontSize: 11, color: TEXT_MUTED }}>{awayAbbr} vs {homeAbbr}</Text>
           </View>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
           {/* Summary card */}
-          <Animated.View entering={FadeInDown.duration(400)} style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 24 }}>
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 24 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <View>
                 <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5 }}>CLUTCH PICK</Text>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFF', marginTop: 2 }}>{predictionDisplay.label}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFF', marginTop: 2 }}>{pickLabel ?? 'Current Pick'}</Text>
               </View>
               <View style={{ backgroundColor: `${tier.color}20`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: `${tier.color}40` }}>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: tier.color }}>{tier.label}</Text>
               </View>
             </View>
 
-            <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFF', marginBottom: 12 }}>{pred.confidence}%</Text>
+            <Text style={{ fontSize: 28, fontWeight: '900', color: '#FFF', marginBottom: 12 }}>{Math.round(confidence)}%</Text>
 
             {/* Mini win prob bar */}
             <View style={{ marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: TEAL }} numberOfLines={1}>{game.homeTeam.abbreviation} {dp.home}%</Text>
+                <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: TEAL }} numberOfLines={1}>{homeAbbr} {dp.home}%</Text>
                 {hasDraw ? (
                   <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: drawColor, textAlign: 'center' }} numberOfLines={1}>Draw {dp.draw}%</Text>
                 ) : null}
-                <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: MAROON, textAlign: 'right' }} numberOfLines={1}>{dp.away}% {game.awayTeam.abbreviation}</Text>
+                <Text style={{ flex: 1, fontSize: 9, fontWeight: '700', color: MAROON, textAlign: 'right' }} numberOfLines={1}>{dp.away}% {awayAbbr}</Text>
               </View>
               <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', overflow: 'hidden' }}>
                 <View style={{ flex: dp.home, backgroundColor: TEAL, borderRadius: 3 }} />
@@ -196,10 +163,10 @@ export default function ConfidenceExplainedScreen() {
             <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 17 }}>
               Win probability is the model's estimate of who wins. Confidence is how much the model trusts that estimate — based on data quality, factor coverage, and model agreement.
             </Text>
-          </Animated.View>
+          </View>
 
           {/* Tier legend */}
-          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: 24 }}>
             <Text style={{ fontSize: 10, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5, marginBottom: 12 }}>TIER LEGEND</Text>
             {TIERS.map((t, i) => {
               const isActive = i === currentTierIdx;
@@ -222,10 +189,10 @@ export default function ConfidenceExplainedScreen() {
                 </View>
               );
             })}
-          </Animated.View>
+          </View>
 
           {/* What goes into confidence */}
-          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: 24 }}>
             <Text style={{ fontSize: 10, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5, marginBottom: 12 }}>WHAT GOES INTO CONFIDENCE</Text>
             {FACTORS.map((f, i) => (
               <View key={i} style={{ flexDirection: 'row', marginBottom: 12, gap: 12 }}>
@@ -238,7 +205,7 @@ export default function ConfidenceExplainedScreen() {
                 </View>
               </View>
             ))}
-          </Animated.View>
+          </View>
 
           {/* Disclaimer */}
           <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
