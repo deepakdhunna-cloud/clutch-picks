@@ -217,6 +217,43 @@ describe("canonical prediction result", () => {
     expect(reconciled.signals[0]?.key).toBe("orchestrator-projection-reconciliation");
   });
 
+  it("keeps rounded tennis score projections aligned to the final pick", () => {
+    const reconciled = reconcileProjectionToFinal({
+      sport: "TENNIS",
+      projection: projection({
+        homeWinProbability: 0.51,
+        awayWinProbability: 0.49,
+        projectedHomeScore: 1.4,
+        projectedAwayScore: 1.4,
+        projectedSpread: 0,
+        projectedTotal: 2.8,
+      }),
+      finalProbabilities: { home: 0.46, away: 0.54 },
+    });
+
+    expect(reconciled.projectedSpread).toBeLessThan(0);
+    expect(reconciled.projectedAwayScore).toBeGreaterThan(reconciled.projectedHomeScore);
+    expect(Math.abs(reconciled.projectedSpread)).toBeGreaterThanOrEqual(0.2);
+  });
+
+  it("keeps rounded football score projections above the sport threshold", () => {
+    const reconciled = reconcileProjectionToFinal({
+      sport: "NFL",
+      projection: projection({
+        homeWinProbability: 0.42,
+        awayWinProbability: 0.58,
+        projectedHomeScore: 23.2,
+        projectedAwayScore: 24,
+        projectedSpread: -0.8,
+        projectedTotal: 47.2,
+      }),
+      finalProbabilities: { home: 0.56, away: 0.44 },
+    });
+
+    expect(reconciled.projectedSpread).toBeGreaterThanOrEqual(0.5);
+    expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
+  });
+
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {
     const ctx = makeNBAContext();
     const canonical = buildCanonicalPredictionResult({

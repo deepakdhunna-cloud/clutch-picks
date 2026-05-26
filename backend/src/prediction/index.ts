@@ -256,6 +256,61 @@ function scoresForTargetSpread(args: {
   };
 }
 
+function reconciledScoreLineForPick(args: {
+  sport: string;
+  total: number;
+  finalPick: Exclude<ProjectionOutcome, "none">;
+}): { home: number; away: number; spread: number; total: number } {
+  if (args.finalPick === "draw") {
+    const scores = scoresForTargetSpread({
+      sport: args.sport,
+      total: args.total,
+      spread: 0,
+    });
+    return {
+      home: scores.home,
+      away: scores.away,
+      spread: roundTo(scores.home - scores.away, 1),
+      total: roundTo(scores.home + scores.away, 1),
+    };
+  }
+
+  const direction = args.finalPick === "home" ? 1 : -1;
+  const threshold = meaningfulProjectionSpreadThreshold(args.sport);
+  let targetMagnitude = threshold;
+  let fallback: { home: number; away: number; spread: number; total: number } | null = null;
+
+  // Public score projections are displayed to one decimal. Small raw spreads
+  // can round back into a tie, so verify the displayed line before returning it.
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const scores = scoresForTargetSpread({
+      sport: args.sport,
+      total: args.total,
+      spread: direction * targetMagnitude,
+    });
+    const line = {
+      home: scores.home,
+      away: scores.away,
+      spread: roundTo(scores.home - scores.away, 1),
+      total: roundTo(scores.home + scores.away, 1),
+    };
+
+    fallback = line;
+    if (projectedScoreOutcome(args.sport, line.home, line.away) === args.finalPick) {
+      return line;
+    }
+
+    targetMagnitude = roundTo(targetMagnitude + 0.1, 2);
+  }
+
+  return fallback ?? {
+    home: args.total / 2,
+    away: args.total / 2,
+    spread: 0,
+    total: args.total,
+  };
+}
+
 export function reconcileProjectionToFinal(args: {
   sport: string;
   projection: SimulationProjection;
@@ -266,7 +321,6 @@ export function reconcileProjectionToFinal(args: {
     args.finalProbabilities.away,
     args.finalProbabilities.draw,
   );
-  const threshold = meaningfulProjectionSpreadThreshold(args.sport);
   const rawScorePick = projectedScoreOutcome(
     args.sport,
     args.projection.projectedHomeScore,
@@ -280,21 +334,15 @@ export function reconcileProjectionToFinal(args: {
   let scoreAdjusted = false;
 
   if (finalPick !== "none" && rawScorePick !== finalPick) {
-    const targetSpread =
-      finalPick === "home"
-        ? threshold
-        : finalPick === "away"
-          ? -threshold
-          : 0;
-    const reconciledScores = scoresForTargetSpread({
+    const reconciledScores = reconciledScoreLineForPick({
       sport: args.sport,
       total: projectedTotal,
-      spread: targetSpread,
+      finalPick,
     });
     projectedHomeScore = reconciledScores.home;
     projectedAwayScore = reconciledScores.away;
-    projectedSpread = roundTo(projectedHomeScore - projectedAwayScore, 1);
-    projectedTotal = roundTo(projectedHomeScore + projectedAwayScore, 1);
+    projectedSpread = reconciledScores.spread;
+    projectedTotal = reconciledScores.total;
     scoreAdjusted = true;
   }
 
