@@ -366,9 +366,9 @@ interface GamePrediction {
   analysis: string;
   predictedSpread: number;
   predictedTotal: number;
-  marketFavorite: 'home' | 'away';
-  spread: number;
-  overUnder: number;
+  marketFavorite?: 'home' | 'away';
+  spread?: number;
+  overUnder?: number;
   createdAt: string;
   homeWinProbability: number;
   awayWinProbability: number;

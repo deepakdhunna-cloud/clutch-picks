@@ -248,8 +248,6 @@ export function translateNewEnginePrediction(
   // use the three-way max, not the larger of only home/away.
   const confidence = Math.max(homeProbPct, awayProbPct, drawProbPct ?? 0);
 
-  const marketFavorite: "home" | "away" =
-    game.marketFavorite ?? predictedWinner;
   const decisionProfile = newPred.canonicalResult.decisionProfile;
 
   return {
@@ -261,9 +259,9 @@ export function translateNewEnginePrediction(
     analysis: newPred.narrative || "",
     predictedSpread: newPred.projection?.projectedSpread ?? spread ?? 0,
     predictedTotal: newPred.projection?.projectedTotal ?? overUnder ?? 0,
-    marketFavorite,
-    spread: spread ?? 0,
-    overUnder: overUnder ?? 0,
+    marketFavorite: game.marketFavorite,
+    spread,
+    overUnder,
     createdAt: newPred.generatedAt,
     canonicalResult: newPred.canonicalResult,
     homeWinProbability: homeProbPct,

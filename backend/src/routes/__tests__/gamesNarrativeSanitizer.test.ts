@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  attachPredictionToGame,
   shouldPromotePredictionUpdate,
   sanitizePredictionForGame,
   updateLivePrediction,
@@ -114,6 +115,36 @@ describe("sanitizePredictionForGame", () => {
     expect(sanitized.analysis).toContain("Los Angeles Lakers");
     expect(sanitized.analysis).not.toContain("The model");
     expect(sanitized.analysis).not.toContain("Home LAL Elo");
+  });
+});
+
+describe("attachPredictionToGame", () => {
+  test("does not invent market odds when the game feed has none", () => {
+    const game = makeGame();
+    const prediction = makePrediction("Stable pregame read.");
+
+    const attached = attachPredictionToGame(game, prediction);
+
+    expect(attached.prediction).toBeDefined();
+    expect(attached.spread).toBeUndefined();
+    expect(attached.overUnder).toBeUndefined();
+    expect(attached.marketFavorite).toBeUndefined();
+  });
+
+  test("preserves real market odds from the game feed", () => {
+    const game: Game = {
+      ...makeGame(),
+      spread: -4.5,
+      overUnder: 218.5,
+      marketFavorite: "home",
+    };
+    const prediction = makePrediction("Stable pregame read.");
+
+    const attached = attachPredictionToGame(game, prediction);
+
+    expect(attached.spread).toBe(-4.5);
+    expect(attached.overUnder).toBe(218.5);
+    expect(attached.marketFavorite).toBe("home");
   });
 });
 

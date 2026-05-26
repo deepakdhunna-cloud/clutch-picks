@@ -113,9 +113,9 @@ export interface Prediction {
   predictedWinner: "home" | "away";
   confidence: number; // 50-94%
   aiAnalysis: string;
-  marketFavorite: "home" | "away";
-  spread: number; // Positive means home favored
-  overUnder: number;
+  marketFavorite?: "home" | "away";
+  spread?: number; // Positive means home favored
+  overUnder?: number;
   // Advanced fields
   homeWinProbability: number; // 0-100
   awayWinProbability: number; // 0-100

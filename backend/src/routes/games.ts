@@ -113,9 +113,9 @@ export interface GamePrediction {
   analysis: string;
   predictedSpread: number;
   predictedTotal: number;
-  marketFavorite: "home" | "away";
-  spread: number;
-  overUnder: number;
+  marketFavorite?: "home" | "away";
+  spread?: number;
+  overUnder?: number;
   createdAt: string;
   // Advanced fields
   homeWinProbability: number;
@@ -675,16 +675,13 @@ export function sanitizePredictionForGame(game: Game, prediction: GamePrediction
   };
 }
 
-function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
+export function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
   const displayPrediction = sanitizePredictionForGame(
     game,
     ensureCanonicalPredictionResult(game, prediction),
   );
   return {
     ...game,
-    spread: game.spread ?? displayPrediction.spread,
-    overUnder: game.overUnder ?? displayPrediction.overUnder,
-    marketFavorite: game.marketFavorite ?? displayPrediction.marketFavorite,
     prediction: displayPrediction,
   };
 }

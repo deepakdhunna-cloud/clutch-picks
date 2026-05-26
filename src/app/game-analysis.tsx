@@ -53,8 +53,8 @@ interface GamePrediction {
   predictedOutcome?: 'home' | 'away' | 'draw';
   confidence: number;
   analysis: string;
-  spread: number;
-  overUnder: number;
+  spread?: number;
+  overUnder?: number;
   edgeRating: number;
   valueRating: number;
   homeWinProbability: number;
