@@ -10,7 +10,7 @@ type SweepIssue = {
 };
 
 const DEFAULT_BASE_URL = "https://clutch-picks-production.up.railway.app";
-const EXPECTED_ENGINE_VERSION = "2.9.0-league-reliability-guards";
+const EXPECTED_ENGINE_VERSION = "2.10.0-source-aware-availability";
 
 const baseUrl = (process.env.PREDICTION_SWEEP_BASE_URL ?? process.env.BACKEND_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 const sweepDate = process.env.PREDICTION_SWEEP_DATE ?? new Date().toISOString().slice(0, 10);
@@ -20,6 +20,11 @@ const endpoints = [
   "/api/games/top-picks",
   `/api/games/date/${sweepDate}`,
 ];
+
+const TOP_PICK_MIN_CONFIDENCE = 56;
+const TOP_PICK_BLOCKED_TAGS = new Set(["thin-data", "low-conviction"]);
+const TOP_PICK_BLOCKED_WARNING_REGEX =
+  /reliability reserve|missing critical|data coverage is thin|source unavailable|confidence compressed/i;
 
 function asGames(payload: unknown): ApiObject[] {
   if (Array.isArray(payload)) return payload as ApiObject[];
@@ -137,6 +142,7 @@ async function fetchJson(path: string): Promise<unknown> {
 async function main(): Promise<void> {
   const endpointCounts: Array<{ endpoint: string; games: number; predicted: number }> = [];
   const seen = new Map<string, ApiObject>();
+  const issues: SweepIssue[] = [];
 
   const health = await fetchJson("/health") as ApiObject;
   const healthVersion = health.build?.predictionEngineVersion;
@@ -152,9 +158,37 @@ async function main(): Promise<void> {
       predicted: games.filter((game) => game.prediction || game.canonicalResult).length,
     });
     for (const game of games) seen.set(gameId(game), game);
+
+    if (endpoint === "/api/games/top-picks") {
+      for (const game of games) {
+        const prediction = game.prediction;
+        const canonical = prediction?.canonicalResult;
+        if (!prediction || !canonical) {
+          issues.push(issue(game, "top-pick response included a game without canonical prediction"));
+          continue;
+        }
+        const confidence = Number(canonical.confidence ?? prediction.confidence);
+        const tags = canonical.decisionProfile?.tags ?? [];
+        const warnings = canonical.warnings ?? [];
+        if (!Number.isFinite(confidence) || confidence < TOP_PICK_MIN_CONFIDENCE) {
+          issues.push(issue(game, `top-pick confidence ${confidence} is below ${TOP_PICK_MIN_CONFIDENCE}`));
+        }
+        if (prediction.snapshotType === "stored-pregame") {
+          issues.push(issue(game, "top-pick response included a stored pregame snapshot"));
+        }
+        if (canonical.decisionProfile?.lowDataWarning) {
+          issues.push(issue(game, "top-pick response included a low-data prediction"));
+        }
+        if (tags.some((tag: string) => TOP_PICK_BLOCKED_TAGS.has(tag))) {
+          issues.push(issue(game, "top-pick response included a blocked decision tag", { tags }));
+        }
+        if (warnings.some((warning: string) => TOP_PICK_BLOCKED_WARNING_REGEX.test(warning))) {
+          issues.push(issue(game, "top-pick response included blocked warning", { warnings }));
+        }
+      }
+    }
   }
 
-  const issues: SweepIssue[] = [];
   for (const game of seen.values()) {
     const predictionObject = game.prediction;
     if (!predictionObject) continue;

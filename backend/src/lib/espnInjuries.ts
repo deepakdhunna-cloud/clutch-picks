@@ -182,8 +182,8 @@ const EMPTY_UNAVAILABLE: GameInjuryReport = {
  * Fetch the per-game injury report. For unsupported sports (NFL, NCAA,
  * soccer) returns immediately with source="unavailable" — no network call.
  *
- * On any fetch/parse failure for a supported sport, returns an empty
- * report with source="espn-summary" (safe default — never throws).
+ * On any fetch/parse failure for a supported sport, returns source="unavailable".
+ * A failed provider call must not be interpreted as a verified clean report.
  */
 export async function fetchGameInjuries(
   sport: string,
@@ -204,7 +204,7 @@ export async function fetchGameInjuries(
 
   const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/summary?event=${gameId}`;
 
-  const emptyReport: GameInjuryReport = {
+  const verifiedEmptyReport: GameInjuryReport = {
     homeTeamInjuries: [],
     awayTeamInjuries: [],
     source: "espn-summary",
@@ -213,13 +213,22 @@ export async function fetchGameInjuries(
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
-      injuryCache.set(cacheKey, { data: emptyReport, timestamp: Date.now() });
-      return emptyReport;
+      injuryCache.set(cacheKey, { data: EMPTY_UNAVAILABLE, timestamp: Date.now() });
+      return EMPTY_UNAVAILABLE;
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
+    if (!Array.isArray(data?.injuries)) {
+      injuryCache.set(cacheKey, { data: EMPTY_UNAVAILABLE, timestamp: Date.now() });
+      return EMPTY_UNAVAILABLE;
+    }
+
     const parsed = parseGameInjuries(data, homeTeamId, awayTeamId);
-    const report: GameInjuryReport = { ...parsed, source: "espn-summary" };
+    const report: GameInjuryReport = {
+      ...verifiedEmptyReport,
+      ...parsed,
+      source: "espn-summary",
+    };
 
     injuryCache.set(cacheKey, { data: report, timestamp: Date.now() });
     return report;
@@ -228,8 +237,8 @@ export async function fetchGameInjuries(
       `[injuries] summary fetch failed for ${sport} game ${gameId}:`,
       err instanceof Error ? err.message : err,
     );
-    injuryCache.set(cacheKey, { data: emptyReport, timestamp: Date.now() });
-    return emptyReport;
+    injuryCache.set(cacheKey, { data: EMPTY_UNAVAILABLE, timestamp: Date.now() });
+    return EMPTY_UNAVAILABLE;
   }
 }
 
@@ -287,6 +296,7 @@ export function toTeamInjuryReport(
  */
 export type InjurySourceTag =
   | "espn-summary"
+  | "sportsdataio"
   | "player-availability"
   | "merged"
   | "unavailable";
@@ -325,7 +335,7 @@ type PlayerAvailabilityLike = {
  *   - probable, available, anything else -> ignored (no signal)
  */
 export function mergePlayerAvailability(
-  espnReport: TeamInjuryReport,
+  espnReport: TeamInjuryReport & { source?: string },
   rows: PlayerAvailabilityLike[],
 ): MergedTeamInjuryReport {
   function bucketFor(status: string): "out" | "doubtful" | "questionable" | null {
@@ -362,16 +372,19 @@ export function mergePlayerAvailability(
     paAddedAny = true;
   }
 
+  const upstreamSource = (espnReport as { source?: string }).source as InjurySourceTag | undefined;
+  const upstreamAvailable =
+    upstreamSource !== undefined && upstreamSource !== "unavailable";
   const espnHadData =
     espnReport.out.length > 0 ||
     espnReport.doubtful.length > 0 ||
     espnReport.questionable.length > 0;
 
   let source: InjurySourceTag;
-  if (!espnHadData && !paAddedAny) source = "unavailable";
-  else if (espnHadData && paAddedAny) source = "merged";
+  if (!upstreamAvailable && !espnHadData && !paAddedAny) source = "unavailable";
+  else if ((upstreamAvailable || espnHadData) && paAddedAny) source = "merged";
   else if (paAddedAny) source = "player-availability";
-  else source = "espn-summary";
+  else source = upstreamSource ?? "espn-summary";
 
   return {
     out,

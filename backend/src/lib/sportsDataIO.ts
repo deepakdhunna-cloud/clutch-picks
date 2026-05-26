@@ -507,9 +507,9 @@ export async function fetchSportsDataIOInjuries(
 }
 
 export function mergeInjuryReports(
-  primary: TeamInjuryReport,
+  primary: TeamInjuryReport & { source?: string },
   sportsDataIO: TeamInjuryReport | null,
-): TeamInjuryReport {
+): TeamInjuryReport & { source?: string } {
   if (!sportsDataIO) return primary;
   const seen = new Set<string>();
   const mergeList = (
@@ -537,5 +537,8 @@ export function mergeInjuryReports(
     totalOut: out.length,
     totalDoubtful: doubtful.length,
     totalQuestionable: questionable.length,
+    source: primary.source && primary.source !== "unavailable"
+      ? "merged"
+      : "sportsdataio",
   };
 }

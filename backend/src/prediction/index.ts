@@ -46,7 +46,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.9.0-league-reliability-guards";
+export const MODEL_VERSION = "2.10.0-source-aware-availability";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -572,12 +572,12 @@ function isNbaHighLeverageWindow(ctx: GameContext): boolean {
 }
 
 const CRITICAL_FACTOR_KEYS: Record<string, string[]> = {
-  NBA: ["net_rating"],
-  NCAAB: ["net_rating_ncaamb"],
+  NBA: ["injuries_nba", "net_rating"],
+  NCAAB: ["injuries_ncaamb", "net_rating_ncaamb"],
   NFL: ["starting_qb", "injuries_nfl"],
   NCAAF: ["starting_qb_ncaaf", "injuries_ncaaf"],
-  MLB: ["starting_pitcher"],
-  NHL: ["starting_goalie", "special_teams"],
+  MLB: ["starting_pitcher", "injuries_mlb"],
+  NHL: ["starting_goalie", "special_teams", "injuries_nhl"],
   MLS: ["fixture_congestion", "key_player_availability", "stakes"],
   EPL: ["fixture_congestion", "key_player_availability", "stakes"],
   UCL: ["fixture_congestion", "key_player_availability", "ucl_pedigree", "ucl_travel"],

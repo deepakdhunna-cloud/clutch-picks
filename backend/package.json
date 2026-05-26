@@ -13,7 +13,9 @@
     "release:check": "bun run src/scripts/releaseReadiness.ts",
     "release:check:production": "railway run --environment production --service clutch-picks -- bun run release:check",
     "qa:predictions:live": "bun run src/scripts/predictionInvariantSweep.ts",
-    "qa:predictions:production": "PREDICTION_SWEEP_BASE_URL=https://clutch-picks-production.up.railway.app bun run qa:predictions:live"
+    "qa:predictions:production": "PREDICTION_SWEEP_BASE_URL=https://clutch-picks-production.up.railway.app bun run qa:predictions:live",
+    "qa:sources:live": "bun run src/scripts/predictionSourceCoverageAudit.ts",
+    "qa:sources:production": "railway run --environment production --service clutch-picks -- bun run qa:sources:live"
   },
   "devDependencies": {
     "@types/bun": "latest",

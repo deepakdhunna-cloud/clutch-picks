@@ -16,6 +16,7 @@
  */
 
 import type { GameContext, FactorContribution } from "../types";
+import { injuryReportsAreVerified, injuryUnavailableEvidence } from "./availability";
 
 // ─── 1. Fixture congestion ──────────────────────────────────────────────────
 // Soccer teams playing 3+ games in 7 days show measurable fatigue. Penalty:
@@ -69,11 +70,12 @@ export function keyPlayerFactor(
   ctx: GameContext,
   weight: number,
 ): FactorContribution {
+  const injurySourceVerified = injuryReportsAreVerified(ctx.homeInjuries, ctx.awayInjuries);
   const impact = (list: GameContext["homeInjuries"]): number =>
     Math.min(75, list.out.length * 25 + list.doubtful.length * 12);
 
-  const homeImpact = impact(ctx.homeInjuries);
-  const awayImpact = impact(ctx.awayInjuries);
+  const homeImpact = injurySourceVerified ? impact(ctx.homeInjuries) : 0;
+  const awayImpact = injurySourceVerified ? impact(ctx.awayInjuries) : 0;
   const delta = awayImpact - homeImpact;
 
   const topNames = (list: GameContext["homeInjuries"]): string[] => {
@@ -90,7 +92,9 @@ export function keyPlayerFactor(
   if (awayList.length) parts.push(`${ctx.game.awayTeam.abbreviation}: ${awayList.join(", ")}`);
 
   const evidence =
-    parts.length > 0
+    !injurySourceVerified
+      ? injuryUnavailableEvidence()
+      : parts.length > 0
       ? parts.join("; ")
       : "No significant availability concerns reported for either team";
 
@@ -99,8 +103,8 @@ export function keyPlayerFactor(
     label: "Key player availability",
     homeDelta: delta,
     weight,
-    available: true,
-    hasSignal: delta !== 0,
+    available: injurySourceVerified,
+    hasSignal: injurySourceVerified && delta !== 0,
     evidence,
   };
 }

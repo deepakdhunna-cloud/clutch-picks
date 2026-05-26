@@ -14,6 +14,7 @@ import { computeNFLFactors } from "../factors/nfl";
 import { computeNBAFactors } from "../factors/nba";
 import { computeMLBFactors } from "../factors/mlb";
 import { computeNHLFactors } from "../factors/nhl";
+import { computeMLSFactors } from "../factors/mls";
 import type { GameContext, FactorContribution } from "../types";
 import type { Game, Team } from "../../types/sports";
 import { Sport, League, GameStatus } from "../../types/sports";
@@ -93,6 +94,18 @@ function makeContext(overrides: Partial<GameContext> = {}): GameContext {
     gameDate: "2026-04-12",
     ...overrides,
   };
+}
+
+function injuryReportWithSource(source: string): GameContext["homeInjuries"] {
+  return {
+    out: [],
+    doubtful: [],
+    questionable: [],
+    totalOut: 0,
+    totalDoubtful: 0,
+    totalQuestionable: 0,
+    source,
+  } as GameContext["homeInjuries"];
 }
 
 // ─── Validation helpers ─────────────────────────────────────────────────
@@ -214,6 +227,19 @@ describe("NBA factors", () => {
     expect(injuries.homeDelta).toBeGreaterThan(0); // Away has 1 PG out
   });
 
+  it("does not treat unknown NBA availability as a clean injury report", () => {
+    const ctx = makeContext({
+      homeInjuries: injuryReportWithSource("unavailable"),
+      awayInjuries: injuryReportWithSource("unavailable"),
+    });
+    const factors = computeNBAFactors(ctx);
+    const injuries = factors.find((f) => f.key === "injuries_nba")!;
+
+    expect(injuries.available).toBe(false);
+    expect(injuries.hasSignal).toBe(false);
+    expect(injuries.evidence).toContain("availability source unavailable");
+  });
+
   it("back-to-back penalizes the team on b2b", () => {
     const ctx = makeContext();
     const factors = computeNBAFactors(ctx);
@@ -251,6 +277,21 @@ describe("NFL factors", () => {
     const factors = computeNFLFactors(ctx);
     const qb = factors.find((f) => f.key === "starting_qb")!;
     expect(qb.homeDelta).toBe(120); // Away QB out = +120 for home
+  });
+
+  it("does not mark NFL QBs healthy when availability source is unavailable", () => {
+    const ctx = makeContext({
+      sport: "NFL",
+      homeInjuries: injuryReportWithSource("unavailable"),
+      awayInjuries: injuryReportWithSource("unavailable"),
+    });
+    const factors = computeNFLFactors(ctx);
+    const qb = factors.find((f) => f.key === "starting_qb")!;
+    const injuries = factors.find((f) => f.key === "injuries_nfl")!;
+
+    expect(qb.available).toBe(false);
+    expect(injuries.available).toBe(false);
+    expect(qb.evidence).toContain("availability source unavailable");
   });
 });
 
@@ -304,6 +345,19 @@ describe("MLB factors", () => {
     const prediction = predictGame(ctx);
     expect(prediction.canonicalResult.warnings).toContain("MLB data coverage is thin; confidence compressed.");
   });
+
+  it("does not treat unknown MLB position-player availability as a clean report", () => {
+    const ctx = makeContext({
+      sport: "MLB",
+      homeInjuries: injuryReportWithSource("unavailable"),
+      awayInjuries: injuryReportWithSource("unavailable"),
+    });
+    const factors = computeMLBFactors(ctx);
+    const injuries = factors.find((f) => f.key === "injuries_mlb")!;
+
+    expect(injuries.available).toBe(false);
+    expect(injuries.evidence).toContain("availability source unavailable");
+  });
 });
 
 describe("NHL factors", () => {
@@ -328,6 +382,35 @@ describe("NHL factors", () => {
     const goalie = factors.find((f) => f.key === "starting_goalie")!;
     expect(goalie.homeDelta).toBeGreaterThan(0); // Home has better SV%
     expect(goalie.available).toBe(true);
+  });
+
+  it("does not treat unknown NHL skater availability as a clean report", () => {
+    const ctx = makeContext({
+      sport: "NHL",
+      homeInjuries: injuryReportWithSource("unavailable"),
+      awayInjuries: injuryReportWithSource("unavailable"),
+    });
+    const factors = computeNHLFactors(ctx);
+    const injuries = factors.find((f) => f.key === "injuries_nhl")!;
+
+    expect(injuries.available).toBe(false);
+    expect(injuries.evidence).toContain("availability source unavailable");
+  });
+});
+
+describe("soccer availability factors", () => {
+  it("does not treat unknown soccer player availability as a clean report", () => {
+    const ctx = makeContext({
+      sport: "MLS",
+      homeInjuries: injuryReportWithSource("unavailable"),
+      awayInjuries: injuryReportWithSource("unavailable"),
+    });
+    const factors = computeMLSFactors(ctx);
+    const availability = factors.find((f) => f.key === "key_player_availability")!;
+
+    expect(availability.available).toBe(false);
+    expect(availability.hasSignal).toBe(false);
+    expect(availability.evidence).toContain("availability source unavailable");
   });
 });
 

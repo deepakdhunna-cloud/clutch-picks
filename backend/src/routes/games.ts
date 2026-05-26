@@ -692,6 +692,53 @@ export function attachPredictionToGame(game: Game, prediction: GamePrediction): 
   };
 }
 
+const TOP_PICK_MIN_CONFIDENCE = 56;
+const TOP_PICK_LIMIT = 8;
+const TOP_PICK_MAX_CANDIDATES = 48;
+const TOP_PICK_MAX_CANDIDATES_PER_SPORT = 6;
+const TOP_PICK_BLOCKED_DECISION_TAGS = new Set(["thin-data", "low-conviction"]);
+const TOP_PICK_BLOCKED_WARNING_REGEX =
+  /reliability reserve|missing critical|data coverage is thin|source unavailable|confidence compressed/i;
+
+export function isTopPickEligible(game: Game): boolean {
+  const prediction = game.prediction;
+  const canonical = prediction?.canonicalResult;
+  if (!prediction || !canonical) return false;
+  if (game.status !== "SCHEDULED") return false;
+  if (prediction.snapshotType === "stored-pregame") return false;
+  if (prediction.lowDataWarning || prediction.isTossUp) return false;
+
+  const confidence = canonical.confidence ?? prediction.confidence;
+  if (!Number.isFinite(confidence) || confidence < TOP_PICK_MIN_CONFIDENCE) return false;
+  if (canonical.decisionProfile?.lowDataWarning) return false;
+
+  const tags = canonical.decisionProfile?.tags ?? [];
+  if (tags.some((tag) => TOP_PICK_BLOCKED_DECISION_TAGS.has(tag))) return false;
+
+  const warnings = canonical.warnings ?? [];
+  if (warnings.some((warning) => TOP_PICK_BLOCKED_WARNING_REGEX.test(warning))) return false;
+
+  return true;
+}
+
+function selectTopPickCandidates(games: Game[]): Game[] {
+  const gamesBySport = new Map<string, Game[]>();
+  for (const game of games) {
+    const existing = gamesBySport.get(game.sport) ?? [];
+    existing.push(game);
+    gamesBySport.set(game.sport, existing);
+  }
+
+  return [...gamesBySport.values()]
+    .flatMap((sportGames) =>
+      sportGames
+        .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+        .slice(0, TOP_PICK_MAX_CANDIDATES_PER_SPORT)
+    )
+    .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+    .slice(0, TOP_PICK_MAX_CANDIDATES);
+}
+
 function isFinalGame(game: Game): boolean {
   return game.status === "FINAL";
 }
@@ -2829,32 +2876,14 @@ gamesRouter.get("/top-picks", async (c) => {
       new Map(allGames.map((game) => [game.id, game])).values()
     );
 
-    // Filter to only scheduled games (not finished)
-    const scheduledGames = uniqueGames.filter(
-      (g) => g.status === "SCHEDULED" || g.status === "LIVE"
-    );
+    // Top picks must be pregame only. Do not force a pick per sport if the
+    // available inputs are thin; returning fewer picks is better than promoting
+    // a weak read.
+    const scheduledGames = uniqueGames.filter((g) => g.status === "SCHEDULED");
+    const topPickGames = selectTopPickCandidates(scheduledGames);
 
-    // Group by sport and pick one game per sport
-    const gamesBySport = new Map<string, Game[]>();
-    for (const game of scheduledGames) {
-      const existing = gamesBySport.get(game.sport) || [];
-      existing.push(game);
-      gamesBySport.set(game.sport, existing);
-    }
-
-    // Select the first scheduled/live game per sport.
-    const topPickGames: Game[] = [];
-    for (const games of gamesBySport.values()) {
-      // Sort by game time and take the first scheduled one
-      const sorted = games.sort(
-        (a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
-      );
-      if (sorted[0]) {
-        topPickGames.push(sorted[0]);
-      }
-    }
-
-    // Generate predictions SYNCHRONOUSLY for these top picks (max ~8 games)
+    // Generate predictions synchronously for a bounded candidate pool, then
+    // keep only picks with enough source quality and conviction.
     const gamesWithPredictions = await batchProcess(
       topPickGames,
       async (game) => {
@@ -2868,10 +2897,11 @@ gamesRouter.get("/top-picks", async (c) => {
       4 // Process 4 at a time
     );
 
-    // Sort by confidence descending
+    // Sort by confidence descending, but never fill the section with thin-data picks.
     const sortedByConfidence = gamesWithPredictions
-      .filter((g) => g.prediction && g.prediction.confidence > 0)
-      .sort((a, b) => (b.prediction?.confidence ?? 0) - (a.prediction?.confidence ?? 0));
+      .filter(isTopPickEligible)
+      .sort((a, b) => (b.prediction?.confidence ?? 0) - (a.prediction?.confidence ?? 0))
+      .slice(0, TOP_PICK_LIMIT);
 
     return c.json({ data: sortedByConfidence });
   } catch (error) {

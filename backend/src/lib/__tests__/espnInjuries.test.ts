@@ -242,6 +242,40 @@ describe("fetchGameInjuries — unsupported sports", () => {
   });
 });
 
+describe("fetchGameInjuries — source failure handling", () => {
+  it("does not treat a failed supported-sport fetch as verified healthy", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    } as Response);
+
+    const report = await fetchGameInjuries("NBA", "nba-fetch-503", "13", "10");
+
+    expect(report.source).toBe("unavailable");
+    expect(report.homeTeamInjuries).toEqual([]);
+    expect(report.awayTeamInjuries).toEqual([]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it("does not treat a missing ESPN injury payload as verified healthy", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    } as Response);
+
+    const report = await fetchGameInjuries("NBA", "nba-missing-injury-payload", "13", "10");
+
+    expect(report.source).toBe("unavailable");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+});
+
 describe("mergePlayerAvailability", () => {
   function emptyEspn(): TeamInjuryReport {
     return {
@@ -299,6 +333,17 @@ describe("mergePlayerAvailability", () => {
   it("returns unavailable when both sources empty", () => {
     const result = mergePlayerAvailability(emptyEspn(), []);
     expect(result.source).toBe("unavailable");
+    expect(result.out).toHaveLength(0);
+    expect(result.doubtful).toHaveLength(0);
+    expect(result.questionable).toHaveLength(0);
+  });
+
+  it("preserves a verified empty ESPN report instead of downgrading it to unavailable", () => {
+    const result = mergePlayerAvailability(
+      { ...emptyEspn(), source: "espn-summary" },
+      [],
+    );
+    expect(result.source).toBe("espn-summary");
     expect(result.out).toHaveLength(0);
     expect(result.doubtful).toHaveLength(0);
     expect(result.questionable).toHaveLength(0);

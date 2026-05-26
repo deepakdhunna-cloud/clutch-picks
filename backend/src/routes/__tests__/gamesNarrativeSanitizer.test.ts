@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   attachPredictionToGame,
   buildStoredPregamePrediction,
+  isTopPickEligible,
   shouldPromotePredictionUpdate,
   sanitizePredictionForGame,
   updateLivePrediction,
@@ -82,6 +83,69 @@ function makePrediction(analysis: string): GamePrediction {
   };
 }
 
+type CanonicalResult = NonNullable<GamePrediction["canonicalResult"]>;
+type DecisionProfile = NonNullable<CanonicalResult["decisionProfile"]>;
+
+function makeDecisionProfile(overrides: Partial<DecisionProfile> = {}): DecisionProfile {
+  return {
+    version: "unified-decision-profile-v1",
+    pick: "home",
+    probability: 0.59,
+    confidence: 59,
+    dataCoverage: 0.85,
+    signalCoverage: 0.7,
+    agreementScore: 82,
+    hiddenEdgeScore: 30,
+    upsetScore: 12,
+    riskScore: 25,
+    edgeRating: 2,
+    valueRating: 1,
+    lowDataWarning: false,
+    engineDivergence: false,
+    factorPick: "home",
+    projectionPick: "home",
+    tags: ["model-consensus"],
+    thesis: [],
+    watchouts: [],
+    ...overrides,
+  };
+}
+
+function makeCanonicalResult(overrides: Partial<CanonicalResult> = {}): CanonicalResult {
+  return {
+    eventId: "lal-okc",
+    marketType: "moneyline",
+    finalPick: "home",
+    finalProbability: 0.59,
+    confidence: 59,
+    probabilities: { home: 0.59, away: 0.41 },
+    decisionProfile: makeDecisionProfile(),
+    modelInputs: {
+      sport: "NBA",
+      homeTeamId: "lal",
+      awayTeamId: "okc",
+      gameTime: "2026-05-11T21:30:00.000Z",
+      factorCount: 5,
+      availableFactorCount: 5,
+      marketConsensusIncluded: true,
+    },
+    engineBreakdown: [],
+    reconciliation: { method: "test", notes: [] },
+    timestamp: "2026-05-11T12:00:00.000Z",
+    dataVersion: "test",
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function makeTopPickPrediction(overrides: Partial<GamePrediction> = {}): GamePrediction {
+  return {
+    ...makePrediction("Professional-grade read with enough source support."),
+    canonicalResult: makeCanonicalResult(),
+    ...overrides,
+  };
+}
+
 describe("sanitizePredictionForGame", () => {
   test("rewrites stale NBA raw-factor narratives before they reach cards", () => {
     const stale =
@@ -146,6 +210,62 @@ describe("attachPredictionToGame", () => {
     expect(attached.spread).toBe(-4.5);
     expect(attached.overUnder).toBe(218.5);
     expect(attached.marketFavorite).toBe("home");
+  });
+});
+
+describe("isTopPickEligible", () => {
+  test("allows only scheduled canonical predictions with enough conviction", () => {
+    const game = attachPredictionToGame(makeGame(), makeTopPickPrediction());
+
+    expect(isTopPickEligible(game)).toBe(true);
+  });
+
+  test("rejects thin-data and low-conviction reads", () => {
+    const thinData = attachPredictionToGame(
+      makeGame(),
+      makeTopPickPrediction({
+        canonicalResult: makeCanonicalResult({
+          decisionProfile: makeDecisionProfile({
+            lowDataWarning: true,
+            tags: ["thin-data"],
+          }),
+          warnings: ["League reliability reserve active because critical context is missing."],
+        }),
+      }),
+    );
+    const lowConviction = attachPredictionToGame(
+      makeGame(),
+      makeTopPickPrediction({
+        confidence: 53,
+        canonicalResult: makeCanonicalResult({
+          confidence: 53,
+          finalProbability: 0.53,
+          probabilities: { home: 0.53, away: 0.47 },
+          decisionProfile: makeDecisionProfile({
+            confidence: 53,
+            probability: 0.53,
+            tags: ["low-conviction"],
+          }),
+        }),
+      }),
+    );
+
+    expect(isTopPickEligible(thinData)).toBe(false);
+    expect(isTopPickEligible(lowConviction)).toBe(false);
+  });
+
+  test("rejects live games and stored snapshots", () => {
+    const live = attachPredictionToGame(
+      { ...makeGame(), status: "LIVE" },
+      makeTopPickPrediction(),
+    );
+    const stored = attachPredictionToGame(
+      makeGame(),
+      makeTopPickPrediction({ snapshotType: "stored-pregame" }),
+    );
+
+    expect(isTopPickEligible(live)).toBe(false);
+    expect(isTopPickEligible(stored)).toBe(false);
   });
 });
 

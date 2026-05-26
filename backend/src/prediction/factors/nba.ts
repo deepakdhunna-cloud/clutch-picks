@@ -17,6 +17,7 @@
  */
 
 import type { GameContext, FactorContribution } from "../types";
+import { injuryReportsAreVerified, injuryUnavailableEvidence } from "./availability";
 
 // Star player impact by position.
 // Source: NBA advanced stats — top-3 players by usage rate account for
@@ -44,6 +45,7 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
 
   const homeOut = ctx.homeInjuries.out.slice(0, 5);
   const awayOut = ctx.awayInjuries.out.slice(0, 5);
+  const injurySourceVerified = injuryReportsAreVerified(ctx.homeInjuries, ctx.awayInjuries);
 
   for (const player of homeOut) {
     const impact = STAR_IMPACT[player.position] ?? 30;
@@ -71,9 +73,12 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
     label: "Star player availability",
     homeDelta: injuryDelta,
     weight: 0.19,
-    available: true,
-    hasSignal: injuryDelta !== 0,
+    available: injurySourceVerified,
+    hasSignal: injurySourceVerified && injuryDelta !== 0,
     evidence:
+      !injurySourceVerified
+        ? injuryUnavailableEvidence()
+        :
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
         : "No significant injuries reported for either team",

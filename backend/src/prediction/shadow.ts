@@ -256,8 +256,14 @@ export async function buildGameContext(
   // PlayerAvailability rows. Each provider is conservative: no source is
   // allowed to invent availability, and duplicate players collapse to the
   // highest-severity bucket once.
-  const homeInjuriesEspn = toTeamInjuryReport(gameInjuries.homeTeamInjuries);
-  const awayInjuriesEspn = toTeamInjuryReport(gameInjuries.awayTeamInjuries);
+  const homeInjuriesEspn = {
+    ...toTeamInjuryReport(gameInjuries.homeTeamInjuries),
+    source: gameInjuries.source,
+  };
+  const awayInjuriesEspn = {
+    ...toTeamInjuryReport(gameInjuries.awayTeamInjuries),
+    source: gameInjuries.source,
+  };
   const homeInjuriesSportsDataIO = mergeInjuryReports(homeInjuriesEspn, homeSportsDataIOInjuries);
   const awayInjuriesSportsDataIO = mergeInjuryReports(awayInjuriesEspn, awaySportsDataIOInjuries);
   const homeInjuries = mergePlayerAvailability(homeInjuriesSportsDataIO, homeAvailability);

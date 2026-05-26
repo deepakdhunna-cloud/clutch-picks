@@ -26,6 +26,7 @@
 import type { GameContext, FactorContribution } from "../types";
 import type { LineupPlayer } from "../../lib/espnStats";
 import parkFactorsData from "../../lib/data/mlbParkFactors.json";
+import { injuryReportsAreVerified, injuryUnavailableEvidence } from "./availability";
 
 // ─── Park factor lookup ────────────────────────────────────────────────
 const PARK_FACTORS: Record<string, number> = parkFactorsData.parks;
@@ -388,8 +389,9 @@ function formatTeamList(summary: string[]): string {
 function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution {
   const homeReport = ctx.homeInjuries;
   const awayReport = ctx.awayInjuries;
+  const injurySourceVerified = injuryReportsAreVerified(homeReport, awayReport);
 
-  if (!homeReport || !awayReport) {
+  if (!homeReport || !awayReport || !injurySourceVerified) {
     return {
       key: "injuries_mlb",
       label: "Position player injuries",
@@ -397,7 +399,7 @@ function buildPositionPlayerInjuriesFactor(ctx: GameContext): FactorContribution
       weight: 0.05,
       available: false,
       hasSignal: false,
-      evidence: "Injury data unavailable",
+      evidence: injuryUnavailableEvidence(),
     };
   }
 

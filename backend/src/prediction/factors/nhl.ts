@@ -20,6 +20,7 @@
  */
 
 import type { GameContext, FactorContribution } from "../types";
+import { injuryReportsAreVerified, injuryUnavailableEvidence } from "./availability";
 
 // ─── League average baselines (2024-2025) ───────────────────────────────
 // Source: Hockey Reference / Natural Stat Trick
@@ -189,6 +190,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
   // We don't have TOI data, so we use all OUT skaters and weight by position.
   let injuryDelta = 0;
   const injuryParts: string[] = [];
+  const injurySourceVerified = injuryReportsAreVerified(ctx.homeInjuries, ctx.awayInjuries);
 
   for (const player of ctx.homeInjuries.out) {
     if (player.position === "G") continue;
@@ -218,9 +220,12 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     label: "Skater injuries",
     homeDelta: injuryDelta,
     weight: 0.06,
-    available: true,
-    hasSignal: injuryDelta !== 0,
+    available: injurySourceVerified,
+    hasSignal: injurySourceVerified && injuryDelta !== 0,
     evidence:
+      !injurySourceVerified
+        ? injuryUnavailableEvidence()
+        :
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
         : "No significant skater injuries reported",

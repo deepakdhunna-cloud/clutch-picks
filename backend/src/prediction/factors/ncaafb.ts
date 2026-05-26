@@ -27,6 +27,7 @@
  */
 
 import type { GameContext, FactorContribution } from "../types";
+import { injuryReportsAreVerified, injuryUnavailableEvidence } from "./availability";
 
 // QB position weight is 2.8x a typical skill player.
 // Source: Chase Stuart's Approximate Value research (2006-2020);
@@ -56,6 +57,7 @@ const POSITION_IMPACT: Record<string, number> = {
 
 export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
+  const injurySourceVerified = injuryReportsAreVerified(ctx.homeInjuries, ctx.awayInjuries);
 
   // ── 1. Starting QB status ─────────────────────────────────────────────
   // Direct copy of nfl.ts starting_qb factor.
@@ -100,9 +102,11 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     label: "Starting QB status",
     homeDelta: qbDelta,
     weight: 0.20,
-    available: true,
-    hasSignal: qbDelta !== 0,
-    evidence: qbParts.length > 0 ? qbParts.join("; ") : "Both starting QBs appear healthy",
+    available: injurySourceVerified,
+    hasSignal: injurySourceVerified && qbDelta !== 0,
+    evidence: !injurySourceVerified
+      ? injuryUnavailableEvidence()
+      : qbParts.length > 0 ? qbParts.join("; ") : "Both starting QBs appear healthy",
   });
 
   // ── 2. Weather ────────────────────────────────────────────────────────
@@ -211,9 +215,12 @@ export function computeNCAAFBFactors(ctx: GameContext): FactorContribution[] {
     label: "Non-QB injury report",
     homeDelta: injuryDelta,
     weight: 0.08,
-    available: true,
-    hasSignal: injuryDelta !== 0,
+    available: injurySourceVerified,
+    hasSignal: injurySourceVerified && injuryDelta !== 0,
     evidence:
+      !injurySourceVerified
+        ? injuryUnavailableEvidence()
+        :
       injuryParts.length > 0
         ? injuryParts.slice(0, 4).join("; ") + (injuryParts.length > 4 ? ` (+${injuryParts.length - 4} more)` : "")
         : "No significant non-QB injuries reported",
