@@ -251,6 +251,95 @@ const cases: Array<{ sport: Sport; expectedFactor: string }> = [
   { sport: Sport.NCAAB, expectedFactor: "net_rating_ncaamb" },
 ];
 
+const projectionBounds: Record<Sport, { min: number; max: number }> = {
+  [Sport.NBA]: { min: 185, max: 255 },
+  [Sport.NCAAB]: { min: 108, max: 178 },
+  [Sport.NFL]: { min: 30, max: 63 },
+  [Sport.NCAAF]: { min: 34, max: 78 },
+  [Sport.MLB]: { min: 5.2, max: 13.4 },
+  [Sport.NHL]: { min: 4.0, max: 8.6 },
+  [Sport.MLS]: { min: 1.4, max: 4.4 },
+  [Sport.EPL]: { min: 1.4, max: 4.5 },
+  [Sport.UCL]: { min: 1.5, max: 4.8 },
+  [Sport.IPL]: { min: 245, max: 430 },
+  [Sport.TENNIS]: { min: 2.0, max: 3.0 },
+};
+
+const thinDataRatingCaps: Record<Sport, number> = {
+  [Sport.NBA]: 0.35,
+  [Sport.NCAAB]: 0.36,
+  [Sport.NFL]: 0.34,
+  [Sport.NCAAF]: 0.34,
+  [Sport.MLB]: 0.30,
+  [Sport.NHL]: 0.32,
+  [Sport.MLS]: 0.30,
+  [Sport.EPL]: 0.30,
+  [Sport.UCL]: 0.30,
+  [Sport.IPL]: 0.32,
+  [Sport.TENNIS]: 0.25,
+};
+
+function makeThinContext(sport: Sport): GameContext {
+  const ctx = baseContext(sport);
+  const emptyForm = {
+    results: [],
+    formString: "",
+    streak: 0,
+    avgScore: sport === Sport.IPL ? 160 : sport === Sport.MLB ? 4.2 : sport === Sport.NHL ? 2.8 : sport === Sport.TENNIS ? 0 : 100,
+    avgAllowed: sport === Sport.IPL ? 160 : sport === Sport.MLB ? 4.2 : sport === Sport.NHL ? 2.8 : sport === Sport.TENNIS ? 0 : 100,
+    wins: 0,
+    losses: 0,
+  };
+  const thinExtended = {
+    homeRecord: { wins: 1, losses: 1 },
+    awayRecord: { wins: 1, losses: 1 },
+    lastGameDate: null,
+    avgScoreLast5: 0,
+    avgScoreLast10: 0,
+    scoringTrend: 0,
+    defenseTrend: 0,
+    headToHeadResults: [],
+    strengthOfSchedule: 0.5,
+    restDays: null,
+    consecutiveAwayGames: 0,
+  };
+
+  return {
+    ...ctx,
+    homeElo: 1700,
+    awayElo: 1450,
+    homeForm: emptyForm,
+    awayForm: emptyForm,
+    homeExtended: thinExtended,
+    awayExtended: thinExtended,
+    homeInjuries: { out: [], doubtful: [], questionable: [], totalOut: 0, totalDoubtful: 0, totalQuestionable: 0 },
+    awayInjuries: { out: [], doubtful: [], questionable: [], totalOut: 0, totalDoubtful: 0, totalQuestionable: 0 },
+    homeAdvanced: {},
+    awayAdvanced: {},
+    homeLineup: null,
+    awayLineup: null,
+    weather: null,
+    homeFixtureCongestion: null,
+    awayFixtureCongestion: null,
+    homeManagerChange: null,
+    awayManagerChange: null,
+    homeStakes: null,
+    awayStakes: null,
+    leagueStandings: null,
+    uclPedigree: null,
+    uclTravel: null,
+    marketConsensus: null,
+    sportsDataIO: {
+      homeAdvanced: false,
+      awayAdvanced: false,
+      homeLineup: false,
+      awayLineup: false,
+      homeInjuries: false,
+      awayInjuries: false,
+    },
+  };
+}
+
 describe("all supported sports prediction pipeline", () => {
   for (const { sport, expectedFactor } of cases) {
     it(`${sport} plugs real match context into factors, projection, and one canonical answer`, () => {
@@ -284,6 +373,12 @@ describe("all supported sports prediction pipeline", () => {
       if (canonical.probabilities.draw !== undefined) {
         expect(result.projection!.drawProbability).toBeCloseTo(canonical.probabilities.draw, 3);
       }
+      expect(result.projection!.projectedTotal).toBeGreaterThanOrEqual(projectionBounds[sport].min);
+      expect(result.projection!.projectedTotal).toBeLessThanOrEqual(projectionBounds[sport].max);
+      expect(result.projection!.projectedTotal).toBeCloseTo(
+        result.projection!.projectedHomeScore + result.projection!.projectedAwayScore,
+        1,
+      );
 
       if (canonical.finalPick === "home") {
         expect(result.predictedWinner?.teamId).toBe(ctx.game.homeTeam.id);
@@ -299,4 +394,47 @@ describe("all supported sports prediction pipeline", () => {
       expect(canonical.finalPick).not.toBe("none");
     });
   }
+
+  for (const { sport } of cases) {
+    it(`${sport} caps rating weight and reserves confidence when league-critical context is thin`, () => {
+      const result = predictGame(makeThinContext(sport));
+      const rating = result.factors.find((factor) => factor.key === "rating_diff");
+      const guard = result.factors.find((factor) => factor.key === "data_quality_guard");
+      const totalWeight = result.factors.reduce((sum, factor) => sum + factor.weight, 0);
+
+      expect(rating).toBeDefined();
+      expect(rating!.weight).toBeLessThanOrEqual(thinDataRatingCaps[sport] + 0.001);
+      expect(guard).toBeDefined();
+      expect(guard!.available).toBe(false);
+      expect(guard!.hasSignal).toBe(false);
+      expect(totalWeight).toBeCloseTo(1, 3);
+      expect(result.canonicalResult.warnings.join(" ")).toContain("reliability reserve");
+      expect(result.canonicalResult.decisionProfile?.tags).toContain("thin-data");
+    });
+  }
+
+  it("does not bypass the reliability guard just because a market anchor exists", () => {
+    const result = predictGame({
+      ...makeThinContext(Sport.NBA),
+      marketConsensus: {
+        lines: [],
+        pinnacleLine: null,
+        noVigHomeProb: 0.53,
+        noVigAwayProb: 0.47,
+        avgHomeProb: 0.53,
+        avgAwayProb: 0.47,
+        source: "espn-odds",
+        sourceLabel: "ESPN odds fallback",
+        isFallback: true,
+      },
+    });
+    const rating = result.factors.find((factor) => factor.key === "rating_diff");
+    const guard = result.factors.find((factor) => factor.key === "data_quality_guard");
+
+    expect(rating?.weight).toBeLessThanOrEqual(thinDataRatingCaps[Sport.NBA] + 0.001);
+    expect(guard).toBeDefined();
+    expect(guard?.evidence).toContain("ESPN odds fallback anchor available");
+    expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
+    expect(result.canonicalResult.warnings.join(" ")).toContain("reliability reserve");
+  });
 });

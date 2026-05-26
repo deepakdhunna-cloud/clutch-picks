@@ -286,6 +286,120 @@ describe("game-script simulation", () => {
     expect(first.homeWinProbability).toBeGreaterThan(first.awayWinProbability);
   });
 
+  it("bounds extreme high NBA scoring projections to the sport scale", () => {
+    const prediction = predictGame(makeNBAContext({
+      marketOverUnder: 330,
+      homeForm: {
+        results: ["W", "W", "W", "W", "W", "W", "W", "W", "W", "W"],
+        formString: "W-W-W-W-W-W-W-W-W-W",
+        streak: 10,
+        avgScore: 178,
+        avgAllowed: 170,
+        wins: 10,
+        losses: 0,
+      },
+      awayForm: {
+        results: ["W", "W", "W", "W", "W", "W", "W", "W", "W", "W"],
+        formString: "W-W-W-W-W-W-W-W-W-W",
+        streak: 10,
+        avgScore: 174,
+        avgAllowed: 168,
+        wins: 10,
+        losses: 0,
+      },
+      homeExtended: {
+        homeRecord: { wins: 30, losses: 3 },
+        awayRecord: { wins: 24, losses: 9 },
+        lastGameDate: "2026-04-13",
+        avgScoreLast5: 178,
+        avgScoreLast10: 176,
+        scoringTrend: 1,
+        defenseTrend: -1,
+        headToHeadResults: [],
+        strengthOfSchedule: 0.55,
+        restDays: 2,
+        consecutiveAwayGames: 0,
+      },
+      awayExtended: {
+        homeRecord: { wins: 27, losses: 6 },
+        awayRecord: { wins: 22, losses: 11 },
+        lastGameDate: "2026-04-13",
+        avgScoreLast5: 174,
+        avgScoreLast10: 172,
+        scoringTrend: 1,
+        defenseTrend: -1,
+        headToHeadResults: [],
+        strengthOfSchedule: 0.55,
+        restDays: 2,
+        consecutiveAwayGames: 0,
+      },
+    }));
+
+    expect(prediction.projection!.projectedTotal).toBeLessThanOrEqual(255);
+    expect(prediction.projection!.projectedTotal).toBeCloseTo(
+      prediction.projection!.projectedHomeScore + prediction.projection!.projectedAwayScore,
+      1,
+    );
+    expect(prediction.projection!.signals.some((signal) => signal.key === "projection-total-bounds")).toBe(true);
+  });
+
+  it("bounds extreme low NBA scoring projections to the sport scale", () => {
+    const prediction = predictGame(makeNBAContext({
+      marketOverUnder: 120,
+      homeForm: {
+        results: ["L", "L", "L", "L", "L", "L", "L", "L", "L", "L"],
+        formString: "L-L-L-L-L-L-L-L-L-L",
+        streak: -10,
+        avgScore: 58,
+        avgAllowed: 62,
+        wins: 0,
+        losses: 10,
+      },
+      awayForm: {
+        results: ["L", "L", "L", "L", "L", "L", "L", "L", "L", "L"],
+        formString: "L-L-L-L-L-L-L-L-L-L",
+        streak: -10,
+        avgScore: 60,
+        avgAllowed: 64,
+        wins: 0,
+        losses: 10,
+      },
+      homeExtended: {
+        homeRecord: { wins: 2, losses: 31 },
+        awayRecord: { wins: 4, losses: 29 },
+        lastGameDate: "2026-04-13",
+        avgScoreLast5: 58,
+        avgScoreLast10: 60,
+        scoringTrend: -1,
+        defenseTrend: 1,
+        headToHeadResults: [],
+        strengthOfSchedule: 0.45,
+        restDays: 2,
+        consecutiveAwayGames: 0,
+      },
+      awayExtended: {
+        homeRecord: { wins: 3, losses: 30 },
+        awayRecord: { wins: 5, losses: 28 },
+        lastGameDate: "2026-04-13",
+        avgScoreLast5: 60,
+        avgScoreLast10: 61,
+        scoringTrend: -1,
+        defenseTrend: 1,
+        headToHeadResults: [],
+        strengthOfSchedule: 0.45,
+        restDays: 2,
+        consecutiveAwayGames: 0,
+      },
+    }));
+
+    expect(prediction.projection!.projectedTotal).toBeGreaterThanOrEqual(185);
+    expect(prediction.projection!.projectedTotal).toBeCloseTo(
+      prediction.projection!.projectedHomeScore + prediction.projection!.projectedAwayScore,
+      1,
+    );
+    expect(prediction.projection!.signals.some((signal) => signal.key === "projection-total-bounds")).toBe(true);
+  });
+
   it("anchors the simulator to the rating edge when scoring form points the other way", () => {
     const neutralExtended = {
       homeRecord: { wins: 10, losses: 10 },

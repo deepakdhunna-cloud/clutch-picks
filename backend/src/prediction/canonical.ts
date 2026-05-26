@@ -119,6 +119,9 @@ function warningList(args: {
   if (args.factors.length > 0 && availableFactors / args.factors.length < 0.6) {
     warnings.push("Low factor coverage; missing inputs were redistributed before final aggregation.");
   }
+  if (args.factors.some((f) => f.key === "data_quality_guard")) {
+    warnings.push("Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.");
+  }
   if (!Number.isFinite(args.final.home) || !Number.isFinite(args.final.away)) {
     warnings.push("Invalid final probability encountered; canonical normalizer repaired the output.");
   }

@@ -16,18 +16,26 @@ const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
 
 const ITERATIONS = 50000;
 
-const SPORT_BASELINES: Record<string, { total: number; marginSd: number; totalSd: number; minScore: number; granularity: number }> = {
-  NBA: { total: 224, marginSd: 12.5, totalSd: 15, minScore: 75, granularity: 1 },
-  NCAAB: { total: 144, marginSd: 10.5, totalSd: 11, minScore: 45, granularity: 1 },
-  NFL: { total: 45, marginSd: 13.5, totalSd: 10, minScore: 0, granularity: 1 },
-  NCAAF: { total: 52, marginSd: 16, totalSd: 13, minScore: 0, granularity: 1 },
-  MLB: { total: 8.6, marginSd: 3.2, totalSd: 2.2, minScore: 0, granularity: 1 },
-  NHL: { total: 6.1, marginSd: 2.2, totalSd: 1.6, minScore: 0, granularity: 1 },
-  MLS: { total: 2.7, marginSd: 1.55, totalSd: 1.1, minScore: 0, granularity: 1 },
-  EPL: { total: 2.8, marginSd: 1.55, totalSd: 1.1, minScore: 0, granularity: 1 },
-  UCL: { total: 3.0, marginSd: 1.65, totalSd: 1.2, minScore: 0, granularity: 1 },
-  IPL: { total: 320, marginSd: 36, totalSd: 44, minScore: 80, granularity: 1 },
-  TENNIS: { total: 2.45, marginSd: 0.85, totalSd: 0.45, minScore: 0, granularity: 1 },
+const SPORT_BASELINES: Record<string, {
+  total: number;
+  totalMin: number;
+  totalMax: number;
+  marginSd: number;
+  totalSd: number;
+  minScore: number;
+  granularity: number;
+}> = {
+  NBA: { total: 224, totalMin: 185, totalMax: 255, marginSd: 12.5, totalSd: 15, minScore: 75, granularity: 1 },
+  NCAAB: { total: 144, totalMin: 108, totalMax: 178, marginSd: 10.5, totalSd: 11, minScore: 45, granularity: 1 },
+  NFL: { total: 45, totalMin: 30, totalMax: 63, marginSd: 13.5, totalSd: 10, minScore: 0, granularity: 1 },
+  NCAAF: { total: 52, totalMin: 34, totalMax: 78, marginSd: 16, totalSd: 13, minScore: 0, granularity: 1 },
+  MLB: { total: 8.6, totalMin: 5.2, totalMax: 13.4, marginSd: 3.2, totalSd: 2.2, minScore: 0, granularity: 1 },
+  NHL: { total: 6.1, totalMin: 4.0, totalMax: 8.6, marginSd: 2.2, totalSd: 1.6, minScore: 0, granularity: 1 },
+  MLS: { total: 2.7, totalMin: 1.4, totalMax: 4.4, marginSd: 1.55, totalSd: 1.1, minScore: 0, granularity: 1 },
+  EPL: { total: 2.8, totalMin: 1.4, totalMax: 4.5, marginSd: 1.55, totalSd: 1.1, minScore: 0, granularity: 1 },
+  UCL: { total: 3.0, totalMin: 1.5, totalMax: 4.8, marginSd: 1.65, totalSd: 1.2, minScore: 0, granularity: 1 },
+  IPL: { total: 320, totalMin: 245, totalMax: 430, marginSd: 36, totalSd: 44, minScore: 80, granularity: 1 },
+  TENNIS: { total: 2.45, totalMin: 2.0, totalMax: 3.0, marginSd: 0.85, totalSd: 0.45, minScore: 0, granularity: 1 },
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -97,6 +105,55 @@ function meaningfulMarginThreshold(sport: string): number {
   if (sport === "MLB" || sport === "NHL" || SOCCER_LEAGUES.has(sport)) return 0.12;
   if (sport === "TENNIS") return 0.08;
   return 0.25;
+}
+
+function clampProjectedTotal(
+  sport: string,
+  total: number,
+  signals: ProjectionSignal[],
+): number {
+  const baseline = SPORT_BASELINES[sport] ?? SPORT_BASELINES.NBA!;
+  const bounded = clamp(total, baseline.totalMin, baseline.totalMax);
+  if (Math.abs(bounded - total) > 0.05) {
+    signals.unshift({
+      key: "projection-total-bounds",
+      label: "Projection total bounds",
+      value: round(bounded - total, 2),
+      evidence: `Projected total bounded to ${round(bounded, 1)} for ${sport} scoring scale`,
+    });
+  }
+  return bounded;
+}
+
+function boundedProjectedScoreLine(
+  sport: string,
+  homeScore: number,
+  awayScore: number,
+  signals: ProjectionSignal[],
+): { home: number; away: number } {
+  const baseline = SPORT_BASELINES[sport] ?? SPORT_BASELINES.NBA!;
+  const rawTotal = homeScore + awayScore;
+  const total = clamp(rawTotal, baseline.totalMin, baseline.totalMax);
+  let spread = homeScore - awayScore;
+  const maxSpread = Math.max(0, total - baseline.minScore * 2);
+
+  if (Math.abs(spread) > maxSpread) {
+    spread = Math.sign(spread || 1) * maxSpread;
+  }
+
+  if (Math.abs(total - rawTotal) > 0.05) {
+    signals.unshift({
+      key: "projection-total-bounds",
+      label: "Projection total bounds",
+      value: round(total - rawTotal, 2),
+      evidence: `Projected total bounded to ${round(total, 1)} for ${sport} scoring scale`,
+    });
+  }
+
+  return {
+    home: (total + spread) / 2,
+    away: (total - spread) / 2,
+  };
 }
 
 function tennisWeatherVolatility(ctx: GameContext): { boost: number; evidence: string } | null {
@@ -368,6 +425,8 @@ function buildScoreModel(
     });
   }
 
+  totalMean = clampProjectedTotal(ctx.sport, totalMean, signals);
+
   ({ homeMean, awayMean } = anchorMarginToRatingEdge({
     sport: ctx.sport,
     homeMean,
@@ -476,8 +535,14 @@ export function simulateGameProjection(
     else draws++;
   }
 
-  const projectedHomeScore = homeScoreSum / ITERATIONS;
-  const projectedAwayScore = awayScoreSum / ITERATIONS;
+  const boundedScores = boundedProjectedScoreLine(
+    ctx.sport,
+    homeScoreSum / ITERATIONS,
+    awayScoreSum / ITERATIONS,
+    model.signals,
+  );
+  const projectedHomeScore = boundedScores.home;
+  const projectedAwayScore = boundedScores.away;
   const projectedSpread = projectedHomeScore - projectedAwayScore;
   const projectedTotal = projectedHomeScore + projectedAwayScore;
   const avgMargin = marginSum / ITERATIONS;
@@ -498,6 +563,8 @@ export function simulateGameProjection(
     projectedTotal: round(projectedTotal, 1),
     volatility: round(volatility, 2),
     upsetRisk: round(upsetRisk, 3),
-    signals: model.signals.slice(0, 5),
+    signals: Array.from(
+      new Map(model.signals.map((signal) => [signal.key, signal])).values(),
+    ).slice(0, 5),
   };
 }

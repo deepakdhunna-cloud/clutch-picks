@@ -46,7 +46,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.8.0-nba-playoff-thin-data-calibration";
+export const MODEL_VERSION = "2.9.0-league-reliability-guards";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -571,15 +571,76 @@ function isNbaHighLeverageWindow(ctx: GameContext): boolean {
   return monthDay >= 415 && monthDay <= 625;
 }
 
-function applyContextualFactorWeighting(
+const CRITICAL_FACTOR_KEYS: Record<string, string[]> = {
+  NBA: ["net_rating"],
+  NCAAB: ["net_rating_ncaamb"],
+  NFL: ["starting_qb", "injuries_nfl"],
+  NCAAF: ["starting_qb_ncaaf", "injuries_ncaaf"],
+  MLB: ["starting_pitcher"],
+  NHL: ["starting_goalie", "special_teams"],
+  MLS: ["fixture_congestion", "key_player_availability", "stakes"],
+  EPL: ["fixture_congestion", "key_player_availability", "stakes"],
+  UCL: ["fixture_congestion", "key_player_availability", "ucl_pedigree", "ucl_travel"],
+  IPL: ["ipl_table_strength", "ipl_venue_split"],
+  TENNIS: ["tennis_ranking_edge", "tennis_recent_form"],
+};
+
+const MIN_NON_RATING_SIGNAL_WEIGHT: Record<string, number> = {
+  NBA: 0.28,
+  NCAAB: 0.24,
+  NFL: 0.24,
+  NCAAF: 0.24,
+  MLB: 0.26,
+  NHL: 0.24,
+  MLS: 0.18,
+  EPL: 0.18,
+  UCL: 0.18,
+  IPL: 0.20,
+  TENNIS: 0.18,
+};
+
+const RATING_WEIGHT_CAP_WHEN_THIN: Record<string, number> = {
+  NBA: 0.35,
+  NCAAB: 0.36,
+  NFL: 0.34,
+  NCAAF: 0.34,
+  MLB: 0.30,
+  NHL: 0.32,
+  MLS: 0.30,
+  EPL: 0.30,
+  UCL: 0.30,
+  IPL: 0.32,
+  TENNIS: 0.25,
+};
+
+function applyLeagueReliabilityGuards(
   ctx: GameContext,
   factors: FactorContribution[],
 ): FactorContribution[] {
-  if (!isNbaHighLeverageWindow(ctx) || ctx.marketConsensus) return factors;
-
   const rating = factors.find((factor) => factor.key === "rating_diff");
-  const netRating = factors.find((factor) => factor.key === "net_rating");
-  if (!rating || rating.homeDelta === 0 || rating.weight <= 0.35 || netRating?.available) {
+  if (!rating || rating.homeDelta === 0) {
+    return factors;
+  }
+
+  const criticalKeys = CRITICAL_FACTOR_KEYS[ctx.sport] ?? [];
+  const criticalMissing = criticalKeys
+    .map((key) => ({
+      key,
+      factor: factors.find((candidate) => candidate.key === key),
+    }))
+    .filter((entry) => !entry.factor || !entry.factor.available);
+  const nonRatingSignalWeight = factors
+    .filter((factor) => factor.key !== "rating_diff" && factor.available && factor.hasSignal)
+    .reduce((sum, factor) => sum + factor.weight, 0);
+  const signalFloor = MIN_NON_RATING_SIGNAL_WEIGHT[ctx.sport] ?? 0.22;
+  const thinSignal = nonRatingSignalWeight < signalFloor;
+
+  if (criticalMissing.length === 0 && !thinSignal) {
+    return factors;
+  }
+
+  const ratingCap = RATING_WEIGHT_CAP_WHEN_THIN[ctx.sport] ?? 0.32;
+  if (rating.weight <= ratingCap) {
     return factors;
   }
 
@@ -587,33 +648,66 @@ function applyContextualFactorWeighting(
   const matchupTargets = factors.filter((factor) =>
     factor.available &&
     factor.hasSignal &&
-    (factor.key === "recent_form" || factor.key === "injuries_nba") &&
+    factor.key !== "rating_diff" &&
     Math.sign(factor.homeDelta) === -ratingDirection &&
     factor.weight > 0
   );
   const targetWeight = matchupTargets.reduce((sum, factor) => sum + factor.weight, 0);
-  if (targetWeight <= 0) return factors;
-
-  const ratingCap = 0.35;
   const excess = rating.weight - ratingCap;
+  const redistributionShare =
+    matchupTargets.length > 0
+      ? isNbaHighLeverageWindow(ctx) ? 0.75 : 0.55
+      : 0;
+  const redistributedExcess = excess * redistributionShare;
+  const reserveWeight = excess - redistributedExcess;
   const targetKeys = new Set(matchupTargets.map((factor) => factor.key));
+  const missingLabels = criticalMissing
+    .map(({ key, factor }) => factor?.label ?? key)
+    .filter(Boolean);
+  const marketAnchorEvidence = ctx.marketConsensus
+    ? `${ctx.marketConsensus.sourceLabel ?? "Market consensus"} anchor available`
+    : "No market consensus anchor available";
+  const guardEvidence = [
+    missingLabels.length > 0
+      ? `Missing critical ${ctx.sport} inputs: ${missingLabels.join(", ")}`
+      : null,
+    thinSignal
+      ? `Only ${(nonRatingSignalWeight * 100).toFixed(0)}% non-rating signal weight available`
+      : null,
+    marketAnchorEvidence,
+  ].filter(Boolean).join("; ");
 
-  return factors.map((factor) => {
+  const guarded = factors.map((factor) => {
     if (factor.key === "rating_diff") {
       return {
         ...factor,
         weight: ratingCap,
-        evidence: `${factor.evidence}; playoff thin-data cap applied because market and net-rating inputs are unavailable`,
+        evidence: `${factor.evidence}; reliability cap applied because ${guardEvidence}`,
       };
     }
-    if (targetKeys.has(factor.key)) {
+    if (targetWeight > 0 && targetKeys.has(factor.key)) {
       return {
         ...factor,
-        weight: factor.weight + (excess * factor.weight / targetWeight),
+        weight: factor.weight + (redistributedExcess * factor.weight / targetWeight),
       };
     }
     return factor;
   });
+
+  if (reserveWeight <= 0.001) return guarded;
+
+  return [
+    ...guarded,
+    {
+      key: "data_quality_guard",
+      label: "Missing-data confidence reserve",
+      homeDelta: 0,
+      weight: reserveWeight,
+      available: false,
+      hasSignal: false,
+      evidence: `${guardEvidence}; reserved ${Math.round(reserveWeight * 100)}% of model weight instead of donating it to rating/home-field`,
+    },
+  ];
 }
 
 /**
@@ -664,7 +758,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   }
   const normalizedFactors = normalizeWeightsToOne(redistributedFactors);
 
-  const contextWeightedFactors = applyContextualFactorWeighting(ctx, normalizedFactors);
+  const contextWeightedFactors = applyLeagueReliabilityGuards(ctx, normalizedFactors);
 
   // 2c. Preserve neutral factors as neutral votes. Missing inputs were already
   //     redistributed above; confirmed no-edge inputs should not amplify Elo.

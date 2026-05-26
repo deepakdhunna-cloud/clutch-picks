@@ -10,7 +10,7 @@ type SweepIssue = {
 };
 
 const DEFAULT_BASE_URL = "https://clutch-picks-production.up.railway.app";
-const EXPECTED_ENGINE_VERSION = "2.8.0-nba-playoff-thin-data-calibration";
+const EXPECTED_ENGINE_VERSION = "2.9.0-league-reliability-guards";
 
 const baseUrl = (process.env.PREDICTION_SWEEP_BASE_URL ?? process.env.BACKEND_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 const sweepDate = process.env.PREDICTION_SWEEP_DATE ?? new Date().toISOString().slice(0, 10);
@@ -76,6 +76,23 @@ function spreadThreshold(sportKey: string): number {
   if (["MLB", "NHL", "MLS", "EPL", "UCL"].includes(sportKey)) return 0.12;
   if (sportKey === "TENNIS") return 0.08;
   return 0.25;
+}
+
+function projectedTotalBounds(sportKey: string): { min: number; max: number } {
+  const bounds: Record<string, { min: number; max: number }> = {
+    NBA: { min: 185, max: 255 },
+    NCAAB: { min: 108, max: 178 },
+    NFL: { min: 30, max: 63 },
+    NCAAF: { min: 34, max: 78 },
+    MLB: { min: 5.2, max: 13.4 },
+    NHL: { min: 4.0, max: 8.6 },
+    MLS: { min: 1.4, max: 4.4 },
+    EPL: { min: 1.4, max: 4.5 },
+    UCL: { min: 1.5, max: 4.8 },
+    IPL: { min: 245, max: 430 },
+    TENNIS: { min: 2.0, max: 3.0 },
+  };
+  return bounds[sportKey] ?? { min: 0, max: Number.POSITIVE_INFINITY };
 }
 
 function projectionSide(game: ApiObject, projected: ApiObject): Side {
@@ -196,6 +213,10 @@ async function main(): Promise<void> {
       const reportedTotal = Number(projected.projectedTotal);
       if (Number.isFinite(scoreTotal) && Number.isFinite(reportedTotal) && Math.abs(scoreTotal - reportedTotal) > 0.001) {
         issues.push(issue(game, `projectedTotal ${reportedTotal} does not match displayed score total ${scoreTotal}`));
+      }
+      const totalBounds = projectedTotalBounds(sport(game));
+      if (Number.isFinite(reportedTotal) && (reportedTotal < totalBounds.min || reportedTotal > totalBounds.max)) {
+        issues.push(issue(game, `projectedTotal ${reportedTotal} is outside ${sport(game)} bounds ${totalBounds.min}-${totalBounds.max}`));
       }
     }
 
