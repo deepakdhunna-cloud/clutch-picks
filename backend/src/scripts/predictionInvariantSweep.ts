@@ -143,12 +143,16 @@ async function main(): Promise<void> {
     if (!predictionObject) continue;
 
     const canonical = predictionObject.canonicalResult;
+    const isStoredPregameSnapshot = predictionObject.snapshotType === "stored-pregame";
     const pick = pickSide(game);
     const p = probabilities(game);
     const finalProbability = Number(canonical?.finalProbability ?? predictionObject.confidence / 100);
 
-    if (canonical?.dataVersion && canonical.dataVersion !== expectedEngineVersion) {
+    if (canonical?.dataVersion && canonical.dataVersion !== expectedEngineVersion && !isStoredPregameSnapshot) {
       issues.push(issue(game, `unexpected dataVersion ${canonical.dataVersion}`));
+    }
+    if (isStoredPregameSnapshot && !canonical?.warnings?.includes("Stored pregame prediction snapshot; not recomputed after final.")) {
+      issues.push(issue(game, "stored pregame snapshot is missing audit warning"));
     }
 
     const probabilitySum = p.draw === undefined ? p.home + p.away : p.home + p.away + p.draw;
