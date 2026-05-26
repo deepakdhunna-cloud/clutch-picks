@@ -10,7 +10,7 @@ type SweepIssue = {
 };
 
 const DEFAULT_BASE_URL = "https://clutch-picks-production.up.railway.app";
-const EXPECTED_ENGINE_VERSION = "2.7.0-market-fallback-projection-contract";
+const EXPECTED_ENGINE_VERSION = "2.8.0-nba-playoff-thin-data-calibration";
 
 const baseUrl = (process.env.PREDICTION_SWEEP_BASE_URL ?? process.env.BACKEND_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 const sweepDate = process.env.PREDICTION_SWEEP_DATE ?? new Date().toISOString().slice(0, 10);

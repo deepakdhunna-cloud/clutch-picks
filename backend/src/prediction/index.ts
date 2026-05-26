@@ -46,7 +46,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.7.0-market-fallback-projection-contract";
+export const MODEL_VERSION = "2.8.0-nba-playoff-thin-data-calibration";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -555,6 +555,67 @@ export function normalizeWeightsToOne(factors: FactorContribution[]): FactorCont
   return factors.map((f) => ({ ...f, weight: f.weight / sum }));
 }
 
+function isNbaHighLeverageWindow(ctx: GameContext): boolean {
+  if (ctx.sport !== "NBA") return false;
+
+  const phase = ctx.game.seasonContext?.phase?.toLowerCase() ?? "";
+  if (phase.includes("playoff") || phase.includes("final") || phase.includes("title")) {
+    return true;
+  }
+
+  const date = new Date(ctx.game.dateTime);
+  if (Number.isNaN(date.getTime())) return false;
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const monthDay = month * 100 + day;
+  return monthDay >= 415 && monthDay <= 625;
+}
+
+function applyContextualFactorWeighting(
+  ctx: GameContext,
+  factors: FactorContribution[],
+): FactorContribution[] {
+  if (!isNbaHighLeverageWindow(ctx) || ctx.marketConsensus) return factors;
+
+  const rating = factors.find((factor) => factor.key === "rating_diff");
+  const netRating = factors.find((factor) => factor.key === "net_rating");
+  if (!rating || rating.homeDelta === 0 || rating.weight <= 0.35 || netRating?.available) {
+    return factors;
+  }
+
+  const ratingDirection = Math.sign(rating.homeDelta);
+  const matchupTargets = factors.filter((factor) =>
+    factor.available &&
+    factor.hasSignal &&
+    (factor.key === "recent_form" || factor.key === "injuries_nba") &&
+    Math.sign(factor.homeDelta) === -ratingDirection &&
+    factor.weight > 0
+  );
+  const targetWeight = matchupTargets.reduce((sum, factor) => sum + factor.weight, 0);
+  if (targetWeight <= 0) return factors;
+
+  const ratingCap = 0.35;
+  const excess = rating.weight - ratingCap;
+  const targetKeys = new Set(matchupTargets.map((factor) => factor.key));
+
+  return factors.map((factor) => {
+    if (factor.key === "rating_diff") {
+      return {
+        ...factor,
+        weight: ratingCap,
+        evidence: `${factor.evidence}; playoff thin-data cap applied because market and net-rating inputs are unavailable`,
+      };
+    }
+    if (targetKeys.has(factor.key)) {
+      return {
+        ...factor,
+        weight: factor.weight + (excess * factor.weight / targetWeight),
+      };
+    }
+    return factor;
+  });
+}
+
 /**
  * Keep the factor blend honest after unavailable-data redistribution.
  *
@@ -603,9 +664,11 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   }
   const normalizedFactors = normalizeWeightsToOne(redistributedFactors);
 
+  const contextWeightedFactors = applyContextualFactorWeighting(ctx, normalizedFactors);
+
   // 2c. Preserve neutral factors as neutral votes. Missing inputs were already
   //     redistributed above; confirmed no-edge inputs should not amplify Elo.
-  const adjustedFactors = blendFactors(normalizedFactors);
+  const adjustedFactors = blendFactors(contextWeightedFactors);
 
   // 3. Sum weighted deltas → total rating advantage for home
   // Each factor's contribution = homeDelta * weight (if available)

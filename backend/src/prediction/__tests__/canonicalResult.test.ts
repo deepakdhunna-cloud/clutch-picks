@@ -196,6 +196,46 @@ describe("canonical prediction result", () => {
     expect(result.canonicalResult.decisionProfile?.tags).toContain("market-disagreement");
   });
 
+  it("does not let NBA playoff thin-data Elo/home court drown form and availability", () => {
+    const home = makeTeam("5", "CLE", 52, 30);
+    const away = makeTeam("18", "NY", 53, 29);
+    const result = predictGame(makeNBAContext({
+      game: {
+        id: "401873344",
+        sport: Sport.NBA,
+        league: League.Pro,
+        homeTeam: home,
+        awayTeam: away,
+        dateTime: "2026-05-26T00:00Z",
+        venue: "Rocket Arena",
+        tvChannel: "",
+        status: GameStatus.Scheduled,
+        seasonContext: {
+          phase: "playoffs",
+          label: "NBA playoff window",
+          detail: "This falls in the NBA playoff window, so regular-season numbers are background and the pick should lean on repeatable matchup edges.",
+          source: "date",
+        },
+      },
+      homeElo: 1595.271474279614,
+      awayElo: 1538.319135735273,
+      homeForm: { results: ["L", "L", "W", "L", "W", "L", "L", "W", "L", "W"], formString: "L-L-W-L-W-L-L-W-L-W", streak: -1, avgScore: 110, avgAllowed: 114, wins: 4, losses: 6 },
+      awayForm: { results: ["W", "W", "W", "W", "W", "W", "W", "W", "W", "W"], formString: "W-W-W-W-W-W-W-W-W-W", streak: 10, avgScore: 121, avgAllowed: 106, wins: 10, losses: 0 },
+      homeExtended: { homeRecord: { wins: 29, losses: 12 }, awayRecord: { wins: 23, losses: 18 }, lastGameDate: null, avgScoreLast5: 110, avgScoreLast10: 110, scoringTrend: -0.05, defenseTrend: -0.03, headToHeadResults: [], strengthOfSchedule: 0.55, restDays: null, consecutiveAwayGames: 0 },
+      awayExtended: { homeRecord: { wins: 27, losses: 14 }, awayRecord: { wins: 26, losses: 15 }, lastGameDate: null, avgScoreLast5: 121, avgScoreLast10: 121, scoringTrend: 0.08, defenseTrend: 0.04, headToHeadResults: [], strengthOfSchedule: 0.55, restDays: null, consecutiveAwayGames: 1 },
+      homeInjuries: { out: [{ name: "Dennis Schroder", position: "G", detail: "Out" }], doubtful: [], questionable: [], totalOut: 1, totalDoubtful: 0, totalQuestionable: 0 },
+      awayInjuries: { out: [], doubtful: [], questionable: [], totalOut: 0, totalDoubtful: 0, totalQuestionable: 0 },
+      homeAdvanced: {},
+      awayAdvanced: {},
+      marketConsensus: null,
+    }));
+
+    expect(result.predictedWinner?.teamId).toBe("18");
+    expect(result.awayWinProbability).toBeGreaterThan(result.homeWinProbability);
+    expect(result.confidence).toBeLessThan(58);
+    expect(result.factors.find((factor) => factor.key === "rating_diff")?.weight).toBeLessThanOrEqual(0.35);
+  });
+
   it("reconciles public projection probabilities and score to the final pick", () => {
     const reconciled = reconcileProjectionToFinal({
       sport: "NBA",
