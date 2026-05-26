@@ -29,6 +29,7 @@ function sentenceCount(text: string): number {
 }
 
 const BANNED_REGEX = /lock|guaranteed|can't lose|can’t lose|easy money|slam dunk|smash|dominant|sharp play|hammer|sure thing/i;
+const BAD_STYLE_REGEX = /get the call|usable edges|power-rating case|working against the pick|the model|the algorithm/i;
 
 function makeFactors(overrides: Partial<FactorContribution>[] = []): FactorContribution[] {
   const defaults: FactorContribution[] = [
@@ -75,13 +76,14 @@ describe("buildDeterministicNarrative", () => {
     for (const band of bands) {
       const text = buildNarrative(makeFactors(), band);
       expect(BANNED_REGEX.test(text)).toBe(false);
+      expect(BAD_STYLE_REGEX.test(text)).toBe(false);
     }
   });
 
   it("includes counterpoint when one exists", () => {
     // Factor 4 (injuries) has negative homeDelta — should appear as counterpoint
     const text = buildNarrative(makeFactors(), "clear edge", "BOS");
-    expect(text.toLowerCase()).toContain("against the pick");
+    expect(text.toLowerCase()).toContain("the concern");
   });
 
   it("includes structured injury context when provided", () => {
@@ -172,6 +174,7 @@ describe("buildDeterministicNarrative", () => {
     expect(text).not.toContain("Home LAL Elo");
     expect(text).not.toContain("Away OKC Elo");
     expect(text).not.toContain("Home L10");
+    expect(text).not.toMatch(BAD_STYLE_REGEX);
     expect(text.toLowerCase()).toContain("recent form");
     expect(sentenceCount(text)).toBeLessThanOrEqual(10);
   });
@@ -182,7 +185,7 @@ describe("buildDeterministicNarrative", () => {
     );
     const text = buildDeterministicNarrative(input).toLowerCase();
 
-    expect(text).toMatch(/fan angle|fun part|interesting|viewing hook|for fans/);
+    expect(text).toMatch(/question|hinge|interesting|clean edge|story/);
     expect(text).not.toContain("game 7");
     expect(text).not.toContain("series lead");
   });
@@ -331,7 +334,7 @@ describe("buildDeterministicNarrative", () => {
 // Extract the sentence rendered in the counterpoint slot, if any. Returns
 // null when the narrative does not include a counterpoint section at all.
 function extractCounterpointSentence(text: string): string | null {
-  const marker = "Working against the pick:";
+  const marker = "The concern:";
   const idx = text.indexOf(marker);
   if (idx === -1) return null;
   const after = text.slice(idx);

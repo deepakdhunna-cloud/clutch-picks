@@ -218,6 +218,35 @@ describe("sanitizePredictionForGame", () => {
     expect(sanitized.analysis).not.toContain("The biggest driver");
     expect(sanitized.analysis).not.toContain("Home LAL Elo");
     expect(sanitized.analysis).not.toContain("Home L10");
+    expect(sanitized.analysis).not.toContain("Working against the pick");
+    expect(sanitized.analysis).not.toContain("usable edges");
+  });
+
+  test("rewrites stale deterministic app narratives with awkward copy", () => {
+    const stale =
+      "the Cleveland Guardians get the call over the Washington Nationals, mostly because the matchup gives them a few more usable edges. Start here: the power-rating case starts with the home-field adjustment, where the Cleveland Guardians grade out with about 79 rating points behind them. Working against the pick: recent form favors Washington.";
+
+    const game: Game = {
+      ...makeGame(),
+      sport: "MLB",
+      homeTeam: { ...makeGame().homeTeam, name: "Washington Nationals", abbreviation: "WSH" },
+      awayTeam: { ...makeGame().awayTeam, name: "Cleveland Guardians", abbreviation: "CLE" },
+    };
+    const sanitized = sanitizePredictionForGame(game, {
+      ...makePrediction(stale),
+      predictedWinner: "away",
+      homeWinProbability: 45,
+      awayWinProbability: 55,
+      confidence: 55,
+    });
+
+    expect(sanitized.analysis).toContain("Cleveland Guardians");
+    expect(sanitized.analysis).toContain("Washington Nationals");
+    expect(sanitized.analysis).not.toContain("get the call");
+    expect(sanitized.analysis).not.toContain("usable edges");
+    expect(sanitized.analysis).not.toContain("power-rating case");
+    expect(sanitized.analysis).not.toContain("Working against the pick");
+    expect(sanitized.analysis[0]).toBe(sanitized.analysis[0]?.toUpperCase());
   });
 
   test("leaves already-human NBA narratives alone", () => {
@@ -430,7 +459,7 @@ describe("buildStoredPregamePrediction", () => {
     expect(prediction.wasCorrect).toBe(false);
     expect(prediction.actualOutcome).toBe("away");
     expect(prediction.homeWinProbability).toBeCloseTo(54.5, 1);
-    expect(prediction.analysis).toContain("The pregame model favored Los Angeles Lakers");
+    expect(prediction.analysis).toContain("The pregame read favored Los Angeles Lakers");
     expect(prediction.analysis).toContain("before tipoff");
     expect(prediction.analysis).toContain("locked");
     expect(prediction.analysis).not.toContain("Stored pregame prediction");

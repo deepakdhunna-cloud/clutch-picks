@@ -250,6 +250,23 @@ function teamPossessiveForNarrative(team: Team): string {
   return team.name.endsWith("s") ? `${team.name}'` : `${team.name}'s`;
 }
 
+function sentenceStart(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function cleanAnalysisCopy(text: string): string {
+  return text
+    .replace(/\bthe model\b/gi, "the read")
+    .replace(/\bthe algorithm\b/gi, "the read")
+    .replace(/\bElo\b/g, "rating")
+    .replace(/\bget the call\b/gi, "are the pick")
+    .replace(/\busable edges\b/gi, "narrow matchup edges")
+    .replace(/\bpower-rating case\b/gi, "rating read")
+    .replace(/\bWorking against the pick\b/g, "The concern")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 // ─── Template-based fallback analysis ───────────────────────────────────────
 
 function buildTemplateAnalysis(
@@ -315,7 +332,7 @@ function buildTemplateAnalysis(
 
   const mainReason = (() => {
     if (predictedWinner === "home") {
-      return `the home setup matters, and the model gives ${winnerSubject} first crack at the cleaner path`;
+      return `the home setup gives ${winnerSubject} the cleaner path`;
     }
     if (eloGap >= 25) {
       return `${winnerPossessive} power rating travels well enough to offset the road setting`;
@@ -323,23 +340,23 @@ function buildTemplateAnalysis(
     if (winnerFormPct > loserFormPct + 0.15) {
       return `${winnerPossessive} recent form is carrying more of the case`;
     }
-    return `${winnerSubject} have a few more usable edges in the current matchup data`;
+    return `${winnerSubject} hold the narrow matchup edge`;
   })();
 
   const leanLabel = isTossUp || confidence < 55
     ? "thin lean"
     : confidence < 65
       ? "modest lean"
-      : confidence < 75
-        ? "solid lean"
-        : "firm model read";
+    : confidence < 75
+      ? "solid lean"
+      : "firm read";
 
   const sentences: string[] = [
     seasonPrefix +
     pickVariant(
       [
-        `I lean ${winnerSubject} over ${loserSubject}, mostly because ${mainReason}.`,
-        `${winnerSubject} are the pick over ${loserSubject}, and the short version is this: ${mainReason}.`,
+        `The lean is ${winnerTeam.name} over ${loserTeam.name} because ${mainReason}.`,
+        `${sentenceStart(winnerSubject)} are the pick over ${loserSubject}, and the short version is this: ${mainReason}.`,
         `Give me ${winnerSubject} as a ${leanLabel} over ${loserSubject}; ${mainReason}.`,
       ],
       `${seed}|open`,
@@ -350,7 +367,7 @@ function buildTemplateAnalysis(
     sentences.push(
       pickVariant(
         [
-          `Because this is ${game.seasonContext.label.toLowerCase()}, the regular-season resume is background and the model is looking for repeatable matchup edges.`,
+          `Because this is ${game.seasonContext.label.toLowerCase()}, the regular-season resume is background and repeatable matchup edges matter more.`,
           `The ${game.seasonContext.label.toLowerCase()} context matters here, so the record is only part of the story.`,
           `${game.seasonContext.detail}`,
         ],
@@ -363,8 +380,8 @@ function buildTemplateAnalysis(
     pickVariant(
       [
         `The core numbers are not mysterious: ${winnerTeam.name} are ${winnerRecord} with ${winnerFormStr} recent form, while ${loserTeam.name} are ${loserRecord} with ${loserFormStr}.`,
-        `The model is weighing ${winnerRecord} against ${loserRecord}, recent form at ${winnerFormStr} vs ${loserFormStr}, and Elo ${Math.round(winnerElo)} vs ${Math.round(loserElo)}.`,
-        `The resume check gives ${winnerTeam.name} ${winnerRecord}, ${winnerFormStr} lately, and a ${Math.round(winnerElo)} Elo mark against ${loserPossessive} ${winnerRecord === loserRecord ? "matching" : loserRecord} record and ${Math.round(loserElo)} Elo.`,
+        `The read weighs ${winnerRecord} against ${loserRecord}, recent form at ${winnerFormStr} vs ${loserFormStr}, and ratings ${Math.round(winnerElo)} vs ${Math.round(loserElo)}.`,
+        `The resume check gives ${winnerTeam.name} ${winnerRecord}, ${winnerFormStr} lately, and a ${Math.round(winnerElo)} rating against ${loserPossessive} ${winnerRecord === loserRecord ? "matching" : loserRecord} record and ${Math.round(loserElo)} rating.`,
       ],
       `${seed}|numbers`,
     ),
@@ -385,7 +402,7 @@ function buildTemplateAnalysis(
   } else if (predictedWinner === "home" && winnerExtended.homeRecord.wins + winnerExtended.homeRecord.losses > 0) {
     sentences.push(`${winnerPossessive} home split (${winnerExtended.homeRecord.wins}-${winnerExtended.homeRecord.losses}) gives the pick a little more shape.`);
   } else if (predictedWinner === "away" && winnerExtended.awayRecord.wins + winnerExtended.awayRecord.losses > 0) {
-    sentences.push(`${winnerPossessive} road split (${winnerExtended.awayRecord.wins}-${winnerExtended.awayRecord.losses}) is part of why the model is willing to travel with them.`);
+    sentences.push(`${winnerPossessive} road split (${winnerExtended.awayRecord.wins}-${winnerExtended.awayRecord.losses}) is part of why the pick can travel.`);
   }
 
   // Injury sentence — only if the sport has a structured feed and the winner
@@ -410,7 +427,7 @@ function buildTemplateAnalysis(
     counterpoints.push(`${loserSubject} own the better season record`);
   }
   if (eloGap < -25) {
-    counterpoints.push(`${loserSubject} carry the higher raw Elo number`);
+    counterpoints.push(`${loserSubject} carry the higher raw rating`);
   }
 
   if (counterpoints.length > 0) {
@@ -421,8 +438,8 @@ function buildTemplateAnalysis(
     pickVariant(
       [
         `For fans, the hook is whether ${winnerPossessive} main edge shows up before ${loserPossessive} counterpunch does.`,
-        `That is what makes the card interesting: ${winnerSubject} have the model's nod, but ${loserSubject} have enough here to test it.`,
-        `The watch point is simple: if ${winnerSubject} control the part of the matchup the model likes, the pick makes sense fast; if not, this gets uncomfortable.`,
+        `That is what makes the card interesting: ${winnerSubject} have the lean, but ${loserSubject} have enough here to test it.`,
+        `The watch point is simple: if ${winnerSubject} control the matchup's main edge, the pick makes sense fast; if not, this gets uncomfortable.`,
       ],
       `${seed}|fan`,
     ),
@@ -608,7 +625,7 @@ ${dataCoverageNote ? dataCoverageNote + "\n" : ""}
 Factors:
 ${factorSummary}
 
-Write a sharp 4-6 sentence game-card prediction narrative. Explain why the model picked ${predictedWinner === "home" ? game.homeTeam.name : game.awayTeam.name}, include the best counterpoint if the matchup is close, and keep it under 10 sentences.`.trim();
+Write a sharp 4-6 sentence game-card prediction narrative. Explain why the pick is ${predictedWinner === "home" ? game.homeTeam.name : game.awayTeam.name}, include the best counterpoint if the matchup is close, and keep it under 10 sentences. Do not mention "the model", "the algorithm", or raw "Elo" labels in the final answer.`.trim();
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -623,7 +640,7 @@ Write a sharp 4-6 sentence game-card prediction narrative. Explain why the model
           {
             role: "system",
             content:
-              "You are writing for Clutch Picks. Sound like a smart sports friend at a bar: conversational, specific, confident but not hypey. Explain why the model picked the provided team using only the data in the prompt. If the data is mixed or close, say so honestly and include the best counterpoint. Write 4-6 short sentences, maximum 10, unique to this matchup. Include why the game is interesting from a fan perspective. Mention out/doubtful injuries only when provided. If season context is provided, make the narrative fit that moment (playoff, tournament, bowl, stretch run) instead of sounding like a generic regular-season note. Never use generic phrases like 'should be a good game' or 'anything can happen'. Never use tout/gambling hype terms like lock, guaranteed, can't lose, easy money, slam dunk, smash, hammer, sharp play, dominant, or sure thing.",
+              "You are writing for Clutch Picks. Sound conversational, specific, and confident but not hypey. Explain why the provided team is the pick using only the data in the prompt. If the data is mixed or close, say so honestly and include the best counterpoint. Write 4-6 short sentences, maximum 10, unique to this matchup. Include why the game is interesting from a fan perspective. Mention out/doubtful injuries only when provided. If season context is provided, make the narrative fit that moment (playoff, tournament, bowl, stretch run) instead of sounding like a generic regular-season note. Never mention 'the model', 'the algorithm', or raw 'Elo' labels in the final answer; translate those as the read or ratings. Never use generic phrases like 'should be a good game' or 'anything can happen'. Never use tout/gambling hype terms like lock, guaranteed, can't lose, easy money, slam dunk, smash, hammer, sharp play, dominant, or sure thing.",
           },
           { role: "user", content: userPrompt },
         ],
@@ -642,11 +659,12 @@ Write a sharp 4-6 sentence game-card prediction narrative. Explain why the model
       choices?: Array<{ message?: { content?: string } }>;
     };
 
-    const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text) {
+    const rawText = data.choices?.[0]?.message?.content?.trim();
+    if (!rawText) {
       const fallback = buildTemplateAnalysis(game, predictedWinner, confidence, homeForm, awayForm, homeExtended, awayExtended, homeInjuries, awayInjuries, homeElo, awayElo, isTossUp);
       return { text: fallback, aiAgreesWithModel: true };
     }
+    const text = cleanAnalysisCopy(rawText);
 
     setCachedAIAnalysis(
       game.id,

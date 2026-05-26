@@ -3,7 +3,7 @@ import { getCanonicalFinalPick } from './canonical-result';
 import { cleanProjectionCopy } from './projection-display';
 
 const STALE_RAW_NARRATIVE =
-  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b/i;
+  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating case\b|\bworking against the pick\b|\bexpected-score projection adds context\b/i;
 
 type NarrativeGame = Pick<GameWithPrediction, 'sport' | 'homeTeam' | 'awayTeam' | 'seasonContext'> & {
   prediction?: Prediction;

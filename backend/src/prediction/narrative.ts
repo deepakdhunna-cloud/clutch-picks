@@ -29,6 +29,8 @@ const BANNED_WORDS = [
 ];
 
 const BANNED_REGEX = new RegExp(BANNED_WORDS.join("|"), "i");
+const BAD_STYLE_REGEX =
+  /\bget the call\b|\busable edges\b|\bpower-rating case\b|\bworking against the pick\b|\bthe model\b|\bthe algorithm\b/i;
 
 // ─── Neutral-context factor keys ────────────────────────────────────────
 // These factors describe environmental / game-level context that affects
@@ -209,6 +211,10 @@ function teamSubject(input: NarrativeInput, abbr: string): string {
   return name;
 }
 
+function sentenceStart(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function homeVenueEdge(input: NarrativeInput): string {
   switch (input.sport) {
     case "NBA":
@@ -318,20 +324,19 @@ function renderFactorInsight(
 
   if (factor.key.includes("rating") || label.includes("elo")) {
     const diff = parseEloDifferential(factor.evidence);
-    const edgeText = diff ? `about ${diff} rating points` : "a power-rating edge";
+    const edgeText = diff ? `about ${diff} rating points` : "the stronger rating profile";
 
     if (role === "counter") {
-      return `the power-rating read still gives ${opposingDisplay} something to argue with`;
+      return `the ratings keep ${opposingDisplay} close enough to respect`;
     }
 
     if (side === "home") {
       const venueEdge = homeVenueEdge(input);
-      const adjustment = homeAdjustmentLabel(input);
       return pickVariant(
         [
-          `${venueEdge} is doing real work: once the location bump is included, ${winnerDisplay} show ${edgeText} of edge`,
-          `the power-rating case starts with the ${adjustment}, where ${winnerDisplay} grade out with ${edgeText} behind them`,
-          `the home setup matters: after the ${adjustment}, ${winnerDisplay} come out ${edgeText} ahead`,
+          `${venueEdge} helps, but the cleaner point is that ${winnerDisplay} rate ahead by ${edgeText} after venue is accounted for`,
+          `the ratings lean toward ${winnerDisplay} by ${edgeText} once venue is included`,
+          `the venue-adjusted rating read puts ${winnerDisplay} in front by ${edgeText}`,
         ],
         `${seed}|elo-home|${role}`,
       );
@@ -339,9 +344,9 @@ function renderFactorInsight(
 
     return pickVariant(
       [
-        `the power-rating piece travels: even with the road setting baked in, ${winnerDisplay} still carry ${edgeText}`,
-        `${winnerDisplay} get there through the ratings, with the matchup still showing ${edgeText} in their favor`,
-        `the road spot is baked in, and the ratings still point to ${winnerDisplay} by ${edgeText}`,
+        `the ratings still lean toward ${winnerDisplay} by ${edgeText} even after venue is accounted for`,
+        `${winnerDisplay} rate ahead by ${edgeText}, which is enough to keep them on top of the matchup read`,
+        `the road or neutral setting is baked in, and the rating read still points to ${winnerDisplay} by ${edgeText}`,
       ],
       `${seed}|elo-away|${role}`,
     );
@@ -353,9 +358,9 @@ function renderFactorInsight(
       const winnerForm = side === "home" ? form.home : form.away;
       const loserForm = side === "home" ? form.away : form.home;
       if (role === "counter") {
-        return `${teamPossessive(input, opposingAbbr)} recent form is the warning sign: ${loserForm} lately`;
+        return `${teamPossessive(input, opposingAbbr)} recent form is the main concern: ${loserForm} lately`;
       }
-      return `${teamPossessive(input, input.winnerAbbr)} recent-results case is ${winnerForm}, compared with ${loserForm} for ${loser}`;
+      return `${teamName(input, input.winnerAbbr)} have the better recent-form line at ${winnerForm}, compared with ${loserForm} for ${loser}`;
     }
     return role === "counter"
       ? `${teamPossessive(input, opposingAbbr)} recent form gives them the cleanest counter`
@@ -388,8 +393,8 @@ function renderFactorInsight(
 
   if (factor.key.includes("simulation_projection") || label.includes("game-script")) {
     return role === "counter"
-      ? `the expected-score projection is the cleanest warning: ${cleanEvidenceForNarrative(factor.evidence)}`
-      : `the expected-score projection adds context: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `the projected score keeps this close: ${cleanEvidenceForNarrative(factor.evidence)}`
+      : `the projected score supports the lean: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (factor.key.includes("market_comparison") || label.includes("consensus")) {
@@ -419,9 +424,9 @@ function renderFanAngle(
   if (seasonContext && counterpoint && opposingAbbr) {
     return pickVariant(
       [
-        `That is the fan angle: in the ${seasonContext.label}, ${readableFactorLabel(counterpoint)} gives ${teamSubject(input, opposingAbbr)} a real pressure point.`,
-        `What makes this worth watching is the tension between ${teamPossessive(input, winnerAbbr!)} main edge and ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} counterpunch.`,
-        `For fans, the interesting part is whether ${teamPossessive(input, winnerAbbr!)} top edge still travels with ${readableFactorLabel(counterpoint)} pulling the other way.`,
+        `The hinge is whether ${teamSubject(input, opposingAbbr)} can turn ${readableFactorLabel(counterpoint)} into enough pressure in the ${seasonContext.label}.`,
+        `The matchup stays interesting because ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} can still pull this back.`,
+        `The deciding question is whether ${teamPossessive(input, winnerAbbr!)} top edge holds with ${readableFactorLabel(counterpoint)} pushing the other way.`,
       ],
       `${seed}|fan-season-counter`,
     );
@@ -430,9 +435,9 @@ function renderFanAngle(
   if (seasonContext) {
     return pickVariant(
       [
-        `That is the viewing hook: the ${seasonContext.label} makes those matchup edges feel bigger than a normal calendar spot.`,
-        `For fans, the draw is seeing which of these concrete edges actually holds up in the ${seasonContext.label}.`,
-        `The interesting part is that this setting puts the cleanest matchup data under a brighter light.`,
+        `The ${seasonContext.label} makes the cleaner matchup edges matter more than a normal calendar spot.`,
+        `The question is which of these concrete edges holds up in the ${seasonContext.label}.`,
+        `This setting puts the cleanest matchup data under a brighter light.`,
       ],
       `${seed}|fan-season`,
     );
@@ -441,9 +446,9 @@ function renderFanAngle(
   if (counterpoint && opposingAbbr && winnerAbbr) {
     return pickVariant(
       [
-        `The fun part is ${teamSubject(input, opposingAbbr)} still have a path if ${readableFactorLabel(counterpoint)} shows up.`,
-        `That counterpoint keeps the card interesting: ${teamSubject(input, opposingAbbr)} have one clear way to make this uncomfortable.`,
-        `For fans, the hinge is whether ${teamPossessive(input, winnerAbbr)} main edge outweighs ${teamPossessive(input, opposingAbbr)} best counter.`,
+        `${sentenceStart(teamSubject(input, opposingAbbr))} still have a path if ${readableFactorLabel(counterpoint)} shows up.`,
+        `${sentenceStart(teamSubject(input, opposingAbbr))} have one clear way to make this uncomfortable.`,
+        `The hinge is whether ${teamPossessive(input, winnerAbbr)} main edge outweighs ${teamPossessive(input, opposingAbbr)} best counter.`,
       ],
       `${seed}|fan-counter`,
     );
@@ -453,11 +458,11 @@ function renderFanAngle(
   const leadLabel = readableFactorLabel(leadFactor);
   return pickVariant(
     [
-      `What makes it interesting is whether that ${leadLabel} edge is enough to set the whole game script.`,
+      `The question is whether that ${leadLabel} edge is enough to shape the final result.`,
       supportLabel
-        ? `The fan angle is simple: ${leadLabel} starts the case, and ${supportLabel} is the next piece to watch.`
-        : `The fan angle is simple: this one mostly comes down to whether ${leadLabel} is as meaningful as the numbers say.`,
-      `For a normal fan, this is the kind of matchup where one clean edge can tell you what to watch from the jump.`,
+        ? `${sentenceStart(leadLabel)} starts the case, and ${supportLabel} is the next piece to watch.`
+        : `This one mostly comes down to whether ${leadLabel} is as meaningful as the numbers say.`,
+      `One clean edge may tell the story early.`,
     ],
     `${seed}|fan-basic`,
   );
@@ -530,9 +535,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${teamSubject(input, winnerAbbr)} are the lean over ${teamSubject(input, loserAbbr)}, but this is still close to a toss-up.`,
-            `I give ${teamSubject(input, winnerAbbr)} the nod over ${teamSubject(input, loserAbbr)}, though it is still a toss-up type margin.`,
-            `${teamSubject(input, winnerAbbr)} are the pick, but this is more toss-up lean than declaration against ${teamSubject(input, loserAbbr)}.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the lean over ${teamSubject(input, loserAbbr)}, but this is still close to a toss-up.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} get the narrow nod over ${teamSubject(input, loserAbbr)}, though it is still a toss-up type margin.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick, but this is more toss-up lean than declaration against ${teamSubject(input, loserAbbr)}.`,
           ],
           `${seed}|coinflip`,
         ),
@@ -543,9 +548,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `I lean ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} because the best pieces of the matchup point their way.`,
-            `${teamSubject(input, winnerAbbr)} get the call over ${teamSubject(input, loserAbbr)}, mostly because the matchup gives them a few more usable edges.`,
-            `The read tilts toward ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}, even if it is not a runaway case.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the lean over ${teamSubject(input, loserAbbr)} because the best pieces of the matchup point their way.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick over ${teamSubject(input, loserAbbr)}, but the margin is narrow.`,
+            `The read tilts toward ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}, even though this is not a separation play.`,
           ],
           `${seed}|slight`,
         ),
@@ -556,9 +561,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${teamSubject(input, winnerAbbr)} are the pick over ${teamSubject(input, loserAbbr)}, and the case starts with one matchup edge carrying real weight.`,
-            `I am on ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} here because the matchup data gives them cleaner paths to win.`,
-            `${teamSubject(input, winnerAbbr)} have the better case against ${teamSubject(input, loserAbbr)}, with the top factors pointing the same direction.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick over ${teamSubject(input, loserAbbr)}, and the case starts with one matchup edge carrying real weight.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are ahead of ${teamSubject(input, loserAbbr)} in the matchup read because the data gives them cleaner paths to win.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} have the better case against ${teamSubject(input, loserAbbr)}, with the top factors pointing the same direction.`,
           ],
           `${seed}|clear`,
         ),
@@ -569,9 +574,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${teamSubject(input, winnerAbbr)} are the side here, with more than one signal backing up the pick.`,
-            `The strongest read on this matchup is ${teamSubject(input, winnerAbbr)}, because the biggest indicators are stacked their way.`,
-            `${teamSubject(input, winnerAbbr)} are the cleaner pick over ${teamSubject(input, loserAbbr)}, and it is not just one stat doing the work.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the side here, with more than one signal backing up the pick.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the strongest read in this matchup because the biggest indicators are stacked their way.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the cleaner pick over ${teamSubject(input, loserAbbr)}, and it is not just one stat doing the work.`,
           ],
           `${seed}|strong`,
         ),
@@ -586,7 +591,7 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
       [
         `The main reason: ${leadInsight}.`,
         `Start here: ${leadInsight}.`,
-        `The first thing that jumps out: ${leadInsight}.`,
+        `The first thing that stands out: ${leadInsight}.`,
       ],
       `${seed}|lead`,
     ),
@@ -600,9 +605,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     parts.push(
       pickVariant(
         [
-          `The support is not one-note either: ${supportText}.`,
+          `Additional support: ${supportText}.`,
           `There is backup for it too: ${supportText}.`,
-          `Two more pieces help the pick: ${supportText}.`,
+          `The next layer supports the pick: ${supportText}.`,
         ],
         `${seed}|support`,
       ),
@@ -635,7 +640,7 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
       "counter",
     );
     parts.push(
-      `Working against the pick: ${counterInsight}.`,
+      `The concern: ${counterInsight}.`,
     );
   }
 
@@ -761,6 +766,10 @@ function validateNarrative(text: string): { valid: boolean; reason?: string } {
   if (BANNED_REGEX.test(text)) {
     const match = text.match(BANNED_REGEX);
     return { valid: false, reason: `Contains banned word: "${match?.[0]}"` };
+  }
+  if (BAD_STYLE_REGEX.test(text)) {
+    const match = text.match(BAD_STYLE_REGEX);
+    return { valid: false, reason: `Contains bad style phrase: "${match?.[0]}"` };
   }
   return { valid: true };
 }

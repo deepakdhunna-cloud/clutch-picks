@@ -623,7 +623,7 @@ function setCachedPrediction(gameId: string, prediction: GamePrediction): void {
 }
 
 const STALE_NARRATIVE_REGEX =
-  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b/i;
+  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating case\b|\bworking against the pick\b|\bexpected-score projection adds context\b/i;
 
 function predictionFactorToContribution(factor: PredictionFactor): FactorContribution {
   const homeScore = Number.isFinite(factor.homeScore) ? factor.homeScore : 0.5;
@@ -879,10 +879,10 @@ function buildStoredPregameAnalysis(
   const startPhrase = lockedPregameStartPhrase(game.sport);
 
   if (predictedOutcome === "draw") {
-    return `The pregame model flagged a draw profile${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
+    return `The pregame read flagged a draw profile${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
   }
 
-  return `The pregame model favored ${selectedTeam}${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
+  return `The pregame read favored ${selectedTeam}${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
 }
 
 export function buildStoredPregamePrediction(

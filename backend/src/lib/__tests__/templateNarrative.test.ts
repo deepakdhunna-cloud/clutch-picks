@@ -95,6 +95,9 @@ describe("legacy template analysis", () => {
     expect(text.toLowerCase()).toContain("playoff");
     expect(text.toLowerCase()).toContain("recent form");
     expect(text).not.toContain("Home LAL Elo");
+    expect(text).not.toContain("Elo");
+    expect(text).not.toContain("the model");
+    expect(text).not.toContain("usable edges");
     expect(text).not.toContain("The data points toward");
     expect(text).not.toContain("clear separation");
   });
