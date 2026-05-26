@@ -116,7 +116,7 @@ describe('canonical UI result helpers', () => {
 
   it('hides raw simulation counts from projection copy', () => {
     expect(cleanProjectionCopy('8,000 simulated scripts aligned to the final pick')).toBe(
-      'Expected-score model aligned to the final pick',
+      'Projected score and margin for the final pick',
     );
     expect(cleanProjectionCopy('Expected scoring average is 108.0-105.0, while the simulation lean is HOM 57% after 8,000 game scripts; upset/draw risk 43%')).toBe(
       'Expected scoring average is 108.0-105.0, while the projection lean is HOM 57% with upset/draw risk 43%',

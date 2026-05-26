@@ -3,7 +3,8 @@
  *
  * This is deliberately separate from the factor engine:
  * - Factor model answers: "who owns the matchup edge?"
- * - Simulation answers: "what score distribution does that edge imply?"
+ * - Simulation answers: "what score distribution does the league-specific
+ *   game script imply, and does it agree with the factor read?"
  *
  * The simulator is deterministic for a given game/context so tests, caches,
  * and backtests stay reproducible. It uses a seeded PRNG plus sport-specific
@@ -11,32 +12,14 @@
  */
 
 import type { FactorContribution, GameContext, ProjectionSignal, SimulationProjection } from "./types";
+import {
+  evaluateSimulationReadiness,
+  getSportSimulationProfile,
+} from "./simulators/profiles";
 
 const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
 
 const ITERATIONS = 50000;
-
-const SPORT_BASELINES: Record<string, {
-  total: number;
-  totalMin: number;
-  totalMax: number;
-  marginSd: number;
-  totalSd: number;
-  minScore: number;
-  granularity: number;
-}> = {
-  NBA: { total: 224, totalMin: 185, totalMax: 255, marginSd: 12.5, totalSd: 15, minScore: 75, granularity: 1 },
-  NCAAB: { total: 144, totalMin: 108, totalMax: 178, marginSd: 10.5, totalSd: 11, minScore: 45, granularity: 1 },
-  NFL: { total: 45, totalMin: 30, totalMax: 63, marginSd: 13.5, totalSd: 10, minScore: 0, granularity: 1 },
-  NCAAF: { total: 52, totalMin: 34, totalMax: 78, marginSd: 16, totalSd: 13, minScore: 0, granularity: 1 },
-  MLB: { total: 8.6, totalMin: 5.2, totalMax: 13.4, marginSd: 3.2, totalSd: 2.2, minScore: 0, granularity: 1 },
-  NHL: { total: 6.1, totalMin: 4.0, totalMax: 8.6, marginSd: 2.2, totalSd: 1.6, minScore: 0, granularity: 1 },
-  MLS: { total: 2.7, totalMin: 1.4, totalMax: 4.4, marginSd: 1.55, totalSd: 1.1, minScore: 0, granularity: 1 },
-  EPL: { total: 2.8, totalMin: 1.4, totalMax: 4.5, marginSd: 1.55, totalSd: 1.1, minScore: 0, granularity: 1 },
-  UCL: { total: 3.0, totalMin: 1.5, totalMax: 4.8, marginSd: 1.65, totalSd: 1.2, minScore: 0, granularity: 1 },
-  IPL: { total: 320, totalMin: 245, totalMax: 430, marginSd: 36, totalSd: 44, minScore: 80, granularity: 1 },
-  TENNIS: { total: 2.45, totalMin: 2.0, totalMax: 3.0, marginSd: 0.85, totalSd: 0.45, minScore: 0, granularity: 1 },
-};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -99,12 +82,7 @@ function signalStrength(factors: FactorContribution[]): number {
 }
 
 function meaningfulMarginThreshold(sport: string): number {
-  if (sport === "NBA" || sport === "NCAAB") return 0.6;
-  if (sport === "NFL" || sport === "NCAAF") return 0.45;
-  if (sport === "IPL") return 3;
-  if (sport === "MLB" || sport === "NHL" || SOCCER_LEAGUES.has(sport)) return 0.12;
-  if (sport === "TENNIS") return 0.08;
-  return 0.25;
+  return getSportSimulationProfile(sport).meaningfulMarginThreshold;
 }
 
 function clampProjectedTotal(
@@ -112,7 +90,7 @@ function clampProjectedTotal(
   total: number,
   signals: ProjectionSignal[],
 ): number {
-  const baseline = SPORT_BASELINES[sport] ?? SPORT_BASELINES.NBA!;
+  const baseline = getSportSimulationProfile(sport).baseline;
   const bounded = clamp(total, baseline.totalMin, baseline.totalMax);
   if (Math.abs(bounded - total) > 0.05) {
     signals.unshift({
@@ -131,7 +109,7 @@ function boundedProjectedScoreLine(
   awayScore: number,
   signals: ProjectionSignal[],
 ): { home: number; away: number } {
-  const baseline = SPORT_BASELINES[sport] ?? SPORT_BASELINES.NBA!;
+  const baseline = getSportSimulationProfile(sport).baseline;
   const rawTotal = homeScore + awayScore;
   const total = clamp(rawTotal, baseline.totalMin, baseline.totalMax);
   let spread = homeScore - awayScore;
@@ -181,11 +159,12 @@ function tennisWeatherVolatility(ctx: GameContext): { boost: number; evidence: s
   };
 }
 
-function anchorMarginToRatingEdge(args: {
+function reconcileIndependentScriptWithRatingPrior(args: {
   sport: string;
   homeMean: number;
   awayMean: number;
   expectedMargin: number;
+  hasScoreBaseline: boolean;
   signals: ProjectionSignal[];
 }): { homeMean: number; awayMean: number } {
   const threshold = meaningfulMarginThreshold(args.sport);
@@ -205,11 +184,25 @@ function anchorMarginToRatingEdge(args: {
   }
 
   const shift = targetMargin - currentMargin;
+  if (args.hasScoreBaseline) {
+    args.signals.unshift({
+      key: "factor-script-tension",
+      label: "Factor/script tension",
+      value: round(currentMargin - args.expectedMargin, 2),
+      evidence:
+        "Independent scoring script disagrees with the factor-model edge; " +
+        "raw simulation disagreement stays visible for orchestrator review",
+    });
+    return { homeMean: args.homeMean, awayMean: args.awayMean };
+  }
+
   args.signals.unshift({
-    key: "rating-consensus-anchor",
-    label: "Consensus margin anchor",
+    key: "rating-prior-anchor",
+    label: "Rating-prior anchor",
     value: round(shift, 2),
-    evidence: `Rating edge anchors the projected score margin ${shift >= 0 ? "+" : ""}${round(shift, 1)} toward the model side`,
+    evidence:
+      `Scoring baseline is incomplete, so rating prior anchors projected margin ` +
+      `${shift >= 0 ? "+" : ""}${round(shift, 1)} toward the model side`,
   });
 
   return {
@@ -218,17 +211,109 @@ function anchorMarginToRatingEdge(args: {
   };
 }
 
+function averageFinite(values: Array<number | undefined | null>): number | null {
+  const finite = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (finite.length === 0) return null;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function applyLeagueScoringAdjustments(args: {
+  ctx: GameContext;
+  totalMean: number;
+  marginSd: number;
+  signals: ProjectionSignal[];
+}): { totalMean: number; marginSd: number } {
+  let totalMean = args.totalMean;
+  let marginSd = args.marginSd;
+
+  if (args.ctx.sport === "MLB") {
+    const homePitcher = args.ctx.homeLineup?.startingPitcher;
+    const awayPitcher = args.ctx.awayLineup?.startingPitcher;
+    const starterRunLevel = averageFinite([
+      homePitcher?.fip,
+      homePitcher?.era,
+      awayPitcher?.fip,
+      awayPitcher?.era,
+    ]);
+
+    if (starterRunLevel !== null) {
+      const totalShift = clamp((starterRunLevel - 4.2) * 0.45, -0.9, 0.9);
+      if (Math.abs(totalShift) >= 0.08) {
+        totalMean += totalShift;
+        args.signals.push({
+          key: "mlb-starter-total",
+          label: "Starter run environment",
+          value: round(totalShift, 2),
+          evidence: `Starter ERA/FIP profile moves projected total ${totalShift >= 0 ? "+" : ""}${round(totalShift, 1)} runs`,
+        });
+      }
+    }
+  }
+
+  if (args.ctx.sport === "NHL") {
+    const savePct = averageFinite([
+      args.ctx.homeAdvanced.savePercentage,
+      args.ctx.awayAdvanced.savePercentage,
+    ]);
+
+    if (savePct !== null) {
+      const totalShift = clamp((0.905 - savePct) * 55, -0.55, 0.55);
+      if (Math.abs(totalShift) >= 0.06) {
+        totalMean += totalShift;
+        args.signals.push({
+          key: "nhl-goalie-total",
+          label: "Goalie total environment",
+          value: round(totalShift, 2),
+          evidence: `Team save profile moves projected total ${totalShift >= 0 ? "+" : ""}${round(totalShift, 1)} goals`,
+        });
+      }
+    }
+  }
+
+  if (args.ctx.sport === "TENNIS") {
+    const venueText = args.ctx.game.venue ?? "";
+    const grandSlam =
+      /grand slam|australian open|roland garros|french open|wimbledon|us open/i.test(venueText);
+    const bestOfFive =
+      grandSlam &&
+      /men/i.test(venueText) &&
+      !/women/i.test(venueText);
+    if (bestOfFive) {
+      const previousTotal = totalMean;
+      totalMean = clamp(totalMean + 0.18, 2.0, 3.0);
+      marginSd *= 1.04;
+      args.signals.push({
+        key: "tennis-format-total",
+        label: "Match format total",
+        value: round(totalMean - previousTotal, 2),
+        evidence: "Men's late-round format keeps more three-set/five-set match paths alive",
+      });
+    }
+  }
+
+  return { totalMean, marginSd };
+}
+
 function buildScoreModel(
   ctx: GameContext,
   totalRatingDelta: number,
   factors: FactorContribution[],
-): { homeMean: number; awayMean: number; marginSd: number; totalMean: number; signals: ProjectionSignal[] } {
-  const baseline = SPORT_BASELINES[ctx.sport] ?? SPORT_BASELINES.NBA!;
+): {
+  homeMean: number;
+  awayMean: number;
+  marginSd: number;
+  totalMean: number;
+  totalSd: number;
+  signals: ProjectionSignal[];
+} {
+  const readiness = evaluateSimulationReadiness(ctx, factors);
+  const profile = readiness.profile;
+  const baseline = profile.baseline;
   const halfTotal = baseline.total / 2;
 
   let homeMean = inferTeamAttack(ctx.homeForm.avgScore, ctx.awayForm.avgAllowed, halfTotal);
   let awayMean = inferTeamAttack(ctx.awayForm.avgScore, ctx.homeForm.avgAllowed, halfTotal);
-  const signals: ProjectionSignal[] = [];
+  const signals: ProjectionSignal[] = [...readiness.signals];
 
   const netRatingDelta = factorDelta(factors, "net_rating");
   const pitcherDelta = factorDelta(factors, "starting_pitcher");
@@ -242,14 +327,9 @@ function buildScoreModel(
   const homeVenueWinPct = splitWinPct(ctx.homeExtended.homeRecord);
   const awayRoadWinPct = splitWinPct(ctx.awayExtended.awayRecord);
 
-  // Convert rating edge into a score-margin target. This is intentionally
-  // sport-specific: 40 Elo is a real edge in MLB/NHL, but a softer signal in
-  // NBA where possessions create wider margins.
-  const marginPer100Elo: Record<string, number> = {
-    NBA: 4.5, NCAAB: 3.8, NFL: 4.9, NCAAF: 5.8, MLB: 1.15, NHL: 0.8,
-    MLS: 0.56, EPL: 0.56, UCL: 0.6, IPL: 15, TENNIS: 0.55,
-  };
-  let expectedMargin = (totalRatingDelta / 100) * (marginPer100Elo[ctx.sport] ?? 2.5);
+  // Convert rating edge into a score-margin target. The conversion now comes
+  // from the league simulation profile instead of a single generic formula.
+  let expectedMargin = (totalRatingDelta / 100) * profile.marginPer100Elo;
   if (
     ctx.marketFavorite &&
     typeof ctx.marketSpread === "number" &&
@@ -276,13 +356,19 @@ function buildScoreModel(
     ctx.awayForm.avgScore > 0 &&
     ctx.homeForm.avgAllowed > 0 &&
     ctx.awayForm.avgAllowed > 0;
-  const marginBlend = hasScoreBaseline ? 0.72 : 1.0;
+  const marginBlend = hasScoreBaseline
+    ? profile.ratingPriorBlendWithScoreBaseline
+    : profile.ratingPriorBlendWithoutScoreBaseline;
   const marginShift = (expectedMargin - currentMargin) * marginBlend;
   homeMean += marginShift / 2;
   awayMean -= marginShift / 2;
 
   if (Math.abs(netRatingDelta) > 1) {
-    const shift = clamp(netRatingDelta / 30, -3, 3);
+    const shift = clamp(
+      netRatingDelta / profile.netRatingShiftDivisor,
+      -profile.netRatingShiftCap,
+      profile.netRatingShiftCap,
+    );
     homeMean += shift / 2;
     awayMean -= shift / 2;
     signals.push({
@@ -342,7 +428,11 @@ function buildScoreModel(
   }
 
   if (Math.abs(trendDelta) > 0.04) {
-    const shift = clamp(trendDelta * (ctx.sport === "NBA" || ctx.sport === "NCAAB" ? 2.2 : 1.2), -2.5, 2.5);
+    const shift = clamp(
+      trendDelta * profile.trendMarginMultiplier,
+      -profile.trendMarginCap,
+      profile.trendMarginCap,
+    );
     homeMean += shift / 2;
     awayMean -= shift / 2;
     signals.push({
@@ -356,7 +446,11 @@ function buildScoreModel(
   if (homeVenueWinPct !== null && awayRoadWinPct !== null) {
     const venueEdge = homeVenueWinPct - awayRoadWinPct;
     if (Math.abs(venueEdge) > 0.08) {
-      const shift = clamp(venueEdge * (ctx.sport === "MLB" || ctx.sport === "NHL" ? 1.2 : 3.5), -2, 2);
+      const shift = clamp(
+        venueEdge * profile.venueSplitMultiplier,
+        -profile.venueSplitCap,
+        profile.venueSplitCap,
+      );
       homeMean += shift / 2;
       awayMean -= shift / 2;
       signals.push({
@@ -369,7 +463,8 @@ function buildScoreModel(
   }
 
   let totalMean = homeMean + awayMean;
-  let marginSd = baseline.marginSd;
+  let marginSd = baseline.marginSd * readiness.varianceMultiplier;
+  const totalSd = baseline.totalSd * readiness.totalVarianceMultiplier;
 
   if (Math.abs(weatherDelta) > 0.5) {
     const compression = ctx.sport === "NFL" || ctx.sport === "NCAAF" ? 0.06 : 0.03;
@@ -425,13 +520,21 @@ function buildScoreModel(
     });
   }
 
+  ({ totalMean, marginSd } = applyLeagueScoringAdjustments({
+    ctx,
+    totalMean,
+    marginSd,
+    signals,
+  }));
+
   totalMean = clampProjectedTotal(ctx.sport, totalMean, signals);
 
-  ({ homeMean, awayMean } = anchorMarginToRatingEdge({
+  ({ homeMean, awayMean } = reconcileIndependentScriptWithRatingPrior({
     sport: ctx.sport,
     homeMean,
     awayMean,
     expectedMargin,
+    hasScoreBaseline,
     signals,
   }));
 
@@ -446,7 +549,7 @@ function buildScoreModel(
     });
   }
 
-  const minMean = ctx.sport === "NBA" ? 80 : ctx.sport === "NCAAB" ? 48 : 0.15;
+  const minMean = profile.minMean;
   homeMean = Math.max(minMean, homeMean);
   awayMean = Math.max(minMean, awayMean);
 
@@ -455,27 +558,28 @@ function buildScoreModel(
     awayMean,
     marginSd,
     totalMean: totalMean || homeMean + awayMean,
+    totalSd,
     signals,
   };
 }
 
 function quantizeScore(value: number, sport: string): number {
-  const baseline = SPORT_BASELINES[sport] ?? SPORT_BASELINES.NBA!;
+  const baseline = getSportSimulationProfile(sport).baseline;
   const rounded = Math.round(value / baseline.granularity) * baseline.granularity;
   return Math.max(baseline.minScore, rounded);
 }
 
 function sampleScorePair(
-  model: { homeMean: number; awayMean: number; marginSd: number; totalMean: number },
+  model: { homeMean: number; awayMean: number; marginSd: number; totalMean: number; totalSd: number },
   sport: string,
   rand: () => number,
 ): { home: number; away: number } {
-  const baseline = SPORT_BASELINES[sport] ?? SPORT_BASELINES.NBA!;
+  const baseline = getSportSimulationProfile(sport).baseline;
   const expectedMargin = model.homeMean - model.awayMean;
   const sampledMargin = expectedMargin + normalSample(rand) * model.marginSd;
   const sampledTotal = Math.max(
     0.2,
-    model.totalMean + normalSample(rand) * baseline.totalSd,
+    model.totalMean + normalSample(rand) * model.totalSd,
   );
 
   let home = (sampledTotal + sampledMargin) / 2;

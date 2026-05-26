@@ -9,6 +9,7 @@ import { LRUCache } from "lru-cache";
 import type { PredictionResult as StoredPredictionResult } from "@prisma/client";
 import { cleanOldShadowLogs } from "../prediction/shadow";
 import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
+import { computeLiveIplChaseRead } from "../prediction/liveIpl";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "../prediction/seasonContext";
 import { buildDeterministicNarrative, buildNarrativeInput } from "../prediction/narrative";
 import { getConfidenceBand, type CanonicalEngineRead, type CanonicalPredictionResult, type FactorContribution } from "../prediction/types";
@@ -682,9 +683,13 @@ export function sanitizePredictionForGame(game: Game, prediction: GamePrediction
 }
 
 export function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
-  const displayPrediction = sanitizePredictionForGame(
+  const liveAdjustedPrediction = applyLiveAdjustmentIfNeeded(
     game,
     ensureCanonicalPredictionResult(game, prediction),
+  );
+  const displayPrediction = sanitizePredictionForGame(
+    game,
+    liveAdjustedPrediction,
   );
   return {
     ...game,
@@ -1272,8 +1277,85 @@ function parseSoccerPeriod(display: string): number {
 }
 
 function applyLiveAdjustmentIfNeeded(game: Game, pregamePrediction: GamePrediction): GamePrediction {
-  void game;
-  return pregamePrediction;
+  const iplChase = computeLiveIplChaseRead(game);
+  if (!iplChase) return pregamePrediction;
+
+  const predictedWinner = iplChase.pick;
+  const liveEngineRead: CanonicalEngineRead = {
+    engine: iplChase.engine,
+    pick: predictedWinner,
+    probability: predictedWinner === "home" ? iplChase.homeWinProbability : iplChase.awayWinProbability,
+    confidence: iplChase.confidence,
+    weight: 1,
+    probabilities: {
+      home: iplChase.homeWinProbability,
+      away: iplChase.awayWinProbability,
+    },
+    inputs: {
+      target: iplChase.target,
+      runsNeeded: iplChase.runsNeeded,
+      ballsRemaining: iplChase.ballsRemaining,
+      requiredRunRate: iplChase.requiredRunRate,
+      currentRunRate: iplChase.currentRunRate,
+      wicketsLost: iplChase.wicketsLost,
+      wicketsInHand: iplChase.wicketsInHand,
+    },
+  };
+
+  const next: GamePrediction = {
+    ...pregamePrediction,
+    predictedWinner,
+    predictedOutcome: predictedWinner,
+    confidence: iplChase.confidence,
+    analysis: `Live IPL chase read: ${iplChase.evidence}`,
+    homeWinProbability: roundPercentTenth(iplChase.homeWinProbability * 100),
+    awayWinProbability: roundPercentTenth(iplChase.awayWinProbability * 100),
+    predictedSpread: iplChase.projectedSpread,
+    predictedTotal: iplChase.projectedTotal,
+    isTossUp: Math.abs(iplChase.homeWinProbability - iplChase.awayWinProbability) < 0.05,
+    projection: pregamePrediction.projection
+      ? {
+          ...pregamePrediction.projection,
+          engine: iplChase.engine,
+          homeWinProbability: roundPercentTenth(iplChase.homeWinProbability * 100),
+          awayWinProbability: roundPercentTenth(iplChase.awayWinProbability * 100),
+          projectedHomeScore: iplChase.projectedHomeScore,
+          projectedAwayScore: iplChase.projectedAwayScore,
+          projectedSpread: iplChase.projectedSpread,
+          projectedTotal: iplChase.projectedTotal,
+          upsetRisk: roundPercentTenth((1 - Math.max(iplChase.homeWinProbability, iplChase.awayWinProbability)) * 100) / 100,
+          signals: [
+            {
+              key: "live-ipl-chase",
+              label: "Live IPL chase state",
+              value: canonicalSignalValue(predictedWinner),
+              evidence: iplChase.evidence,
+            },
+            ...pregamePrediction.projection.signals.filter((signal) => signal.key !== "live-ipl-chase"),
+          ].slice(0, 5),
+        }
+      : undefined,
+    factors: [
+      {
+        name: "Live IPL chase state",
+        weight: 1,
+        homeScore: iplChase.homeWinProbability,
+        awayScore: iplChase.awayWinProbability,
+        description: iplChase.evidence,
+      },
+      ...pregamePrediction.factors,
+    ],
+  };
+
+  return withCanonicalPredictionResult(next, game.sport, {
+    liveEngineRead,
+    warning: "Live IPL chase state adjusted the in-game pick; pregame model read remains in engine breakdown.",
+    projectionSignal: {
+      key: "live-ipl-chase",
+      label: "Live IPL chase state",
+      evidence: iplChase.evidence,
+    },
+  });
 }
 
 async function annotateMarketComparison(game: Game, prediction: GamePrediction): Promise<void> {

@@ -15,19 +15,13 @@ import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { cleanProjectionCopy, getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
+import { getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import {
   getCanonicalConfidence,
   getCanonicalResult,
   traceCanonicalUiConsumption,
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
-import {
-  decisionProfileHeadline,
-  decisionProfileSubline,
-  decisionProfileTags,
-  decisionTagLabel,
-} from '@/lib/decision-profile-display';
 import { cricketRequiredText, cricketRoleText, cricketStatusText, scorePairText, teamScoreText } from '@/lib/cricket-score';
 import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceUrl } from '@/lib/watch-url';
@@ -771,8 +765,6 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
   // Memoized derived team values
   const canonicalResult = useMemo(() => getCanonicalResult(game.prediction), [game.prediction]);
-  const decisionProfile = canonicalResult?.decisionProfile ?? null;
-  const decisionTags = useMemo(() => decisionProfileTags(decisionProfile), [decisionProfile]);
   const canonicalConfidence = getCanonicalConfidence(game.prediction);
   const predictionDisplay = useMemo(() => getGamePredictionDisplay(game), [game]);
   const hasPrediction = Boolean(game.prediction);
@@ -1229,70 +1221,6 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     ) : null}
                   </View>
                 </View>
-                {/* Data quality indicators */}
-                {game.prediction.lowDataWarning ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                    <Text style={{ color: 'rgba(255,200,100,0.6)', fontSize: 9, fontWeight: '600' }}>⚠ Limited data</Text>
-                  </View>
-                ) : null}
-                {game.prediction.ensembleDivergence ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: game.prediction.lowDataWarning ? 2 : 4 }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '600' }}>Models disagree</Text>
-                  </View>
-                ) : null}
-                {decisionProfile ? (
-                  <View
-                    style={{
-                      marginTop: 8,
-                      paddingTop: 8,
-                      borderTopWidth: 1,
-                      borderTopColor: 'rgba(255,255,255,0.08)',
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#7A9DB8', fontSize: 9, fontWeight: '800', letterSpacing: 0.8 }}>
-                          UNIFIED READ
-                        </Text>
-                        <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '900', marginTop: 2 }}>
-                          {decisionProfileHeadline(decisionProfile)}
-                        </Text>
-                        <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.52)', fontSize: 10, fontWeight: '700', marginTop: 2 }}>
-                          {decisionProfileSubline(decisionProfile)}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: '700' }}>
-                          Edge
-                        </Text>
-                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '900', marginTop: 2 }}>
-                          {decisionProfile.edgeRating}/10
-                        </Text>
-                      </View>
-                    </View>
-                    {decisionTags.length > 0 ? (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 7 }}>
-                        {decisionTags.map((tag) => (
-                          <View
-                            key={tag}
-                            style={{
-                              paddingHorizontal: 7,
-                              paddingVertical: 3,
-                              borderRadius: 7,
-                              backgroundColor: tag === 'upset-watch' ? 'rgba(139,10,31,0.22)' : 'rgba(122,157,184,0.13)',
-                              borderWidth: 1,
-                              borderColor: tag === 'upset-watch' ? 'rgba(139,10,31,0.38)' : 'rgba(122,157,184,0.22)',
-                            }}
-                          >
-                            <Text style={{ color: '#D8E6F2', fontSize: 9, fontWeight: '800' }}>
-                              {decisionTagLabel(tag)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
                 {game.prediction.projection ? (
                   <View
                     style={{
@@ -1323,11 +1251,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                         </Text>
                       </View>
                     </View>
-                    {projectionDisplay || game.prediction.projection.signals[0] ? (
+                    {projectionDisplay ? (
                       <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.48)', fontSize: 10, lineHeight: 14, marginTop: 5 }}>
-                        {game.prediction.projection.signals[0]
-                          ? `${game.prediction.projection.signals[0].label}: ${cleanProjectionCopy(game.prediction.projection.signals[0].evidence)}`
-                          : projectionDisplay?.contextText}
+                        {projectionDisplay.contextText}
                       </Text>
                     ) : null}
                   </View>

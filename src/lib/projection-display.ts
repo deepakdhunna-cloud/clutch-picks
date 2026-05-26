@@ -39,16 +39,16 @@ export function getProjectionRiskTier(value: number | null | undefined): 'Low' |
 }
 
 export function cleanProjectionCopy(text: string | null | undefined): string {
-  if (!text) return 'Expected-score model aligned to the final pick';
+  if (!text) return 'Projected score and margin for the final pick';
   const cleaned = text
-    .replace(/\b[\d,]+\s+simulated\s+(?:game\s+)?scripts(?:\s+aligned to the final pick)?/gi, 'Expected-score model aligned to the final pick')
+    .replace(/\b[\d,]+\s+simulated\s+(?:game\s+)?scripts(?:\s+aligned to the final pick)?/gi, 'Projected score and margin for the final pick')
     .replace(/\bafter\s+[\d,]+\s+(?:simulated\s+)?(?:game\s+)?scripts;?\s*(?=upset\/draw risk)/gi, 'with ')
     .replace(/\bafter\s+[\d,]+\s+(?:simulated\s+)?(?:game\s+)?scripts;?\s*/gi, '')
     .replace(/\bsimulation lean\b/gi, 'projection lean')
     .replace(/\bsimulated score margin\b/gi, 'projected score margin')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  return cleaned || 'Expected-score model aligned to the final pick';
+  return cleaned || 'Projected score and margin for the final pick';
 }
 
 function projectionSide(input: ProjectionDisplayInput): 'home' | 'away' | 'draw' | 'toss_up' | null {
@@ -109,13 +109,13 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
   const confidenceText = confidence > 0 ? ` ${confidence}%` : '';
 
   return {
-    label: 'Unified Projection',
+    label: 'Projected Score',
     homeScore: formatDecimal(input.projection.projectedHomeScore),
     awayScore: formatDecimal(input.projection.projectedAwayScore),
     total: formatDecimal(input.projection.projectedTotal),
     spread: formatDecimal(input.projection.projectedSpread),
     spreadValue: input.projection.projectedSpread,
     leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
-    contextText: cleanProjectionCopy('Expected-score model aligned to the final pick'),
+    contextText: 'Projected score and margin for the final pick',
   };
 }

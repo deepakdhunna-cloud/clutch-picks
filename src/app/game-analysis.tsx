@@ -1,19 +1,12 @@
 import { ActivityIndicator, FlatList, View, Text, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { memo } from 'react';
 import { useGame } from '@/hooks/useGames';
 import { displayConfidence, displayWinProbability } from '@/lib/display-confidence';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
-import { cleanProjectionCopy, getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
+import { getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import { getPredictionDisplay } from '@/lib/prediction-display';
-import {
-  decisionProfileHeadline,
-  decisionProfileSubline,
-  decisionProfileTags,
-  decisionTagLabel,
-} from '@/lib/decision-profile-display';
 import {
   getCanonicalConfidence,
   getCanonicalResult,
@@ -74,12 +67,12 @@ interface GamePrediction {
     projectedTotal: number;
     volatility: number;
     upsetRisk: number;
-    signals: Array<{
+    signals: {
       key: string;
       label: string;
       value: number;
       evidence: string;
-    }>;
+    }[];
   };
 }
 
@@ -398,8 +391,6 @@ export default function GameAnalysisScreen() {
   const awayEdgeCount = sorted.filter(f => f.awayScore > f.homeScore + 0.3).length;
   const neutralCount = sorted.length - homeEdgeCount - awayEdgeCount;
   const canonical = getCanonicalResult(prediction as unknown as Prediction);
-  const decisionProfile = canonical?.decisionProfile ?? null;
-  const decisionTags = decisionProfileTags(decisionProfile);
   const predictionDisplay = getPredictionDisplay({
     prediction: prediction as unknown as Prediction,
     homeTeam,
@@ -433,7 +424,7 @@ export default function GameAnalysisScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Analysis Breakdown</Text>
             <Text style={s.headerSub}>
-              {homeTeam.abbreviation} vs {awayTeam.abbreviation} · unified engine · {sorted.length} factors
+              {homeTeam.abbreviation} vs {awayTeam.abbreviation} · pick, projection, and key factors
             </Text>
           </View>
         </View>
@@ -465,7 +456,7 @@ export default function GameAnalysisScreen() {
             <View style={s.pickCardInner}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <View>
-                  <Text style={s.pickLabel}>UNIFIED ENGINE PICK</Text>
+                  <Text style={s.pickLabel}>OUR PICK</Text>
                   <Text style={s.pickTeam}>{winnerName}</Text>
                 </View>
                 <View style={s.confBadge}>
@@ -530,63 +521,9 @@ export default function GameAnalysisScreen() {
           </View>
         </View>
 
-        {decisionProfile ? (
-          <View style={s.decisionCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.sectionLabel}>Unified Decision Profile</Text>
-                <Text style={s.decisionHeadline}>{decisionProfileHeadline(decisionProfile)}</Text>
-                <Text style={s.decisionSubline}>{decisionProfileSubline(decisionProfile)}</Text>
-              </View>
-              <View style={s.decisionScoreBadge}>
-                <Text style={s.decisionScore}>{decisionProfile.edgeRating}/10</Text>
-                <Text style={s.decisionScoreLabel}>EDGE</Text>
-              </View>
-            </View>
-
-            <View style={s.decisionMetricRow}>
-              <View style={s.decisionMetric}>
-                <Text style={s.decisionMetricValue}>{decisionProfile.valueRating}/10</Text>
-                <Text style={s.decisionMetricLabel}>Value</Text>
-              </View>
-              <View style={s.decisionMetric}>
-                <Text style={s.decisionMetricValue}>{Math.round(decisionProfile.agreementScore)}%</Text>
-                <Text style={s.decisionMetricLabel}>Agreement</Text>
-              </View>
-              <View style={s.decisionMetric}>
-                <Text style={s.decisionMetricValue}>{Math.round(decisionProfile.upsetScore)}</Text>
-                <Text style={s.decisionMetricLabel}>Upset</Text>
-              </View>
-            </View>
-
-            {decisionTags.length > 0 ? (
-              <View style={s.decisionTagRow}>
-                {decisionTags.map((tag) => (
-                  <View
-                    key={tag}
-                    style={[
-                      s.decisionTag,
-                      tag === 'upset-watch' ? { borderColor: 'rgba(139,10,31,0.38)', backgroundColor: 'rgba(139,10,31,0.18)' } : null,
-                    ]}
-                  >
-                    <Text style={s.decisionTagText}>{decisionTagLabel(tag)}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {decisionProfile.thesis[0] ? (
-              <Text style={s.decisionBody}>{decisionProfile.thesis[0]}</Text>
-            ) : null}
-            {decisionProfile.watchouts[0] ? (
-              <Text style={s.decisionWatchout}>{decisionProfile.watchouts[0]}</Text>
-            ) : null}
-          </View>
-        ) : null}
-
         {/* Model Summary */}
         <View style={s.summaryCard}>
-          <Text style={s.sectionLabel}>Unified Model Summary</Text>
+          <Text style={s.sectionLabel}>Why This Pick</Text>
           <Text style={s.summaryText}>{displayPredictionAnalysis({
             sport: (game.sport ?? 'UNKNOWN') as any,
             homeTeam,
@@ -614,7 +551,7 @@ export default function GameAnalysisScreen() {
                 <Text style={s.projectionScore}>{projectionDisplay?.homeScore ?? Math.round(prediction.projection.projectedHomeScore)}</Text>
               </View>
               <View style={s.projectionMid}>
-                <Text style={s.projectionMidLabel}>{projectionDisplay?.label ?? 'Unified Projection'}</Text>
+                <Text style={s.projectionMidLabel}>{projectionDisplay?.label ?? 'Projected Score'}</Text>
                 <Text style={s.projectionMidValue}>{projectionDisplay?.leanText ?? predictionDisplay.leanLabel}</Text>
                 <Text style={s.projectionMidValue}>Total {projectionDisplay?.total ?? Math.round(prediction.projection.projectedTotal)}</Text>
                 <Text style={s.projectionMidValue}>Spread {(projectionDisplay?.spreadValue ?? prediction.projection.projectedSpread) >= 0 ? '+' : ''}{projectionDisplay?.spread ?? Math.round(prediction.projection.projectedSpread)}</Text>
@@ -625,23 +562,13 @@ export default function GameAnalysisScreen() {
               </View>
             </View>
 
-            {prediction.projection.signals.length > 0 ? (
-              <View style={{ gap: 8, marginTop: 14 }}>
-                {prediction.projection.signals.slice(0, 3).map((signal) => (
-                  <View key={signal.key} style={s.projectionSignal}>
-                    <Text style={s.projectionSignalTitle}>{signal.label}</Text>
-                    <Text style={s.projectionSignalBody}>{cleanProjectionCopy(signal.evidence)}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
           </View>
         ) : null}
 
         {/* Factors */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <Text style={s.sectionLabel}>Analysis Factors</Text>
-          <Text style={{ fontSize: 10, color: '#6B7C94' }}>Sorted by impact</Text>
+          <Text style={s.sectionLabel}>Key Factors</Text>
+          <Text style={{ fontSize: 10, color: '#6B7C94' }}>Strongest first</Text>
         </View>
           </>
         }

@@ -9,7 +9,7 @@
  *   3. Redistributes weight from unavailable factors
  *   4. Sums weighted deltas into a total rating advantage
  *   5. Converts to probability via the Elo logistic
- *   6. Blends in game-script simulation + a small market calibration anchor
+ *   6. Blends factor, game-script simulation, and small market calibration reads
  *   7. Reconciles public projection to the final pick while preserving raw
  *      simulator disagreement in canonical engineBreakdown
  *   8. Returns the prediction with all factors, projection, confidence, and band
@@ -367,11 +367,11 @@ export function reconcileProjectionToFinal(args: {
 
   return {
     ...args.projection,
-    homeWinProbability: roundTo(args.finalProbabilities.home),
-    awayWinProbability: roundTo(args.finalProbabilities.away),
+    homeWinProbability: roundTo(args.finalProbabilities.home, 4),
+    awayWinProbability: roundTo(args.finalProbabilities.away, 4),
     drawProbability:
       args.finalProbabilities.draw !== undefined
-        ? roundTo(args.finalProbabilities.draw)
+        ? roundTo(args.finalProbabilities.draw, 4)
         : undefined,
     projectedHomeScore,
     projectedAwayScore,

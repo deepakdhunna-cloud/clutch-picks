@@ -11,6 +11,8 @@
     "studio": "cloud-studio --port 3001 --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "release:check": "bun run src/scripts/releaseReadiness.ts",
+    "backtest:simulation": "bun run src/scripts/simulationBacktest.ts",
+    "backtest:historical-current": "bun run src/scripts/currentEngineHistoricalReplay.ts",
     "release:check:production": "railway run --environment production --service clutch-picks -- bun run release:check",
     "qa:predictions:live": "bun run src/scripts/predictionInvariantSweep.ts",
     "qa:predictions:production": "PREDICTION_SWEEP_BASE_URL=https://clutch-picks-production.up.railway.app bun run qa:predictions:live",

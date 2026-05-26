@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { predictGame } from "../index";
 import { simulateGameProjection } from "../simulation";
 import { computeBaseFactors } from "../factors/base";
+import { computeNBAFactors } from "../factors/nba";
 import { computeTennisFactors } from "../factors/tennis";
 import { blendFactors, normalizeWeightsToOne } from "../index";
 import type { GameContext } from "../types";
@@ -286,6 +287,24 @@ describe("game-script simulation", () => {
     expect(first.homeWinProbability).toBeGreaterThan(first.awayWinProbability);
   });
 
+  it("surfaces league-specific simulation readiness gaps", () => {
+    const ctx = makeNBAContext({
+      homeAdvanced: {},
+      awayAdvanced: {},
+    });
+    const factors = blendFactors(normalizeWeightsToOne([
+      ...computeBaseFactors(ctx),
+      ...computeNBAFactors(ctx),
+    ]));
+    const projection = simulateGameProjection(ctx, 80, factors);
+
+    expect(projection.signals.some((signal) => signal.key === "simulation-profile")).toBe(true);
+    expect(projection.signals.some((signal) => signal.key === "simulation-feature-gap")).toBe(true);
+    expect(
+      projection.signals.find((signal) => signal.key === "simulation-profile")?.evidence,
+    ).toContain("NBA possession proxy");
+  });
+
   it("bounds extreme high NBA scoring projections to the sport scale", () => {
     const prediction = predictGame(makeNBAContext({
       marketOverUnder: 330,
@@ -400,7 +419,7 @@ describe("game-script simulation", () => {
     expect(prediction.projection!.signals.some((signal) => signal.key === "projection-total-bounds")).toBe(true);
   });
 
-  it("anchors the simulator to the rating edge when scoring form points the other way", () => {
+  it("lets the simulator challenge the rating edge when scoring form points the other way", () => {
     const neutralExtended = {
       homeRecord: { wins: 10, losses: 10 },
       awayRecord: { wins: 10, losses: 10 },
@@ -440,9 +459,9 @@ describe("game-script simulation", () => {
     const factors = blendFactors(normalizeWeightsToOne(computeBaseFactors(ctx)));
     const projection = simulateGameProjection(ctx, 120, factors);
 
-    expect(projection.homeWinProbability).toBeGreaterThan(projection.awayWinProbability);
-    expect(projection.projectedSpread).toBeGreaterThan(0);
-    expect(projection.signals.some((signal) => signal.key === "rating-consensus-anchor")).toBe(true);
+    expect(projection.awayWinProbability).toBeGreaterThan(projection.homeWinProbability);
+    expect(projection.projectedSpread).toBeLessThan(0);
+    expect(projection.signals.some((signal) => signal.key === "factor-script-tension")).toBe(true);
   });
 
   it("is wired into predictGame and exposes projection metadata", () => {
