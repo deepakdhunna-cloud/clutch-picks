@@ -840,6 +840,51 @@ function normalizedStoredProbabilities(row: StoredPredictionResult): {
   };
 }
 
+function lockedPregameStartPhrase(sport: Game["sport"]): string {
+  switch (sport) {
+    case "NBA":
+    case "NCAAB":
+      return "before tipoff";
+    case "NFL":
+    case "NCAAF":
+      return "before kickoff";
+    case "MLB":
+      return "before first pitch";
+    case "NHL":
+      return "before puck drop";
+    case "TENNIS":
+      return "before first serve";
+    case "IPL":
+      return "before the toss and opening ball";
+    default:
+      return "before the match started";
+  }
+}
+
+function buildStoredPregameAnalysis(
+  game: Game,
+  predictedOutcome: "home" | "away" | "draw",
+  probabilities: { home: number; away: number; draw?: number },
+): string {
+  const selectedTeam =
+    predictedOutcome === "home"
+      ? game.homeTeam.name
+      : predictedOutcome === "away"
+        ? game.awayTeam.name
+        : "a draw";
+  const selectedProbability = probabilityForPick(probabilities, predictedOutcome);
+  const probabilityText = Number.isFinite(selectedProbability)
+    ? ` at ${Math.round(selectedProbability * 100)}%`
+    : "";
+  const startPhrase = lockedPregameStartPhrase(game.sport);
+
+  if (predictedOutcome === "draw") {
+    return `The pregame model flagged a draw profile${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
+  }
+
+  return `The pregame model favored ${selectedTeam}${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
+}
+
 export function buildStoredPregamePrediction(
   game: Game,
   row: StoredPredictionResult,
@@ -860,9 +905,7 @@ export function buildStoredPregamePrediction(
     predictedWinner,
     predictedOutcome,
     confidence: row.confidence,
-    analysis:
-      `Stored pregame prediction from ${modelVersion}. ` +
-      "This is the recorded pick captured before the game, not a postgame model rerun.",
+    analysis: buildStoredPregameAnalysis(game, predictedOutcome, probabilities),
     predictedSpread: 0,
     predictedTotal: 0,
     createdAt: row.createdAt.toISOString(),

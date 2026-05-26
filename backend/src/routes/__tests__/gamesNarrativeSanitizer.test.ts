@@ -430,6 +430,11 @@ describe("buildStoredPregamePrediction", () => {
     expect(prediction.wasCorrect).toBe(false);
     expect(prediction.actualOutcome).toBe("away");
     expect(prediction.homeWinProbability).toBeCloseTo(54.5, 1);
+    expect(prediction.analysis).toContain("The pregame model favored Los Angeles Lakers");
+    expect(prediction.analysis).toContain("before tipoff");
+    expect(prediction.analysis).toContain("locked");
+    expect(prediction.analysis).not.toContain("Stored pregame prediction");
+    expect(prediction.analysis).not.toContain("2.6.0-neutral-factor-projection-truth");
     expect(prediction.canonicalResult?.finalPick).toBe("home");
     expect(prediction.canonicalResult?.dataVersion).toBe("2.6.0-neutral-factor-projection-truth");
     expect(prediction.canonicalResult?.warnings).toContain("Stored pregame prediction snapshot; not recomputed after final.");
