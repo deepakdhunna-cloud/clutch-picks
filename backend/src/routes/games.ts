@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
+import type { PredictionResult as StoredPredictionResult } from "@prisma/client";
 import { cleanOldShadowLogs } from "../prediction/shadow";
 import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "../prediction/seasonContext";
@@ -26,6 +27,7 @@ import {
 } from "../lib/tennisStats";
 import { fetchTennisExplorerLiveMatches, type TennisExplorerLiveMatch } from "../lib/tennisExplorer";
 import { fetchIPLStandings, type IPLStandingEntry } from "../lib/iplStandings";
+import { prisma } from "../prisma";
 
 // ESPN API base URLs for each sport
 const ESPN_ENDPOINTS = {
@@ -131,6 +133,10 @@ export interface GamePrediction {
   lowDataWarning?: boolean;
   ensembleDivergence?: boolean;
   drawProbability?: number;
+  modelVersion?: string;
+  snapshotType?: "stored-pregame";
+  wasCorrect?: boolean | null;
+  actualOutcome?: "home" | "away" | "draw" | "unavailable" | null;
   projection?: {
     engine: string;
     iterations: number;
@@ -684,6 +690,123 @@ export function attachPredictionToGame(game: Game, prediction: GamePrediction): 
     ...game,
     prediction: displayPrediction,
   };
+}
+
+function isFinalGame(game: Game): boolean {
+  return game.status === "FINAL";
+}
+
+function normalizedStoredProbabilities(row: StoredPredictionResult): {
+  home: number;
+  away: number;
+  draw?: number;
+} {
+  const includeDraw = row.predictedOutcome === "draw" || typeof row.drawProb === "number";
+  const home = typeof row.homeWinProb === "number" ? row.homeWinProb : 0.5;
+  const away = typeof row.awayWinProb === "number" ? row.awayWinProb : 0.5;
+  const draw = includeDraw ? (typeof row.drawProb === "number" ? row.drawProb : 0) : undefined;
+  const total = home + away + (draw ?? 0);
+  if (total <= 0) {
+    return includeDraw ? { home: 0.375, away: 0.375, draw: 0.25 } : { home: 0.5, away: 0.5 };
+  }
+  return {
+    home: home / total,
+    away: away / total,
+    ...(includeDraw ? { draw: (draw ?? 0) / total } : {}),
+  };
+}
+
+export function buildStoredPregamePrediction(
+  game: Game,
+  row: StoredPredictionResult,
+): GamePrediction {
+  const probabilities = normalizedStoredProbabilities(row);
+  const predictedOutcome =
+    row.predictedOutcome === "home" || row.predictedOutcome === "away" || row.predictedOutcome === "draw"
+      ? row.predictedOutcome
+      : row.predictedWinner === "away"
+        ? "away"
+        : "home";
+  const predictedWinner = row.predictedWinner === "away" ? "away" : "home";
+  const modelVersion = row.modelVersion ?? "stored-pregame-snapshot";
+
+  const prediction: GamePrediction = {
+    id: `stored-${row.id}`,
+    gameId: row.gameId,
+    predictedWinner,
+    predictedOutcome,
+    confidence: row.confidence,
+    analysis:
+      `Stored pregame prediction from ${modelVersion}. ` +
+      "This is the recorded pick captured before the game, not a postgame model rerun.",
+    predictedSpread: 0,
+    predictedTotal: 0,
+    createdAt: row.createdAt.toISOString(),
+    homeWinProbability: Math.round(probabilities.home * 1000) / 10,
+    awayWinProbability: Math.round(probabilities.away * 1000) / 10,
+    drawProbability:
+      probabilities.draw !== undefined
+        ? Math.round(probabilities.draw * 1000) / 10
+        : undefined,
+    factors: [],
+    edgeRating: row.edgeRating ?? 1,
+    valueRating: row.valueRating ?? 1,
+    recentFormHome: "",
+    recentFormAway: "",
+    homeStreak: 0,
+    awayStreak: 0,
+    isTossUp: row.isTossUp,
+    modelVersion,
+    snapshotType: "stored-pregame",
+    wasCorrect: row.wasCorrect,
+    actualOutcome:
+      row.actualOutcome === "home" ||
+      row.actualOutcome === "away" ||
+      row.actualOutcome === "draw" ||
+      row.actualOutcome === "unavailable"
+        ? row.actualOutcome
+        : null,
+  };
+
+  return {
+    ...prediction,
+    canonicalResult: canonicalFromLegacyPrediction(prediction, game.sport, {
+      timestamp: row.createdAt.toISOString(),
+      dataVersion: modelVersion,
+      warning: "Stored pregame prediction snapshot; not recomputed after final.",
+    }),
+  };
+}
+
+async function loadStoredPregamePredictionMap(games: Game[]): Promise<Map<string, GamePrediction>> {
+  const finalGames = games.filter(isFinalGame);
+  if (finalGames.length === 0) return new Map();
+
+  const gameById = new Map(finalGames.map((game) => [game.id, game]));
+  const rows = await prisma.predictionResult.findMany({
+    where: {
+      gameId: { in: finalGames.map((game) => game.id) },
+      OR: [
+        { wasCorrect: { not: null } },
+        { actualWinner: { not: null } },
+        { resolvedAt: { not: null } },
+      ],
+    },
+  });
+
+  const predictions = new Map<string, GamePrediction>();
+  for (const row of rows) {
+    const game = gameById.get(row.gameId);
+    if (!game) continue;
+    predictions.set(row.gameId, buildStoredPregamePrediction(game, row));
+  }
+  return predictions;
+}
+
+async function getStoredPregamePrediction(game: Game): Promise<GamePrediction | null> {
+  if (!isFinalGame(game)) return null;
+  const map = await loadStoredPregamePredictionMap([game]);
+  return map.get(game.id) ?? null;
 }
 
 // ─── Live game data type ──────────────────────────────────────────────────────
@@ -1275,6 +1398,11 @@ function choosePredictionUpdate(
 // Generate prediction for an ESPN game. The prediction remains the stable
 // model/simulation call even when the game is in progress.
 async function addPredictionToGame(game: Game): Promise<Game> {
+  const storedPregamePrediction = await getStoredPregamePrediction(game);
+  if (storedPregamePrediction) {
+    return attachPredictionToGame(game, storedPregamePrediction);
+  }
+
   const cachedPrediction = pickFreshestPrediction(game.id, game.status === "LIVE");
   if (cachedPrediction) {
     return attachPredictionToGame(game, cachedPrediction);
@@ -2641,13 +2769,21 @@ gamesRouter.get("/", async (c) => {
         new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
     );
 
-    // Attach the freshest cached prediction — never block the response for
+    const storedPregamePredictions = await loadStoredPregamePredictionMap(filteredGames);
+
+    // Attach the stored pregame snapshot for resolved games, otherwise attach
+    // the freshest cached prediction — never block the response for
     // generation. ALWAYS overwrite any prediction the indexed/transformed game
     // already had: that earlier value may have been computed against an older
     // cache snapshot, and only the current cache value is guaranteed to match
     // what the detail endpoint will return for the same game.
     for (let i = 0; i < filteredGames.length; i++) {
       const game = filteredGames[i]!;
+      const storedPregamePrediction = storedPregamePredictions.get(game.id);
+      if (storedPregamePrediction) {
+        filteredGames[i] = attachPredictionToGame(game, storedPregamePrediction);
+        continue;
+      }
       const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
       if (cached) {
         filteredGames[i] = attachPredictionToGame(game, cached);
@@ -2760,8 +2896,13 @@ gamesRouter.get("/date/:date", async (c) => {
   try {
     const games = await fetchAllGames(dateParam);
 
-    // Attach any cached predictions inline so first paint shows them when warm.
+    const storedPregamePredictions = await loadStoredPregamePredictionMap(games);
+
+    // Attach stored pregame snapshots for resolved games and cached predictions
+    // for active/upcoming games so first paint shows them when warm.
     const gamesWithCached = games.map((g) => {
+      const storedPregamePrediction = storedPregamePredictions.get(g.id);
+      if (storedPregamePrediction) return attachPredictionToGame(g, storedPregamePrediction);
       if (g.prediction) return g;
       const cached = pickFreshestPrediction(g.id, g.status === "LIVE");
       return cached ? attachPredictionToGame(g, cached) : g;
@@ -2795,6 +2936,11 @@ gamesRouter.get("/id/:id", async (c) => {
     // the same value the list endpoint would return right now (otherwise the
     // game card badge and the detail page can disagree on who's favored).
     const ensurePrediction = async (game: Game): Promise<Game> => {
+      const storedPregamePrediction = await getStoredPregamePrediction(game);
+      if (storedPregamePrediction) {
+        return attachPredictionToGame(game, storedPregamePrediction);
+      }
+
       const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
       if (cached) {
         return attachPredictionToGame(game, cached);

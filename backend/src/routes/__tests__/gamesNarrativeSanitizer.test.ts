@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   attachPredictionToGame,
+  buildStoredPregamePrediction,
   shouldPromotePredictionUpdate,
   sanitizePredictionForGame,
   updateLivePrediction,
@@ -145,6 +146,65 @@ describe("attachPredictionToGame", () => {
     expect(attached.spread).toBe(-4.5);
     expect(attached.overUnder).toBe(218.5);
     expect(attached.marketFavorite).toBe("home");
+  });
+});
+
+describe("buildStoredPregamePrediction", () => {
+  test("preserves the original settled prediction instead of replaying the current engine", () => {
+    const row = {
+      id: "row-1",
+      gameId: "lal-okc",
+      sport: "NBA",
+      scheduledStart: new Date("2026-05-11T21:30:00.000Z"),
+      homeTeam: "LAL",
+      awayTeam: "OKC",
+      predictedWinner: "home",
+      predictedOutcome: "home",
+      actualWinner: "away",
+      actualOutcome: "away",
+      confidence: 55,
+      isTossUp: false,
+      wasCorrect: false,
+      homeElo: 1595,
+      awayElo: 1538,
+      homeWinProb: 0.5454,
+      awayWinProb: 0.4546,
+      drawProb: null,
+      modelVersion: "2.6.0-neutral-factor-projection-truth",
+      selectedOutcomeProb: 0.5454,
+      brierScore: 0.2975,
+      logLoss: 0.7869,
+      finalHomeScore: 93,
+      finalAwayScore: 130,
+      marketHomeProb: null,
+      marketAwayProb: null,
+      marketDrawProb: null,
+      marketDivergence: null,
+      dataCoverage: 0.875,
+      signalCoverage: 0.375,
+      agreementScore: null,
+      edgeRating: 2,
+      valueRating: 1,
+      riskScore: null,
+      tagsJson: null,
+      dataSourcesJson: null,
+      gradeVersion: "test",
+      gradedAt: new Date("2026-05-12T02:00:00.000Z"),
+      settledBy: "test",
+      createdAt: new Date("2026-05-11T12:00:00.000Z"),
+      resolvedAt: new Date("2026-05-12T02:00:00.000Z"),
+    };
+
+    const prediction = buildStoredPregamePrediction(makeGame(), row);
+
+    expect(prediction.snapshotType).toBe("stored-pregame");
+    expect(prediction.predictedWinner).toBe("home");
+    expect(prediction.wasCorrect).toBe(false);
+    expect(prediction.actualOutcome).toBe("away");
+    expect(prediction.homeWinProbability).toBeCloseTo(54.5, 1);
+    expect(prediction.canonicalResult?.finalPick).toBe("home");
+    expect(prediction.canonicalResult?.dataVersion).toBe("2.6.0-neutral-factor-projection-truth");
+    expect(prediction.canonicalResult?.warnings).toContain("Stored pregame prediction snapshot; not recomputed after final.");
   });
 });
 
