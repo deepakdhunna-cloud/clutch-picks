@@ -1,5 +1,6 @@
 import { View, Text, RefreshControl, Pressable, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
 import React, { useState, useCallback, memo, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -170,11 +171,13 @@ const TopPickCard = memo(function TopPickCard({
   index,
   onPress,
   onPressIn,
+  animationsEnabled,
 }: {
   game: GameWithPrediction;
   index: number;
   onPress: () => void;
   onPressIn?: () => void;
+  animationsEnabled: boolean;
 }) {
   const router = useRouter();
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport);
@@ -205,6 +208,17 @@ const TopPickCard = memo(function TopPickCard({
   const glowPulse = useSharedValue(0);
   const pressProgress = useSharedValue(0);
   React.useEffect(() => {
+    if (!animationsEnabled) {
+      cancelAnimation(rotation);
+      cancelAnimation(glowPulse);
+      cancelAnimation(pressProgress);
+      rotation.value = 0;
+      glowPulse.value = 0;
+      pressProgress.value = 0;
+      return;
+    }
+    rotation.value = 0;
+    glowPulse.value = 0;
     rotation.value = withRepeat(withTiming(360, { duration: 6800, easing: Easing.linear }), -1, false);
     glowPulse.value = withRepeat(
       withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.ease) }),
@@ -212,7 +226,7 @@ const TopPickCard = memo(function TopPickCard({
       true
     );
     return () => { cancelAnimation(rotation); cancelAnimation(glowPulse); cancelAnimation(pressProgress); };
-  }, []);
+  }, [animationsEnabled, glowPulse, pressProgress, rotation]);
   const rotatingStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value % 360}deg` }],
   }));
@@ -229,7 +243,7 @@ const TopPickCard = memo(function TopPickCard({
   }));
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 80).duration(650).easing(Easing.out(Easing.cubic))} style={{ paddingBottom: 44 }}>
+    <Animated.View entering={FadeInDown.delay(Math.min(index * 80, 240)).duration(650).easing(Easing.out(Easing.cubic))} style={{ paddingBottom: 44 }}>
       <AnimatedPressable
         onPress={onPress}
         onPressIn={() => {
@@ -483,6 +497,7 @@ const TopPickCard = memo(function TopPickCard({
 
 export default function ClutchPicksScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
   const { isPremium } = useSubscription();
@@ -518,7 +533,7 @@ export default function ClutchPicksScreen() {
     router.push(`/game/${game.id}` as any);
   }, [handleGameWarm, router]);
 
-  const headerComponent = (
+  const headerComponent = useMemo(() => (
     <View style={{ paddingTop: 16, paddingBottom: 28 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {/* Logo icon */}
@@ -543,7 +558,29 @@ export default function ClutchPicksScreen() {
         </View>
       </View>
     </View>
-  );
+  ), []);
+
+  const renderTopPick = useCallback(({ item, index }: { item: GameWithPrediction; index: number }) => (
+    <View style={responsive.numColumns === 2 ? { flex: 1 } : undefined}>
+      <TopPickCard
+        game={item}
+        index={index}
+        animationsEnabled={isFocused}
+        onPressIn={() => handleGameWarm(item)}
+        onPress={() => handleGamePress(item)}
+      />
+    </View>
+  ), [handleGamePress, handleGameWarm, isFocused, responsive.numColumns]);
+
+  const keyTopPick = useCallback((item: GameWithPrediction) => item.id, []);
+
+  const topPicksFooter = useMemo(() => (
+    <View style={{ paddingTop: 16, paddingBottom: 20 }}>
+      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
+        All predictions are AI-generated for entertainment purposes only. Not gambling advice.
+      </Text>
+    </View>
+  ), []);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#010101' }}>
@@ -735,20 +772,11 @@ export default function ClutchPicksScreen() {
           <Animated.FlatList
             key={responsive.numColumns}
             data={validPicks}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyTopPick}
             numColumns={responsive.numColumns}
             columnWrapperStyle={responsive.numColumns === 2 ? { gap: 16, paddingHorizontal: responsive.contentPadding } : undefined}
             ListHeaderComponent={headerComponent}
-            renderItem={({ item, index }) => (
-              <View style={responsive.numColumns === 2 ? { flex: 1 } : undefined}>
-                <TopPickCard
-                  game={item}
-                  index={index}
-                  onPressIn={() => handleGameWarm(item)}
-                  onPress={() => handleGamePress(item)}
-                />
-              </View>
-            )}
+            renderItem={renderTopPick}
             contentContainerStyle={[{ paddingHorizontal: 20, paddingBottom: bottomPadding }, responsive.isTablet && { maxWidth: 700, alignSelf: 'center', width: '100%' }]}
             showsVerticalScrollIndicator={false}
             onScroll={scrollHandler}
@@ -760,13 +788,7 @@ export default function ClutchPicksScreen() {
             maxToRenderPerBatch={3}
             windowSize={5}
             initialNumToRender={2}
-            ListFooterComponent={
-              <View style={{ paddingTop: 16, paddingBottom: 20 }}>
-                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
-                  All predictions are AI-generated for entertainment purposes only. Not gambling advice.
-                </Text>
-              </View>
-            }
+            ListFooterComponent={topPicksFooter}
           />
         ) : (
           <ScrollView

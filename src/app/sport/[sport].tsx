@@ -10,10 +10,10 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Filter, Calendar, Trophy, Layers, Zap } from 'lucide-react-native';
+import { ChevronLeft, Filter, Calendar, Trophy, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { GameCard } from '@/components/sports';
-import { Sport, SPORT_META, GameStatus, type GameWithPrediction } from '@/types/sports';
+import { Sport, SPORT_META, type GameWithPrediction } from '@/types/sports';
 import { useWeekGamesBySport } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 
@@ -49,7 +49,7 @@ const FilterButton = memo(function FilterButton({
   }));
 
   const handlePress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onSelect();
   }, [onSelect]);
 
@@ -147,10 +147,15 @@ export default function SportDetailScreen() {
     return weekData.flatMap(d => d.games);
   }, [weekData]);
 
-  const todayStr = new Date().toDateString();
-  const tomorrowDate = new Date();
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrowStr = tomorrowDate.toDateString();
+  const { todayStr, tomorrowStr } = useMemo(() => {
+    const now = new Date();
+    const tomorrowDate = new Date(now);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    return {
+      todayStr: now.toDateString(),
+      tomorrowStr: tomorrowDate.toDateString(),
+    };
+  }, []);
 
   // Calculate counts for each filter
   const filterCounts = useMemo(() => {
@@ -187,32 +192,31 @@ export default function SportDetailScreen() {
   }, [allGames, deferredFilter, todayStr, tomorrowStr]);
 
   // Filters with icons
-  const filters: { key: FilterStatus; label: string; icon: React.ReactNode }[] = [
-    { key: 'live', label: 'Live Now', icon: <Zap size={20} color="#FFFFFF" /> },
-    { key: 'today', label: 'Today', icon: <Calendar size={20} color="#FFFFFF" /> },
-    { key: 'tomorrow', label: 'Tomorrow', icon: <Calendar size={20} color="#FFFFFF" /> },
-    { key: 'results', label: 'Results', icon: <Trophy size={20} color="#FFFFFF" /> },
-  ];
+  const filters = useMemo<{ key: FilterStatus; label: string; icon: React.ReactNode }[]>(
+    () => [
+      { key: 'live', label: 'Live Now', icon: <Zap size={20} color="#FFFFFF" /> },
+      { key: 'today', label: 'Today', icon: <Calendar size={20} color="#FFFFFF" /> },
+      { key: 'tomorrow', label: 'Tomorrow', icon: <Calendar size={20} color="#FFFFFF" /> },
+      { key: 'results', label: 'Results', icon: <Trophy size={20} color="#FFFFFF" /> },
+    ],
+    [],
+  );
 
-  if (!sportMeta) {
-    return (
-      <View style={styles.notFoundContainer}>
-        <Text style={styles.notFoundText}>Sport not found</Text>
-      </View>
-    );
-  }
+  const handleFilterSelect = useCallback((nextFilter: FilterStatus) => {
+    setFilter(nextFilter);
+  }, []);
 
-  const renderGame = ({ item, index }: { item: GameWithPrediction; index: number }) => (
+  const renderGame = useCallback(({ item, index }: { item: GameWithPrediction; index: number }) => (
     <View style={styles.gameItem}>
       <GameCard game={item} index={index} />
     </View>
-  );
+  ), []);
 
-  const renderEmpty = () => (
+  const renderEmpty = useCallback(() => (
     <View style={styles.emptyState}>
       {isLoading ? (
         <>
-          <ActivityIndicator size="large" color={sportMeta.color} />
+          <ActivityIndicator size="large" color={sportMeta?.color ?? '#FFFFFF'} />
           <Text style={styles.emptyText}>
             Loading games...
           </Text>
@@ -226,59 +230,70 @@ export default function SportDetailScreen() {
         </>
       )}
     </View>
-  );
+  ), [filter, isLoading, sportMeta?.color]);
 
-  const listHeader = (
-    <>
-      {/* Header */}
-      <Animated.View
-        entering={FadeInDown.duration(500)}
-        style={styles.header}
-      >
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <ChevronLeft size={28} color="#fff" />
-          </Pressable>
-          <View
-            style={[styles.sportIcon, { backgroundColor: sportMeta.color }]}
-          >
-            <Text style={[styles.sportIconText, { color: sportMeta.accentColor }]}>
-              {sportEnum.substring(0, 2)}
-            </Text>
+  const listHeader = useMemo(() => {
+    if (!sportMeta) return null;
+    return (
+      <>
+        {/* Header */}
+        <Animated.View
+          entering={FadeInDown.duration(500)}
+          style={styles.header}
+        >
+          <View style={styles.headerRow}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <ChevronLeft size={28} color="#fff" />
+            </Pressable>
+            <View
+              style={[styles.sportIcon, { backgroundColor: sportMeta.color }]}
+            >
+              <Text style={[styles.sportIconText, { color: sportMeta.accentColor }]}>
+                {sportEnum.substring(0, 2)}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.sportName}>{sportMeta.name}</Text>
+              <Text style={styles.gameCount}>
+                {allGames.length} game{allGames.length !== 1 ? 's' : null}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.sportName}>{sportMeta.name}</Text>
-            <Text style={styles.gameCount}>
-              {allGames.length} game{allGames.length !== 1 ? 's' : null}
-            </Text>
-          </View>
-        </View>
-      </Animated.View>
+        </Animated.View>
 
-      {/* Filters - Horizontal Scrollable */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterScrollContent}
-      >
-        {filters.map((f, index) => (
-          <FilterButton
-            key={f.key}
-            filter={f}
-            isSelected={filter === f.key}
-            onSelect={() => setFilter(f.key)}
-            index={index}
-            sportColor={sportMeta.color}
-            count={filterCounts[f.key]}
-          />
-        ))}
-      </ScrollView>
-    </>
-  );
+        {/* Filters - Horizontal Scrollable */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {filters.map((f, index) => (
+            <FilterButton
+              key={f.key}
+              filter={f}
+              isSelected={filter === f.key}
+              onSelect={() => handleFilterSelect(f.key)}
+              index={index}
+              sportColor={sportMeta.color}
+              count={filterCounts[f.key]}
+            />
+          ))}
+        </ScrollView>
+      </>
+    );
+  }, [allGames.length, filter, filterCounts, filters, handleFilterSelect, router, sportEnum, sportMeta]);
+
+  if (!sportMeta) {
+    return (
+      <View style={styles.notFoundContainer}>
+        <Text style={styles.notFoundText}>Sport not found</Text>
+      </View>
+    );
+  }
 
   return (
     <>

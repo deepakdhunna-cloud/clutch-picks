@@ -94,8 +94,15 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     evidence: `Home run-prevention trend ${homeBowlingTrend >= 0 ? "+" : ""}${homeBowlingTrend.toFixed(2)} vs Away ${awayBowlingTrend >= 0 ? "+" : ""}${awayBowlingTrend.toFixed(2)}`,
   });
 
-  const homeVenuePct = splitWinPct(ctx.homeExtended.homeRecord);
-  const awayRoadPct = splitWinPct(ctx.awayExtended.awayRecord);
+  const directHomeVenuePct = splitWinPct(ctx.homeExtended.homeRecord);
+  const directAwayRoadPct = splitWinPct(ctx.awayExtended.awayRecord);
+  const freeVenueSplit = ctx.iplVenueSplit ?? null;
+  const freeVenueAvailable =
+    freeVenueSplit !== null &&
+    freeVenueSplit.homeGames >= 3 &&
+    freeVenueSplit.awayGames >= 3;
+  const homeVenuePct = directHomeVenuePct ?? (freeVenueAvailable ? freeVenueSplit.homeWinPct : null);
+  const awayRoadPct = directAwayRoadPct ?? (freeVenueAvailable ? freeVenueSplit.awayRoadWinPct : null);
   const venueAvailable = homeVenuePct !== null && awayRoadPct !== null;
   const venueDelta = venueAvailable
     ? clamp((homeVenuePct! - awayRoadPct!) * 70, -45, 45)
@@ -108,7 +115,9 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     available: venueAvailable,
     hasSignal: venueAvailable && venueDelta !== 0,
     evidence: venueAvailable
-      ? `${ctx.game.homeTeam.abbreviation} home win rate ${(homeVenuePct! * 100).toFixed(0)}% vs ${ctx.game.awayTeam.abbreviation} away win rate ${(awayRoadPct! * 100).toFixed(0)}%`
+      ? freeVenueAvailable && (directHomeVenuePct === null || directAwayRoadPct === null)
+        ? `${ctx.game.homeTeam.abbreviation} recent IPL home/H2H win rate ${(homeVenuePct! * 100).toFixed(0)}% (${freeVenueSplit.homeGames} games) vs ${ctx.game.awayTeam.abbreviation} away/H2H win rate ${(awayRoadPct! * 100).toFixed(0)}% (${freeVenueSplit.awayGames} games)`
+        : `${ctx.game.homeTeam.abbreviation} home win rate ${(homeVenuePct! * 100).toFixed(0)}% vs ${ctx.game.awayTeam.abbreviation} away win rate ${(awayRoadPct! * 100).toFixed(0)}%`
       : "Home/away split sample too small for IPL venue factor",
   });
 

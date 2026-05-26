@@ -76,14 +76,38 @@ export interface MLBPitcherQuality {
   seasonLosses?: number;
   recent5Era?: number;        // ERA over last 5 starts
   recent5WarningFlag?: boolean; // recent ERA > season ERA + 1.5 runs
+  isProjected?: boolean;
+  projectionSource?: "mlb-rotation-inference";
+  projectedRestDays?: number;
+  projectedLastStartDate?: string;
 }
 
 // ─── Caches ─────────────────────────────────────────────────────────────────
 const DAILY_PROBABLES_TTL_MS = 60 * 60 * 1000;   // 1 hour
 const PITCHER_STATS_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const PROJECTED_STARTER_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 const dailyProbablesCache = new LRUCache<string, { data: Map<number, MLBPitcherQuality>; timestamp: number }>({ max: 14 });
 const pitcherStatsCache = new LRUCache<string, { data: MLBPitcherQuality; timestamp: number }>({ max: 200 });
+const projectedStarterCache = new LRUCache<string, { data: MLBPitcherQuality | null; timestamp: number }>({ max: 200 });
+
+function isoDateFromInput(dateStr: string): string | null {
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return dateStr;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function daysBetween(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00Z`).getTime();
+  const end = new Date(`${endDate}T00:00:00Z`).getTime();
+  return Math.round((end - start) / 86_400_000);
+}
 
 // ─── Fetch daily probable pitchers ──────────────────────────────────────────
 /**
@@ -154,6 +178,119 @@ export async function fetchMLBDailyProbables(dateStr: string): Promise<Map<numbe
 
   dailyProbablesCache.set(dateStr, { data: result, timestamp: Date.now() });
   return result;
+}
+
+// ─── Project probable starter from recent rotation history ─────────────────
+/**
+ * Project a likely starter when MLB/ESPN have not announced a probable.
+ *
+ * This is intentionally marked as projected data. It uses only official MLB
+ * StatsAPI schedule history for the team, finds recent probable starters, and
+ * chooses the pitcher whose rest pattern best fits a normal MLB rotation.
+ */
+export async function fetchMLBProjectedStarter(
+  espnTeamId: number | string,
+  dateStr: string,
+): Promise<MLBPitcherQuality | null> {
+  const isoDate = isoDateFromInput(dateStr);
+  const mlbTeamId = getMLBTeamIdFromESPN(espnTeamId);
+  if (!isoDate || mlbTeamId === null) return null;
+
+  const cacheKey = `${mlbTeamId}:${isoDate}`;
+  const cached = projectedStarterCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < PROJECTED_STARTER_TTL_MS) {
+    return cached.data;
+  }
+
+  type RotationCandidate = {
+    personId: number;
+    name: string;
+    dates: string[];
+  };
+
+  try {
+    const startDate = addDays(isoDate, -35);
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${mlbTeamId}&startDate=${startDate}&endDate=${isoDate}&hydrate=probablePitcher,team`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) {
+      projectedStarterCache.set(cacheKey, { data: null, timestamp: Date.now() });
+      return null;
+    }
+
+    const data = (await response.json()) as any;
+    const candidates = new Map<number, RotationCandidate>();
+
+    for (const dateEntry of data?.dates ?? []) {
+      const scheduledDate = String(dateEntry?.date ?? "").slice(0, 10);
+      for (const game of dateEntry?.games ?? []) {
+        const gameDate = String(game?.officialDate ?? scheduledDate).slice(0, 10);
+        if (!gameDate || gameDate >= isoDate) continue;
+
+        const homeTeamId = game?.teams?.home?.team?.id;
+        const awayTeamId = game?.teams?.away?.team?.id;
+        const side = homeTeamId === mlbTeamId ? "home" : awayTeamId === mlbTeamId ? "away" : null;
+        if (!side) continue;
+
+        const probable = game?.teams?.[side]?.probablePitcher;
+        const personId = Number(probable?.id);
+        if (!Number.isFinite(personId) || personId <= 0) continue;
+
+        const name = String(probable?.fullName ?? probable?.name ?? `Pitcher ${personId}`).trim();
+        const current = candidates.get(personId) ?? { personId, name, dates: [] };
+        current.name = name || current.name;
+        current.dates.push(gameDate);
+        candidates.set(personId, current);
+      }
+    }
+
+    const ranked = Array.from(candidates.values())
+      .map((candidate) => {
+        const sortedDates = [...candidate.dates].sort();
+        const lastStartDate = sortedDates.at(-1);
+        if (!lastStartDate) return null;
+        const restDays = daysBetween(lastStartDate, isoDate);
+        if (restDays <= 0) return null;
+
+        const restFit = -Math.abs(restDays - 5) * 10;
+        const regularity = sortedDates.length * 2;
+        const idealWindowBonus = restDays >= 4 && restDays <= 6 ? 15 : 0;
+        const tooRecentPenalty = restDays < 3 ? -100 : 0;
+        const stalePenalty = restDays > 8 ? -(restDays - 8) * 8 : 0;
+
+        return {
+          ...candidate,
+          lastStartDate,
+          restDays,
+          score: restFit + regularity + idealWindowBonus + tooRecentPenalty + stalePenalty,
+        };
+      })
+      .filter((candidate): candidate is RotationCandidate & { lastStartDate: string; restDays: number; score: number } => candidate !== null)
+      .sort((left, right) => right.score - left.score || right.restDays - left.restDays);
+
+    const candidate = ranked[0];
+    if (!candidate) {
+      projectedStarterCache.set(cacheKey, { data: null, timestamp: Date.now() });
+      return null;
+    }
+
+    const season = new Date(`${isoDate}T00:00:00Z`).getUTCFullYear();
+    const enriched = await fetchMLBPitcherStats(candidate.personId, season, candidate.name);
+    const projected: MLBPitcherQuality = {
+      ...(enriched ?? { mlbPersonId: candidate.personId, name: candidate.name }),
+      isProjected: true,
+      projectionSource: "mlb-rotation-inference",
+      projectedRestDays: candidate.restDays,
+      projectedLastStartDate: candidate.lastStartDate,
+    };
+
+    projectedStarterCache.set(cacheKey, { data: projected, timestamp: Date.now() });
+    console.log(`[mlbStatsApi] Projected starter for MLB team ${mlbTeamId} on ${isoDate}: ${projected.name} (${candidate.restDays} days rest)`);
+    return projected;
+  } catch (err) {
+    console.warn(`[mlbStatsApi] Failed to project starter for ESPN team ${espnTeamId} on ${dateStr}:`, err instanceof Error ? err.message : String(err));
+    projectedStarterCache.set(cacheKey, { data: null, timestamp: Date.now() });
+    return null;
+  }
 }
 
 // ─── Fetch individual pitcher stats ─────────────────────────────────────────
@@ -344,4 +481,10 @@ export function computePitcherQualityScore(p: MLBPitcherQuality): number {
   }
 
   return Math.max(0, Math.min(10, score));
+}
+
+export function resetMLBStatsApiCachesForTest(): void {
+  dailyProbablesCache.clear();
+  pitcherStatsCache.clear();
+  projectedStarterCache.clear();
 }

@@ -91,6 +91,8 @@ function scheduleGameDetailWarmup(
       seedGameDetailCache(queryClient, gameId, cachedGame);
 
       void queryClient.prefetchQuery({
+        // queryClient is cache plumbing, not part of the server identity for this request.
+        // eslint-disable-next-line @tanstack/query/exhaustive-deps
         queryKey: ['game', gameId],
         queryFn: async () => {
           const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
@@ -426,6 +428,8 @@ export function useGame(gameId: string) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
+    // queryClient is only used to seed/merge cached detail data for smoother navigation.
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: ['game', gameId],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
@@ -484,7 +488,7 @@ export function useWeekGamesBySport(sport: string) {
       for (let i = 0; i < 3; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() + i);
-        dates.push(date.toISOString().split('T')[0]);
+        dates.push(formatLocalDate(date));
       }
 
       // Fetch games for each date in parallel

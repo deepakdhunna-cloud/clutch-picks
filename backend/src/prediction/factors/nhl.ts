@@ -88,7 +88,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
   const goalieAvailable = homeSavePct !== undefined || awaySavePct !== undefined;
 
   let goalieDelta = 0;
-  let goalieEvidence = "Starting goalie data unavailable";
+  let goalieEvidence = "Starting goalie/team save data unavailable from public team feeds";
 
   if (homeSavePct !== undefined && awaySavePct !== undefined) {
     const homeQuality = goalieQualityDelta(homeSavePct, undefined);
@@ -161,7 +161,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     awayPK !== undefined;
 
   let stDelta = 0;
-  let stEvidence = "Special teams data unavailable";
+  let stEvidence = "Special teams data unavailable from public team feeds";
 
   if (stAvailable) {
     // Home PP vs Away PK: positive = home has edge on power play

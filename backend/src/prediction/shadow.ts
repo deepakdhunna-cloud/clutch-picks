@@ -35,6 +35,11 @@ import {
   mergeAdvancedMetrics,
   mergeInjuryReports,
 } from "../lib/sportsDataIO";
+import {
+  fetchFreeAdvancedMetrics,
+  fetchFreeIPLVenueSplit,
+  fetchFreeTennisProfileByName,
+} from "../lib/freeDataSources";
 // fetchTeamShootingRecent removed — stats.nba.com IP-blocks Railway
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 import {
@@ -179,6 +184,7 @@ export async function buildGameContext(
     homeExtended, awayExtended,
     gameInjuries,
     homeAdvancedEspn, awayAdvancedEspn,
+    homeFreeAdvanced, awayFreeAdvanced,
     homeLineupEspn, awayLineupEspn,
     homeSportsDataIOAdvanced, awaySportsDataIOAdvanced,
     homeSportsDataIOLineup, awaySportsDataIOLineup,
@@ -191,6 +197,8 @@ export async function buildGameContext(
     homeAvailability, awayAvailability,
     uclPedigree,
     uclTravel,
+    homeTennisProfile, awayTennisProfile,
+    iplVenueSplit,
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
@@ -203,6 +211,22 @@ export async function buildGameContext(
     fetchGameInjuries(sport, game.id, game.homeTeam.id, game.awayTeam.id),
     fetchAdvancedMetrics(game.homeTeam.id, sport),
     fetchAdvancedMetrics(game.awayTeam.id, sport),
+    fetchFreeAdvancedMetrics({
+      sport,
+      gameId: game.id,
+      teamId: game.homeTeam.id,
+      teamName: game.homeTeam.name,
+      teamAbbreviation: game.homeTeam.abbreviation,
+      gameDate,
+    }),
+    fetchFreeAdvancedMetrics({
+      sport,
+      gameId: game.id,
+      teamId: game.awayTeam.id,
+      teamName: game.awayTeam.name,
+      teamAbbreviation: game.awayTeam.abbreviation,
+      gameDate,
+    }),
     fetchStartingLineup(game.homeTeam.id, sport, gameDate),
     fetchStartingLineup(game.awayTeam.id, sport, gameDate),
     fetchSportsDataIOAdvancedMetrics(sport, String(game.homeTeam.abbreviation ?? ""), gameDate),
@@ -250,6 +274,15 @@ export async function buildGameContext(
     sport === "UCL"
       ? lookupUclTravelInfo(game.homeTeam.name, game.awayTeam.name)
       : Promise.resolve(null),
+    sport === "TENNIS"
+      ? fetchFreeTennisProfileByName(game.homeTeam.name, game.homeTeam.tour, 10, gameDate)
+      : Promise.resolve(null),
+    sport === "TENNIS"
+      ? fetchFreeTennisProfileByName(game.awayTeam.name, game.awayTeam.tour, 10, gameDate)
+      : Promise.resolve(null),
+    sport === "IPL"
+      ? fetchFreeIPLVenueSplit(game.id, game.homeTeam.id, game.awayTeam.id)
+      : Promise.resolve(null),
   ]);
 
   // Translate PlayerInjury[] → TeamInjuryReport, then merge SportsDataIO and
@@ -269,10 +302,20 @@ export async function buildGameContext(
   const homeInjuries = mergePlayerAvailability(homeInjuriesSportsDataIO, homeAvailability);
   const awayInjuries = mergePlayerAvailability(awayInjuriesSportsDataIO, awayAvailability);
 
-  const homeAdvanced = mergeAdvancedMetrics(homeAdvancedEspn, homeSportsDataIOAdvanced);
-  const awayAdvanced = mergeAdvancedMetrics(awayAdvancedEspn, awaySportsDataIOAdvanced);
+  const homeAdvancedFree = mergeAdvancedMetrics(homeAdvancedEspn, homeFreeAdvanced);
+  const awayAdvancedFree = mergeAdvancedMetrics(awayAdvancedEspn, awayFreeAdvanced);
+  const homeAdvanced = mergeAdvancedMetrics(homeAdvancedFree, homeSportsDataIOAdvanced);
+  const awayAdvanced = mergeAdvancedMetrics(awayAdvancedFree, awaySportsDataIOAdvanced);
   const homeLineup = homeSportsDataIOLineup ?? homeLineupEspn;
   const awayLineup = awaySportsDataIOLineup ?? awayLineupEspn;
+  const resolvedHomeForm =
+    sport === "TENNIS" && homeTennisProfile?.form?.results.length
+      ? homeTennisProfile.form
+      : homeForm;
+  const resolvedAwayForm =
+    sport === "TENNIS" && awayTennisProfile?.form?.results.length
+      ? awayTennisProfile.form
+      : awayForm;
   const marketConsensus =
     sharpMarketConsensus ??
     buildMarketConsensusFromGameOdds({
@@ -317,10 +360,10 @@ export async function buildGameContext(
       name: game.homeTeam.name,
       abbreviation: game.homeTeam.abbreviation,
       logo: game.homeTeam.logo || "",
-      rank: game.homeTeam.rank,
+      rank: game.homeTeam.rank ?? homeTennisProfile?.rank,
       seed: game.homeTeam.seed,
-      rankingPoints: game.homeTeam.rankingPoints,
-      tour: game.homeTeam.tour,
+      rankingPoints: game.homeTeam.rankingPoints ?? homeTennisProfile?.rankingPoints,
+      tour: game.homeTeam.tour ?? homeTennisProfile?.tour,
       standingsRank: game.homeTeam.standingsRank,
       standingsPoints: game.homeTeam.standingsPoints,
       netRunRate: game.homeTeam.netRunRate,
@@ -339,10 +382,10 @@ export async function buildGameContext(
       name: game.awayTeam.name,
       abbreviation: game.awayTeam.abbreviation,
       logo: game.awayTeam.logo || "",
-      rank: game.awayTeam.rank,
+      rank: game.awayTeam.rank ?? awayTennisProfile?.rank,
       seed: game.awayTeam.seed,
-      rankingPoints: game.awayTeam.rankingPoints,
-      tour: game.awayTeam.tour,
+      rankingPoints: game.awayTeam.rankingPoints ?? awayTennisProfile?.rankingPoints,
+      tour: game.awayTeam.tour ?? awayTennisProfile?.tour,
       standingsRank: game.awayTeam.standingsRank,
       standingsPoints: game.awayTeam.standingsPoints,
       netRunRate: game.awayTeam.netRunRate,
@@ -368,8 +411,8 @@ export async function buildGameContext(
     sport,
     homeElo,
     awayElo,
-    homeForm,
-    awayForm,
+    homeForm: resolvedHomeForm,
+    awayForm: resolvedAwayForm,
     homeExtended,
     awayExtended,
     homeInjuries,
@@ -401,6 +444,14 @@ export async function buildGameContext(
       homeInjuries: !!homeSportsDataIOInjuries,
       awayInjuries: !!awaySportsDataIOInjuries,
     },
+    freeDataSources: {
+      homeAdvanced: !!homeFreeAdvanced,
+      awayAdvanced: !!awayFreeAdvanced,
+      homeTennisProfile: !!homeTennisProfile,
+      awayTennisProfile: !!awayTennisProfile,
+      iplVenueSplit: !!iplVenueSplit,
+    },
+    iplVenueSplit,
     gameDate: gameDate.toISOString(),
   };
 }

@@ -133,7 +133,7 @@ export function computeNBAFactors(ctx: GameContext): FactorContribution[] {
     awayDrtg !== undefined;
 
   let netRatingDelta = 0;
-  let netRatingEvidence = "Offensive/defensive rating data unavailable from ESPN";
+  let netRatingEvidence = "Offensive/defensive rating data unavailable from public team feeds";
 
   if (netRatingAvailable) {
     const homeNet = homeOrtg! - homeDrtg!;

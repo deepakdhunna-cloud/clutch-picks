@@ -1709,10 +1709,16 @@ export default function GameDetailScreen() {
   const removePick = useRemovePick();
   const { data: game, dataUpdatedAt, isLoading, error, refetch } = useGame(id ?? '') as { data: Game | null | undefined; dataUpdatedAt: number; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
   const { refreshing, onRefresh } = useSmoothRefresh(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     return refetch();
   }, { minVisibleMs: 320, maxVisibleMs: 850 });
   const hasGameData = !!game;
+
+  const openPickAction = useCallback((side: 'home' | 'away') => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setPendingPickAction(userPick?.pickedTeam === side ? 'remove' : 'pick');
+    setPendingPick(side);
+  }, [userPick?.pickedTeam]);
 
   useEffect(() => {
     if (!id || !hasGameData || !deferredContentReady) return;
@@ -1749,11 +1755,6 @@ export default function GameDetailScreen() {
   const cricketContext = !suspended && isLiveCricket ? cricketInningsContext(game) : null;
   const cricketClockText = cricketOvers;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
-  const openPickAction = useCallback((side: 'home' | 'away') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPendingPickAction(userPick?.pickedTeam === side ? 'remove' : 'pick');
-    setPendingPick(side);
-  }, [userPick?.pickedTeam]);
   // Pre-game countdown state — true while the game is SCHEDULED and tip-off
   // is within the COUNTDOWN_WINDOW_SEC window (1 hour). Drives both the LED
   // countdown visibility and the shrunk-score / dim-overlay treatment.
@@ -1767,6 +1768,8 @@ export default function GameDetailScreen() {
   const detailScoreboardScale = suspended ? 0.7 : isLiveCricket ? 1.22 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
   const detailTopInset = Math.max(insets.top, 58);
   const detailHeaderTopSpacer = 12;
+  const showDetailRefreshPill = refreshing ? hasGameData : false;
+  const showBlockingRefresh = refreshing ? !hasGameData : false;
   return (
     <View style={{ flex: 1, backgroundColor: '#040608', overflow: 'hidden' }}>
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -1775,8 +1778,8 @@ export default function GameDetailScreen() {
         <LinearGradient colors={['transparent', hexToRgba(awayAccent, 0.22), hexToRgba(awayAccent, 0.42)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
       </View>
-      <DetailRefreshPill visible={refreshing && hasGameData} top={detailTopInset + 10} />
-      <ScrollView style={{ flex: 1, marginTop: detailTopInset }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={refreshing && !hasGameData} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={40} />}>
+      <DetailRefreshPill visible={showDetailRefreshPill} top={detailTopInset + 10} />
+      <ScrollView style={{ flex: 1, marginTop: detailTopInset }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={showBlockingRefresh} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
           <View style={{ height: detailHeaderTopSpacer }} />
           {/* Top bar — back (absolute left) + centered combined pill */}

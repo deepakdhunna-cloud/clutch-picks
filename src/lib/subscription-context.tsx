@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { AppState, Platform } from 'react-native';
 import {
   addCustomerInfoListener,
@@ -73,8 +73,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     return () => subscription.remove();
   }, [checkSubscription]);
 
+  const value = useMemo(
+    () => ({ isPremium, isLoading, checkSubscription }),
+    [checkSubscription, isLoading, isPremium],
+  );
+
   return (
-    <SubscriptionContext.Provider value={{ isPremium, isLoading, checkSubscription }}>
+    <SubscriptionContext.Provider value={value}>
       {children}
     </SubscriptionContext.Provider>
   );

@@ -878,6 +878,15 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   if (ctx.sportsDataIO?.homeInjuries || ctx.sportsDataIO?.awayInjuries) {
     dataSources.push("SportsDataIO injury feed");
   }
+  if (ctx.freeDataSources?.homeAdvanced || ctx.freeDataSources?.awayAdvanced) {
+    dataSources.push("public boxscore/team stats enrichment");
+  }
+  if (ctx.freeDataSources?.homeTennisProfile || ctx.freeDataSources?.awayTennisProfile) {
+    dataSources.push("public tennis ranking/form data");
+  }
+  if (ctx.freeDataSources?.iplVenueSplit) {
+    dataSources.push("ESPN Cricinfo IPL matchup splits");
+  }
 
   // 9. Market comparison after the blend. Market consensus already had a
   //    small calibration vote above; this block reports the remaining gap

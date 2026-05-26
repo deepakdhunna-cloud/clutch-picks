@@ -257,6 +257,26 @@ export type GameContext = {
     awayInjuries: boolean;
   };
 
+  // Public/free source enrichment that fills gaps before paid providers
+  // override fields. Used for source attribution and coverage audits.
+  freeDataSources?: {
+    homeAdvanced: boolean;
+    awayAdvanced: boolean;
+    homeTennisProfile: boolean;
+    awayTennisProfile: boolean;
+    iplVenueSplit: boolean;
+  };
+
+  // IPL-only public cricket fallback. This is derived from ESPN Cricinfo's
+  // recent head-to-head home/away events when team schedule splits are thin.
+  iplVenueSplit?: {
+    homeWinPct: number;
+    awayRoadWinPct: number;
+    homeGames: number;
+    awayGames: number;
+    source: "espn-cricket-h2h";
+  } | null;
+
   /** ISO date string of the game */
   gameDate: string;
 };

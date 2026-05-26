@@ -10,6 +10,7 @@ type GameIdentity = {
 };
 
 const TRUSTED_SCOREBOARD_SPORTS = new Set<string>(Object.values(Sport));
+const EMPTY_VERIFIED_GAMES: never[] = [];
 
 function hasTrustedScoreboardId(game: GameIdentity): boolean {
   return /^\d+$/.test(String(game.id ?? ''));
@@ -46,5 +47,17 @@ export function isUnverifiedTennisGame(game: GameIdentity | null | undefined): b
 }
 
 export function filterVerifiedGames<T extends GameIdentity>(games: readonly T[] | null | undefined): T[] {
-  return (games ?? []).filter(isVerifiedScoreboardGame);
+  if (!games || games.length === 0) return EMPTY_VERIFIED_GAMES as T[];
+
+  const verified: T[] = [];
+  let droppedAny = false;
+  for (const game of games) {
+    if (isVerifiedScoreboardGame(game)) {
+      verified.push(game);
+    } else {
+      droppedAny = true;
+    }
+  }
+
+  return droppedAny ? verified : (games as T[]);
 }

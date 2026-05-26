@@ -35,6 +35,7 @@ const allSports = Object.values(Sport);
 const HOME_SPORT_INITIAL_GAME_COUNT = 10;
 const HOME_SPORT_GAME_BATCH_COUNT = 10;
 const HOME_BOARD_SCROLL_OFFSET = 300;
+const SEARCH_RESULT_ITEM_HEIGHT = 88;
 
 const RefreshPill = memo(function RefreshPill({ visible, label }: { visible: boolean; label: string }) {
   if (!visible) return null;
@@ -1011,13 +1012,13 @@ export default function HomeScreen() {
   const searchResults = useMemo<GameWithPrediction[]>(() => {
     if (!todaysGames) return [];
     const q = debouncedQuery.trim().toLowerCase();
+    if (!q) return [];
     const statusOrder: Record<string, number> = { LIVE: 0, SCHEDULED: 1, FINAL: 2 };
     return todaysGames
       .filter((game) => {
         if (game.status === GameStatus.POSTPONED || game.status === GameStatus.CANCELLED) {
           return false;
         }
-        if (!q) return true;
         const sportName = SPORT_META[game.sport as Sport]?.name?.toLowerCase() ?? '';
         const sportKey = (game.sport as string).toLowerCase();
         return (
@@ -1313,11 +1314,147 @@ export default function HomeScreen() {
   );
   const getItemKey = useCallback((item: FlatListItem) => `${boardTransitionKey}:${item.key}`, [boardTransitionKey]);
 
+  const handleCloseSearchModal = useCallback(() => {
+    setSearchModalVisible(false);
+    setSearchQuery('');
+    setDebouncedQuery('');
+  }, []);
+
   // Navigate to game from search modal - memoized
   const handleSearchGamePress = useCallback((game: GameWithPrediction) => {
-    setSearchModalVisible(false);
+    handleCloseSearchModal();
     handleOpenGame(game);
-  }, [handleOpenGame]);
+  }, [handleCloseSearchModal, handleOpenGame]);
+
+  const searchData = useMemo<GameWithPrediction[]>(
+    () => (searchQuery.trim() === '' ? [] : searchResults),
+    [searchQuery, searchResults]
+  );
+
+  const renderSearchResult = useCallback(({ item, index }: { item: GameWithPrediction; index: number }) => (
+    <SearchGameCard
+      game={item}
+      index={index}
+      onPressIn={() => handleWarmGame(item)}
+      onPress={() => handleSearchGamePress(item)}
+    />
+  ), [handleSearchGamePress, handleWarmGame]);
+
+  const getSearchItemLayout = useCallback((_: ArrayLike<GameWithPrediction> | null | undefined, index: number) => ({
+    length: SEARCH_RESULT_ITEM_HEIGHT,
+    offset: SEARCH_RESULT_ITEM_HEIGHT * index,
+    index,
+  }), []);
+
+  const homeListHeader = useMemo(() => (
+    <>
+      <HomeHeader
+        liveGamesPreview={liveGamesPreview}
+        filteredLiveGames={filteredLiveGames}
+        availableLiveSports={availableLiveSports}
+        liveSportCounts={liveSportCounts}
+        selectedLiveSportFilter={selectedLiveSportFilter}
+        setSelectedLiveSportFilter={setSelectedLiveSportFilter}
+        selectedSportFilter={selectedSportFilter}
+        setSelectedSportFilter={applySportFilter}
+        showAllLive={showAllLive}
+        setShowAllLive={setShowAllLive}
+        onViewAll={scrollToHomeBoard}
+        nonLiveGames={nonLiveGames}
+        gameCounts={gameCounts}
+        isLoadingGames={isInitialHomeLoading}
+        router={router}
+        onOpenGame={handleOpenGame}
+        onWarmGame={handleWarmGame}
+        horizontalPadding={horizontalPadding}
+        headerFontSize={headerFontSize}
+        responsive={responsive}
+        statusFilter={statusFilter}
+      />
+      {/* Game Board header + status filter pills */}
+      <View style={{ paddingHorizontal: 20, marginBottom: 6, marginTop: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
+          <LinearGradient colors={['transparent', 'rgba(122,157,184,0.15)', 'rgba(122,157,184,0.6)']} locations={[0, 0.6, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
+          <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 }}>Game Board</Text>
+          <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
+        </View>
+      </View>
+      <StatusFilterRail statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
+
+      {/* Selected sport tile + Clear button — separate */}
+      {selectedSportFilter ? (() => {
+        const sportLabel = displaySport(selectedSportFilter);
+        const count = gameCounts?.[selectedSportFilter] ?? 0;
+        return (
+          <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginLeft: 20, marginRight: 20, marginTop: 0, marginBottom: 16 }}>
+            {/* Sport tile */}
+            <LedMiniPanel
+              leftSport={selectedSportFilter}
+              label={sportLabel}
+              count={count}
+              sideRail
+            />
+            {/* Clear button — separate jumbotron tile */}
+            <Pressable
+              onPress={() => applySportFilter(null)}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.84 : 1,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+              })}
+            >
+              <LedMiniPanel label="CLEAR" />
+            </Pressable>
+          </View>
+        );
+      })() : null}
+    </>
+  ), [
+    applySportFilter,
+    availableLiveSports,
+    filteredLiveGames,
+    gameCounts,
+    handleOpenGame,
+    handleWarmGame,
+    headerFontSize,
+    horizontalPadding,
+    isInitialHomeLoading,
+    liveGamesPreview,
+    liveSportCounts,
+    nonLiveGames,
+    responsive,
+    router,
+    scrollToHomeBoard,
+    selectedLiveSportFilter,
+    selectedSportFilter,
+    showAllLive,
+    statusFilter,
+  ]);
+
+  const homeListEmpty = useMemo(() => (
+    !isLoadingGames && nonLiveGames.length === 0 && liveGamesPreview.length === 0 ? (
+      <View className="px-5">
+        <Text className="text-zinc-200 text-xs font-semibold uppercase tracking-wider mb-3">
+          Today's Games
+        </Text>
+        <View className="bg-zinc-800 rounded-2xl p-8 items-center">
+          <Text className="text-zinc-200 text-center font-semibold mb-1">
+            No games today
+          </Text>
+          <Text className="text-zinc-400 text-center text-sm">
+            Tomorrow's slate will appear here when games are scheduled.
+          </Text>
+        </View>
+      </View>
+    ) : null
+  ), [isLoadingGames, liveGamesPreview.length, nonLiveGames.length]);
+
+  const homeListFooter = useMemo(() => (
+    <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 }}>
+      <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
+        AI predictions are for entertainment purposes only. Not financial advice.
+      </Text>
+    </View>
+  ), []);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
@@ -1342,7 +1479,7 @@ export default function HomeScreen() {
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         pointerEvents="none"
       />
-      <RefreshPill visible={refreshing && hasHomeGameData} label="Updating board" />
+      <RefreshPill visible={refreshing ? hasHomeGameData : false} label="Updating board" />
       <Animated.FlatList
         key={numColumns}
         ref={flatListRef}
@@ -1367,100 +1504,16 @@ export default function HomeScreen() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing && !hasHomeGameData}
+            refreshing={refreshing ? !hasHomeGameData : false}
             onRefresh={onRefresh}
             tintColor={TEAL}
             colors={[TEAL]}
             progressBackgroundColor="#080C10"
           />
         }
-        ListHeaderComponent={
-        <>
-        <HomeHeader
-            liveGamesPreview={liveGamesPreview}
-            filteredLiveGames={filteredLiveGames}
-            availableLiveSports={availableLiveSports}
-            liveSportCounts={liveSportCounts}
-            selectedLiveSportFilter={selectedLiveSportFilter}
-            setSelectedLiveSportFilter={setSelectedLiveSportFilter}
-            selectedSportFilter={selectedSportFilter}
-            setSelectedSportFilter={applySportFilter}
-            showAllLive={showAllLive}
-            setShowAllLive={setShowAllLive}
-            onViewAll={() => flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true })}
-            nonLiveGames={nonLiveGames}
-            gameCounts={gameCounts}
-            isLoadingGames={isInitialHomeLoading}
-            router={router}
-            onOpenGame={handleOpenGame}
-            onWarmGame={handleWarmGame}
-            horizontalPadding={horizontalPadding}
-            headerFontSize={headerFontSize}
-            responsive={responsive}
-            statusFilter={statusFilter}
-          />
-          {/* Game Board header + status filter pills */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 6, marginTop: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
-              <LinearGradient colors={['transparent', 'rgba(122,157,184,0.15)', 'rgba(122,157,184,0.6)']} locations={[0, 0.6, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
-              <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 }}>Game Board</Text>
-              <LinearGradient colors={['rgba(122,157,184,0.6)', 'rgba(122,157,184,0.15)', 'transparent']} locations={[0, 0.4, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, height: 1 }} />
-            </View>
-          </View>
-          <StatusFilterRail statusFilter={statusFilter} setStatusFilter={setStatusFilter} />
-
-          {/* Selected sport tile + Clear button — separate */}
-          {selectedSportFilter ? (() => {
-            const sportLabel = displaySport(selectedSportFilter!);
-            const count = gameCounts?.[selectedSportFilter] ?? 0;
-            return (
-              <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginLeft: 20, marginRight: 20, marginTop: 0, marginBottom: 16 }}>
-                {/* Sport tile */}
-                <LedMiniPanel
-                  leftSport={selectedSportFilter}
-                  label={sportLabel}
-                  count={count}
-                  sideRail
-                />
-                {/* Clear button — separate jumbotron tile */}
-                <Pressable
-                  onPress={() => applySportFilter(null)}
-                  style={({ pressed }) => ({
-                    opacity: pressed ? 0.84 : 1,
-                    transform: [{ scale: pressed ? 0.97 : 1 }],
-                  })}
-                >
-                  <LedMiniPanel label="CLEAR" />
-                </Pressable>
-              </View>
-            );
-          })() : null}
-        </>
-        }
-        ListEmptyComponent={
-          !isLoadingGames && nonLiveGames.length === 0 && liveGamesPreview.length === 0 ? (
-            <View className="px-5">
-              <Text className="text-zinc-200 text-xs font-semibold uppercase tracking-wider mb-3">
-                Today's Games
-              </Text>
-              <View className="bg-zinc-800 rounded-2xl p-8 items-center">
-                <Text className="text-zinc-200 text-center font-semibold mb-1">
-                  No games today
-                </Text>
-                <Text className="text-zinc-400 text-center text-sm">
-                  Tomorrow's slate will appear here when games are scheduled.
-                </Text>
-              </View>
-            </View>
-          ) : null
-        }
-        ListFooterComponent={
-          <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 }}>
-            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)', textAlign: 'center', lineHeight: 15 }}>
-              AI predictions are for entertainment purposes only. Not financial advice.
-            </Text>
-          </View>
-        }
+        ListHeaderComponent={homeListHeader}
+        ListEmptyComponent={homeListEmpty}
+        ListFooterComponent={homeListFooter}
       />
 
       {/* Search Modal */}
@@ -1468,7 +1521,7 @@ export default function HomeScreen() {
         visible={searchModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setSearchModalVisible(false)}
+        onRequestClose={handleCloseSearchModal}
       >
         <View style={{ flex: 1, backgroundColor: '#040608' }}>
           {/* Search Bar Row */}
@@ -1524,7 +1577,7 @@ export default function HomeScreen() {
 
             {/* Cancel button */}
             <Pressable
-              onPress={() => setSearchModalVisible(false)}
+              onPress={handleCloseSearchModal}
               className="active:opacity-60"
             >
               <Text style={{ color: '#5A7A8A', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
@@ -1535,19 +1588,13 @@ export default function HomeScreen() {
           <FlatList
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
-            data={searchQuery.trim() === '' ? [] : searchResults}
+            data={searchData}
             keyExtractor={(item) => item.id}
             removeClippedSubviews={true}
             maxToRenderPerBatch={4}
             windowSize={5}
-            renderItem={({ item, index }) => (
-              <SearchGameCard
-                game={item}
-                index={index}
-                onPressIn={() => handleWarmGame(item)}
-                onPress={() => handleSearchGamePress(item)}
-              />
-            )}
+            getItemLayout={getSearchItemLayout}
+            renderItem={renderSearchResult}
             ListHeaderComponent={
               searchQuery.trim() !== '' && searchResults.length > 0 ? (
                 <Text

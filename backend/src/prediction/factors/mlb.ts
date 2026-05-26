@@ -86,6 +86,10 @@ function pitcherQualityDelta(pitcher: LineupPlayer): number {
   return quality;
 }
 
+function pitcherLabel(pitcher: LineupPlayer): string {
+  return pitcher.projectionNote ? `${pitcher.name} (${pitcher.projectionNote})` : pitcher.name;
+}
+
 export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
@@ -109,16 +113,16 @@ export function computeMLBFactors(ctx: GameContext): FactorContribution[] {
     const awayERA = awaySP!.era?.toFixed(2) ?? "N/A";
     const homeFIP = homeSP!.fip?.toFixed(2) ?? "N/A";
     const awayFIP = awaySP!.fip?.toFixed(2) ?? "N/A";
-    spEvidence = `${homeSP!.name} (ERA ${homeERA}, FIP ${homeFIP}) vs ${awaySP!.name} (ERA ${awayERA}, FIP ${awayFIP})`;
+    spEvidence = `${pitcherLabel(homeSP!)} (ERA ${homeERA}, FIP ${homeFIP}) vs ${pitcherLabel(awaySP!)} (ERA ${awayERA}, FIP ${awayFIP})`;
   } else if (homeSP !== null) {
     // Only one pitcher known — partial data
     const homeQuality = pitcherQualityDelta(homeSP!);
     spDelta = homeQuality; // Compare against league-average opponent
-    spEvidence = `${homeSP!.name} (ERA ${homeSP!.era?.toFixed(2) ?? "N/A"}) vs TBD`;
+    spEvidence = `${pitcherLabel(homeSP!)} (ERA ${homeSP!.era?.toFixed(2) ?? "N/A"}) vs TBD`;
   } else if (awaySP !== null) {
     const awayQuality = pitcherQualityDelta(awaySP!);
     spDelta = -awayQuality;
-    spEvidence = `TBD vs ${awaySP!.name} (ERA ${awaySP!.era?.toFixed(2) ?? "N/A"})`;
+    spEvidence = `TBD vs ${pitcherLabel(awaySP!)} (ERA ${awaySP!.era?.toFixed(2) ?? "N/A"})`;
   }
 
   factors.push({

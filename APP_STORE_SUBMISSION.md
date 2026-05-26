@@ -6,7 +6,7 @@ This is a release-readiness checklist for the current app. Do not use it as an a
 
 - App name: `CLUTCH PICKS`
 - Marketing version: `1.1.1`
-- iOS build number: `27`
+- iOS build number: `37`
 - Bundle identifier currently in app config: `Com.vibecode.clutchpicks-xzrxme`
 - Bundle identifier note: keep this exact identifier for updates to the existing App Store app. Changing it requires a separate App Store app record.
 - App URL scheme note: keep the existing installed-app scheme for auth/deep-link compatibility. This is not a Vibe service dependency.

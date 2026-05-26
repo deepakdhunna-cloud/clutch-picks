@@ -1,0 +1,110 @@
+{
+  "runAt": "2026-05-26T13:52:28.220Z",
+  "totalGames": 1122,
+  "gamesSkipped": 215,
+  "perSport": [
+    {
+      "sport": "MLB",
+      "resolvedGames": 646,
+      "oldCorrect": 330,
+      "newCorrect": 366,
+      "oldAccuracy": 51.1,
+      "newAccuracy": 56.7,
+      "accuracyDelta": 5.6,
+      "avgNewConfidence": 53.2,
+      "avgOldConfidence": 54,
+      "disagreements": 156,
+      "disagreementsNewCorrect": 94
+    },
+    {
+      "sport": "NBA",
+      "resolvedGames": 124,
+      "oldCorrect": 84,
+      "newCorrect": 90,
+      "oldAccuracy": 67.7,
+      "newAccuracy": 72.6,
+      "accuracyDelta": 4.8,
+      "avgNewConfidence": 59.2,
+      "avgOldConfidence": 60.6,
+      "disagreements": 22,
+      "disagreementsNewCorrect": 14
+    },
+    {
+      "sport": "NHL",
+      "resolvedGames": 140,
+      "oldCorrect": 80,
+      "newCorrect": 78,
+      "oldAccuracy": 57.1,
+      "newAccuracy": 55.7,
+      "accuracyDelta": -1.4,
+      "avgNewConfidence": 54.9,
+      "avgOldConfidence": 55,
+      "disagreements": 30,
+      "disagreementsNewCorrect": 14
+    },
+    {
+      "sport": "EPL",
+      "resolvedGames": 71,
+      "oldCorrect": 46,
+      "newCorrect": 50,
+      "oldAccuracy": 64.8,
+      "newAccuracy": 70.4,
+      "accuracyDelta": 5.6,
+      "avgNewConfidence": 43.9,
+      "avgOldConfidence": 49.5,
+      "disagreements": 8,
+      "disagreementsNewCorrect": 6
+    },
+    {
+      "sport": "MLS",
+      "resolvedGames": 129,
+      "oldCorrect": 62,
+      "newCorrect": 75,
+      "oldAccuracy": 48.1,
+      "newAccuracy": 58.1,
+      "accuracyDelta": 10.1,
+      "avgNewConfidence": 43.6,
+      "avgOldConfidence": 49.2,
+      "disagreements": 18,
+      "disagreementsNewCorrect": 15
+    },
+    {
+      "sport": "UCL",
+      "resolvedGames": 6,
+      "oldCorrect": 3,
+      "newCorrect": 3,
+      "oldAccuracy": 50,
+      "newAccuracy": 50,
+      "accuracyDelta": 0,
+      "avgNewConfidence": 48.8,
+      "avgOldConfidence": 57.5,
+      "disagreements": 0,
+      "disagreementsNewCorrect": 0
+    },
+    {
+      "sport": "IPL",
+      "resolvedGames": 6,
+      "oldCorrect": 3,
+      "newCorrect": 3,
+      "oldAccuracy": 50,
+      "newAccuracy": 50,
+      "accuracyDelta": 0,
+      "avgNewConfidence": 50.8,
+      "avgOldConfidence": 52,
+      "disagreements": 0,
+      "disagreementsNewCorrect": 0
+    }
+  ],
+  "overall": {
+    "oldAccuracy": 54.2,
+    "newAccuracy": 59.3,
+    "accuracyDelta": 5.1,
+    "newEngineWins": true
+  },
+  "dataQualityNote": "Context data (injuries, form, standings) reflects CURRENT state, not state at prediction time. For games older than 7 days, this introduces noise. Use results as directional signal, not exact accuracy.",
+  "warnings": [
+    "UCL has only 6 resolved games — not statistically meaningful",
+    "IPL has only 6 resolved games — not statistically meaningful",
+    "215 games skipped due to missing ESPN data or fetch failure"
+  ]
+}

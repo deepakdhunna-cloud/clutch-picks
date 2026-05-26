@@ -5,7 +5,7 @@
 
 // ESPN sport path mappings
 import { LRUCache } from "lru-cache";
-import { fetchMLBDailyProbables, type MLBPitcherQuality } from "./mlbStatsApi";
+import { fetchMLBDailyProbables, fetchMLBProjectedStarter, type MLBPitcherQuality } from "./mlbStatsApi";
 import { fetchTennisRecentForm } from "./tennisStats";
 
 const ESPN_SPORT_PATHS: Record<string, string> = {
@@ -740,7 +740,7 @@ export async function fetchAdvancedMetrics(
 
     const result: TeamAdvancedMetrics = {};
 
-    if (sport === "NBA") {
+    if (sport === "NBA" || sport === "NCAAB") {
       // Offensive Rating — try all ESPN name variants
       result.offensiveRating =
         statMap["offensiverating"] ??
@@ -748,6 +748,9 @@ export async function fetchAdvancedMetrics(
         statMap["ortg"] ??
         statMap["offensiveefficiency"] ??
         statMap["pointsperpossession"] ??
+        statMap["avgpoints"] ??
+        statMap["pointspergame"] ??
+        statMap["ppg"] ??
         undefined;
 
       // Defensive Rating — lower is better
@@ -756,6 +759,9 @@ export async function fetchAdvancedMetrics(
         statMap["defrtg"] ??
         statMap["drtg"] ??
         statMap["defensiveefficiency"] ??
+        statMap["avgpointsagainst"] ??
+        statMap["pointsallowedpergame"] ??
+        statMap["opponentpointspergame"] ??
         undefined;
 
       // Pace — possessions per 48 minutes
@@ -804,9 +810,9 @@ export async function fetchAdvancedMetrics(
       }
 
       // Log missing key metrics at debug level
-      if (result.offensiveRating === undefined) console.debug(`[metrics] NBA team ${teamId}: offRtg unavailable from ESPN`);
-      if (result.defensiveRating === undefined) console.debug(`[metrics] NBA team ${teamId}: defRtg unavailable from ESPN`);
-      if (result.effectiveFGPct === undefined) console.debug(`[metrics] NBA team ${teamId}: eFG% unavailable from ESPN`);
+      if (result.offensiveRating === undefined) console.debug(`[metrics] ${sport} team ${teamId}: offRtg unavailable from ESPN`);
+      if (result.defensiveRating === undefined) console.debug(`[metrics] ${sport} team ${teamId}: defRtg unavailable from ESPN`);
+      if (result.effectiveFGPct === undefined) console.debug(`[metrics] ${sport} team ${teamId}: eFG% unavailable from ESPN`);
     }
 
     if (sport === "NFL" || sport === "NCAAF") {
@@ -951,6 +957,8 @@ export interface LineupPlayer {
   mlbPersonId?: number;     // MLB StatsAPI person ID for cross-referencing
   seasonGamesStarted?: number;
   seasonInningsPitched?: number;
+  source?: "espn-probable" | "mlb-statsapi-probable" | "mlb-rotation-projection";
+  projectionNote?: string;
 }
 
 export interface StartingLineup {
@@ -1077,34 +1085,43 @@ async function fetchMLBLineup(
     .then((map) => map.get(teamIdNum) ?? null)
     .catch(() => null);
 
-  // Run both in parallel
+  // Run confirmed-source lookups in parallel.
   const [espnPitcher, mlbPitcher] = await Promise.all([espnPromise, mlbPromise]);
+  const projectedPitcher = !espnPitcher && !mlbPitcher
+    ? await fetchMLBProjectedStarter(teamIdNum, isoDate).catch(() => null)
+    : null;
+  const statsPitcher = mlbPitcher ?? projectedPitcher;
 
-  // Neither source returned anything → no usable lineup
-  if (!espnPitcher && !mlbPitcher) {
+  // No confirmed probable and no projection from recent rotation history.
+  if (!espnPitcher && !statsPitcher) {
     return null;
   }
 
   // Merge: MLB StatsAPI provides stats (richer + more reliable), ESPN provides
   // name and W-L record (better-formatted display strings).
+  const isProjected = Boolean(statsPitcher?.isProjected);
   const pitcher: LineupPlayer = {
-    name: espnPitcher?.name ?? mlbPitcher?.name ?? "Unknown",
+    name: espnPitcher?.name ?? statsPitcher?.name ?? "Unknown",
     position: espnPitcher?.position ?? "SP",
-    isConfirmed: true,
-    era: mlbPitcher?.seasonEra ?? espnPitcher?.era,
+    isConfirmed: !isProjected,
+    era: statsPitcher?.seasonEra ?? espnPitcher?.era,
     record: espnPitcher?.record,
-    fip: mlbPitcher?.seasonFip,
-    whip: mlbPitcher?.seasonWhip,
-    k9: mlbPitcher?.seasonK9,
-    bb9: mlbPitcher?.seasonBb9,
-    recent5Era: mlbPitcher?.recent5Era,
-    recent5WarningFlag: mlbPitcher?.recent5WarningFlag,
-    mlbPersonId: mlbPitcher?.mlbPersonId,
-    seasonGamesStarted: mlbPitcher?.seasonGamesStarted,
-    seasonInningsPitched: mlbPitcher?.seasonInningsPitched,
+    fip: statsPitcher?.seasonFip,
+    whip: statsPitcher?.seasonWhip,
+    k9: statsPitcher?.seasonK9,
+    bb9: statsPitcher?.seasonBb9,
+    recent5Era: statsPitcher?.recent5Era,
+    recent5WarningFlag: statsPitcher?.recent5WarningFlag,
+    mlbPersonId: statsPitcher?.mlbPersonId,
+    seasonGamesStarted: statsPitcher?.seasonGamesStarted,
+    seasonInningsPitched: statsPitcher?.seasonInningsPitched,
+    source: isProjected ? "mlb-rotation-projection" : mlbPitcher ? "mlb-statsapi-probable" : "espn-probable",
+    projectionNote: isProjected
+      ? `Projected from MLB rotation history${statsPitcher?.projectedRestDays !== undefined ? ` (${statsPitcher.projectedRestDays} days rest)` : ""}`
+      : undefined,
   };
 
-  if (mlbPitcher) {
+  if (statsPitcher) {
     console.log(`[lineup] MLB StatsAPI enriched ${pitcher.name} for team ${teamId}: ERA ${pitcher.era ?? '?'}, FIP ${pitcher.fip ?? '?'}, WHIP ${pitcher.whip ?? '?'}, recent5 ${pitcher.recent5Era ?? '?'}`);
   }
 
