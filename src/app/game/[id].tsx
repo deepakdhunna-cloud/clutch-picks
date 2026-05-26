@@ -9,7 +9,6 @@ import {
   Modal,
   StyleSheet,
   RefreshControl,
-  InteractionManager,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1022,18 +1021,39 @@ function WinProbBar({ prediction, homeTeam, awayTeam, sport }: { prediction: Gam
 }
 
 function ConfidenceBarSegment({ filled }: { filled: boolean }) {
+  const rot = useSharedValue(0);
+  useEffect(() => {
+    if (!filled) {
+      cancelAnimation(rot);
+      rot.value = 0;
+      return;
+    }
+    rot.value = withRepeat(
+      withTiming(360, { duration: 4000, easing: Easing.linear }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(rot);
+  }, [filled, rot]);
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rot.value}deg` }],
+  }));
+
   if (!filled) {
     return <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 3, height: 6 }} />;
   }
 
   return (
     <View style={{ flex: 1, borderRadius: 3, overflow: 'hidden' as const, height: 6, alignItems: 'center' as const, justifyContent: 'center' as const }}>
-      <LinearGradient
-        colors={['#5A0614', '#8B0A1F', '#7A9DB8', '#5A7A8A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
+      <Animated.View style={[spinStyle, { width: 60, height: 60, position: 'absolute' as const }]}>
+        <LinearGradient
+          colors={['#5A0614', '#8B0A1F', '#7A9DB8', '#5A7A8A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1 }}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -1063,16 +1083,42 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
   const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
   const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
 
+  const rotation = useSharedValue(0);
+  const glowPulse = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 4500, easing: Easing.linear }),
+      -1,
+      false
+    );
+    glowPulse.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+    return () => {
+      cancelAnimation(rotation);
+      cancelAnimation(glowPulse);
+    };
+  }, [glowPulse, rotation]);
+
+  const rotatingStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.15, 0.4]),
+    shadowRadius: interpolate(glowPulse.value, [0, 1], [8, 20]),
+  }));
+
   const BORDER = 3.5;
 
   return (
-    <View style={{
+    <Animated.View style={[glowStyle, {
       borderRadius: 22,
       shadowColor: '#7A9DB8',
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.24,
-      shadowRadius: 14,
-    }}>
+    }]}>
     <View style={{
       borderRadius: 22,
       overflow: 'hidden',
@@ -1087,14 +1133,31 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
         style={StyleSheet.absoluteFill}
       />
 
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(122,157,184,0.62)', 'rgba(255,255,255,0.16)', 'rgba(90,6,20,0.68)', 'rgba(122,157,184,0.36)']}
-        locations={[0, 0.34, 0.68, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center' as const, justifyContent: 'center' as const }]} pointerEvents="none">
+        <Animated.View
+          style={[
+            rotatingStyle,
+            {
+              width: 800,
+              height: 800,
+              position: 'absolute' as const,
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={['transparent', 'transparent', '#7A9DB8', 'rgba(255,255,255,0.5)', '#7A9DB8', 'transparent', 'transparent']}
+            start={{ x: 0.3, y: 0 }}
+            end={{ x: 0.7, y: 0 }}
+            style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 400 }}
+          />
+          <LinearGradient
+            colors={['transparent', 'transparent', '#5A0614', '#8B0A1F', '#5A0614', 'transparent', 'transparent']}
+            start={{ x: 0.3, y: 0 }}
+            end={{ x: 0.7, y: 0 }}
+            style={{ position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 400 }}
+          />
+        </Animated.View>
+      </View>
 
       {/* ── INNER CARD — inset to reveal the thick border ── */}
       <View style={{
@@ -1186,7 +1249,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
         </View>
       </View>
     </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1548,24 +1611,6 @@ function GameDetailContent() {
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
   const [followed, setFollowed] = useState(false);
-  const [deferredContentReady, setDeferredContentReady] = useState(false);
-
-  useEffect(() => {
-    setDeferredContentReady(false);
-    let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
-      if (!cancelled) setDeferredContentReady(true);
-    });
-    const fallback = setTimeout(() => {
-      if (!cancelled) setDeferredContentReady(true);
-    }, 650);
-
-    return () => {
-      cancelled = true;
-      task.cancel?.();
-      clearTimeout(fallback);
-    };
-  }, [id]);
 
   // Load follow state from AsyncStorage on mount
   useEffect(() => {
@@ -1606,13 +1651,13 @@ function GameDetailContent() {
   }, [userPick?.pickedTeam]);
 
   useEffect(() => {
-    if (!id || !hasGameData || !deferredContentReady) return;
+    if (!id || !hasGameData) return;
     if (Date.now() - dataUpdatedAt < 8000) return;
     const timeout = setTimeout(() => {
       void refetch();
     }, 120);
     return () => clearTimeout(timeout);
-  }, [dataUpdatedAt, deferredContentReady, hasGameData, id, refetch]);
+  }, [dataUpdatedAt, hasGameData, id, refetch]);
   // Tick the pre-game countdown clock — called unconditionally to respect
   // the rules of hooks. Returns +Infinity until we have a valid gameTime
   // and 0 once tip-off has passed.
@@ -1873,17 +1918,11 @@ function GameDetailContent() {
           />
         </View>
         <View style={styles.content}>
-          {deferredContentReady ? (
-            <View style={{ marginBottom: 40 }}>
-              <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
-              <QuarterTable game={game} />
-            </View>
-          ) : (
-            <View style={styles.detailWarmup}>
-              <ActivityIndicator color="#7A9DB8" />
-            </View>
-          )}
-          {deferredContentReady && prediction && isPremium ? (
+          <View style={{ marginBottom: 40 }}>
+            <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
+            <QuarterTable game={game} />
+          </View>
+          {prediction && isPremium ? (
             <>
               {prediction.projection ? (
                 <View style={{ marginBottom: 28 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Projection Center</Text><ProjectionEngineBlock game={game} /></View>
@@ -1901,7 +1940,7 @@ function GameDetailContent() {
                 <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', fontWeight: '600' }}>›</Text>
               </Pressable>
             </>
-          ) : deferredContentReady && prediction && !isPremium ? (
+          ) : prediction && !isPremium ? (
             <>
               {/* ═══ OUR PREDICTION ═══ */}
               <View style={{ marginBottom: 28 }}>
@@ -1930,13 +1969,11 @@ function GameDetailContent() {
               </Pressable>
             </>
           ) : null}
-          {deferredContentReady ? (
-            <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>
-              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', lineHeight: 15 }}>
-                AI predictions are for entertainment purposes only. Not financial advice.
-              </Text>
-            </View>
-          ) : null}
+          <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>
+            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', lineHeight: 15 }}>
+              AI predictions are for entertainment purposes only. Not financial advice.
+            </Text>
+          </View>
         </View>
       </ScrollView>
       <PickConfirmationModal

@@ -699,6 +699,19 @@ const TOP_PICK_MAX_CANDIDATES_PER_SPORT = 6;
 const TOP_PICK_BLOCKED_DECISION_TAGS = new Set(["thin-data", "low-conviction"]);
 const TOP_PICK_BLOCKED_WARNING_REGEX =
   /reliability reserve|missing critical|data coverage is thin|source unavailable|confidence compressed/i;
+const TOP_PICK_SPORT_ORDER: Game["sport"][] = [
+  "NBA",
+  "NFL",
+  "NCAAF",
+  "NCAAB",
+  "MLB",
+  "NHL",
+  "IPL",
+  "TENNIS",
+  "MLS",
+  "EPL",
+  "UCL",
+];
 
 export function isTopPickEligible(game: Game): boolean {
   const prediction = game.prediction;
@@ -719,6 +732,70 @@ export function isTopPickEligible(game: Game): boolean {
   if (warnings.some((warning) => TOP_PICK_BLOCKED_WARNING_REGEX.test(warning))) return false;
 
   return true;
+}
+
+function isDisplayableTopPickCandidate(game: Game): boolean {
+  const prediction = game.prediction;
+  const canonical = prediction?.canonicalResult;
+  if (!prediction || !canonical) return false;
+  if (game.status !== "SCHEDULED") return false;
+  if (prediction.snapshotType === "stored-pregame") return false;
+
+  const awayName = game.awayTeam?.name?.trim();
+  const homeName = game.homeTeam?.name?.trim();
+  if (!awayName || !homeName || awayName === "TBD" || homeName === "TBD" || awayName === "—" || homeName === "—") {
+    return false;
+  }
+
+  const confidence = canonical.confidence ?? prediction.confidence;
+  return Number.isFinite(confidence);
+}
+
+function topPickScore(game: Game): number {
+  const prediction = game.prediction;
+  const canonical = prediction?.canonicalResult;
+  if (!prediction || !canonical) return Number.NEGATIVE_INFINITY;
+
+  const confidence = canonical.confidence ?? prediction.confidence;
+  const edge = prediction.edgeRating ?? 5;
+  const value = prediction.valueRating ?? 5;
+  const tags = canonical.decisionProfile?.tags ?? [];
+  const warnings = canonical.warnings ?? [];
+
+  let score = confidence + (edge - 5) * 2 + (value - 5) * 1.25;
+  if (prediction.isTossUp) score -= 12;
+  if (prediction.lowDataWarning || canonical.decisionProfile?.lowDataWarning) score -= 10;
+  if (tags.some((tag) => TOP_PICK_BLOCKED_DECISION_TAGS.has(tag))) score -= 14;
+  if (warnings.some((warning) => TOP_PICK_BLOCKED_WARNING_REGEX.test(warning))) score -= 10;
+  return score;
+}
+
+export function selectTopPicksForDisplay(games: Game[]): Game[] {
+  const gamesBySport = new Map<Game["sport"], Game[]>();
+  for (const game of games.filter(isDisplayableTopPickCandidate)) {
+    const existing = gamesBySport.get(game.sport) ?? [];
+    existing.push(game);
+    gamesBySport.set(game.sport, existing);
+  }
+
+  return [...gamesBySport.entries()]
+    .map(([sport, sportGames]) => {
+      const strict = sportGames.filter(isTopPickEligible);
+      const pool = strict.length > 0 ? strict : sportGames;
+      const best = [...pool].sort((a, b) => topPickScore(b) - topPickScore(a))[0];
+      return { sport, game: best };
+    })
+    .filter((entry): entry is { sport: Game["sport"]; game: Game } => Boolean(entry.game))
+    .sort((a, b) => {
+      const orderA = TOP_PICK_SPORT_ORDER.indexOf(a.sport);
+      const orderB = TOP_PICK_SPORT_ORDER.indexOf(b.sport);
+      const rankA = orderA === -1 ? TOP_PICK_SPORT_ORDER.length : orderA;
+      const rankB = orderB === -1 ? TOP_PICK_SPORT_ORDER.length : orderB;
+      if (rankA !== rankB) return rankA - rankB;
+      return topPickScore(b.game) - topPickScore(a.game);
+    })
+    .map((entry) => entry.game)
+    .slice(0, TOP_PICK_LIMIT);
 }
 
 function selectTopPickCandidates(games: Game[]): Game[] {
@@ -2892,13 +2969,12 @@ gamesRouter.get("/top-picks", async (c) => {
       4 // Process 4 at a time
     );
 
-    // Sort by confidence descending, but never fill the section with thin-data picks.
-    const sortedByConfidence = gamesWithPredictions
-      .filter(isTopPickEligible)
-      .sort((a, b) => (b.prediction?.confidence ?? 0) - (a.prediction?.confidence ?? 0))
-      .slice(0, TOP_PICK_LIMIT);
+    // Show the strongest scheduled pick per sport. Strict source-quality picks
+    // win first; if a sport has no strict candidate, keep the best transparent
+    // model read so the board does not collapse to one league or zero picks.
+    const topPicksBySport = selectTopPicksForDisplay(gamesWithPredictions);
 
-    return c.json({ data: sortedByConfidence });
+    return c.json({ data: topPicksBySport });
   } catch (error) {
     console.error("Error fetching top picks:", error);
     return c.json(

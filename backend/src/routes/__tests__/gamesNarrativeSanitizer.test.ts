@@ -3,6 +3,7 @@ import {
   attachPredictionToGame,
   buildStoredPregamePrediction,
   isTopPickEligible,
+  selectTopPicksForDisplay,
   shouldPromotePredictionUpdate,
   sanitizePredictionForGame,
   updateLivePrediction,
@@ -144,6 +145,63 @@ function makeTopPickPrediction(overrides: Partial<GamePrediction> = {}): GamePre
     canonicalResult: makeCanonicalResult(),
     ...overrides,
   };
+}
+
+function makeSportGame(id: string, sport: Game["sport"], home: string, away: string): Game {
+  const base = makeGame();
+  return {
+    ...base,
+    id,
+    sport,
+    homeTeam: {
+      ...base.homeTeam,
+      id: `${id}-home`,
+      name: `${home} Team`,
+      abbreviation: home,
+      city: home,
+    },
+    awayTeam: {
+      ...base.awayTeam,
+      id: `${id}-away`,
+      name: `${away} Team`,
+      abbreviation: away,
+      city: away,
+    },
+  };
+}
+
+function attachTopPick(game: Game, confidence: number, tags: DecisionProfile["tags"] = ["model-consensus"]): Game {
+  const probability = confidence / 100;
+  return attachPredictionToGame(
+    game,
+    makeTopPickPrediction({
+      id: `pred-${game.id}`,
+      gameId: game.id,
+      confidence,
+      homeWinProbability: probability,
+      awayWinProbability: 1 - probability,
+      edgeRating: confidence >= 60 ? 7 : 5,
+      valueRating: confidence >= 60 ? 7 : 5,
+      canonicalResult: makeCanonicalResult({
+        eventId: game.id,
+        confidence,
+        finalProbability: probability,
+        probabilities: { home: probability, away: 1 - probability },
+        decisionProfile: makeDecisionProfile({
+          confidence,
+          probability,
+          tags,
+        }),
+        modelInputs: {
+          ...makeCanonicalResult().modelInputs,
+          sport: game.sport,
+          homeTeamId: game.homeTeam.id,
+          awayTeamId: game.awayTeam.id,
+          gameTime: game.gameTime,
+        },
+      }),
+    }),
+  );
 }
 
 describe("sanitizePredictionForGame", () => {
@@ -299,6 +357,23 @@ describe("isTopPickEligible", () => {
 
     expect(isTopPickEligible(live)).toBe(false);
     expect(isTopPickEligible(stored)).toBe(false);
+  });
+});
+
+describe("selectTopPicksForDisplay", () => {
+  test("returns the best scheduled pick per sport and falls back when strict gates reject a sport", () => {
+    const nba = attachTopPick(makeSportGame("nba-1", "NBA", "LAL", "OKC"), 62);
+    const mlbWeak = attachTopPick(makeSportGame("mlb-1", "MLB", "NYY", "BOS"), 58);
+    const mlbStrong = attachTopPick(makeSportGame("mlb-2", "MLB", "LAD", "SF"), 66);
+    const nhlLowConviction = attachTopPick(
+      makeSportGame("nhl-1", "NHL", "DAL", "EDM"),
+      53,
+      ["low-conviction"],
+    );
+
+    const selected = selectTopPicksForDisplay([mlbWeak, nhlLowConviction, mlbStrong, nba]);
+
+    expect(selected.map((game) => game.id)).toEqual(["nba-1", "mlb-2", "nhl-1"]);
   });
 });
 
