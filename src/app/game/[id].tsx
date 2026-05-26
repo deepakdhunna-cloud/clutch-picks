@@ -10,7 +10,6 @@ import {
   StyleSheet,
   RefreshControl,
   InteractionManager,
-  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1344,7 +1343,7 @@ function RecentForm({ game }: { game: Game }) {
                 <Text style={styles.formRecord}>{team.record}</Text>
               </View>
               {formResults.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={Platform.OS === 'android'} decelerationRate="fast">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={true} decelerationRate="fast">
                 {formResults.slice(0, 10).map((r: string, i: number) => (
                   <View key={i} style={{
                     width: 28,

@@ -753,7 +753,7 @@ const YourGames = memo(function YourGames({
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <FollowedCard game={item} />}
         getItemLayout={(_, index) => ({ length: FOLLOWED_CARD_W + ARENA_CARD_GAP, offset: (FOLLOWED_CARD_W + ARENA_CARD_GAP) * index, index })}

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, useRef, memo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -819,7 +819,7 @@ export default function SearchExploreScreen() {
           maxToRenderPerBatch={RESULT_RENDER_BATCH_SIZE}
           updateCellsBatchingPeriod={40}
           windowSize={7}
-          removeClippedSubviews={Platform.OS === 'android'}
+          removeClippedSubviews
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss} contentContainerStyle={{ paddingBottom: 60 }}>

@@ -1,4 +1,4 @@
-import { View, Text, RefreshControl, Pressable, ActivityIndicator, ScrollView, StyleSheet, Platform } from 'react-native';
+import { View, Text, RefreshControl, Pressable, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
@@ -784,7 +784,7 @@ export default function ClutchPicksScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5A7A8A" />
             }
-            removeClippedSubviews={Platform.OS === 'android'}
+            removeClippedSubviews={true}
             maxToRenderPerBatch={3}
             windowSize={5}
             initialNumToRender={2}

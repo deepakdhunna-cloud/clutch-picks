@@ -1,4 +1,4 @@
-import { ActivityIndicator, FlatList, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { ActivityIndicator, FlatList, View, Text, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { memo } from 'react';
@@ -446,7 +446,7 @@ export default function GameAnalysisScreen() {
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={7}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
         ListHeaderComponent={
           <>
