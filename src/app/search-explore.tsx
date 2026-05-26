@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, useRef, memo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Platform } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Search, Clock, X, ChevronRight, Trophy, Radio, Flame, ShieldAlert, CalendarClock } from 'lucide-react-native';
+import { ArrowLeft, Search, Clock, X, ChevronRight, Trophy, Radio, Flame, CalendarClock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
@@ -13,7 +13,6 @@ import { GameWithPrediction, GameStatus, Sport, SPORT_META } from '@/types/sport
 import { displayConfidence, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import {
   getCanonicalConfidence,
-  getCanonicalFinalPick,
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { getTeamColors } from '@/lib/team-colors';
@@ -560,18 +559,6 @@ export default function SearchExploreScreen() {
       .slice(0, 6);
   }, [allGames, localDateKey, todayKey]);
 
-  const upsetWatch = useMemo(() => {
-    if (!isPremium) return [];
-    if (!allGames) return [];
-    return [...allGames]
-      .filter(g => {
-        const pick = getCanonicalFinalPick(g.prediction);
-        return (pick === 'home' || pick === 'away') && g.marketFavorite && pick !== g.marketFavorite;
-      })
-      .sort((a, b) => getCanonicalConfidence(b.prediction) - getCanonicalConfidence(a.prediction))
-      .slice(0, 6);
-  }, [allGames, isPremium]);
-
   const tossUpGames = useMemo(() => {
     if (!isPremium) return [];
     if (!allGames) return [];
@@ -614,7 +601,6 @@ export default function SearchExploreScreen() {
     || finalGames.length > 0
     || startingSoon.length > 0
     || trendingGames.length > 0
-    || upsetWatch.length > 0
     || tossUpGames.length > 0;
 
   const warmGame = useCallback((game: GameWithPrediction) => {
@@ -624,15 +610,15 @@ export default function SearchExploreScreen() {
   const navGame = useCallback((game: GameWithPrediction) => {
     if (!claimGameNavigation(game.id)) return;
     // Fire the navigation FIRST so the push animation starts immediately.
-    // Everything else (cache warmup, haptic, AsyncStorage write) is deferred
-    // so the heavy JS work runs after the navigation transition kicks off.
+    // Seed the detail cache immediately; haptics and storage writes wait until
+    // after the transition so the tap stays responsive.
     const recentTerm = query.trim() || `${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`;
+    warmGame(game);
     router.push({ pathname: '/game/[id]', params: { id: game.id } });
     afterFrame(() => {
       Keyboard.dismiss();
       fireLightHaptic();
       InteractionManager.runAfterInteractions(() => {
-        warmGame(game);
         void saveRecent(recentTerm);
       });
     });
@@ -833,7 +819,7 @@ export default function SearchExploreScreen() {
           maxToRenderPerBatch={RESULT_RENDER_BATCH_SIZE}
           updateCellsBatchingPeriod={40}
           windowSize={7}
-          removeClippedSubviews
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss} contentContainerStyle={{ paddingBottom: 60 }}>
@@ -929,34 +915,9 @@ export default function SearchExploreScreen() {
               </View>
             ) : null}
 
-            {upsetWatch.length > 0 ? (
-              <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<ShieldAlert size={14} color={MAROON} />} label="MARKET DISAGREEMENT" title="Upset watch" />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
-                  {upsetWatch.map((game, i) => {
-                    const pick = getCanonicalFinalPick(game.prediction);
-                    const dog = pick === 'home' ? game.homeTeam : game.awayTeam;
-                    const fav = pick === 'home' ? game.awayTeam : game.homeTeam;
-                    const conf = Math.round(displayConfidence(getCanonicalConfidence(game.prediction)));
-                    return (
-                      <View key={`upset-${game.id}`} style={storyRowKey(i, upsetWatch.length)}>
-                        <StoryCard
-                          game={game}
-                          tone="upset"
-                          title="Upset case"
-                          subtitle={`${fav.abbreviation} favored, model prefers ${dog.abbreviation} at ${conf}%`}
-                          onPress={() => navGame(game)}
-                        />
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
-
             {tossUpGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<Flame size={14} color="#94a3b8" />} label="CLOSEST LINES" title="Toss-up watch" />
+                <SectionHeader icon={<Flame size={14} color="#94a3b8" />} label="CLOSEST READS" title="Toss-up watch" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {tossUpGames.map((game, i) => (
                     <View key={`toss-${game.id}`} style={storyRowKey(i, tossUpGames.length)}>

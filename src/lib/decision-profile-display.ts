@@ -4,7 +4,7 @@ const TAG_LABELS: Record<CanonicalDecisionTag, string> = {
   'model-consensus': 'Consensus',
   'hidden-edge': 'Hidden edge',
   'upset-watch': 'Upset watch',
-  'market-disagreement': 'Market gap',
+  'market-disagreement': 'Consensus gap',
   'thin-data': 'Thin data',
   'volatile-script': 'Volatile',
   'low-conviction': 'Low conviction',
@@ -20,7 +20,7 @@ export function decisionProfileHeadline(profile?: CanonicalDecisionProfile | nul
   if (profile.tags.includes('upset-watch')) return 'Upset profile active';
   if (profile.tags.includes('hidden-edge')) return 'Hidden edge detected';
   if (profile.tags.includes('model-consensus')) return 'Engines aligned';
-  if (profile.tags.includes('market-disagreement')) return 'Market disagreement';
+  if (profile.tags.includes('market-disagreement')) return 'Consensus gap';
   if (profile.tags.includes('thin-data')) return 'Limited-data read';
   return 'Unified read';
 }

@@ -211,6 +211,39 @@ describe("attachPredictionToGame", () => {
     expect(attached.overUnder).toBe(218.5);
     expect(attached.marketFavorite).toBe("home");
   });
+
+  test("does not rewrite the public pick from live IPL chase state", () => {
+    const game: Game = {
+      ...makeGame(),
+      sport: "IPL",
+      status: "LIVE",
+      homeTeam: {
+        ...makeGame().homeTeam,
+        abbreviation: "CSK",
+        name: "Chennai Super Kings",
+      },
+      awayTeam: {
+        ...makeGame().awayTeam,
+        abbreviation: "MI",
+        name: "Mumbai Indians",
+      },
+      cricketState: {
+        home: { runs: 170, wickets: 6, overs: 20, maxOvers: 20, scoreText: "170/6" },
+        away: { runs: 95, wickets: 2, overs: 9, maxOvers: 20, isBatting: true, scoreText: "95/2" },
+        battingSide: "away",
+        target: 171,
+      },
+    };
+    const pregame = makePrediction("Pregame read favors the home side.");
+
+    const attached = attachPredictionToGame(game, pregame);
+
+    expect(attached.prediction?.predictedWinner).toBe("home");
+    expect(attached.prediction?.confidence).toBe(59);
+    expect(attached.prediction?.analysis).toBe("Pregame read favors the home side.");
+    expect(attached.prediction?.canonicalResult?.finalPick).toBe("home");
+    expect(attached.prediction?.canonicalResult?.engineBreakdown.some((read) => read.engine === "live-ipl-chase-v1")).toBe(false);
+  });
 });
 
 describe("isTopPickEligible", () => {
@@ -401,6 +434,21 @@ describe("shouldPromotePredictionUpdate", () => {
 
     expect(shouldPromotePredictionUpdate(makeGame(), previous, noisyFlip)).toBe(false);
     expect(shouldPromotePredictionUpdate(makeGame(), previous, clearFlip)).toBe(true);
+  });
+
+  test("never promotes prediction changes after the game starts", () => {
+    const previous = makePrediction("Pregame read favors the home side.");
+    const liveCandidate: GamePrediction = {
+      ...previous,
+      predictedWinner: "away",
+      predictedOutcome: "away",
+      confidence: 84,
+      homeWinProbability: 16,
+      awayWinProbability: 84,
+    };
+
+    expect(shouldPromotePredictionUpdate({ ...makeGame(), status: "LIVE" }, previous, liveCandidate)).toBe(false);
+    expect(shouldPromotePredictionUpdate({ ...makeGame(), status: "FINAL" }, previous, liveCandidate)).toBe(false);
   });
 });
 

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useState, useCallback, useMemo, useEffect, useDeferredValue, memo } from 'react';
 import Animated, {
@@ -315,7 +315,7 @@ export default function SportDetailScreen() {
             filteredGames.length === 0 ? styles.emptyScrollContent : null,
           ]}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews
+          removeClippedSubviews={Platform.OS === 'android'}
           initialNumToRender={6}
           maxToRenderPerBatch={6}
           windowSize={7}

@@ -49,6 +49,9 @@ function findGameInData(data: unknown, gameId: string): GameWithPrediction | und
   const nestedGame = record.game;
   if (nestedGame) return findGameInData(nestedGame, gameId);
 
+  const nestedData = record.data;
+  if (nestedData) return findGameInData(nestedData, gameId);
+
   return undefined;
 }
 

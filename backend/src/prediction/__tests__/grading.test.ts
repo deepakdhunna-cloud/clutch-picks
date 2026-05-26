@@ -5,7 +5,7 @@ import {
   logLoss,
   selectedOutcomeProbability,
 } from "../grading";
-import { shouldPersistPredictionSnapshot } from "../newEngineAdapter";
+import { shouldPersistPredictionSnapshot, shouldUpdatePredictionSnapshot } from "../newEngineAdapter";
 
 describe("prediction grading", () => {
   it("uses the probability assigned to the selected home/away/draw outcome", () => {
@@ -106,15 +106,23 @@ describe("prediction grading", () => {
     expect(summary.overall.avgBrierScore).toBeCloseTo(0.2408, 4);
   });
 
-  it("persists only safely pregame snapshots", () => {
+  it("persists any pregame snapshot but only updates before the lock window", () => {
     const now = new Date("2026-05-24T18:00:00Z");
 
     expect(shouldPersistPredictionSnapshot({
       status: "SCHEDULED",
       gameTime: "2026-05-24T18:10:01Z",
     }, now)).toBe(true);
+    expect(shouldUpdatePredictionSnapshot({
+      status: "SCHEDULED",
+      gameTime: "2026-05-24T18:10:01Z",
+    }, now)).toBe(true);
 
     expect(shouldPersistPredictionSnapshot({
+      status: "SCHEDULED",
+      gameTime: "2026-05-24T18:03:00Z",
+    }, now)).toBe(true);
+    expect(shouldUpdatePredictionSnapshot({
       status: "SCHEDULED",
       gameTime: "2026-05-24T18:03:00Z",
     }, now)).toBe(false);

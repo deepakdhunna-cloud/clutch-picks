@@ -753,7 +753,7 @@ const YourGames = memo(function YourGames({
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
-        removeClippedSubviews
+        removeClippedSubviews={Platform.OS === 'android'}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <FollowedCard game={item} />}
         getItemLayout={(_, index) => ({ length: FOLLOWED_CARD_W + ARENA_CARD_GAP, offset: (FOLLOWED_CARD_W + ARENA_CARD_GAP) * index, index })}
@@ -2574,7 +2574,7 @@ const GameDay = memo(function GameDay({
 });
 
 // ─── PREP SUB-TABS ───
-const PREP_TABS = ['Ranked', 'Underdogs'] as const;
+const PREP_TABS = ['Ranked', 'Upsets'] as const;
 const PREP_MATCHUP_LIMIT = 16;
 
 // ─── PREP MODE ───
@@ -2615,22 +2615,22 @@ const Prep = memo(function Prep({
     });
   }, [sched]);
 
-  const underdogPlays = useMemo(() => {
+  const upsetPlays = useMemo(() => {
     return ranked
       .filter(r => {
-        const mf = r.game.marketFavorite;
-        const pw = getCanonicalFinalPick(r.game.prediction);
-        return !!mf && (pw === 'home' || pw === 'away') && mf !== pw;
+        const profile = r.game.prediction?.canonicalResult?.decisionProfile;
+        return profile?.tags.includes('upset-watch') || (r.game.prediction?.projection?.upsetRisk ?? 0) >= 0.42;
       })
       .map(r => {
         const pick = getCanonicalFinalPick(r.game.prediction);
-        const dog = pick === 'home' ? r.game.homeTeam : r.game.awayTeam;
-        const fav = pick === 'home' ? r.game.awayTeam : r.game.homeTeam;
+        const modelTeam = pick === 'home' ? r.game.homeTeam : pick === 'away' ? r.game.awayTeam : null;
         const conf = Math.round(getCanonicalConfidence(r.game.prediction));
         return {
           ...r,
-          udHeadline: `Market favors ${fav.abbreviation}; model prefers ${dog.abbreviation}`,
-          udTags: ['UNDERDOG PICK', `${conf}% MODEL CONF`],
+          udHeadline: modelTeam
+            ? `Model flags ${modelTeam.abbreviation} with upset-risk context`
+            : 'Model flags a volatile matchup profile',
+          udTags: ['UPSET WATCH', `${conf}% MODEL CONF`],
         };
       });
   }, [ranked]);
@@ -2704,11 +2704,11 @@ const Prep = memo(function Prep({
         </View>
       ) : null}
 
-      {/* Sub-tab toggle: Ranked / Underdogs */}
+      {/* Sub-tab toggle: Ranked / Upsets */}
       <View style={{minHeight:54, flexDirection:'row', marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, backgroundColor:'rgba(255,255,255,0.04)', borderRadius:18, padding:4, borderWidth:1, borderColor:'rgba(180,211,235,0.10)'}}>
         {PREP_TABS.map((label, idx) => {
           const active = prepTab === idx;
-          const count = idx === 0 ? ranked.length : underdogPlays.length;
+          const count = idx === 0 ? ranked.length : upsetPlays.length;
           return (
             <Pressable key={label} onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }} style={{flex:1, minWidth:0, marginRight: idx === PREP_TABS.length - 1 ? 0 : 6}}>
               <LinearGradient
@@ -2747,13 +2747,13 @@ const Prep = memo(function Prep({
         )
       ) : null}
 
-      {/* Underdogs tab content */}
+      {/* Upsets tab content */}
       {prepTab === 1 ? (
         <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}>
-          <Text style={{fontSize:11, color:TEXT_MUTED, lineHeight:16, marginBottom:12}}>Games where the model disagrees with the market favorite.</Text>
-          {underdogPlays.length > 0
-            ? underdogPlays.map((r, i)=><MatchupCard key={`ud-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} defaultExpanded={i === 0} />)
-            : <View style={{backgroundColor:PANEL_DARK, borderRadius:14, borderWidth:1, borderColor:BORDER_MED, padding:14}}><Text style={{fontSize:11, color:TEXT_MUTED, lineHeight:16}}>No underdog disagreements on this slate. The model is aligned with the market favorites.</Text></View>}
+          <Text style={{fontSize:11, color:TEXT_MUTED, lineHeight:16, marginBottom:12}}>Model-flagged volatility and upset-risk profiles.</Text>
+          {upsetPlays.length > 0
+            ? upsetPlays.map((r, i)=><MatchupCard key={`upset-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} defaultExpanded={i === 0} />)
+            : <View style={{backgroundColor:PANEL_DARK, borderRadius:14, borderWidth:1, borderColor:BORDER_MED, padding:14}}><Text style={{fontSize:11, color:TEXT_MUTED, lineHeight:16}}>No model upset profiles on this slate.</Text></View>}
         </View>
       ) : null}
 

@@ -296,6 +296,9 @@ export interface Prediction {
   isTossUp?: boolean; // true if game is within 45-55% probability range
   lowDataWarning?: boolean; // true when dataCoverage < 0.6
   ensembleDivergence?: boolean; // true when sub-models disagree on winner
+  snapshotType?: 'stored-pregame';
+  wasCorrect?: boolean | null;
+  actualOutcome?: 'home' | 'away' | 'draw' | 'unavailable' | null;
   projection?: {
     engine: string;
     iterations: number;

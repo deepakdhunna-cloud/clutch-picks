@@ -1,4 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, Platform } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -126,7 +126,7 @@ const SportTileCarousel = memo(function SportTileCarousel({
         initialNumToRender={1}
         maxToRenderPerBatch={1}
         windowSize={2}
-        removeClippedSubviews
+        removeClippedSubviews={Platform.OS === 'android'}
         getItemLayout={(_, index) => ({
           length: pageWidth,
           offset: pageWidth * index,
@@ -574,7 +574,7 @@ const HomeHeader = React.memo(function HomeHeader({
             contentContainerStyle={{ paddingLeft: 20, paddingRight: 8, alignItems: 'center' }}
             style={{ flexGrow: 0 }}
             scrollEventThrottle={16}
-            removeClippedSubviews={true}
+            removeClippedSubviews={Platform.OS === 'android'}
             decelerationRate="fast"
           >
             {(showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)).map((game) => (
@@ -1488,7 +1488,7 @@ export default function HomeScreen() {
         keyExtractor={getItemKey}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        removeClippedSubviews={true}
+        removeClippedSubviews={Platform.OS === 'android'}
         maxToRenderPerBatch={4}
         windowSize={5}
         initialNumToRender={3}
@@ -1590,7 +1590,7 @@ export default function HomeScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
             data={searchData}
             keyExtractor={(item) => item.id}
-            removeClippedSubviews={true}
+            removeClippedSubviews={Platform.OS === 'android'}
             maxToRenderPerBatch={4}
             windowSize={5}
             getItemLayout={getSearchItemLayout}

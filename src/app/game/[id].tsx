@@ -10,6 +10,7 @@ import {
   StyleSheet,
   RefreshControl,
   InteractionManager,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,7 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
@@ -64,6 +66,7 @@ import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceAppUrl, getWatchSourceUrl } from '@/lib/watch-url';
 import { readFollowedGameIds, toggleFollowedGame } from '@/lib/followed-games';
 import { ExternalLink, Globe, Smartphone, Tv } from 'lucide-react-native';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function openWatchInWeb(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
@@ -529,7 +532,8 @@ function LivePulseDot() {
       ),
       -1
     );
-  }, []);
+    return () => cancelAnimation(scale);
+  }, [scale]);
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: 2 - scale.value,
@@ -1018,45 +1022,24 @@ function WinProbBar({ prediction, homeTeam, awayTeam, sport }: { prediction: Gam
   );
 }
 
-function ConfidenceBarSegment({ index, filled }: { index: number; filled: boolean; totalFilled: number }) {
-  // Use rotation on a square gradient to create seamless infinite color cycling
-  // Rotation never jumps because 0° and 360° look identical
-  const rot = useSharedValue(0);
-  useEffect(() => {
-    if (!filled) return;
-    rot.value = withRepeat(
-      withTiming(360, { duration: 4000, easing: Easing.linear }),
-      -1,
-      false
-    );
-  }, [filled]);
-
-  const spinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rot.value}deg` }],
-  }));
-
+function ConfidenceBarSegment({ filled }: { filled: boolean }) {
   if (!filled) {
     return <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 3, height: 6 }} />;
   }
 
-  // A large square gradient rotates behind the tiny segment window
-  // The gradient has maroon on one side, teal on the other
-  // As it spins, the colors smoothly cycle through the visible area
   return (
     <View style={{ flex: 1, borderRadius: 3, overflow: 'hidden' as const, height: 6, alignItems: 'center' as const, justifyContent: 'center' as const }}>
-      <Animated.View style={[spinStyle, { width: 60, height: 60, position: 'absolute' as const }]}>
-        <LinearGradient
-          colors={['#5A0614', '#8B0A1F', '#7A9DB8', '#5A7A8A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ flex: 1 }}
-        />
-      </Animated.View>
+      <LinearGradient
+        colors={['#5A0614', '#8B0A1F', '#7A9DB8', '#5A7A8A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
     </View>
   );
 }
 
-function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, seasonContext }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport']; gameId: string; seasonContext?: Game['seasonContext'] }) {
+function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, seasonContext, isLocked }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport']; gameId: string; seasonContext?: Game['seasonContext']; isLocked?: boolean }) {
   const router = useRouter();
   const predictionDisplay = getPredictionDisplay({
     prediction: prediction as Prediction,
@@ -1081,36 +1064,16 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
   const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
   const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
 
-  // Continuous rotation — animates from 0 to a huge number so it never resets/jumps
-  const rotation = useSharedValue(0);
-  const glowPulse = useSharedValue(0);
-  useEffect(() => {
-    // Animate to a very large value so it spins continuously without resetting
-    rotation.value = withTiming(360000, { duration: 360000 / 360 * 4500, easing: Easing.linear });
-    glowPulse.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, []);
-
-  const rotatingStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value % 360}deg` }],
-  }));
-
-  const glowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.15, 0.4]),
-    shadowRadius: interpolate(glowPulse.value, [0, 1], [8, 20]),
-  }));
-
   const BORDER = 3.5;
 
   return (
-    <Animated.View style={[glowStyle, {
+    <View style={{
       borderRadius: 22,
       shadowColor: '#7A9DB8',
       shadowOffset: { width: 0, height: 0 },
-    }]}>
+      shadowOpacity: 0.24,
+      shadowRadius: 14,
+    }}>
     <View style={{
       borderRadius: 22,
       overflow: 'hidden',
@@ -1125,34 +1088,14 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Rotating beam — oversized square that spins, clipped by card border radius */}
-      <View style={[StyleSheet.absoluteFill, { alignItems: 'center' as const, justifyContent: 'center' as const }]} pointerEvents="none">
-        <Animated.View
-          style={[
-            rotatingStyle,
-            {
-              width: 800,
-              height: 800,
-              position: 'absolute' as const,
-            },
-          ]}
-        >
-          {/* Top half: teal beam */}
-          <LinearGradient
-            colors={['transparent', 'transparent', '#7A9DB8', 'rgba(255,255,255,0.5)', '#7A9DB8', 'transparent', 'transparent']}
-            start={{ x: 0.3, y: 0 }}
-            end={{ x: 0.7, y: 0 }}
-            style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 400 }}
-          />
-          {/* Bottom half: pure dark maroon beam — no white or teal */}
-          <LinearGradient
-            colors={['transparent', 'transparent', '#5A0614', '#8B0A1F', '#5A0614', 'transparent', 'transparent']}
-            start={{ x: 0.3, y: 0 }}
-            end={{ x: 0.7, y: 0 }}
-            style={{ position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: 400 }}
-          />
-        </Animated.View>
-      </View>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(122,157,184,0.62)', 'rgba(255,255,255,0.16)', 'rgba(90,6,20,0.68)', 'rgba(122,157,184,0.36)']}
+        locations={[0, 0.34, 0.68, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
 
       {/* ── INNER CARD — inset to reveal the thick border ── */}
       <View style={{
@@ -1191,7 +1134,11 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                 {winnerName}
               </Text>
             </View>
-            {null}
+            {isLocked ? (
+              <View style={{ borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.24)' }}>
+                <Text style={{ color: '#9AB8CC', fontSize: 8, fontWeight: '900', letterSpacing: 0.9 }}>PREGAME LOCK</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Pick Strength */}
@@ -1211,10 +1158,10 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
             </View>
           </Pressable>
 
-          {/* Confidence bar — animated segments with staggered shimmer */}
+          {/* Confidence bar */}
           <View style={{ flexDirection: 'row' as const, gap: 3, marginBottom: 18 }}>
             {Array.from({ length: SEGS }).map((_, i) => (
-              <ConfidenceBarSegment key={i} index={i} filled={i < filledSegs} totalFilled={filledSegs} />
+              <ConfidenceBarSegment key={i} filled={i < filledSegs} />
             ))}
           </View>
 
@@ -1235,15 +1182,12 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
             <Text style={{ fontSize: 18, fontWeight: '800', color: valueColor }}>
               {valueLabel}
             </Text>
-            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Model vs. market line gap</Text>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Model edge signal</Text>
           </View>
-
-          {/* Vegas Market — populated only when backend has SHARPAPI_KEY. */}
-          <VegasMarketBlock prediction={prediction} winnerName={predictionDisplay.team?.name ?? null} />
         </View>
       </View>
     </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -1356,71 +1300,6 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
   );
 }
 
-// Renders the post-hoc SharpAPI market comparison. No-op when marketComparison
-// is absent (feature-flag off). Never linked out to sportsbooks — purely
-// informational, per Prompt B spec ("no betting affiliate flow").
-function VegasMarketBlock({
-  prediction,
-  winnerName,
-}: {
-  prediction: Prediction;
-  winnerName: string | null;
-}) {
-  const mc = prediction.marketComparison;
-  if (!mc) return null;
-
-  const modelPct = (mc.modelHomeProb * 100).toFixed(1);
-  const marketPct = (mc.marketHomeProb * 100).toFixed(1);
-  const divergencePct = (mc.divergence * 100).toFixed(1);
-  const amber = '#F59E0B';
-
-  const formatAmerican = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-
-  return (
-    <View style={{
-      marginTop: 12,
-      backgroundColor: 'rgba(255,255,255,0.02)',
-      borderRadius: 12, padding: 14,
-      borderWidth: 1, borderColor: mc.isDivergent ? `${amber}40` : 'rgba(255,255,255,0.12)',
-    }}>
-      <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 8 }}>
-        VEGAS MARKET
-      </Text>
-
-      {/* Side-by-side model vs market */}
-      <View style={{ flexDirection: 'row' as const, gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', fontWeight: '700', letterSpacing: 0.8 }}>OUR MODEL</Text>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 2 }}>{modelPct}%</Text>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>home win</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', fontWeight: '700', letterSpacing: 0.8 }}>MARKET (PINNACLE)</Text>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 2 }}>{marketPct}%</Text>
-          <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>no-vig</Text>
-        </View>
-      </View>
-
-      {mc.isDivergent ? (
-        <View style={{
-          marginTop: 10, padding: 8, borderRadius: 8,
-          backgroundColor: `${amber}15`, borderWidth: 1, borderColor: `${amber}30`,
-        }}>
-          <Text style={{ fontSize: 11, color: amber, fontWeight: '700' }}>
-            Our model disagrees with Vegas by {divergencePct}%
-          </Text>
-        </View>
-      ) : null}
-
-      {mc.bestBook && winnerName ? (
-        <Text style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-          Best line on {winnerName}: {formatAmerican(mc.bestBook.american)} at {mc.bestBook.sportsbook}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
 function RecentForm({ game }: { game: Game }) {
   const { homeTeam, awayTeam, prediction } = game;
   if (!prediction) return null;
@@ -1435,56 +1314,62 @@ function RecentForm({ game }: { game: Game }) {
         {[
           { team: homeTeam, form: prediction.recentFormHome, accent: homeColors.accent },
           { team: awayTeam, form: prediction.recentFormAway, accent: awayColors.accent },
-        ].map(({ team, form, accent }) => (
-          <View key={team.id} style={styles.formCard}>
-            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 10 }}>
-              {/* Team color badge — same as box score */}
-              <View style={{
-                backgroundColor: accent,
-                borderRadius: 6,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                minWidth: 42,
-                alignItems: 'center' as const,
-                justifyContent: 'center' as const,
-              }}>
-                <Text style={{
-                  fontSize: 11,
-                  fontWeight: '800',
-                  color: '#FFFFFF',
-                  letterSpacing: 0.5,
-                }}>
-                  {team.abbreviation}
-                </Text>
-              </View>
-              <Text style={styles.formRecord}>{team.record}</Text>
-            </View>
-            {form.split('').filter((c: string) => c === 'W' || c === 'L' || c === 'D').length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={true} decelerationRate="fast">
-              {form.split('').filter((c: string) => c === 'W' || c === 'L' || c === 'D').slice(0, 10).map((r: string, i: number) => (
-                <View key={i} style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  backgroundColor: r === 'W' ? 'rgba(122,157,184,0.15)' : r === 'D' ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.10)',
-                  borderWidth: 1,
-                  borderColor: r === 'W' ? 'rgba(122,157,184,0.3)' : r === 'D' ? 'rgba(255,255,255,0.14)' : 'rgba(239,68,68,0.2)',
+        ].map(({ team, form, accent }) => {
+          const formResults = (typeof form === 'string' ? form : '')
+            .split('')
+            .filter((c: string) => c === 'W' || c === 'L' || c === 'D');
+
+          return (
+            <View key={team.id} style={styles.formCard}>
+              <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 10 }}>
+                {/* Team color badge — same as box score */}
+                <View style={{
+                  backgroundColor: accent,
+                  borderRadius: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  minWidth: 42,
                   alignItems: 'center' as const,
                   justifyContent: 'center' as const,
                 }}>
                   <Text style={{
-                    color: r === 'W' ? '#7A9DB8' : r === 'D' ? 'rgba(255,255,255,0.55)' : '#EF4444',
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: '800',
-                  }}>{r}</Text>
+                    color: '#FFFFFF',
+                    letterSpacing: 0.5,
+                  }}>
+                    {team.abbreviation}
+                  </Text>
                 </View>
-              ))}
-            </ScrollView>
-            ) : (
-              <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '600' }}>Recent results are warming up for this team.</Text>
-            )}
-          </View>
-        ))}
+                <Text style={styles.formRecord}>{team.record}</Text>
+              </View>
+              {formResults.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={Platform.OS === 'android'} decelerationRate="fast">
+                {formResults.slice(0, 10).map((r: string, i: number) => (
+                  <View key={i} style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    backgroundColor: r === 'W' ? 'rgba(122,157,184,0.15)' : r === 'D' ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.10)',
+                    borderWidth: 1,
+                    borderColor: r === 'W' ? 'rgba(122,157,184,0.3)' : r === 'D' ? 'rgba(255,255,255,0.14)' : 'rgba(239,68,68,0.2)',
+                    alignItems: 'center' as const,
+                    justifyContent: 'center' as const,
+                  }}>
+                    <Text style={{
+                      color: r === 'W' ? '#7A9DB8' : r === 'D' ? 'rgba(255,255,255,0.55)' : '#EF4444',
+                      fontSize: 10,
+                      fontWeight: '800',
+                    }}>{r}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+              ) : (
+                <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '600' }}>Recent results are warming up for this team.</Text>
+              )}
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -1569,6 +1454,7 @@ function PreGameCountdown({ secondsLeft, sport }: { secondsLeft: number; sport?:
       -1,
       false
     );
+    return () => cancelAnimation(colonOpacity);
   }, [colonOpacity]);
   const colonStyle = useAnimatedStyle(() => ({ opacity: colonOpacity.value }));
 
@@ -1657,7 +1543,7 @@ function GameDetailLoading() {
   );
 }
 
-export default function GameDetailScreen() {
+function GameDetailContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -2003,7 +1889,7 @@ export default function GameDetailScreen() {
               {prediction.projection ? (
                 <View style={{ marginBottom: 28 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Projection Center</Text><ProjectionEngineBlock game={game} /></View>
               ) : null}
-              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} /></View>
+              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} isLocked={game.status === 'LIVE' || game.status === 'FINAL'} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
               <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
@@ -2088,6 +1974,16 @@ export default function GameDetailScreen() {
         }}
       />
     </View>
+  );
+}
+
+export default function GameDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  return (
+    <ErrorBoundary key={id ?? 'game-detail'} onGoBack={() => router.back()}>
+      <GameDetailContent />
+    </ErrorBoundary>
   );
 }
 

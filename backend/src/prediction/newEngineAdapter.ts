@@ -314,6 +314,15 @@ export function shouldPersistPredictionSnapshot(
   if (game.status !== "SCHEDULED") return false;
   const scheduledStart = new Date(game.gameTime).getTime();
   if (!Number.isFinite(scheduledStart)) return false;
+  return scheduledStart > now.getTime();
+}
+
+export function shouldUpdatePredictionSnapshot(
+  game: Pick<Game, "status" | "gameTime">,
+  now = new Date(),
+): boolean {
+  if (!shouldPersistPredictionSnapshot(game, now)) return false;
+  const scheduledStart = new Date(game.gameTime).getTime();
   return scheduledStart - now.getTime() > SNAPSHOT_FREEZE_MS;
 }
 
@@ -410,6 +419,9 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
       };
       if (existing) {
         if (existing.actualWinner !== null || existing.wasCorrect !== null || existing.resolvedAt !== null) {
+          return;
+        }
+        if (!shouldUpdatePredictionSnapshot(game)) {
           return;
         }
         await prisma.predictionResult.update({
