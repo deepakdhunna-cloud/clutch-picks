@@ -6,45 +6,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
+import { CONFIDENCE_TIER_DEFINITIONS } from '@/lib/display-confidence';
 
+const TIER_ACCENTS = [
+  'rgba(255,255,255,0.15)',
+  'rgba(122,157,184,0.22)',
+  'rgba(122,157,184,0.32)',
+  'rgba(122,157,184,0.44)',
+  'rgba(139,10,31,0.45)',
+] as const;
 
-const TIERS = [
-  {
-    range: '50–54%',
-    label: 'Considered a Lean',
-    desc: 'The model detects a slight edge for one team, but the matchup is close. Factors are nearly even — this is a competitive game where small advantages matter.',
-    accent: 'rgba(255,255,255,0.15)',
-    filled: 2,
-  },
-  {
-    range: '55–59%',
-    label: 'Considered a Solid Pick',
-    desc: 'A clear advantage has been identified across key prediction factors. The model has enough signal to make a confident lean, though some uncertainty remains.',
-    accent: 'rgba(122,157,184,0.25)',
-    filled: 4,
-  },
-  {
-    range: '60–64%',
-    label: 'Considered a Strong Pick',
-    desc: 'Multiple prediction factors align in the same direction. The model sees a meaningful edge backed by data — recent form, matchup quality, and statistical trends agree.',
-    accent: 'rgba(122,157,184,0.40)',
-    filled: 6,
-  },
-  {
-    range: '65–69%',
-    label: 'Considered a High Confidence Pick',
-    desc: 'Strong agreement across all three sub-models (composite, Elo, and recent form). The data depth is high and the edge is clear — this is one of the day\'s top predictions.',
-    accent: 'rgba(139,10,31,0.30)',
-    filled: 8,
-  },
-  {
-    range: '70%+',
-    label: 'Considered a Lock',
-    desc: 'A dominant edge across nearly every factor the model tracks. All sub-models agree, data coverage is strong, and the statistical separation between the teams is significant.',
-    accent: 'rgba(139,10,31,0.45)',
-    filled: 10,
-  },
-];
+const TIERS = CONFIDENCE_TIER_DEFINITIONS.map((tier, index) => ({
+  ...tier,
+  label: `Considered a ${tier.label}`,
+  accent: TIER_ACCENTS[index] ?? 'rgba(255,255,255,0.15)',
+}));
 
 export default function ConfidenceTiersScreen() {
   const router = useRouter();

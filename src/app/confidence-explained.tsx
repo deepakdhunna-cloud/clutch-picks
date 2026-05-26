@@ -8,7 +8,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGame } from '@/hooks/useGames';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
-import { displayWinProbability } from '@/lib/display-confidence';
+import { CONFIDENCE_TIER_DEFINITIONS, displayWinProbability, getConfidenceTier } from '@/lib/display-confidence';
 import { getCanonicalWinProbabilities } from '@/lib/canonical-result';
 import { getPredictionDisplay } from '@/lib/prediction-display';
 import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
@@ -30,13 +30,7 @@ interface Game {
   };
 }
 
-// Colors come from getConfidenceTier in display-confidence.ts — keep in sync.
-const TIERS = [
-  { label: 'Toss-Up',     color: '#6B7280', range: '< 53%',   desc: 'The model can\'t separate these teams. Data is too close or too thin to lean either way.' },
-  { label: 'Solid Pick',  color: '#94A3B8', range: '53–59%',  desc: 'A clear advantage found across key factors. The model leans one way with moderate certainty.' },
-  { label: 'Strong Pick', color: '#CBD5E1', range: '60–71%',  desc: 'Multiple prediction factors align. Elo, form, and matchup context all point the same direction.' },
-  { label: 'Lock',        color: '#F1F5F9', range: '72%+',    desc: 'Dominant edge across nearly every factor. All sub-models agree and data coverage is strong.' },
-];
+const TIERS = CONFIDENCE_TIER_DEFINITIONS;
 
 const FACTORS = [
   { num: '1', title: 'Team Strength', detail: 'Elo power ratings, season win rate, and strength of schedule.' },
@@ -45,13 +39,6 @@ const FACTORS = [
   { num: '4', title: 'Data Completeness', detail: 'Missing factors reduce confidence — the model knows what it doesn\'t know.' },
   { num: '5', title: 'Model Agreement', detail: 'Three sub-models vote independently. Disagreement lowers confidence.' },
 ];
-
-function getTier(conf: number, isTossUp?: boolean) {
-  if (isTossUp || conf < 53) return TIERS[0];
-  if (conf < 60) return TIERS[1];
-  if (conf < 72) return TIERS[2];
-  return TIERS[3];
-}
 
 function ConfidenceFallback({
   title,
@@ -145,8 +132,8 @@ export default function ConfidenceExplainedScreen() {
     homeTeam: game.homeTeam,
     awayTeam: game.awayTeam,
   });
-  const tier = getTier(pred.confidence, predictionDisplay.isTossUp);
-  const currentTierIdx = TIERS.indexOf(tier);
+  const tier = getConfidenceTier(pred.confidence, predictionDisplay.isTossUp);
+  const currentTierIdx = TIERS.findIndex((item) => item.label === tier.label);
   const canonicalProbabilities = getCanonicalWinProbabilities(pred as unknown as Prediction);
   const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away, canonicalProbabilities.draw);
   const hasDraw = typeof dp.draw === 'number';

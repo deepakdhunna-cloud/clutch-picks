@@ -75,11 +75,50 @@ export function formatGameTime(sport: string, quarter?: string, clock?: string):
  * Returns a human-readable confidence tier label for any confidence percentage.
  */
 export function getConfidenceTierLabel(confidence: number): string {
-  if (confidence >= 72) return 'Considered a Lock';
-  if (confidence >= 60) return 'Considered a Strong Pick';
-  if (confidence >= 53) return 'Considered a Solid Pick';
+  if (confidence >= 75) return 'Considered a Lock';
+  if (confidence >= 67) return 'Considered a Strong Pick';
+  if (confidence >= 60) return 'Considered a Solid Pick';
+  if (confidence >= 53) return 'Considered a Lean Pick';
   return 'Considered a Toss-Up';
 }
+
+export const CONFIDENCE_TIER_DEFINITIONS = [
+  {
+    label: 'Toss-Up',
+    color: '#6B7280',
+    range: '< 53%',
+    desc: "The model cannot create enough separation. It may still choose a side elsewhere, but the strength label should not sell this as an edge.",
+    filled: 2,
+  },
+  {
+    label: 'Lean Pick',
+    color: '#8EA4B8',
+    range: '53-59%',
+    desc: 'A slight model lean. The pick can be shown, but the edge is narrow and should be treated as a watch-level recommendation.',
+    filled: 4,
+  },
+  {
+    label: 'Solid Pick',
+    color: '#A8BAC8',
+    range: '60-66%',
+    desc: 'A usable edge with better separation across the core factors. This is the first tier where the app should call the pick solid.',
+    filled: 6,
+  },
+  {
+    label: 'Strong Pick',
+    color: '#CBD5E1',
+    range: '67-74%',
+    desc: 'Multiple factors and sub-models are aligned with meaningful probability separation.',
+    filled: 8,
+  },
+  {
+    label: 'Lock',
+    color: '#F1F5F9',
+    range: '75%+',
+    desc: 'A dominant edge across the model stack with strong agreement and data coverage.',
+    filled: 10,
+  },
+] as const;
 
 /**
  * Canonical confidence tier — { short label, color } pair used across the app
@@ -93,14 +132,20 @@ export function getConfidenceTierLabel(confidence: number): string {
  * The palette is intentionally neutral: graduated lightness on cool grays so
  * higher tiers feel "premium" without competing with the maroon accent color.
  */
+export type ConfidenceTierLabel = typeof CONFIDENCE_TIER_DEFINITIONS[number]['label'];
+
 export interface ConfidenceTier {
-  label: 'Toss-Up' | 'Solid Pick' | 'Strong Pick' | 'Lock';
+  label: ConfidenceTierLabel;
   color: string;
+  range: string;
+  desc: string;
+  filled: number;
 }
 
 export function getConfidenceTier(confidence: number, isTossUp?: boolean): ConfidenceTier {
-  if (isTossUp || confidence < 53) return { label: 'Toss-Up',     color: '#6B7280' };
-  if (confidence < 60)             return { label: 'Solid Pick',  color: '#94A3B8' };
-  if (confidence < 72)             return { label: 'Strong Pick', color: '#CBD5E1' };
-  return                                  { label: 'Lock',        color: '#F1F5F9' };
+  if (isTossUp || confidence < 53) return CONFIDENCE_TIER_DEFINITIONS[0];
+  if (confidence < 60)             return CONFIDENCE_TIER_DEFINITIONS[1];
+  if (confidence < 67)             return CONFIDENCE_TIER_DEFINITIONS[2];
+  if (confidence < 75)             return CONFIDENCE_TIER_DEFINITIONS[3];
+  return                                  CONFIDENCE_TIER_DEFINITIONS[4];
 }

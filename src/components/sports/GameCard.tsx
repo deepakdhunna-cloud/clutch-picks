@@ -300,53 +300,53 @@ const LiveGameLayout = memo(function LiveGameLayout({
       >
         {/* Red glow for live */}
         <View style={{
-          borderRadius: 22,
+          borderRadius: 28,
           shadowColor: '#DC2626',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.18,
-          shadowRadius: 22,
-          elevation: 6,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.35,
+          shadowRadius: 36,
+          elevation: 12,
         }}>
         {/* Depth shadow */}
         <View style={{
-          borderRadius: 22,
+          borderRadius: 28,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 16 },
-          shadowOpacity: 0.95,
-          shadowRadius: 32,
-          elevation: 30,
+          shadowOffset: { width: 0, height: 40 },
+          shadowOpacity: 1,
+          shadowRadius: 80,
+          elevation: 60,
         }}>
         {/* Glass border — dark reflective with team colors */}
-        <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
+        <View style={{ borderRadius: 28, padding: 12, overflow: 'hidden' }}>
           <LinearGradient
             colors={[
-              `${awayAccent}90`,
-              `${awayAccent}50`,
+              `${awayAccent}FF`,
+              `${awayAccent}B0`,
               '#0D1118',
               '#080C12',
               '#0D1118',
-              `${homeAccent}50`,
-              `${homeAccent}90`,
+              `${homeAccent}B0`,
+              `${homeAccent}FF`,
             ]}
             locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 28 }}
           />
           {/* Inner bevel — specular highlight top, deep shadow bottom */}
-          <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
+          <View style={{ borderRadius: 20, padding: 5, overflow: 'hidden' }}>
             <LinearGradient
               colors={[
-                `${awayAccent}60`,
-                'rgba(255,255,255,0.12)',
+                `${awayAccent}C0`,
+                'rgba(255,255,255,0.45)',
                 '#080C12',
-                'rgba(0,0,0,0.6)',
-                `${homeAccent}50`,
+                'rgba(0,0,0,0.95)',
+                `${homeAccent}B0`,
               ]}
               locations={[0, 0.2, 0.5, 0.8, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 19 }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 20 }}
             />
           {/* Card body */}
           <View style={{ borderRadius: 18, overflow: 'hidden' }}>
@@ -836,36 +836,36 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       {/* Depth shadow */}
       <View style={styles.cardShadowContainer}>
       {/* Glass border — dark reflective with team colors */}
-      <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
+      <View style={{ borderRadius: 28, padding: 12, overflow: 'hidden' }}>
         <LinearGradient
           colors={[
-            `${awayAccent}90`,
-            `${awayAccent}50`,
+            `${awayAccent}FF`,
+            `${awayAccent}B0`,
             '#0D1118',
             '#080C12',
             '#0D1118',
-            `${homeAccent}50`,
-            `${homeAccent}90`,
+            `${homeAccent}B0`,
+            `${homeAccent}FF`,
           ]}
           locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 28 }}
         />
         {/* Inner bevel — specular highlight on top edge, deep shadow on bottom */}
-        <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
+        <View style={{ borderRadius: 20, padding: 5, overflow: 'hidden' }}>
           <LinearGradient
             colors={[
-              `${awayAccent}60`,
-              'rgba(255,255,255,0.12)',
+              `${awayAccent}C0`,
+              'rgba(255,255,255,0.45)',
               '#080C12',
-              'rgba(0,0,0,0.6)',
-              `${homeAccent}50`,
+              'rgba(0,0,0,0.95)',
+              `${homeAccent}B0`,
             ]}
             locations={[0, 0.2, 0.5, 0.8, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 19 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 20 }}
           />
         {/* Card body */}
         <View style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
@@ -1454,12 +1454,12 @@ const styles = StyleSheet.create({
   },
   // GameCard main card — hyper glass raised border
   cardShadowContainer: {
-    borderRadius: 22,
+    borderRadius: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.95,
-    shadowRadius: 32,
-    elevation: 30,
+    shadowOffset: { width: 0, height: 40 },
+    shadowOpacity: 1,
+    shadowRadius: 80,
+    elevation: 60,
   },
   cardOverflowContainer: {
     overflow: 'hidden',

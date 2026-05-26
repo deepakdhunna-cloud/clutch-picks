@@ -419,7 +419,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT, letterSpacing: 1.5 }}>PICK READ</Text>
                       <View style={{ backgroundColor: 'rgba(122,157,184,0.08)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(122,157,184,0.19)' }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: TEAL }}>Solid Pick</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: TEAL }}>Lean Pick</Text>
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 3, height: 5, marginBottom: 16 }}>
@@ -479,11 +479,11 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
           </View>
           <View style={{ gap: 8 }}>
             {[
-              { range: '50–54%', label: 'Considered a Lean', desc: 'Slight edge detected by the model', accent: 'rgba(255,255,255,0.15)' },
-              { range: '55–59%', label: 'Considered a Solid Pick', desc: 'Clear advantage found across key factors', accent: 'rgba(122,157,184,0.25)' },
-              { range: '60–64%', label: 'Considered a Strong Pick', desc: 'Multiple prediction factors align', accent: 'rgba(122,157,184,0.35)' },
-              { range: '65–69%', label: 'Considered a High Confidence Pick', desc: 'Strong model agreement and data depth', accent: 'rgba(139,10,31,0.25)' },
-              { range: '70%+', label: 'Considered a Lock', desc: 'Dominant edge across all factors', accent: 'rgba(139,10,31,0.35)' },
+              { range: '< 53%', label: 'Considered a Toss-Up', desc: 'No clean edge from the model', accent: 'rgba(255,255,255,0.15)' },
+              { range: '53–59%', label: 'Considered a Lean Pick', desc: 'Narrow edge detected by the model', accent: 'rgba(122,157,184,0.22)' },
+              { range: '60–66%', label: 'Considered a Solid Pick', desc: 'Usable separation across core factors', accent: 'rgba(122,157,184,0.32)' },
+              { range: '67–74%', label: 'Considered a Strong Pick', desc: 'Strong model agreement and data depth', accent: 'rgba(139,10,31,0.25)' },
+              { range: '75%+', label: 'Considered a Lock', desc: 'Dominant edge across all factors', accent: 'rgba(139,10,31,0.35)' },
             ].map((tier, i) => (
               <Animated.View key={i} entering={FadeInDown.delay(550 + i * 60).duration(400)}>
                 <View style={{
