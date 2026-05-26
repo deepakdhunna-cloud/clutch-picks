@@ -329,9 +329,11 @@ export function reconcileProjectionToFinal(args: {
 
   let projectedHomeScore = args.projection.projectedHomeScore;
   let projectedAwayScore = args.projection.projectedAwayScore;
-  let projectedSpread = args.projection.projectedSpread;
-  let projectedTotal = args.projection.projectedTotal;
-  let scoreAdjusted = false;
+  let projectedSpread = roundTo(projectedHomeScore - projectedAwayScore, 1);
+  let projectedTotal = roundTo(projectedHomeScore + projectedAwayScore, 1);
+  let scoreAdjusted =
+    Math.abs(projectedSpread - args.projection.projectedSpread) > 0.001 ||
+    Math.abs(projectedTotal - args.projection.projectedTotal) > 0.001;
 
   if (finalPick !== "none" && rawScorePick !== finalPick) {
     const reconciledScores = reconciledScoreLineForPick({

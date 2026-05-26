@@ -254,6 +254,25 @@ describe("canonical prediction result", () => {
     expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
   });
 
+  it("normalizes projection spread and total from the displayed scoreline", () => {
+    const reconciled = reconcileProjectionToFinal({
+      sport: "TENNIS",
+      projection: projection({
+        homeWinProbability: 0.54,
+        awayWinProbability: 0.46,
+        projectedHomeScore: 1.5,
+        projectedAwayScore: 1.4,
+        projectedSpread: 0,
+        projectedTotal: 2.8,
+      }),
+      finalProbabilities: { home: 0.54, away: 0.46 },
+    });
+
+    expect(reconciled.projectedSpread).toBeCloseTo(0.1, 1);
+    expect(reconciled.projectedTotal).toBeCloseTo(2.9, 1);
+    expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
+  });
+
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {
     const ctx = makeNBAContext();
     const canonical = buildCanonicalPredictionResult({
