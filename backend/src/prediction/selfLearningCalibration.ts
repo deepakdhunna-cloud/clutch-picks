@@ -22,6 +22,19 @@ export type LearningCalibrationSnapshot = {
   reliabilityCurve: LearningReliabilityBucket[];
 };
 
+/**
+ * Kill-switch for the self-learning calibration layer. Defaults to ENABLED so
+ * shipped 2.11.0 behavior is preserved; set SELF_LEARNING_CALIBRATION_ENABLED to
+ * "false"/"0"/"off"/"no" to disable it in production without a code revert. When
+ * disabled, predictions serve the raw model probability with no adjustment.
+ */
+export function isSelfLearningCalibrationEnabled(): boolean {
+  const raw = process.env.SELF_LEARNING_CALIBRATION_ENABLED;
+  if (raw === undefined) return true;
+  const value = raw.trim().toLowerCase();
+  return !(value === "false" || value === "0" || value === "off" || value === "no");
+}
+
 const MIN_BUCKET_SAMPLE = 30;
 const FULL_TRUST_BUCKET_SAMPLE = 100;
 const MAX_BINARY_ADJUSTMENT = 0.03;

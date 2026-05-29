@@ -459,19 +459,31 @@ describe("isTopPickEligible", () => {
 });
 
 describe("selectTopPicksForDisplay", () => {
-  test("returns the best scheduled pick per sport and falls back when strict gates reject a sport", () => {
+  test("surfaces the best strict pick per sport, and a clean relaxed lean when no strict pick exists", () => {
     const nba = attachTopPick(makeSportGame("nba-1", "NBA", "LAL", "OKC"), 62);
     const mlbWeak = attachTopPick(makeSportGame("mlb-1", "MLB", "NYY", "BOS"), 58);
     const mlbStrong = attachTopPick(makeSportGame("mlb-2", "MLB", "LAD", "SF"), 66);
-    const nhlLowConviction = attachTopPick(
-      makeSportGame("nhl-1", "NHL", "DAL", "EDM"),
-      53,
-      ["low-conviction"],
-    );
+    // NHL has no >=56 strict pick, but this 54 lean is clean (no blocked tags,
+    // no low-data, not a toss-up) so it is an acceptable relaxed fallback.
+    const nhlCleanLean = attachTopPick(makeSportGame("nhl-1", "NHL", "DAL", "EDM"), 54);
 
-    const selected = selectTopPicksForDisplay([mlbWeak, nhlLowConviction, mlbStrong, nba]);
+    const selected = selectTopPicksForDisplay([mlbWeak, nhlCleanLean, mlbStrong, nba]);
 
     expect(selected.map((game) => game.id)).toEqual(["nba-1", "mlb-2", "nhl-1"]);
+  });
+
+  test("never surfaces a blocked/low-conviction pick, even when a sport has no other pick", () => {
+    const nba = attachTopPick(makeSportGame("nba-1", "NBA", "LAL", "OKC"), 62);
+    // NHL's only pick carries a low-conviction blocked tag. The old ungated
+    // fallback surfaced it (a defect); the relaxed fallback must still reject it
+    // so the sport contributes no pick rather than one the engine distrusts.
+    const nhlBlocked = attachTopPick(makeSportGame("nhl-1", "NHL", "DAL", "EDM"), 53, ["low-conviction"]);
+    // A below-floor clean pick (52, < relaxed floor 53) is also not surfaced.
+    const mlbBelowFloor = attachTopPick(makeSportGame("mlb-1", "MLB", "NYY", "BOS"), 52);
+
+    const selected = selectTopPicksForDisplay([nba, nhlBlocked, mlbBelowFloor]);
+
+    expect(selected.map((game) => game.id)).toEqual(["nba-1"]);
   });
 });
 

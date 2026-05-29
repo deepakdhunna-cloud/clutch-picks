@@ -89,6 +89,11 @@ const envSchema = z.object({
 
   // ─── Feature flags ────────────────────────────────────────────────────
   USE_NEW_PREDICTION_ENGINE: z.string().optional(),
+  // Kill-switch for the self-learning calibration layer. Defaults to ENABLED
+  // (preserves shipped 2.11.0 behavior). Set to "false"/"0"/"off" to disable
+  // the layer in production without a code revert — predictions then serve the
+  // raw model probability with no self-learning adjustment.
+  SELF_LEARNING_CALIBRATION_ENABLED: z.string().optional(),
 
   // ─── Paths ────────────────────────────────────────────────────────────
   // Where prediction_shadow_*.jsonl files land; defaults to backend/logs

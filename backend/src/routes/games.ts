@@ -700,6 +700,12 @@ export function attachPredictionToGame(game: Game, prediction: GamePrediction): 
 }
 
 const TOP_PICK_MIN_CONFIDENCE = 56;
+// Fallback floor used only when a sport has no pick that clears the strict 56
+// bar. A relaxed pick must still be a genuine lean (above a coin flip) and must
+// pass every quality gate below — it just may be a 53-55 lean rather than a
+// high-conviction read. This keeps the board populated on thin/offseason slates
+// without ever surfacing a pick the engine itself flagged as unreliable.
+const TOP_PICK_RELAXED_MIN_CONFIDENCE = 53;
 const TOP_PICK_LIMIT = 8;
 const TOP_PICK_MAX_CANDIDATES = 48;
 const TOP_PICK_MAX_CANDIDATES_PER_SPORT = 6;
@@ -720,7 +726,12 @@ const TOP_PICK_SPORT_ORDER: Game["sport"][] = [
   "UCL",
 ];
 
-export function isTopPickEligible(game: Game): boolean {
+// Every quality gate a featured pick must clear, parameterized only by the
+// confidence floor. Both the strict and relaxed gates share this so a relaxed
+// fallback pick can never bypass the blocked-tag / low-data / toss-up /
+// reliability-warning checks — the exact defect that let a 44.5% thin-data pick
+// reach Top Picks. The ONLY difference between strict and relaxed is the floor.
+function passesTopPickQualityGates(game: Game, minConfidence: number): boolean {
   const prediction = game.prediction;
   const canonical = prediction?.canonicalResult;
   if (!prediction || !canonical) return false;
@@ -729,7 +740,7 @@ export function isTopPickEligible(game: Game): boolean {
   if (prediction.lowDataWarning || prediction.isTossUp) return false;
 
   const confidence = canonical.confidence ?? prediction.confidence;
-  if (!Number.isFinite(confidence) || confidence < TOP_PICK_MIN_CONFIDENCE) return false;
+  if (!Number.isFinite(confidence) || confidence < minConfidence) return false;
   if (canonical.decisionProfile?.lowDataWarning) return false;
 
   const tags = canonical.decisionProfile?.tags ?? [];
@@ -739,6 +750,16 @@ export function isTopPickEligible(game: Game): boolean {
   if (warnings.some((warning) => TOP_PICK_BLOCKED_WARNING_REGEX.test(warning))) return false;
 
   return true;
+}
+
+export function isTopPickEligible(game: Game): boolean {
+  return passesTopPickQualityGates(game, TOP_PICK_MIN_CONFIDENCE);
+}
+
+// Relaxed fallback: same quality gates, lower confidence floor. Used only when
+// no strict-eligible pick exists for a sport.
+export function isRelaxedTopPickEligible(game: Game): boolean {
+  return passesTopPickQualityGates(game, TOP_PICK_RELAXED_MIN_CONFIDENCE);
 }
 
 function isDisplayableTopPickCandidate(game: Game): boolean {
@@ -788,7 +809,10 @@ export function selectTopPicksForDisplay(games: Game[]): Game[] {
   return [...gamesBySport.entries()]
     .map(([sport, sportGames]) => {
       const strict = sportGames.filter(isTopPickEligible);
-      const pool = strict.length > 0 ? strict : sportGames;
+      // Fallback to relaxed-but-still-clean picks (never the ungated sportGames,
+      // which let blocked/low-data/below-coin-flip picks through). A sport with
+      // no acceptable pick contributes none rather than a pick we distrust.
+      const pool = strict.length > 0 ? strict : sportGames.filter(isRelaxedTopPickEligible);
       const best = [...pool].sort((a, b) => topPickScore(b) - topPickScore(a))[0];
       return { sport, game: best };
     })

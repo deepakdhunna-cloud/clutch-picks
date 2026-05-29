@@ -245,7 +245,7 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
     spreadValue: tennisScores ? tennisScores.spread : cricket ? Math.round(input.projection.projectedSpread) : input.projection.projectedSpread,
     leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
     contextText: tennisScores
-      ? 'Projected match games for the final pick'
+      ? 'Indicative games derived from the win-probability model'
       : cricket
         ? 'Projected run score for the final pick'
         : 'Projected score and margin for the final pick',

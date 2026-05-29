@@ -14,6 +14,7 @@ import { getConfidenceBand } from "./types";
 import {
   applySelfLearningCalibration,
   getSelfLearningCalibrationSnapshot,
+  isSelfLearningCalibrationEnabled,
 } from "./selfLearningCalibration";
 import type { Game, GamePrediction, PredictionFactor } from "../routes/games";
 import { prisma } from "../prisma";
@@ -361,8 +362,11 @@ export function shouldUpdatePredictionSnapshot(
 export async function runNewEnginePrediction(game: Game): Promise<GamePrediction> {
   const ctx = await buildGameContext(game);
   let newPred = predictGame(ctx);
-  const learningSnapshot = await getSelfLearningCalibrationSnapshot(ctx.sport);
-  const learnedPred = applySelfLearningCalibration(newPred, learningSnapshot);
+  // Self-learning calibration is gated by a kill-switch so it can be disabled in
+  // production without a revert. When disabled we serve the raw model output.
+  const learnedPred = isSelfLearningCalibrationEnabled()
+    ? applySelfLearningCalibration(newPred, await getSelfLearningCalibrationSnapshot(ctx.sport))
+    : newPred;
   if (learnedPred !== newPred) {
     const alignedProjection = learnedPred.projection
       ? reconcileProjectionToFinal({
