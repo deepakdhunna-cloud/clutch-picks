@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Dimensions, InteractionManager } from 'react-native';
 import Svg, { Path, Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -7,7 +7,7 @@ const { width: W, height: H } = Dimensions.get('window');
 const CELL = 20;
 const COLS = Math.ceil(W / CELL);
 const ROWS = Math.ceil(H / CELL);
-const STEP = 3;
+const STEP = 6;
 const SVG_W = W;
 const SVG_H = H;
 
@@ -60,28 +60,40 @@ for (let c = 0; c <= COLS; c++) {
   vLines.push({ d, opacity });
 }
 
-export default function GridBackground() {
+function GridBackground() {
+  // Defer the (heavy) SVG reconciliation until after the tab transition so the
+  // many <Path> nodes don't compete with the initial navigation animation.
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = InteractionManager.runAfterInteractions(() => setShow(true));
+    return () => t.cancel();
+  }, []);
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Svg width={W} height={H} viewBox={`0 0 ${SVG_W} ${SVG_H}`}>
-        <Defs>
-          <RadialGradient id="gridFade" cx="50%" cy="35%" rx="60%" ry="60%">
-            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.06} />
-            <Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0.02} />
-            <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        {/* Subtle radial glow behind the grid */}
-        <Rect x="0" y="0" width={SVG_W} height={SVG_H} fill="url(#gridFade)" />
-        {/* Horizontal lines — opacity varies by distance from center */}
-        {hLines.map((line, i) => (
-          <Path key={`h${i}`} d={line.d} stroke={`rgba(160,170,180,${line.opacity.toFixed(3)})`} strokeWidth={0.5} fill="none" />
-        ))}
-        {/* Vertical lines — opacity varies by distance from center */}
-        {vLines.map((line, i) => (
-          <Path key={`v${i}`} d={line.d} stroke={`rgba(160,170,180,${line.opacity.toFixed(3)})`} strokeWidth={0.5} fill="none" />
-        ))}
-      </Svg>
+      {show ? (
+        <Svg width={W} height={H} viewBox={`0 0 ${SVG_W} ${SVG_H}`}>
+          <Defs>
+            <RadialGradient id="gridFade" cx="50%" cy="35%" rx="60%" ry="60%">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.06} />
+              <Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0.02} />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          {/* Subtle radial glow behind the grid */}
+          <Rect x="0" y="0" width={SVG_W} height={SVG_H} fill="url(#gridFade)" />
+          {/* Horizontal lines — opacity varies by distance from center */}
+          {hLines.map((line, i) => (
+            <Path key={`h${i}`} d={line.d} stroke={`rgba(160,170,180,${line.opacity.toFixed(3)})`} strokeWidth={0.5} fill="none" />
+          ))}
+          {/* Vertical lines — opacity varies by distance from center */}
+          {vLines.map((line, i) => (
+            <Path key={`v${i}`} d={line.d} stroke={`rgba(160,170,180,${line.opacity.toFixed(3)})`} strokeWidth={0.5} fill="none" />
+          ))}
+        </Svg>
+      ) : null}
     </View>
   );
 }
+
+export default React.memo(GridBackground);

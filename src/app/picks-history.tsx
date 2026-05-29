@@ -43,6 +43,8 @@ interface PickTile {
   gameId: string;
   abbreviation: string;
   opponentAbbr: string;
+  teamName: string;
+  opponentName: string;
   sport: string;
   result: string;
   createdAt: string;
@@ -134,12 +136,12 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
           {/* Team info */}
           <View style={s.pickInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={s.pickTeam}>{item.abbreviation}</Text>
-              <View style={[s.sportPill, { borderColor: `${accentColor}30` }]}>
+              <Text style={[s.pickTeam, { flexShrink: 1 }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>{item.teamName}</Text>
+              <View style={[s.sportPill, { borderColor: `${accentColor}30`, flexShrink: 0 }]}>
                 <Text style={[s.sportPillText, { color: accentColor }]}>{displaySport(item.sport)}</Text>
               </View>
             </View>
-            <Text style={s.pickVs}>vs {item.opponentAbbr} <Text style={{ color: 'rgba(255,255,255,0.15)' }}> {item.time}</Text></Text>
+            <Text style={s.pickVs} numberOfLines={1}>vs {item.opponentName} <Text style={{ color: 'rgba(255,255,255,0.15)' }}>{item.time}</Text></Text>
           </View>
 
           {/* Result badge */}
@@ -199,30 +201,45 @@ export default function PicksHistoryScreen() {
   const [filter, setFilter] = useState<'all' | 'win' | 'loss' | 'pending'>('all');
   const deferredFilter = useDeferredValue(filter);
 
+  const gameMap = useMemo(
+    () => new Map((allGames ?? []).map((g) => [g.id, g])),
+    [allGames]
+  );
+
   const displayPicks = useMemo(() => {
     if (!picks) return [];
-    const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
     return picks.map((p) => ({
       ...p,
       result: resolvePickResultForDisplay(p, gameMap.get(p.gameId)),
     }));
-  }, [picks, allGames]);
+  }, [picks, gameMap]);
 
   const allTiles = useMemo<PickTile[]>(() => {
     if (displayPicks.length === 0) return [];
     return [...displayPicks]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map((p) => ({
-        id: p.id,
-        gameId: p.gameId,
-        abbreviation: p.pickedTeam === 'home' ? (p.homeTeam ?? '??') : (p.awayTeam ?? '??'),
-        opponentAbbr: p.pickedTeam === 'home' ? (p.awayTeam ?? '??') : (p.homeTeam ?? '??'),
-        sport: p.sport ?? 'NBA',
-        result: p.result ?? 'pending',
-        createdAt: p.createdAt,
-        time: formatTime(p.createdAt),
-      }));
-  }, [displayPicks]);
+      .map((p) => {
+        const abbreviation = p.pickedTeam === 'home' ? (p.homeTeam ?? '??') : (p.awayTeam ?? '??');
+        const opponentAbbr = p.pickedTeam === 'home' ? (p.awayTeam ?? '??') : (p.homeTeam ?? '??');
+        // Resolve full team names from the live slate when the game is still
+        // loaded; fall back to the stored abbreviation for older picks.
+        const game = gameMap.get(p.gameId);
+        const pickedFull = p.pickedTeam === 'home' ? game?.homeTeam.name : game?.awayTeam.name;
+        const opponentFull = p.pickedTeam === 'home' ? game?.awayTeam.name : game?.homeTeam.name;
+        return {
+          id: p.id,
+          gameId: p.gameId,
+          abbreviation,
+          opponentAbbr,
+          teamName: pickedFull ?? abbreviation,
+          opponentName: opponentFull ?? opponentAbbr,
+          sport: p.sport ?? 'NBA',
+          result: p.result ?? 'pending',
+          createdAt: p.createdAt,
+          time: formatTime(p.createdAt),
+        };
+      });
+  }, [displayPicks, gameMap]);
 
   const sections = useMemo<PickSection[]>(() => {
     const filtered = deferredFilter === 'all' ? allTiles : allTiles.filter(t => t.result === deferredFilter);
@@ -288,7 +305,7 @@ export default function PicksHistoryScreen() {
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Pick History</Text>
-            <Text style={s.headerSub}>{summary.total} picks  {summary.rate}% win rate</Text>
+            <Text style={s.headerSub}>{summary.total} picks {summary.rate}% win rate</Text>
           </View>
         </View>
 

@@ -3451,6 +3451,43 @@ export function buildHomeGamesDateWindow(now = new Date()): {
   };
 }
 
+// Historical search depth for resolving a game by ID (used by /id/:id and
+// lookupGameById). The profile + picks-history surfaces let users tap picks
+// well older than the home slate; today's cache + a tiny ±3-day window cannot
+// resolve those once the in-memory gameById index is cold (e.g. after a deploy).
+//
+// When we know the sport (query hint or gameIdToSport index) we can afford a
+// deep, targeted look-back (1 sport × N dates). When the sport is unknown we
+// keep a much shallower window because every date fans out to all 11 sports.
+const GAME_LOOKUP_BACK_DAYS_TARGETED = 21;
+const GAME_LOOKUP_FORWARD_DAYS = 3;
+const GAME_LOOKUP_BACK_DAYS_BROAD = 3;
+
+// Build the ordered list of YYYY-MM-DD dates to search when resolving a game by
+// ID. Today (offset 0) is always searched first by the caller, so it is omitted
+// here. Recent days are searched before older ones so the common case (a pick
+// from the last few days) resolves with the fewest ESPN round-trips.
+export function buildGameLookupDateOffsets(opts: { knownSport: boolean }): number[] {
+  const backDays = opts.knownSport
+    ? GAME_LOOKUP_BACK_DAYS_TARGETED
+    : GAME_LOOKUP_BACK_DAYS_BROAD;
+
+  const offsets: number[] = [];
+  // Interleave so we probe the closest dates first regardless of direction.
+  const maxSpan = Math.max(backDays, GAME_LOOKUP_FORWARD_DAYS);
+  for (let i = 1; i <= maxSpan; i++) {
+    if (i <= GAME_LOOKUP_FORWARD_DAYS) offsets.push(i);
+    if (i <= backDays) offsets.push(-i);
+  }
+  return offsets;
+}
+
+function normalizeSportHint(value: string | undefined | null): SportKey | null {
+  if (!value) return null;
+  const upper = value.toUpperCase();
+  return upper in ESPN_ENDPOINTS ? (upper as SportKey) : null;
+}
+
 // Force-refresh all predictions (clears cache so new engine params take effect)
 // Admin-only: requires authenticated user whose ID matches ADMIN_USER_ID env var
 gamesRouter.post("/refresh-predictions", async (c) => {
@@ -3633,6 +3670,11 @@ gamesRouter.get("/date/:date", async (c) => {
 
 gamesRouter.get("/id/:id", async (c) => {
   const gameId = c.req.param("id");
+  // Optional sport hint (e.g. ?sport=NBA). The profile + picks-history tiles
+  // know the sport of an old pick even when our in-memory index has been
+  // cleared by a restart, so the client can pass it to make the historical
+  // look-back cheap and reliable.
+  const sportHint = normalizeSportHint(c.req.query("sport"));
 
   try {
     // Helper to ensure game has the freshest prediction.
@@ -3679,18 +3721,19 @@ gamesRouter.get("/id/:id", async (c) => {
       return c.json({ data: gameWithPrediction });
     }
 
-    // Fallback: search nearby dates (+-3 days)
+    // Fallback: search nearby dates. If we know which sport this game belongs
+    // to — from the client hint or our gameId→sport index — we can search a
+    // deep historical window (targeting just that sport, so it stays cheap).
+    // Without a sport we keep a shallow window because each date fans out to
+    // all sports. This is what lets older picks (profile + picks-history) open.
+    const knownSport = sportHint ?? gameIdToSport.get(gameId) ?? null;
     const today = new Date();
-    const dates: string[] = [];
-    for (let i = -3; i <= 3; i++) {
-      if (i === 0) continue; // already checked today
+    const dates = buildGameLookupDateOffsets({ knownSport: !!knownSport }).map((offset) => {
       const date = new Date(today);
-      date.setDate(date.getDate() + i);
-      dates.push(date.toISOString().split("T")[0]!);
-    }
+      date.setDate(date.getDate() + offset);
+      return date.toISOString().split("T")[0]!;
+    });
 
-    // Fix 4: if we know which sport this game belongs to, only search that sport
-    const knownSport = gameIdToSport.get(gameId);
     const dateResults = await Promise.all(
       dates.map(async (date) => {
         const games = knownSport
@@ -4035,16 +4078,14 @@ export async function lookupGameById(gameId: string): Promise<Game | null> {
   const found = todays.find((g) => g.id === gameId);
   if (found) return ensurePrediction(found);
 
+  const knownSport = gameIdToSport.get(gameId) ?? null;
   const today = new Date();
-  const dates: string[] = [];
-  for (let i = -3; i <= 3; i++) {
-    if (i === 0) continue;
+  const dates = buildGameLookupDateOffsets({ knownSport: !!knownSport }).map((offset) => {
     const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split("T")[0]!);
-  }
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().split("T")[0]!;
+  });
 
-  const knownSport = gameIdToSport.get(gameId);
   const dateResults = await Promise.all(
     dates.map(async (date) => {
       const games = knownSport

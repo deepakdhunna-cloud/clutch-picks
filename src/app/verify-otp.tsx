@@ -251,7 +251,7 @@ export default function VerifyOTP() {
 
           {/* Resend */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.resendRow}>
-            <Pressable onPress={handleResend} disabled={isResending}>
+            <Pressable onPress={handleResend} disabled={isResending} hitSlop={12}>
               <Text style={[s.resendText, isResending && { color: 'rgba(255,255,255,0.25)' }]}>
                 {isResending ? 'Sending...' : 'Resend Code'}
               </Text>

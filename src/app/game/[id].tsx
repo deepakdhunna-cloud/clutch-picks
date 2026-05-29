@@ -9,6 +9,7 @@ import {
   Modal,
   StyleSheet,
   RefreshControl,
+  InteractionManager,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1035,12 +1036,19 @@ function ConfidenceBarSegment({ filled }: { filled: boolean }) {
       rot.value = 0;
       return;
     }
-    rot.value = withRepeat(
-      withTiming(360, { duration: 4000, easing: Easing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(rot);
+    // Defer the spinning gradient until the entrance transition settles so the
+    // many segment spinners don't compete with the screen slide-in.
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      rot.value = withRepeat(
+        withTiming(360, { duration: 4000, easing: Easing.linear }),
+        -1,
+        false
+      );
+    });
+    return () => {
+      interaction.cancel();
+      cancelAnimation(rot);
+    };
   }, [filled, rot]);
 
   const spinStyle = useAnimatedStyle(() => ({
@@ -1093,17 +1101,24 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
   const rotation = useSharedValue(0);
   const glowPulse = useSharedValue(0);
   useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(360, { duration: 4500, easing: Easing.linear }),
-      -1,
-      false
-    );
-    glowPulse.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
+    // Defer these always-running decorative loops (a large rotating gradient +
+    // glow pulse) until the push transition has settled, so they don't compete
+    // with the entrance animation's frame budget. Visually identical — the loops
+    // simply begin a beat after the screen finishes sliding in.
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      rotation.value = withRepeat(
+        withTiming(360, { duration: 4500, easing: Easing.linear }),
+        -1,
+        false
+      );
+      glowPulse.value = withRepeat(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true
+      );
+    });
     return () => {
+      interaction.cancel();
       cancelAnimation(rotation);
       cancelAnimation(glowPulse);
     };
@@ -1297,7 +1312,7 @@ function ProjectionTrackerRow({
       <View style={styles.projectionTrackerTop}>
         <View style={styles.projectionTrackerNameWrap}>
           <View style={[styles.projectionTrackerSwatch, { backgroundColor: tone }]} />
-          <Text style={styles.projectionTrackerTeam}>{label}</Text>
+          <Text style={styles.projectionTrackerTeam} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{label}</Text>
         </View>
         <Text style={styles.projectionTrackerExpected}>Expected</Text>
       </View>
@@ -1356,14 +1371,14 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
 
         <View style={styles.projectionTrackerStack}>
           <ProjectionTrackerRow
-            label={homeTeam.abbreviation}
+            label={homeTeam.name}
             tone={homeColors.accent}
             expected={projection.projectedHomeScore}
             expectedText={isTennisProjection ? projectionDisplay.homeScore : undefined}
             actual={hasActualTotals ? liveHome : undefined}
           />
           <ProjectionTrackerRow
-            label={awayTeam.abbreviation}
+            label={awayTeam.name}
             tone={awayColors.accent}
             expected={projection.projectedAwayScore}
             expectedText={isTennisProjection ? projectionDisplay.awayScore : undefined}
@@ -1738,7 +1753,7 @@ function GameDetailContent() {
           <View style={{ height: detailHeaderTopSpacer }} />
           {/* Top bar — back (absolute left) + centered combined pill */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginBottom: 10, position: 'relative' }}>
-            <Pressable onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
+            <Pressable onPress={() => router.back()} hitSlop={8} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
             {/* Combined pill: LIVE indicator (if live) | sport badge | follow toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
               {isLive ? (<><LivePulseDot /><Text style={{ fontSize: suspended ? 10 : 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>{suspended ? suspensionStatus.toUpperCase() : 'LIVE'}</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
@@ -1767,11 +1782,11 @@ function GameDetailContent() {
           <View style={{ position: 'relative' }}>
           <View style={styles.teamNamesRow}>
             <View style={styles.teamNameCell}>
-              <Text style={styles.teamName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.74}>{homeTeam.name}</Text>
+              <Text style={styles.teamName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.74}>{homeTeam.name}</Text>
               <Text style={styles.teamRecord}>{homeTeam.record}</Text>
             </View>
             <View style={[styles.teamNameCell, styles.teamNameCellAway]}>
-              <Text style={[styles.teamName, { color: '#fff', textAlign: 'right' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.74}>{awayTeam.name}</Text>
+              <Text style={[styles.teamName, { color: '#fff', textAlign: 'right' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.74}>{awayTeam.name}</Text>
               <Text style={[styles.teamRecord, { color: '#ffffff' }]}>{awayTeam.record}</Text>
             </View>
           </View>
@@ -2100,7 +2115,7 @@ const styles = StyleSheet.create({
   cricketRequiredLineAbove: { maxWidth: 220, color: '#FFFFFF', fontSize: 11.5, lineHeight: 14, fontWeight: '900', letterSpacing: 1.4, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },
   winProbShell: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 14,
   },
   winProbBorder: {
@@ -2208,6 +2223,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   projectionTrackerTeam: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 11.5,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.9)',
@@ -2303,7 +2320,7 @@ const styles = StyleSheet.create({
   venueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   watchStrip: {
-    marginHorizontal: 18,
+    marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 24,
     position: 'relative',

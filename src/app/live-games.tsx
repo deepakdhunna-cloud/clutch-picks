@@ -1,41 +1,57 @@
-import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet, FlatList, useWindowDimensions } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
-import { useState, useCallback, useMemo, useDeferredValue, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import Animated, {
   FadeInDown,
-  useAnimatedStyle,
   useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
   withTiming,
-  withSpring,
+  withDelay,
   Easing,
-  runOnJS,
   interpolate,
-  Extrapolation,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { GameCard } from '@/components/sports';
+import { LiveArenaCard } from '@/components/sports/LiveArenaCard';
 import { Sport, SPORT_META, GameWithPrediction } from '@/types/sports';
 import { useGames } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
-import { TEAL } from '@/lib/theme';
+import { TEAL, MAROON, BG, LIVE_RED } from '@/lib/theme';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.22;
-const VELOCITY_THRESHOLD = 500;
-const EXIT_DURATION = 180;
-const ENTER_DURATION = 260;
+// Broadcast-style pulsing live indicator: a solid dot with a ring that
+// expands and fades on a loop. One shared value, UI thread, cleaned up.
+function LivePulse() {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withDelay(
+      200,
+      withRepeat(withTiming(1, { duration: 1600, easing: Easing.out(Easing.ease) }), -1, false)
+    );
+    return () => cancelAnimation(pulse);
+  }, [pulse]);
+
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.7, 2.6]) }],
+    opacity: interpolate(pulse.value, [0, 0.15, 1], [0, 0.55, 0]),
+  }));
+
+  return (
+    <View style={styles.pulseWrap}>
+      <Animated.View style={[styles.pulseRing, ringStyle]} />
+      <View style={styles.pulseDot} />
+    </View>
+  );
+}
 
 export default function LiveGamesScreen() {
   const router = useRouter();
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
-  const deferredSelectedSport = useDeferredValue(selectedSport);
-
-  const translateX = useSharedValue(0);
-  const isAnimating = useRef(false);
   const {
     onTouchStart: onChipTouchStart,
     onTouchMove: onChipTouchMove,
@@ -43,8 +59,19 @@ export default function LiveGamesScreen() {
     shouldHandlePress: shouldHandleChipPress,
   } = useTapGestureGuard();
 
-  const { data: todaysGames, refetch, isLoading } = useGames();
+  const { data: todaysGames, refetch, isLoading, prefetchGame } = useGames();
   const { refreshing, onRefresh } = useSmoothRefresh(refetch);
+  const { width } = useWindowDimensions();
+  const cardWidth = width - 40; // list padding is 20 each side
+
+  const onWarmGame = useCallback((game: GameWithPrediction) => {
+    prefetchGame(game.id, game);
+  }, [prefetchGame]);
+
+  const onOpenGame = useCallback((game: GameWithPrediction) => {
+    prefetchGame(game.id, game);
+    router.push(`/game/${game.id}` as any);
+  }, [prefetchGame, router]);
 
   const liveGames = useMemo<GameWithPrediction[]>(
     () =>
@@ -68,345 +95,297 @@ export default function LiveGamesScreen() {
   const availableSports = useMemo(() => Array.from(gamesBySport.keys()), [gamesBySport]);
 
   const filteredGames = useMemo(() => {
-    if (!deferredSelectedSport) return liveGames;
-    return gamesBySport.get(deferredSelectedSport) ?? [];
-  }, [liveGames, deferredSelectedSport, gamesBySport]);
+    if (!selectedSport) return liveGames;
+    return gamesBySport.get(selectedSport) ?? [];
+  }, [liveGames, selectedSport, gamesBySport]);
 
-  // Order for swipe cycling
-  const filterOrder = useMemo<(Sport | null)[]>(
-    () => [null, ...availableSports],
-    [availableSports]
+  const handleChipPress = useCallback((sport: Sport | null) => {
+    if (!shouldHandleChipPress()) return;
+    void Haptics.selectionAsync().catch(() => {});
+    setSelectedSport(sport);
+  }, [shouldHandleChipPress]);
+
+  const renderLiveGame = useCallback(
+    ({ item }: { item: GameWithPrediction; index: number }) => (
+      <LiveArenaCard game={item} cardWidth={cardWidth} variant="full" onPress={onOpenGame} onPressIn={onWarmGame} />
+    ),
+    [cardWidth, onOpenGame, onWarmGame]
   );
-
-  // Swap the rendered filter and slide the new content in from the opposite side.
-  // direction = 1 means user swiped left (going to next): old exits left, new enters from right.
-  // direction = -1 means user swiped right (going to prev): old exits right, new enters from left.
-  const commitFilterChange = useCallback(
-    (next: Sport | null, direction: 1 | -1) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setSelectedSport(next);
-      // Snap to opposite off-screen position, then animate back to 0.
-      translateX.value = direction === 1 ? SCREEN_WIDTH : -SCREEN_WIDTH;
-      translateX.value = withTiming(
-        0,
-        { duration: ENTER_DURATION, easing: Easing.out(Easing.cubic) },
-        (finished) => {
-          if (finished) {
-            isAnimating.current = false;
-          }
-        }
-      );
-    },
-    [translateX]
-  );
-
-  const animateToFilter = useCallback(
-    (direction: 1 | -1) => {
-      if (filterOrder.length <= 1) {
-        translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.6 });
-        isAnimating.current = false;
-        return;
-      }
-      const currentIdx = filterOrder.findIndex((s) => s === selectedSport);
-      const nextIdx = (currentIdx + direction + filterOrder.length) % filterOrder.length;
-      const next = filterOrder[nextIdx];
-      isAnimating.current = true;
-      // Fly old content fully off-screen in swipe direction.
-      translateX.value = withTiming(
-        direction === 1 ? -SCREEN_WIDTH : SCREEN_WIDTH,
-        { duration: EXIT_DURATION, easing: Easing.in(Easing.cubic) },
-        (finished) => {
-          if (finished) {
-            runOnJS(commitFilterChange)(next, direction);
-          }
-        }
-      );
-    },
-    [filterOrder, selectedSport, translateX, commitFilterChange]
-  );
-
-  const handleChipPress = (sport: Sport | null) => {
-    if (sport === selectedSport || isAnimating.current) return;
-    const currentIdx = filterOrder.findIndex((s) => s === selectedSport);
-    const nextIdx = filterOrder.findIndex((s) => s === sport);
-    const direction: 1 | -1 = nextIdx > currentIdx ? 1 : -1;
-    Haptics.selectionAsync();
-    isAnimating.current = true;
-    translateX.value = withTiming(
-      direction === 1 ? -SCREEN_WIDTH : SCREEN_WIDTH,
-      { duration: EXIT_DURATION, easing: Easing.in(Easing.cubic) },
-      (finished) => {
-        if (finished) {
-          runOnJS(commitFilterChange)(sport, direction);
-        }
-      }
-    );
-  };
-
-  const swipeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-15, 15])
-        .failOffsetY([-12, 12])
-        .onUpdate((e) => {
-          if (isAnimating.current) return;
-          // Rubber band resistance past 40% of screen
-          const max = SCREEN_WIDTH * 0.5;
-          const t = e.translationX;
-          if (Math.abs(t) <= max) {
-            translateX.value = t;
-          } else {
-            const overshoot = Math.abs(t) - max;
-            const resisted = max + overshoot * 0.35;
-            translateX.value = t < 0 ? -resisted : resisted;
-          }
-        })
-        .onEnd((e) => {
-          const passedDistance = Math.abs(e.translationX) > SWIPE_THRESHOLD;
-          const passedVelocity = Math.abs(e.velocityX) > VELOCITY_THRESHOLD;
-          if (passedDistance || passedVelocity) {
-            const direction: 1 | -1 = e.translationX < 0 ? 1 : -1;
-            runOnJS(animateToFilter)(direction);
-          } else {
-            translateX.value = withSpring(0, {
-              damping: 20,
-              stiffness: 220,
-              mass: 0.6,
-            });
-          }
-        }),
-    [animateToFilter, translateX]
-  );
-
-  const animatedListStyle = useAnimatedStyle(() => {
-    const absX = Math.abs(translateX.value);
-    const opacity = interpolate(
-      absX,
-      [0, SCREEN_WIDTH * 0.6],
-      [1, 0],
-      Extrapolation.CLAMP
-    );
-    const scale = interpolate(
-      absX,
-      [0, SCREEN_WIDTH],
-      [1, 0.9],
-      Extrapolation.CLAMP
-    );
-    return {
-      transform: [{ translateX: translateX.value }, { scale }],
-      opacity,
-    };
-  });
-
-  // Soft glow that brightens as you cross the commit threshold during a drag
-  const hintStyle = useAnimatedStyle(() => {
-    const absX = Math.abs(translateX.value);
-    const opacity = interpolate(
-      absX,
-      [0, SWIPE_THRESHOLD, SCREEN_WIDTH * 0.45],
-      [0, 0.25, 0.5],
-      Extrapolation.CLAMP
-    );
-    return { opacity };
-  });
+  const keyExtractor = useCallback((g: GameWithPrediction) => g.id, []);
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
-          }
-        >
+      <View style={styles.container}>
+        {/* Ambient broadcast backdrop — maroon energy up top fading cleanly into
+            black. Vertical so the bottom edge is uniformly transparent (no line). */}
+        <LinearGradient
+          colors={['rgba(139,10,31,0.32)', 'rgba(139,10,31,0.12)', 'rgba(139,10,31,0.03)', 'transparent']}
+          locations={[0, 0.4, 0.72, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.backdrop}
+          pointerEvents="none"
+        />
+
+        <SafeAreaView style={styles.safe} edges={['top']}>
           {/* Header */}
-          <Animated.View entering={FadeInDown.duration(180)} style={styles.header}>
-            <View style={styles.headerRow}>
-              <Pressable onPress={() => router.back()} style={styles.backButton}>
-                <ChevronLeft size={28} color="#fff" />
-              </Pressable>
-              <View style={styles.titleWrap}>
-                <View style={styles.titleRow}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.title}>Live Now</Text>
-                </View>
-                <Text style={styles.subtitle}>
-                  {liveGames.length} game{liveGames.length !== 1 ? 's' : ''} in progress
-                </Text>
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={10}>
+              <View style={styles.backCircle}>
+                <ChevronLeft size={24} color="#fff" />
               </View>
+            </Pressable>
+
+            <View style={styles.titleWrap}>
+              <View style={styles.titleRow}>
+                <LivePulse />
+                <Text style={styles.title}>LIVE NOW</Text>
+              </View>
+              <Text style={styles.subtitle}>
+                {liveGames.length} GAME{liveGames.length !== 1 ? 'S' : ''} IN PROGRESS
+              </Text>
             </View>
           </Animated.View>
 
           {/* Sport filter chips */}
           {availableSports.length > 1 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipScroll}
-              contentContainerStyle={styles.chipScrollContent}
-            >
-              <Pressable
-                onPress={() => {
-                  if (!shouldHandleChipPress()) return;
-                  handleChipPress(null);
-                }}
-                pressRetentionOffset={6}
-                onTouchStart={onChipTouchStart}
-                onTouchMove={onChipTouchMove}
-                onTouchCancel={onChipTouchCancel}
+            <Animated.View entering={FadeInDown.duration(300).delay(80)}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.chipScroll}
+                contentContainerStyle={styles.chipScrollContent}
               >
-                <View
-                  style={[
-                    styles.chip,
-                    !selectedSport ? { backgroundColor: TEAL, borderColor: TEAL } : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      { color: !selectedSport ? '#FFFFFF' : 'rgba(255,255,255,0.7)' },
-                    ]}
-                  >
-                    All ({liveGames.length})
-                  </Text>
-                </View>
-              </Pressable>
-              {availableSports.map((sport) => {
-                const isSelected = selectedSport === sport;
-                const count = gamesBySport.get(sport)?.length ?? 0;
-                const meta = SPORT_META[sport];
-                const bg = meta?.color ?? TEAL;
-                return (
-                  <Pressable
-                    key={sport}
-                    onPress={() => {
-                      if (!shouldHandleChipPress()) return;
-                      handleChipPress(isSelected ? null : sport);
-                    }}
-                    pressRetentionOffset={6}
-                    onTouchStart={onChipTouchStart}
-                    onTouchMove={onChipTouchMove}
-                    onTouchCancel={onChipTouchCancel}
-                  >
-                    <View
-                      style={[
-                        styles.chip,
-                        isSelected ? { backgroundColor: bg, borderColor: bg } : null,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          { color: isSelected ? '#FFFFFF' : 'rgba(255,255,255,0.7)' },
-                        ]}
-                      >
-                        {sport} ({count})
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                <ChipButton
+                  label={`All ${liveGames.length}`}
+                  color={MAROON}
+                  active={!selectedSport}
+                  onPress={() => handleChipPress(null)}
+                  onTouchStart={onChipTouchStart}
+                  onTouchMove={onChipTouchMove}
+                  onTouchCancel={onChipTouchCancel}
+                />
+                {availableSports.map((sport) => {
+                  const isSelected = selectedSport === sport;
+                  const count = gamesBySport.get(sport)?.length ?? 0;
+                  const meta = SPORT_META[sport];
+                  return (
+                    <ChipButton
+                      key={sport}
+                      label={`${sport} ${count}`}
+                      color={meta?.color ?? TEAL}
+                      active={isSelected}
+                      onPress={() => handleChipPress(isSelected ? null : sport)}
+                      onTouchStart={onChipTouchStart}
+                      onTouchMove={onChipTouchMove}
+                      onTouchCancel={onChipTouchCancel}
+                    />
+                  );
+                })}
+              </ScrollView>
+            </Animated.View>
           ) : null}
 
-          {/* Swipeable games panel */}
-          <View style={styles.swipeArea}>
-            {/* Glow hint behind the list */}
-            <Animated.View pointerEvents="none" style={[styles.swipeGlow, hintStyle]} />
-
-            <GestureDetector gesture={swipeGesture}>
-              <Animated.View style={[styles.swipeContent, animatedListStyle]}>
-                <View style={styles.gamesList}>
-                  {filteredGames.map((game, index) => (
-                    <GameCard key={game.id} game={game} index={index} />
-                  ))}
-
-                  {filteredGames.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      {isLoading ? (
-                        <>
-                          <ActivityIndicator size="large" color={TEAL} />
-                          <Text style={styles.emptyText}>Loading live games...</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Zap size={32} color="#71717a" />
-                          <Text style={styles.emptyText}>No live games right now</Text>
-                        </>
-                      )}
+          {/* Live game cards — clean vertical scroll */}
+          <FlatList
+            data={filteredGames}
+            renderItem={renderLiveGame}
+            keyExtractor={keyExtractor}
+            style={styles.gamesListContainer}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.gamesList}
+            removeClippedSubviews
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={7}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                {isLoading ? (
+                  <>
+                    <ActivityIndicator size="large" color={TEAL} />
+                    <Text style={styles.emptyText}>Loading live games…</Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.emptyIcon}>
+                      <Zap size={26} color={TEAL} />
                     </View>
-                  ) : null}
-                </View>
-              </Animated.View>
-            </GestureDetector>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+                    <Text style={styles.emptyTitle}>No live games right now</Text>
+                    <Text style={styles.emptyText}>Check back when games tip off.</Text>
+                  </>
+                )}
+              </View>
+            }
+          />
+        </SafeAreaView>
+      </View>
     </>
   );
 }
 
+// Premium filter chip: glass when idle, a vivid color-gradient with a soft glow
+// when active.
+function ChipButton({
+  label,
+  color,
+  active,
+  onPress,
+  onTouchStart,
+  onTouchMove,
+  onTouchCancel,
+}: {
+  label: string;
+  color: string;
+  active: boolean;
+  onPress: () => void;
+  onTouchStart: (event: GestureResponderEvent) => void;
+  onTouchMove: (event: GestureResponderEvent) => void;
+  onTouchCancel: (event: GestureResponderEvent) => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      pressRetentionOffset={6}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
+      style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+    >
+      {active ? (
+        <LinearGradient
+          colors={[color, 'rgba(0,0,0,0.32)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.chip,
+            { borderColor: color, shadowColor: color, shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 5 },
+          ]}
+        >
+          <Text style={[styles.chipText, { color: '#FFFFFF' }]}>{label}</Text>
+        </LinearGradient>
+      ) : (
+        <View style={[styles.chip, styles.chipIdle]}>
+          <Text style={[styles.chipText, { color: 'rgba(255,255,255,0.66)' }]}>{label}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 100 },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
-  headerRow: { flexDirection: 'row', alignItems: 'center' },
-  backButton: { marginRight: 12, padding: 8, marginLeft: -8 },
+  container: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1 },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 440,
+  },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 18,
+  },
+  backButton: { marginRight: 14 },
+  backCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
   titleWrap: { flex: 1 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  liveDot: {
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  title: {
+    color: '#FFFFFF',
+    fontFamily: 'BebasNeue_400Regular',
+    fontSize: 40,
+    letterSpacing: 1.5,
+    lineHeight: 42,
+  },
+  subtitle: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.6,
+    marginTop: 1,
+  },
+
+  // Live pulse
+  pulseWrap: {
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 9,
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: LIVE_RED,
+  },
+  pulseDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#DC2626',
-    shadowColor: '#DC2626',
-    shadowOpacity: 0.8,
+    backgroundColor: LIVE_RED,
+    shadowColor: LIVE_RED,
+    shadowOpacity: 0.95,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
-  title: { color: '#FFFFFF', fontSize: 22, fontWeight: '800', letterSpacing: 0.5 },
-  subtitle: { color: '#71717a', fontSize: 13, marginTop: 2 },
-  chipScroll: { marginBottom: 16 },
+
+  // Chips
+  chipScroll: { marginBottom: 16, flexGrow: 0 },
   chipScrollContent: { paddingHorizontal: 20, gap: 8 },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(30,30,35,0.95)',
-    marginRight: 8,
   },
-  chipText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
-  swipeArea: {
-    position: 'relative',
-    overflow: 'hidden',
+  chipIdle: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.10)',
   },
-  swipeContent: {
-    width: '100%',
-  },
-  swipeGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 20,
-    right: 20,
-    height: 220,
-    borderRadius: 24,
-    backgroundColor: TEAL,
-    shadowColor: TEAL,
-    shadowOpacity: 0.9,
-    shadowRadius: 40,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  gamesList: { paddingHorizontal: 20 },
+  chipText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.4 },
+
+  // List
+  gamesListContainer: { flex: 1 },
+  gamesList: { paddingHorizontal: 20, paddingBottom: 100 },
+
+  // Empty / loading
   emptyState: {
-    backgroundColor: 'rgba(39, 39, 42, 0.5)',
-    borderRadius: 16,
-    padding: 32,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+    paddingHorizontal: 32,
   },
-  emptyText: { color: '#71717a', textAlign: 'center', marginTop: 12, fontSize: 14 },
+  emptyIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(122,157,184,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(122,157,184,0.22)',
+    marginBottom: 16,
+  },
+  emptyTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  emptyText: { color: '#71717a', textAlign: 'center', marginTop: 6, fontSize: 13 },
 });

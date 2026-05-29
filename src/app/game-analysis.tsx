@@ -421,13 +421,13 @@ export default function GameAnalysisScreen() {
       {/* Header */}
       <View style={[s.headerWrap, { paddingTop: insets.top }]}>
         <View style={s.header}>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
             <Text style={{ fontSize: 22, color: '#FFF', lineHeight: 24 }}>‹</Text>
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Analysis Breakdown</Text>
-            <Text style={s.headerSub}>
-              {homeTeam.abbreviation} vs {awayTeam.abbreviation} · pick, projection, and key factors
+            <Text style={s.headerSub} numberOfLines={2}>
+              {homeTeam.name} vs {awayTeam.name} · pick, projection, and key factors
             </Text>
           </View>
         </View>

@@ -36,10 +36,19 @@ import * as Haptics from 'expo-haptics';
 import { usePrefetchGame } from '@/hooks/useGames';
 import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { deepEqual } from '@/lib/deep-equal';
 
 interface GameCardProps {
   game: GameWithPrediction;
   index?: number;
+}
+
+// Skip re-rendering the (expensive) card subtree — gradients + SVG jerseys —
+// when the game's CONTENT is unchanged. The data layer hands back fresh game
+// objects every poll tick, so a shallow memo would re-render on a timer; a
+// content compare only updates on a real change (score, clock, status, etc.).
+function gameCardPropsEqual(prev: GameCardProps, next: GameCardProps): boolean {
+  return prev.index === next.index && deepEqual(prev.game, next.game);
 }
 
 const GAME_CARD_JERSEY_SIZE = 60;
@@ -475,7 +484,9 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     fontWeight: awayWinning || awayBatting ? '800' : '500',
                     letterSpacing: 0.3,
                   }}
-                  numberOfLines={1}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                 >
                   {game.awayTeam.name}
                 </Text>
@@ -528,7 +539,9 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     fontWeight: homeWinning || homeBatting ? '800' : '500',
                     letterSpacing: 0.3,
                   }}
-                  numberOfLines={1}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                 >
                   {game.homeTeam.name}
                 </Text>
@@ -750,6 +763,11 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
     setPendingSelection(selectedTeam);
     setShowConfirmModal(true);
   }, [userPrediction?.pickedTeam]);
+
+  // Stable per-side handlers so the memoized TappableJersey doesn't re-render
+  // from a fresh inline closure on every parent render.
+  const handleAwayJerseyTap = useCallback(() => handleJerseyTap('away'), [handleJerseyTap]);
+  const handleHomeJerseyTap = useCallback(() => handleJerseyTap('home'), [handleJerseyTap]);
 
   const handleConfirmSelection = useCallback(async () => {
     if (!pendingSelection) return false;
@@ -1023,7 +1041,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     teamColors={awayTeamColors}
                     sport={game.sport}
                     isSelected={userPrediction?.pickedTeam === 'away'}
-                    onSelect={() => handleJerseyTap('away')}
+                    onSelect={handleAwayJerseyTap}
                     isDisabled={gameStarted}
                     side="away"
                     isLoser={isAwayLoser}
@@ -1121,7 +1139,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     teamColors={homeTeamColors}
                     sport={game.sport}
                     isSelected={userPrediction?.pickedTeam === 'home'}
-                    onSelect={() => handleJerseyTap('home')}
+                    onSelect={handleHomeJerseyTap}
                     isDisabled={gameStarted}
                     side="home"
                     isLoser={isHomeLoser}
@@ -1166,8 +1184,8 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
                 {/* Animated progress bar with team colors */}
                 <View style={styles.progressBarContainer}>
-                  {/* Away team bar */}
-                  <Animated.View
+                  {/* Away team bar — static width, plain View (no animation driver) */}
+                  <View
                     style={{
                       flex: pickStats.awayWinChance,
                       borderTopLeftRadius: 3,
@@ -1178,8 +1196,8 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   />
                   {/* Divider */}
                   <View style={styles.progressBarDivider} />
-                  {/* Home team bar */}
-                  <Animated.View
+                  {/* Home team bar — static width, plain View (no animation driver) */}
+                  <View
                     style={{
                       flex: pickStats.homeWinChance,
                       borderTopRightRadius: 3,
@@ -1395,7 +1413,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       </Pressable>
     </View>
   );
-});
+}, gameCardPropsEqual);
 
 const styles = StyleSheet.create({
   // PulsingLiveBadge

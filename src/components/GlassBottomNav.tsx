@@ -1,6 +1,7 @@
 /**
- * Fade Rail — Premium bottom navigation
- * Content dissolves into the nav via gradient. Active tab has a maroon glow pip.
+ * Premium bottom navigation — solid bar with a crisp top hairline.
+ * Content is clipped sharply at the bar edge (no gradient fade, so nothing
+ * bleeds through). Active tab has a maroon glow pip.
  */
 
 import React from 'react';
@@ -20,8 +21,16 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 import { MAROON } from '@/lib/theme';
 
-export const GLASS_BOTTOM_NAV_HEIGHT = 72;
-export const GLASS_BOTTOM_NAV_FADE_HEIGHT = 18;
+// Apple HIG standard tab-bar content height (49pt), sitting above the safe-area
+// inset. Internal spacing below is tuned so the 22px icon + label + active pip
+// fit this height exactly without clipping.
+export const GLASS_BOTTOM_NAV_HEIGHT = 49;
+// No content fade — a solid bar with a crisp top hairline (Apple/Instagram
+// style). A gradient fade let bright horizontal edges (e.g. a live card's
+// glossy top rail) bleed through as a stray line, so content is now clipped
+// sharply at the bar edge instead. Kept exported (= 0) so screens that add it
+// to their bottom padding keep working without change.
+export const GLASS_BOTTOM_NAV_FADE_HEIGHT = 0;
 export const GLASS_BOTTOM_NAV_MIN_BOTTOM_PADDING = 10;
 export const GLASS_BOTTOM_NAV_SCROLL_PADDING = 26;
 
@@ -48,14 +57,8 @@ export function GlassBottomNav({
       style={[styles.container, animatedContainerStyle]}
       animatedProps={animatedContainerProps}
     >
-      {/* Gradient fade — content dissolves into nav */}
-      <LinearGradient
-        colors={['transparent', 'rgba(4,6,8,0.4)', 'rgba(4,6,8,0.8)', '#040608']}
-        style={styles.fade}
-        pointerEvents="none"
-      />
-
-      {/* Nav area */}
+      {/* Nav area — solid bar with a crisp top hairline; content is clipped
+          sharply at this edge (no fade), so nothing bleeds through. */}
       <View style={[styles.bar, { paddingBottom: bottomPadding }]}>
         {/* Accent line */}
         <LinearGradient
@@ -217,11 +220,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-  fade: {
-    height: GLASS_BOTTOM_NAV_FADE_HEIGHT,
-  },
   bar: {
     backgroundColor: '#040608',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.10)',
   },
   accentLine: {
     height: 0.5,
@@ -248,37 +250,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     position: 'relative',
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   iconGlow: {
     position: 'absolute',
-    top: 7,
+    top: 4,
     width: 36,
-    height: 40,
-    borderRadius: 20,
+    height: 30,
+    borderRadius: 18,
     backgroundColor: MAROON,
   },
   iconWrap: {
-    height: 27,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
     zIndex: 1,
     transform: [{ scale: 1 }],
   },
   label: {
     fontSize: 9,
-    lineHeight: 12,
+    lineHeight: 11,
     fontWeight: '700',
     letterSpacing: 0.2,
     color: '#FFFFFF',
-    marginBottom: 5,
+    marginBottom: 1,
     includeFontPadding: false,
     zIndex: 1,
   },
   pip: {
-    height: 5,
+    height: 3,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,

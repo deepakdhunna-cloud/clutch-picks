@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Image, ScrollView, Share,
+  View, Text, Pressable, ActivityIndicator, ScrollView, Share,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '@/components/TopInsetView';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -28,6 +30,8 @@ import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifica
 import { getAppVersionLabel } from '@/lib/app-version';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import type { GameWithPrediction } from '@/types/sports';
 
 // ─── COLORS ───
 const C = {
@@ -68,7 +72,7 @@ const PROFILE_RECENT_PICK_LIMIT = 10;
 
 const ProfileLoadingState = memo(function ProfileLoadingState() {
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
+    <TopInsetView style={{ flex: 1, backgroundColor: C.BG }}>
       <View style={{ paddingHorizontal: 20, paddingTop: 28, paddingBottom: 28 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
           <View>
@@ -95,7 +99,7 @@ const ProfileLoadingState = memo(function ProfileLoadingState() {
           <View key={item} style={{ height: 72, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.025)', borderWidth: 1, borderColor: C.BORDER, marginBottom: 10 }} />
         ))}
       </View>
-    </SafeAreaView>
+    </TopInsetView>
   );
 });
 
@@ -253,18 +257,26 @@ const REASON_LABELS: Record<SignatureCallReason, string> = {
   underdog_and_bold: 'SIGNATURE CALL OF THE WEEK',
 };
 
-const SignatureCallCard = memo(function SignatureCallCard({ call }: { call: SignatureCall }) {
+const SignatureCallCard = memo(function SignatureCallCard({
+  call,
+  game,
+}: {
+  call: SignatureCall;
+  game?: GameWithPrediction;
+}) {
   const isHighConfidence = call.primaryReason === 'high_confidence';
   const accentColor = isHighConfidence ? C.TEAL : C.MAROON;
   const Icon = isHighConfidence ? StarIcon : BoltIcon;
   const label = REASON_LABELS[call.primaryReason];
 
   const pick = call.pick;
-  const homeAbbr = pick.homeTeam ?? 'HOME';
-  const awayAbbr = pick.awayTeam ?? 'AWAY';
+  // Prefer the full team name from the matched game; fall back to the
+  // abbreviation stored on the pick when the game isn't in the loaded slate.
+  const homeLabel = game?.homeTeam?.name ?? pick.homeTeam ?? 'Home';
+  const awayLabel = game?.awayTeam?.name ?? pick.awayTeam ?? 'Away';
   const sport = pick.sport ?? '';
   const dateStr = new Date(pick.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const matchupLine = `${awayAbbr} vs ${homeAbbr}${sport ? ` · ${sport}` : ''} · ${dateStr}`;
+  const matchupLine = `${awayLabel} vs ${homeLabel}${sport ? ` · ${sport}` : ''} · ${dateStr}`;
 
   return (
     <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', marginBottom: 8, position: 'relative', overflow: 'hidden' }}>
@@ -273,8 +285,33 @@ const SignatureCallCard = memo(function SignatureCallCard({ call }: { call: Sign
         <Icon size={12} color={accentColor} />
         <Text style={{ fontSize: 8, fontWeight: '700', color: accentColor, letterSpacing: 1.5 }}>{label}</Text>
       </View>
-      <Text style={{ fontSize: 12, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 0.4, marginBottom: 8 }}>{matchupLine}</Text>
+      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 12, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 0.4, marginBottom: 8 }}>{matchupLine}</Text>
       <Text style={{ fontSize: 13, color: C.TEXT_SECONDARY, lineHeight: 19 }}>{call.narrative}</Text>
+    </View>
+  );
+});
+
+// ─── SIGNATURE CALL SKELETON ───
+// Mirrors the exact box (padding 16, border, radius 16, marginBottom 8) and
+// internal stack of a loaded SignatureCallCard so the section reserves its
+// final height while picks load — no empty→card height pop.
+const SignatureCallSkeleton = memo(function SignatureCallSkeleton() {
+  return (
+    <View style={{ backgroundColor: C.GLASS, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', marginBottom: 8, position: 'relative', overflow: 'hidden' }}>
+      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+        <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+        <View style={{ width: 120, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+      </View>
+      <View style={{ height: 16, justifyContent: 'center', marginBottom: 8 }}>
+        <View style={{ width: '62%', height: 11, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+      </View>
+      <View style={{ height: 19, justifyContent: 'center' }}>
+        <View style={{ width: '100%', height: 9, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+      </View>
+      <View style={{ height: 19, justifyContent: 'center' }}>
+        <View style={{ width: '78%', height: 9, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+      </View>
     </View>
   );
 });
@@ -403,6 +440,97 @@ const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
   );
 });
 
+// ─── RECENT PICK TILE ───
+// One tile per recent pick in the horizontal rail. Pulled out into its own
+// component so each tile owns an independent useTapGestureGuard instance — a
+// single shared guard across the .map() siblings would race (one tile's
+// onTouchMove would clear another's start point), so we give every tile its
+// own guard. Without this guard a horizontal swipe over a tile fires a tap and
+// opens the wrong game / navigates by accident.
+type RecentPickTileData = {
+  id: string;
+  gameId: string;
+  abbreviation: string;
+  opponentAbbr: string;
+  color: string;
+  result: 'win' | 'loss' | 'pending';
+  sport: string;
+  game?: GameWithPrediction;
+};
+
+const RecentPickTile = memo(function RecentPickTile({
+  pick,
+  onPress,
+  onWarm,
+}: {
+  pick: RecentPickTileData;
+  onPress: (gameId: string, game?: GameWithPrediction) => void;
+  onWarm: (gameId: string, game?: GameWithPrediction) => void;
+}) {
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const teamColors = getTeamColors(pick.abbreviation, pick.sport as any, pick.color);
+  const jerseyType = sportEnumToJersey(pick.sport);
+  const isWin = pick.result === 'win';
+  const isLoss = pick.result === 'loss';
+  const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
+  const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
+
+  return (
+    <Pressable
+      onPress={() => {
+        if (!shouldHandlePress()) return;
+        onPress(pick.gameId, pick.game);
+      }}
+      onPressIn={() => onWarm(pick.gameId, pick.game)}
+      pressRetentionOffset={6}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${pick.abbreviation} versus ${pick.opponentAbbr}`}
+      style={({ pressed }) => ({
+        width: 124,
+        height: 140,
+        opacity: pressed ? 0.88 : 1,
+        transform: [{ scale: pressed ? 0.985 : 1 }],
+      })}
+    >
+      <LinearGradient
+        colors={[`${teamColors.primary}52`, `${teamColors.secondary}20`, statusColor === C.MAROON ? 'rgba(139,10,31,0.28)' : 'rgba(122,157,184,0.18)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
+      >
+        <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: `${teamColors.primary}18`, padding: 10, overflow: 'hidden' }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[`${teamColors.primary}24`, `${teamColors.secondary}0E`, 'rgba(0,0,0,0)']}
+            locations={[0, 0.48, 1]}
+            start={{ x: 0, y: 0.12 }}
+            end={{ x: 0.9, y: 0.82 }}
+            style={{ position: 'absolute', left: -24, right: 0, top: -18, bottom: -18 }}
+          />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <Text numberOfLines={1} style={{ flex: 1, fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>{displaySport(pick.sport)}</Text>
+            <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: `${statusColor}22`, borderWidth: 1, borderColor: `${statusColor}44`, marginLeft: 6 }}>
+              <Text style={{ fontSize: 7.5, lineHeight: 9, fontWeight: '900', color: statusColor, includeFontPadding: false }}>{statusLabel}</Text>
+            </View>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 62 }}>
+            <View style={{ width: 70, height: 58, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.075)', borderWidth: 1, borderColor: `${teamColors.primary}20` }}>
+              <JerseyIcon teamCode={pick.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={54} sport={jerseyType} />
+            </View>
+          </View>
+          <View style={{ alignItems: 'center', paddingTop: 7 }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: '100%', fontSize: 14, lineHeight: 17, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{pick.abbreviation}</Text>
+            <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 9, lineHeight: 11, fontWeight: '700', color: C.TEXT_MUTED, includeFontPadding: false }}>vs {pick.opponentAbbr}</Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+});
+
 // ─── MAIN SCREEN ───
 export default function ProfileScreen() {
   const router = useRouter();
@@ -411,8 +539,8 @@ export default function ProfileScreen() {
   const userId = session?.user?.id;
   const hasUser = Boolean(userId);
   const { data: stats, refetch: refetchStats } = useUserStats(hasUser);
-  const { data: picks } = useUserPicks(hasUser);
-  const { data: allGames } = useGames();
+  const { data: picks, isLoading: picksLoading } = useUserPicks(hasUser);
+  const { data: allGames, isLoading: gamesLoading } = useGames();
   const prefetchGame = usePrefetchGame();
   const invalidateSession = useInvalidateSession();
   const scrollHandler = useHideOnScroll();
@@ -436,6 +564,13 @@ export default function ProfileScreen() {
   const userEmail = (profile?.email ?? session?.user?.email ?? null) as string | null;
   const handle = userEmail ?? `@clutch${userName.toLowerCase().replace(/\s/g, '')}`;
 
+  // Shared id→game lookup so the signature-call matchup line can resolve full
+  // team names (the pick row only stores abbreviations).
+  const gamesById = useMemo(
+    () => new Map((allGames ?? []).map((g) => [g.id, g])),
+    [allGames],
+  );
+
   const displayPicks = useMemo(() => {
     if (!picks) return [];
     const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
@@ -447,6 +582,10 @@ export default function ProfileScreen() {
       };
     });
   }, [picks, allGames]);
+
+  // True while the picks/games queries are still resolving for a signed-in user.
+  // Used to reserve final section heights with skeletons so nothing pops in.
+  const dataLoading = hasUser && (picksLoading || gamesLoading) && displayPicks.length === 0;
 
   const wins = displayPicks.length > 0 ? displayPicks.filter((p) => p.result === 'win').length : stats?.wins ?? 0;
   const losses = displayPicks.length > 0 ? displayPicks.filter((p) => p.result === 'loss').length : stats?.losses ?? 0;
@@ -493,12 +632,18 @@ export default function ProfileScreen() {
 
   const hiddenPickCount = Math.max((picks?.length ?? 0) - recentPickTiles.length, 0);
 
-  const handleRecentPickPress = useCallback((gameId: string, game?: NonNullable<typeof allGames>[number]) => {
+  const handleRecentPickPress = useCallback((gameId: string, game?: GameWithPrediction) => {
     if (!claimGameNavigation(gameId)) return;
     prefetchGame(gameId, game);
     router.push(`/game/${gameId}` as any);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [prefetchGame, router]);
+
+  // Warm the detail cache on press-in. prefetchGame tolerates an undefined
+  // source game (older picks not in today's slate) and still seeds/loads by id.
+  const handleRecentPickWarm = useCallback((gameId: string, game?: GameWithPrediction) => {
+    prefetchGame(gameId, game);
+  }, [prefetchGame]);
 
   const formLine = useMemo(() => {
     return [...displayPicks].reverse().slice(0, 10).map((p) => p.result ?? 'pending');
@@ -568,8 +713,11 @@ export default function ProfileScreen() {
   const signatureCalls = useMemo(() => getSignatureCalls(displayPicks), [displayPicks]);
 
   // Weekly rhythm
+  // Always build the full 7-day scaffold (even with zero picks) so the grid
+  // reserves its space in the loading/empty state instead of collapsing and
+  // popping in. With no picks this renders the same 7-cell "-" grid that a
+  // signed-in user with no picks *this week* already sees — no design change.
   const weeklyRhythm = useMemo(() => {
-    if (displayPicks.length === 0) return [];
     const now = new Date();
     const dayOfWeek = now.getDay();
     const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -650,7 +798,7 @@ export default function ProfileScreen() {
   const markers = [50, 60, 70, 80];
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.BG }}>
+    <TopInsetView style={{ flex: 1, backgroundColor: C.BG }}>
       <ConfirmModal
         visible={signOutConfirmVisible}
         title="Sign Out"
@@ -670,20 +818,21 @@ export default function ProfileScreen() {
       <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
 
         {/* ── PAGE HEADER ── */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 28, paddingBottom: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 28, paddingBottom: 20 }}>
           <Svg width={240} height={42} viewBox="0 0 240 42">
             <Defs>
               <SvgGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor="#4A0812" />
-                <Stop offset="0.35" stopColor="#6B3A4A" />
-                <Stop offset="0.65" stopColor="#7A6878" />
-                <Stop offset="1" stopColor={C.TEAL_DARK} />
+                <Stop offset="0" stopColor="#BE1E36" />
+                <Stop offset="0.35" stopColor="#BF6878" />
+                <Stop offset="0.65" stopColor="#C8B6C0" />
+                <Stop offset="1" stopColor={C.TEAL} />
               </SvgGradient>
             </Defs>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
           <Pressable onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            hitSlop={4}
             style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
           </Pressable>
@@ -691,10 +840,10 @@ export default function ProfileScreen() {
 
         {/* ── 1. ANALYST CARD HERO ── */}
         <Animated.View entering={FadeInDown.duration(500)} style={{ marginHorizontal: 16 }}>
-<View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(122,157,184,0.16)', position: 'relative' }}>
+<View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(122,157,184,0.26)', position: 'relative' }}>
 
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.GLASS }} />
-            <LinearGradient colors={[C.MAROON_GLOW, 'transparent', 'transparent', C.TEAL_DIM]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+            <LinearGradient colors={['rgba(139,10,31,0.40)', 'transparent', 'transparent', 'rgba(122,157,184,0.18)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
 
             <View style={{ padding: 22, paddingTop: 16 }}>
               <View />
@@ -705,15 +854,21 @@ export default function ProfileScreen() {
                   <LinearGradient colors={[C.MAROON, C.TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                   <View style={{ flex: 1, borderRadius: 33, backgroundColor: C.BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                     {userImage ? (
-                      <Image source={{ uri: userImage }} style={{ width: '100%', height: '100%' }} />
+                      <Image
+                        source={{ uri: userImage }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={160}
+                      />
                     ) : (
                       <Text style={{ fontSize: 24, fontWeight: '800', color: C.TEXT_PRIMARY }}>{initial}</Text>
                     )}
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, letterSpacing: -0.3 }}>{userName}</Text>
-                  <Text style={{ fontSize: 12, color: C.TEXT_MUTED, marginTop: 2 }}>{handle}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, letterSpacing: -0.3 }}>{userName}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: C.TEXT_MUTED, marginTop: 2 }}>{handle}</Text>
                   {totalPicks >= 10 ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.MAROON_DIM, borderRadius: 8, paddingVertical: 3, paddingHorizontal: 10, alignSelf: 'flex-start', marginTop: 6 }}>
                       <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: C.MAROON }} />
@@ -817,62 +972,14 @@ export default function ProfileScreen() {
                 style={{ flex: 1, height: 146 }}
                 contentContainerStyle={{ paddingLeft: 10, gap: 10 }}
               >
-                {recentPickTiles.map((p) => {
-                  const teamColors = getTeamColors(p.abbreviation, p.sport as any, p.color);
-                  const jerseyType = sportEnumToJersey(p.sport);
-                  const isWin = p.result === 'win';
-                  const isLoss = p.result === 'loss';
-                  const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
-                  const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
-                  return (
-                    <Pressable
-                      key={p.id}
-                      onPress={() => handleRecentPickPress(p.gameId, p.game)}
-                      onPressIn={() => p.game ? prefetchGame(p.gameId, p.game) : undefined}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${p.abbreviation} versus ${p.opponentAbbr}`}
-                      style={({ pressed }) => ({
-                        width: 124,
-                        height: 140,
-                        opacity: pressed ? 0.88 : 1,
-                        transform: [{ scale: pressed ? 0.985 : 1 }],
-                      })}
-                    >
-                      <LinearGradient
-                        colors={[`${teamColors.primary}52`, `${teamColors.secondary}20`, statusColor === C.MAROON ? 'rgba(139,10,31,0.28)' : 'rgba(122,157,184,0.18)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{ flex: 1, borderRadius: 19, padding: 1.2 }}
-                      >
-                        <View style={{ flex: 1, borderRadius: 17.8, backgroundColor: C.GLASS, borderWidth: 1, borderColor: `${teamColors.primary}18`, padding: 10, overflow: 'hidden' }}>
-                          <LinearGradient
-                            pointerEvents="none"
-                            colors={[`${teamColors.primary}24`, `${teamColors.secondary}0E`, 'rgba(0,0,0,0)']}
-                            locations={[0, 0.48, 1]}
-                            start={{ x: 0, y: 0.12 }}
-                            end={{ x: 0.9, y: 0.82 }}
-                            style={{ position: 'absolute', left: -24, right: 0, top: -18, bottom: -18 }}
-                          />
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <Text numberOfLines={1} style={{ flex: 1, fontSize: 8, lineHeight: 10, fontWeight: '900', color: C.TEXT_MUTED, letterSpacing: 1.1, includeFontPadding: false }}>{displaySport(p.sport)}</Text>
-                            <View style={{ borderRadius: 999, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: `${statusColor}22`, borderWidth: 1, borderColor: `${statusColor}44`, marginLeft: 6 }}>
-                              <Text style={{ fontSize: 7.5, lineHeight: 9, fontWeight: '900', color: statusColor, includeFontPadding: false }}>{statusLabel}</Text>
-                            </View>
-                          </View>
-                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 62 }}>
-                            <View style={{ width: 70, height: 58, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.075)', borderWidth: 1, borderColor: `${teamColors.primary}20` }}>
-                              <JerseyIcon teamCode={p.abbreviation} primaryColor={teamColors.primary} secondaryColor={teamColors.secondary} size={54} sport={jerseyType} />
-                            </View>
-                          </View>
-                          <View style={{ alignItems: 'center', paddingTop: 7 }}>
-                            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: '100%', fontSize: 14, lineHeight: 17, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{p.abbreviation}</Text>
-                            <Text numberOfLines={1} style={{ marginTop: 3, fontSize: 9, lineHeight: 11, fontWeight: '700', color: C.TEXT_MUTED, includeFontPadding: false }}>vs {p.opponentAbbr}</Text>
-                          </View>
-                        </View>
-                      </LinearGradient>
-                    </Pressable>
-                  );
-                })}
+                {recentPickTiles.map((p) => (
+                  <RecentPickTile
+                    key={p.id}
+                    pick={p}
+                    onPress={handleRecentPickPress}
+                    onWarm={handleRecentPickWarm}
+                  />
+                ))}
 
                 {recentPickTiles.length === 0 ? (
                   <View style={{ width: 124, height: 140, backgroundColor: C.GLASS, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
@@ -902,10 +1009,12 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 2 }}>SIGNATURE CALLS</Text>
           </View>
           {signatureCalls.length > 0
-            ? signatureCalls.map((call) => <SignatureCallCard key={call.pick.id} call={call} />)
-            : (
-              <Text style={{ fontSize: 12, color: C.TEXT_MUTED, textAlign: 'center', paddingVertical: 24 }}>Make winning picks to see your signature calls here</Text>
-            )}
+            ? signatureCalls.map((call) => <SignatureCallCard key={call.pick.id} call={call} game={gamesById.get(call.pick.gameId)} />)
+            : dataLoading
+              ? <SignatureCallSkeleton />
+              : (
+                <Text style={{ fontSize: 12, color: C.TEXT_MUTED, textAlign: 'center', paddingVertical: 24 }}>Make winning picks to see your signature calls here</Text>
+              )}
         </Animated.View>
 
         {/* ── 5. WEEKLY RHYTHM ── */}
@@ -959,13 +1068,13 @@ export default function ProfileScreen() {
 
         {/* ── 7. SIGN OUT + VERSION ── */}
         <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 28 }}>
-          <Pressable onPress={handleSignOut}>
+          <Pressable onPress={handleSignOut} hitSlop={{ top: 14, bottom: 14, left: 24, right: 24 }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
           </Pressable>
           <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>{appVersionLabel}</Text>
         </View>
 
       </Animated.ScrollView>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }

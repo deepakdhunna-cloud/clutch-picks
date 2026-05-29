@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import React, { useState, useCallback, useEffect, useMemo, useDeferredValue, memo, useRef } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, X, Search } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TopInsetView } from '@/components/TopInsetView';
 import { SportCard, GameCard, LedBarPanel, LedMiniPanel } from '@/components/sports';
 import { CompactLiveCard } from '@/components/sports/CompactLiveCard';
 import { GameCardSkeletonList } from '@/components/sports/GameCardSkeleton';
@@ -100,6 +100,26 @@ const SportTileCarousel = memo(function SportTileCarousel({
     return out;
   }, [sports]);
 
+  // Stable per-sport press handlers, cached by ref, so tapping one tile doesn't
+  // hand every SportCard a brand-new onPress closure (which would defeat its
+  // memo and re-render every LED tile). The handler reads the latest selection +
+  // setter through a ref, so its reference stays constant but it never goes stale.
+  const sportSelectRef = useRef({ selectedSportFilter, setSelectedSportFilter });
+  sportSelectRef.current = { selectedSportFilter, setSelectedSportFilter };
+  const sportPressHandlersRef = useRef<Map<Sport, () => void>>(new Map());
+  const getSportPressHandler = (sport: Sport) => {
+    const cache = sportPressHandlersRef.current;
+    let handler = cache.get(sport);
+    if (!handler) {
+      handler = () => {
+        const { selectedSportFilter: current, setSelectedSportFilter: select } = sportSelectRef.current;
+        select(current === sport ? null : sport);
+      };
+      cache.set(sport, handler);
+    }
+    return handler;
+  };
+
   const scrollX = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -137,7 +157,7 @@ const SportTileCarousel = memo(function SportTileCarousel({
         snapToInterval={pageWidth}
         decelerationRate="fast"
         onScroll={scrollHandler}
-        scrollEventThrottle={32}
+        scrollEventThrottle={16}
         renderItem={({ item }) => (
           <View
             style={{
@@ -158,7 +178,7 @@ const SportTileCarousel = memo(function SportTileCarousel({
                   index={idx}
                   tile
                   tileSize={tileWidth}
-                  onPress={() => setSelectedSportFilter(isSelected ? null : sport)}
+                  onPress={getSportPressHandler(sport)}
                   isSelected={isSelected}
                   hasActiveFilter={selectedSportFilter !== null}
                 />
@@ -578,7 +598,7 @@ const HomeHeader = React.memo(function HomeHeader({
             decelerationRate="fast"
           >
             {(showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)).map((game) => (
-              <CompactLiveCard key={game.id} game={game} onPressIn={() => onWarmGame(game)} onPress={() => onOpenGame(game)} />
+              <CompactLiveCard key={game.id} game={game} onPressIn={onWarmGame} onPress={onOpenGame} />
             ))}
 
             {/* View All button — only show when there are more than 5 and not yet expanded */}
@@ -679,8 +699,8 @@ const SearchGameCard = memo(function SearchGameCard({
           paddingHorizontal: 14,
         }}
       >
-        {/* Left: Team abbreviations stacked with color dots */}
-        <View style={{ width: 64, justifyContent: 'center' }}>
+        {/* Left: Full team names stacked with color dots */}
+        <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
             <View
               style={{
@@ -692,10 +712,10 @@ const SearchGameCard = memo(function SearchGameCard({
               }}
             />
             <Text
-              style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}
+              style={{ flexShrink: 1, color: '#FFFFFF', fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}
               numberOfLines={1}
             >
-              {game.awayTeam.abbreviation}
+              {game.awayTeam.name}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -709,16 +729,16 @@ const SearchGameCard = memo(function SearchGameCard({
               }}
             />
             <Text
-              style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600', letterSpacing: 0.3 }}
+              style={{ flexShrink: 1, color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600', letterSpacing: 0.3 }}
               numberOfLines={1}
             >
-              {game.homeTeam.abbreviation}
+              {game.homeTeam.name}
             </Text>
           </View>
         </View>
 
         {/* Center: Sport badge + status */}
-        <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 8 }}>
+        <View style={{ flexShrink: 0, alignItems: 'center', paddingHorizontal: 10 }}>
           <View
             style={{
               backgroundColor: sportMeta.color,
@@ -833,11 +853,10 @@ export default function HomeScreen() {
     if (isChanging) {
       void Haptics.selectionAsync().catch(() => {});
     }
+    // Apply the filter in place — do NOT auto-scroll the board, so selecting a
+    // sport never makes the page jump.
     setSelectedSportFilter(nextSport);
-    if (isChanging && nextSport) {
-      scrollToHomeBoard();
-    }
-  }, [scrollToHomeBoard, selectedSportFilter]);
+  }, [selectedSportFilter]);
 
   useEffect(() => {
     if (!selectedSportFilter) return;
@@ -1173,12 +1192,18 @@ export default function HomeScreen() {
   }, [todaysGames, deferredSelectedSportFilter, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr, getSportVisibilityKey, visibleSportGameCounts]);
 
 
+  // Tracks which game cards have already played their entrance animation, so a
+  // card that scrolls out of the virtualization window and back in does NOT
+  // re-fire FadeInDown (the "odd jump" while scrolling). Each game animates in
+  // exactly once — on first appearance — matching the first-paint look.
+  const animatedGameKeysRef = useRef<Set<string>>(new Set());
+
   // Render item for FlatList
   const renderGameListItem = useCallback(({ item }: { item: FlatListItem }) => {
     if (item.type === 'sport-header') {
       const sportLabel = displaySport(item.sport);
       return (
-        <Animated.View entering={FadeInDown.duration(180)} style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 14 }}>
+        <Animated.View entering={FadeInDown.duration(180)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 20, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 20, marginBottom: 14 }}>
           <LedBarPanel
             label={sportLabel}
             count={item.gameCount}
@@ -1295,9 +1320,11 @@ export default function HomeScreen() {
     }
 
     if (item.type === 'game') {
+      const hasAnimated = animatedGameKeysRef.current.has(item.key);
+      if (!hasAnimated) animatedGameKeysRef.current.add(item.key);
       return (
         <Animated.View
-          entering={FadeInDown.duration(190).delay(Math.min(item.index * 18, 108))}
+          entering={hasAnimated ? undefined : FadeInDown.duration(190).delay(Math.min(item.index * 18, 108))}
           style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 14 }}
         >
           <GameCard game={item.game} index={item.index} />
@@ -1308,11 +1335,11 @@ export default function HomeScreen() {
     return null;
   }, [numColumns, responsive.contentPadding, showLessSportGames, showMoreSportGames]);
 
-  const boardTransitionKey = useMemo(
-    () => `${deferredStatusFilter}:${deferredSelectedSportFilter ?? 'all'}`,
-    [deferredSelectedSportFilter, deferredStatusFilter]
-  );
-  const getItemKey = useCallback((item: FlatListItem) => `${boardTransitionKey}:${item.key}`, [boardTransitionKey]);
+  // Key items by their own stable id so the FlatList REUSES the cards that
+  // persist across a filter/sport change instead of unmounting and rebuilding
+  // the entire board (which caused a flash + layout shift). Scroll position on a
+  // sport change is handled explicitly by scrollToHomeBoard().
+  const getItemKey = useCallback((item: FlatListItem) => item.key, []);
 
   const handleCloseSearchModal = useCallback(() => {
     setSearchModalVisible(false);
@@ -1457,7 +1484,7 @@ export default function HomeScreen() {
   ), []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }} edges={['top']}>
+    <TopInsetView style={{ flex: 1, backgroundColor: '#000000' }}>
       <ErrorBoundary>
       {/* Logo */}
       <View style={{ alignItems: 'center', paddingTop: 16, paddingBottom: 16 }}>
@@ -1569,7 +1596,7 @@ export default function HomeScreen() {
                 autoCorrect={false}
               />
               {searchQuery.length > 0 ? (
-                <Pressable onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }}>
+                <Pressable onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }} hitSlop={12}>
                   <X size={14} color="rgba(255,255,255,0.4)" />
                 </Pressable>
               ) : null}
@@ -1579,6 +1606,7 @@ export default function HomeScreen() {
             <Pressable
               onPress={handleCloseSearchModal}
               className="active:opacity-60"
+              hitSlop={12}
             >
               <Text style={{ color: '#5A7A8A', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
             </Pressable>
@@ -1651,6 +1679,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
       </ErrorBoundary>
-    </SafeAreaView>
+    </TopInsetView>
   );
 }

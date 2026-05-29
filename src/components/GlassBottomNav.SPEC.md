@@ -28,11 +28,11 @@ A floating pill-shaped bottom tab bar with a frosted glass effect. The bar sits 
 - **Position**: Fixed bottom, centered
 - **Horizontal padding**: 20px each side
 - **Bottom padding**: `max(safeAreaBottom, 12)`
-- **Min height**: 64px
+- **Content height**: 49px (Apple HIG standard tab bar, above safe-area inset)
 - **Max width**: 400px (on wide screens)
 - **Icon spacing**: `space-evenly` between items
 - **Tap target**: min 44×44px per tab (iOS HIG)
-- **Vertical padding**: 8px top/bottom inside bar
+- **Vertical padding**: 4px top/bottom inside bar
 
 ---
 

@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
+  cancelAnimation,
   Easing,
   interpolate,
   useAnimatedStyle,
@@ -98,6 +99,11 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       setShowSuccess(false);
       setErrorMessage(null);
     } else {
+      // Cancel the infinite loops before zeroing — otherwise the repeat stays
+      // scheduled and would keep ticking if the modal is ever kept mounted
+      // (visible={false}) instead of unmounted.
+      cancelAnimation(sweepProgress);
+      cancelAnimation(stagePulse);
       cardOpacity.value = 0;
       cardScale.value = 0.96;
       jerseyScale.value = 1;
@@ -105,6 +111,10 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       stagePulse.value = 0;
       successScale.value = 0;
     }
+    return () => {
+      cancelAnimation(sweepProgress);
+      cancelAnimation(stagePulse);
+    };
   }, [visible, cardOpacity, cardScale, jerseyScale, stagePulse, successScale, sweepProgress]);
 
   const cardStyle = useAnimatedStyle(() => ({

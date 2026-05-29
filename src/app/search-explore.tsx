@@ -19,8 +19,9 @@ import { getTeamColors } from '@/lib/team-colors';
 import { TeamJersey } from '@/components/sports/TeamJersey';
 import { useSubscription } from '@/lib/subscription-context';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import {
-  MAROON, MAROON_DIM, TEAL, LIVE_RED, BG, PANEL_DARK, BORDER_MED,
+  MAROON, TEAL, LIVE_RED, BG, PANEL_DARK, BORDER_MED,
   WHITE, TEXT_SECONDARY, TEXT_MUTED,
 } from '@/lib/theme';
 
@@ -188,8 +189,8 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-start', opacity: final && homeWon ? 0.58 : 1 }}>
               <TeamJersey teamAbbreviation={game.awayTeam.abbreviation} teamName={game.awayTeam.name} primaryColor={awayC.primary} secondaryColor={awayC.secondary} size={34} sport={game.sport as Sport} />
-              <Text style={{ fontSize: 15, fontWeight: '900', color: WHITE, marginTop: 6 }} numberOfLines={1}>{game.awayTeam.abbreviation}</Text>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(180,211,235,0.52)', marginTop: 2 }} numberOfLines={1}>{game.awayTeam.name}</Text>
+              <Text adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 15, fontWeight: '900', color: WHITE, marginTop: 6 }} numberOfLines={2}>{game.awayTeam.name}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(196,219,240,0.70)', marginTop: 2 }} numberOfLines={1}>{game.awayTeam.city}</Text>
             </View>
             <View style={{ width: GAME_BAR_CENTER_W, alignItems: 'center', justifyContent: 'center' }}>
               {showScores ? (
@@ -211,8 +212,8 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
             </View>
             <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-end', opacity: final && awayWon ? 0.58 : 1 }}>
               <TeamJersey teamAbbreviation={game.homeTeam.abbreviation} teamName={game.homeTeam.name} primaryColor={homeC.primary} secondaryColor={homeC.secondary} size={34} sport={game.sport as Sport} />
-              <Text style={{ fontSize: 15, fontWeight: '900', color: WHITE, marginTop: 6 }} numberOfLines={1}>{game.homeTeam.abbreviation}</Text>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(180,211,235,0.52)', marginTop: 2, textAlign: 'right' }} numberOfLines={1}>{game.homeTeam.name}</Text>
+              <Text adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 15, fontWeight: '900', color: WHITE, marginTop: 6, textAlign: 'right' }} numberOfLines={2}>{game.homeTeam.name}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(196,219,240,0.70)', marginTop: 2, textAlign: 'right' }} numberOfLines={1}>{game.homeTeam.city}</Text>
             </View>
           </View>
         </View>
@@ -287,11 +288,11 @@ const ResultGameRow = memo(function ResultGameRow({
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 15, lineHeight: 18, fontWeight: '900', color: WHITE }} numberOfLines={1}>
-            {game.awayTeam.abbreviation}
-          </Text>
-          <Text style={{ fontSize: 10.5, lineHeight: 14, fontWeight: '700', color: 'rgba(180,211,235,0.54)', marginTop: 2 }} numberOfLines={1}>
+          <Text adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 15, lineHeight: 18, fontWeight: '900', color: WHITE }} numberOfLines={1}>
             {game.awayTeam.name}
+          </Text>
+          <Text style={{ fontSize: 10.5, lineHeight: 14, fontWeight: '700', color: 'rgba(196,219,240,0.72)', marginTop: 2 }} numberOfLines={1}>
+            {game.awayTeam.city}
           </Text>
         </View>
 
@@ -308,11 +309,11 @@ const ResultGameRow = memo(function ResultGameRow({
         </View>
 
         <View style={{ flex: 1, minWidth: 0, alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 15, lineHeight: 18, fontWeight: '900', color: WHITE, textAlign: 'right' }} numberOfLines={1}>
-            {game.homeTeam.abbreviation}
-          </Text>
-          <Text style={{ fontSize: 10.5, lineHeight: 14, fontWeight: '700', color: 'rgba(180,211,235,0.54)', marginTop: 2, textAlign: 'right' }} numberOfLines={1}>
+          <Text adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 15, lineHeight: 18, fontWeight: '900', color: WHITE, textAlign: 'right' }} numberOfLines={1}>
             {game.homeTeam.name}
+          </Text>
+          <Text style={{ fontSize: 10.5, lineHeight: 14, fontWeight: '700', color: 'rgba(196,219,240,0.72)', marginTop: 2, textAlign: 'right' }} numberOfLines={1}>
+            {game.homeTeam.city}
           </Text>
         </View>
       </View>
@@ -320,13 +321,15 @@ const ResultGameRow = memo(function ResultGameRow({
   );
 });
 
-const SectionHeader = memo(function SectionHeader({ label, title, icon }: { label?: string; title: string; icon?: React.ReactNode }) {
+const SectionHeader = memo(function SectionHeader({ label, title, icon, accent = TEAL }: { label?: string; title: string; icon?: React.ReactNode; accent?: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14 }}>
+      {/* Accent edge anchors the section to its meaning (live=red, model/prep=teal). */}
+      <View style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, backgroundColor: accent, marginRight: 11 }} />
       {icon ? <View style={{ marginRight: 8 }}>{icon}</View> : null}
-      <View>
-        {label ? <Text style={{ fontSize: 9, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2, marginBottom: 2 }}>{label}</Text> : null}
-        <Text style={{ fontSize: 15, fontWeight: '900', color: WHITE }}>{title}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {label ? <Text style={{ fontSize: 9.5, fontWeight: '900', color: hexWithAlpha(accent, 0.92), letterSpacing: 2, marginBottom: 3 }} numberOfLines={1}>{label}</Text> : null}
+        <Text style={{ fontSize: 17, lineHeight: 21, fontWeight: '900', color: WHITE }} numberOfLines={1}>{title}</Text>
       </View>
     </View>
   );
@@ -378,8 +381,18 @@ const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress
   const accent = tone === 'live' ? LIVE_RED : tone === 'upset' ? MAROON : tone === 'soon' ? TEAL : tone === 'final' ? '#94a3b8' : tone === 'tossup' ? '#94a3b8' : TEAL;
   const sportMeta = SPORT_META[game.sport as Sport];
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
+  // Per-item guard: every StoryCard lives in a horizontal rail, so a swipe
+  // must not register as a tap and open the wrong game.
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
   return (
-    <Pressable onPress={onPress} style={{ width: STORY_CARD_W }}>
+    <Pressable
+      onPress={() => { if (!shouldHandlePress()) return; onPress(); }}
+      pressRetentionOffset={6}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
+      style={{ width: STORY_CARD_W }}
+    >
       <LinearGradient
         colors={[hexWithAlpha(accent, 0.34), 'rgba(180,211,235,0.08)', 'rgba(255,255,255,0.035)']}
         start={{ x: 0, y: 0 }}
@@ -393,7 +406,7 @@ const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress
               {live ? <View style={{ marginRight: 6 }}><LiveDot /></View> : null}
               <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 9, fontWeight: '900', color: accent, letterSpacing: 1.2 }}>{title.toUpperCase()}</Text>
             </View>
-            <Text style={{ fontSize: 15, lineHeight: 18, fontWeight: '900', color: WHITE }} numberOfLines={2}>{game.awayTeam.abbreviation} at {game.homeTeam.abbreviation}</Text>
+            <Text style={{ fontSize: 15, lineHeight: 18, fontWeight: '900', color: WHITE }} numberOfLines={2}>{game.awayTeam.name} at {game.homeTeam.name}</Text>
             <Text style={{ fontSize: 10.5, lineHeight: 15, fontWeight: '700', color: 'rgba(224,234,240,0.55)', marginTop: 7 }} numberOfLines={2}>{subtitle}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
@@ -621,7 +634,7 @@ export default function SearchExploreScreen() {
     // Fire the navigation FIRST so the push animation starts immediately.
     // Seed the detail cache immediately; haptics and storage writes wait until
     // after the transition so the tap stays responsive.
-    const recentTerm = query.trim() || `${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`;
+    const recentTerm = query.trim() || `${game.awayTeam.name} vs ${game.homeTeam.name}`;
     warmGame(game);
     router.push({ pathname: '/game/[id]', params: { id: game.id } });
     afterFrame(() => {
@@ -667,7 +680,7 @@ export default function SearchExploreScreen() {
         <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2, marginBottom: 5 }}>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: hexWithAlpha(TEAL, 0.9), letterSpacing: 2, marginBottom: 5 }}>
                 {sportFilter ? 'BROWSING SPORT' : 'SEARCH RESULTS'}
               </Text>
               <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: WHITE }} numberOfLines={1}>
@@ -680,7 +693,7 @@ export default function SearchExploreScreen() {
               </Pressable>
             ) : null}
           </View>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(180,211,235,0.52)', marginTop: 5 }}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(196,219,240,0.68)', marginTop: 5 }}>
             {baseFilteredGames.length} match{baseFilteredGames.length !== 1 ? 'es' : ''}
           </Text>
         </View>
@@ -747,9 +760,12 @@ export default function SearchExploreScreen() {
         />
         {sportCounts.length > 0 ? (
           <View style={{ marginTop: 28 }}>
-            <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2, paddingHorizontal: 20, marginBottom: 12 }}>
-              BROWSE SPORTS
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
+              <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: TEAL, marginRight: 11 }} />
+              <Text style={{ fontSize: 11, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 2 }}>
+                BROWSE SPORTS
+              </Text>
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
               {sportCounts.map(({ sport, count }, i) => (
                 <View key={sport} style={{ marginRight: i === sportCounts.length - 1 ? 0 : SPORT_CARD_GAP }}>
@@ -775,7 +791,7 @@ export default function SearchExploreScreen() {
             <ArrowLeft size={20} color={WHITE} strokeWidth={2.4} />
           </Pressable>
           <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(180,211,235,0.52)', letterSpacing: 2.2 }}>ARENA SEARCH</Text>
+            <Text style={{ fontSize: 9.5, fontWeight: '900', color: hexWithAlpha(TEAL, 0.92), letterSpacing: 2.2 }}>ARENA SEARCH</Text>
             <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: WHITE, marginTop: 2 }}>Find a matchup</Text>
           </View>
         </View>
@@ -792,11 +808,13 @@ export default function SearchExploreScreen() {
             </View>
             <TextInput
               ref={inputRef}
+              autoFocus
               style={{ flex: 1, fontSize: 15, fontWeight: '700', color: WHITE, paddingVertical: 0 }}
               placeholder="Search teams, sports, venues"
               placeholderTextColor="rgba(180,211,235,0.42)"
               keyboardAppearance="dark"
-              selectionColor={MAROON_DIM}
+              selectionColor={TEAL}
+              cursorColor={TEAL}
               returnKeyType="done"
               value={query}
               onChangeText={onChangeText}
@@ -836,8 +854,11 @@ export default function SearchExploreScreen() {
             {recentSearches.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 }}>
-                  <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2 }}>RECENT SEARCHES</Text>
-                  <Pressable onPress={clearRecents} hitSlop={8}><Text style={{ fontSize: 10, fontWeight: '900', color: MAROON }}>CLEAR</Text></Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: TEAL, marginRight: 11 }} />
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 2 }}>RECENT SEARCHES</Text>
+                  </View>
+                  <Pressable onPress={clearRecents} hitSlop={8}><Text style={{ fontSize: 11, fontWeight: '900', color: MAROON }}>CLEAR</Text></Pressable>
                 </View>
                 <View style={{ paddingHorizontal: 20, gap: 8 }}>
                   {recentSearches.map(term => (
@@ -856,7 +877,7 @@ export default function SearchExploreScreen() {
 
             {liveGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<Radio size={14} color={LIVE_RED} />} label="HAPPENING NOW" title="Live games" />
+                <SectionHeader icon={<Radio size={14} color={LIVE_RED} />} label="HAPPENING NOW" title="Live games" accent={LIVE_RED} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {liveGames.map((game, i) => (
                     <View key={`live-${game.id}`} style={storyRowKey(i, liveGames.length)}>
@@ -875,7 +896,10 @@ export default function SearchExploreScreen() {
 
             {sportCounts.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2, paddingHorizontal: 20, marginBottom: 12 }}>BROWSE THE SLATE</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
+                  <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: TEAL, marginRight: 11 }} />
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 2 }}>BROWSE THE SLATE</Text>
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {sportCounts.map(({ sport, count }, i) => (
                     <View key={sport} style={{ marginRight: i === sportCounts.length - 1 ? 0 : SPORT_CARD_GAP }}>
@@ -888,7 +912,7 @@ export default function SearchExploreScreen() {
 
             {todaySchedule.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="TODAY" title="Scheduled games" />
+                <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="TODAY" title="Scheduled games" accent={TEAL} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {todaySchedule.map((game, i) => (
                     <View key={`today-${game.id}`} style={storyRowKey(i, todaySchedule.length)}>
@@ -907,7 +931,7 @@ export default function SearchExploreScreen() {
 
             {finalGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<Clock size={14} color="#94a3b8" />} label="RECENT" title="Final scores" />
+                <SectionHeader icon={<Clock size={14} color={MAROON} />} label="RECENT" title="Final scores" accent={MAROON} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {finalGames.map((game, i) => (
                     <View key={`final-${game.id}`} style={storyRowKey(i, finalGames.length)}>
@@ -915,7 +939,7 @@ export default function SearchExploreScreen() {
                         game={game}
                         tone="final"
                         title="Final"
-                        subtitle={`${game.awayTeam.abbreviation} ${game.awayScore ?? 0} · ${game.homeTeam.abbreviation} ${game.homeScore ?? 0}`}
+                        subtitle={`${game.awayTeam.name} ${game.awayScore ?? 0} · ${game.homeTeam.name} ${game.homeScore ?? 0}`}
                         onPress={() => navGame(game)}
                       />
                     </View>
@@ -926,7 +950,7 @@ export default function SearchExploreScreen() {
 
             {tossUpGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<Flame size={14} color="#94a3b8" />} label="CLOSEST READS" title="Toss-up watch" />
+                <SectionHeader icon={<Flame size={14} color={TEAL} />} label="CLOSEST READS" title="Toss-up watch" accent={TEAL} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {tossUpGames.map((game, i) => (
                     <View key={`toss-${game.id}`} style={storyRowKey(i, tossUpGames.length)}>
@@ -945,7 +969,7 @@ export default function SearchExploreScreen() {
 
             {startingSoon.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="NEXT WINDOW" title="Starting soon" />
+                <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="NEXT WINDOW" title="Starting soon" accent={TEAL} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                   {startingSoon.map((game, i) => (
                     <View key={`soon-${game.id}`} style={storyRowKey(i, startingSoon.length)}>
@@ -964,7 +988,7 @@ export default function SearchExploreScreen() {
 
             {trendingGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
-                <SectionHeader icon={<Trophy size={14} color={TEAL} />} label="MODEL BOARD" title="Top grades" />
+                <SectionHeader icon={<Trophy size={14} color={TEAL} />} label="MODEL BOARD" title="Top grades" accent={TEAL} />
                 <View style={{ paddingHorizontal: 20 }}>
                   {trendingGames.map((game, i) => (
                     <View key={game.id} style={{ marginBottom: i === trendingGames.length - 1 ? 0 : 14 }}>

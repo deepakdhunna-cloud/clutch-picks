@@ -5,9 +5,9 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  Image,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -208,6 +208,8 @@ export default function ProfileSetupScreen() {
                     <Image
                       source={{ uri: profileImage }}
                       style={{ width: 100, height: 100, borderRadius: 50 }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
                     />
                     {/* Edit pencil overlay */}
                     <View

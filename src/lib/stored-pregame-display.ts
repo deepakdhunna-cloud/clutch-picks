@@ -506,11 +506,11 @@ export function formatAnalysisLinkSubtitle(prediction: Prediction | null | undef
   const factors = prediction?.factors ?? [];
   if (factors.length > 0) {
     const edgeCount = factors.filter((factor) => Math.abs(factor.homeScore - factor.awayScore) > 0.3).length;
-    return `${factors.length} factors - ${edgeCount} edges identified`;
+    return `${factors.length} factors · ${edgeCount} edges identified`;
   }
 
   if (isStoredPregamePrediction(prediction)) {
-    return `Pregame snapshot - ${Math.round(getCanonicalConfidence(prediction))}% lean`;
+    return `Pregame snapshot · ${Math.round(getCanonicalConfidence(prediction))}% lean`;
   }
 
   return 'Factor details pending';

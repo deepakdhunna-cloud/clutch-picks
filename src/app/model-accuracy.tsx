@@ -79,7 +79,7 @@ export default function ModelAccuracyScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={s.header}>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
+          <Pressable onPress={() => router.back()} hitSlop={8} style={s.backBtn}>
             <ArrowLeft size={20} color="#FFFFFF" />
           </Pressable>
           <Text style={s.headerTitle}>Model Performance</Text>

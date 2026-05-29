@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -224,6 +225,8 @@ export default function EditProfileScreen() {
                   <Image
                     source={{ uri: displayImage }}
                     style={{ width: 114, height: 114, borderRadius: 57 }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <User size={56} color={TEXT_MUTED} />
@@ -249,7 +252,7 @@ export default function EditProfileScreen() {
               <Camera size={18} color="#FFFFFF" />
             </View>
           </Pressable>
-          <Pressable onPress={handleAvatarPress} style={{ marginTop: 12 }}>
+          <Pressable onPress={handleAvatarPress} hitSlop={10} style={{ marginTop: 12 }}>
             <Text style={{ color: TEAL, fontWeight: '600', fontSize: 14 }}>
               Change Photo
             </Text>

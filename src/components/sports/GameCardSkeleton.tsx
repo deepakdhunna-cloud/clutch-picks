@@ -6,32 +6,28 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  interpolate,
+  cancelAnimation,
 } from 'react-native-reanimated';
 
-// Single skeleton shape — a rounded rectangle with pulse animation
+// Single skeleton shape — a rounded rectangle with pulse animation.
+// Reads a single shared pulse value driven once at the list level (no
+// per-instance animation loop) so a full skeleton list runs one UI-thread loop.
 function SkeletonRect({
   width,
   height,
   borderRadius = 6,
   style,
+  pulse,
 }: {
   width: number | string;
   height: number;
   borderRadius?: number;
   style?: object;
+  pulse: Animated.SharedValue<number>;
 }) {
-  const opacity = useSharedValue(0.4);
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withTiming(0.8, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, []);
-
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
+    opacity: interpolate(pulse.value, [0, 1], [0.4, 0.8]),
   }));
 
   return (
@@ -50,48 +46,48 @@ function SkeletonRect({
   );
 }
 
-export function GameCardSkeleton() {
+export function GameCardSkeleton({ pulse }: { pulse: Animated.SharedValue<number> }) {
   return (
     <View style={styles.card}>
       {/* Header row: sport badge pill (left) + status badge pill (right) */}
       <View style={styles.headerRow}>
-        <SkeletonRect width={48} height={20} borderRadius={5} />
-        <SkeletonRect width={56} height={20} borderRadius={5} />
+        <SkeletonRect pulse={pulse} width={48} height={20} borderRadius={5} />
+        <SkeletonRect pulse={pulse} width={56} height={20} borderRadius={5} />
       </View>
 
       {/* Teams section */}
       <View style={styles.teamsRow}>
         {/* Away team: jersey circle + abbrev text + record text */}
         <View style={styles.teamCol}>
-          <SkeletonRect width={52} height={52} borderRadius={10} />
-          <SkeletonRect width={36} height={12} borderRadius={4} style={{ marginTop: 8 }} />
-          <SkeletonRect width={28} height={10} borderRadius={4} style={{ marginTop: 4 }} />
+          <SkeletonRect pulse={pulse} width={52} height={52} borderRadius={10} />
+          <SkeletonRect pulse={pulse} width={36} height={12} borderRadius={4} style={{ marginTop: 8 }} />
+          <SkeletonRect pulse={pulse} width={28} height={10} borderRadius={4} style={{ marginTop: 4 }} />
         </View>
 
         {/* Center: VS block */}
         <View style={styles.centerCol}>
-          <SkeletonRect width={48} height={40} borderRadius={10} />
+          <SkeletonRect pulse={pulse} width={48} height={40} borderRadius={10} />
         </View>
 
         {/* Home team: jersey circle + abbrev text + record text */}
         <View style={styles.teamCol}>
-          <SkeletonRect width={52} height={52} borderRadius={10} />
-          <SkeletonRect width={36} height={12} borderRadius={4} style={{ marginTop: 8 }} />
-          <SkeletonRect width={28} height={10} borderRadius={4} style={{ marginTop: 4 }} />
+          <SkeletonRect pulse={pulse} width={52} height={52} borderRadius={10} />
+          <SkeletonRect pulse={pulse} width={36} height={12} borderRadius={4} style={{ marginTop: 8 }} />
+          <SkeletonRect pulse={pulse} width={28} height={10} borderRadius={4} style={{ marginTop: 4 }} />
         </View>
       </View>
 
       {/* Bottom section: confidence badge strip */}
       <View style={styles.bottomSection}>
-        <SkeletonRect width="100%" height={38} borderRadius={10} />
+        <SkeletonRect pulse={pulse} width="100%" height={38} borderRadius={10} />
       </View>
 
       {/* Spread/odds row */}
       <View style={styles.oddsRow}>
-        <SkeletonRect width={90} height={28} borderRadius={8} />
+        <SkeletonRect pulse={pulse} width={90} height={28} borderRadius={8} />
         <View style={styles.oddsRight}>
-          <SkeletonRect width={64} height={28} borderRadius={8} />
-          <SkeletonRect width={56} height={28} borderRadius={8} />
+          <SkeletonRect pulse={pulse} width={64} height={28} borderRadius={8} />
+          <SkeletonRect pulse={pulse} width={56} height={28} borderRadius={8} />
         </View>
       </View>
     </View>
@@ -99,15 +95,26 @@ export function GameCardSkeleton() {
 }
 
 export function GameCardSkeletonList() {
+  // Single UI-thread shimmer driver shared by every skeleton rect in the list.
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+    return () => cancelAnimation(pulse);
+  }, [pulse]);
+
   return (
     <View>
-      <GameCardSkeleton />
+      <GameCardSkeleton pulse={pulse} />
       <View style={styles.spacer} />
-      <GameCardSkeleton />
+      <GameCardSkeleton pulse={pulse} />
       <View style={styles.spacer} />
-      <GameCardSkeleton />
+      <GameCardSkeleton pulse={pulse} />
       <View style={styles.spacer} />
-      <GameCardSkeleton />
+      <GameCardSkeleton pulse={pulse} />
     </View>
   );
 }

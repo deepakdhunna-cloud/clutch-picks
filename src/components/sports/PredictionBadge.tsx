@@ -43,13 +43,13 @@ export const PredictionBadge = memo(function PredictionBadge({
     >
       <View className="flex-row items-center gap-2">
         <View className="items-center">
-          <Text style={{ fontSize: s.label, fontWeight: '800', color: tier.color, letterSpacing: 0.3 }}>
+          <Text style={{ fontSize: s.label, fontWeight: '800', color: tier.color, letterSpacing: 0.3 }} numberOfLines={1}>
             {tier.label}
           </Text>
         </View>
 
         {showBar && size !== 'small' ? (
-          <View className="flex-1 ml-2">
+          <View className="flex-1">
             <View className="h-2 bg-zinc-700/50 rounded-full overflow-hidden">
               <View
                 style={{

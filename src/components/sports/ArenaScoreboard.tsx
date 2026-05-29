@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, G, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -79,35 +79,38 @@ const ArenaScoreFace = memo(function ArenaScoreFace({
   const width = cols * pitch + padX * 2;
   const height = rows * pitch + padY * 2;
 
-  const lit = new Set<string>();
-  let cursor = 2;
-  for (let i = 0; i < text.length; i++) {
-    const matrix = SCORE_FACE_MATRIX[text[i]];
-    if (!matrix) continue;
-    if (i > 0) cursor += SCORE_FACE_GAP;
-    for (let row = 0; row < matrix.length; row++) {
-      for (let col = 0; col < matrix[row].length; col++) {
-        if (matrix[row][col] !== 1) continue;
-        for (let sy = 0; sy < glyphScale; sy++) {
-          for (let sx = 0; sx < glyphScale; sx++) {
-            lit.add(`${cursor + col * glyphScale + sx},${row * glyphScale + sy + 2}`);
+  const cells = useMemo<{ x: number; y: number; lit: boolean }[]>(() => {
+    const lit = new Set<string>();
+    let cursor = 2;
+    for (let i = 0; i < text.length; i++) {
+      const matrix = SCORE_FACE_MATRIX[text[i]];
+      if (!matrix) continue;
+      if (i > 0) cursor += SCORE_FACE_GAP;
+      for (let row = 0; row < matrix.length; row++) {
+        for (let col = 0; col < matrix[row].length; col++) {
+          if (matrix[row][col] !== 1) continue;
+          for (let sy = 0; sy < glyphScale; sy++) {
+            for (let sx = 0; sx < glyphScale; sx++) {
+              lit.add(`${cursor + col * glyphScale + sx},${row * glyphScale + sy + 2}`);
+            }
           }
         }
       }
+      cursor += matrix[0].length * glyphScale;
     }
-    cursor += matrix[0].length * glyphScale;
-  }
 
-  const cells: { x: number; y: number; lit: boolean }[] = [];
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      cells.push({
-        x: padX + col * pitch + pitch / 2,
-        y: padY + row * pitch + pitch / 2,
-        lit: lit.has(`${col},${row}`),
-      });
+    const built: { x: number; y: number; lit: boolean }[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        built.push({
+          x: padX + col * pitch + pitch / 2,
+          y: padY + row * pitch + pitch / 2,
+          lit: lit.has(`${col},${row}`),
+        });
+      }
     }
-  }
+    return built;
+  }, [text, glyphScale, scale]);
 
   return (
     <View style={{ borderRadius: 10 * scale, overflow: 'hidden', backgroundColor: '#020303' }}>

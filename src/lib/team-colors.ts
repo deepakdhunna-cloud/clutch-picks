@@ -853,7 +853,17 @@ function resolveAccentColor(primary: string, secondary: string, explicitAccent?:
 // runs both colors through enhancement + contrast enforcement so jerseys
 // always look vivid and readable on dark card backgrounds.
 // espnColor is the color from ESPN API, used as fallback for teams not in our color map.
+// Cache resolved colors per (sport, team, espnColor). getTeamColors is a pure,
+// deterministic function of its inputs, but it runs HSL conversion + contrast
+// enforcement on every call. Memoizing avoids redoing that math for every card
+// render — the key includes all inputs, so cached values are always correct.
+const teamColorsCache = new Map<string, ResolvedTeamColors>();
+
 export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: string): ResolvedTeamColors {
+  const cacheKey = `${sport}:${abbreviation}:${espnColor ?? ''}`;
+  const cachedColors = teamColorsCache.get(cacheKey);
+  if (cachedColors) return cachedColors;
+
   // Vibrant fallback so unknown teams don't render as flat gray
   const defaultColors: TeamColors = { primary: '#3B82C4', secondary: '#FFFFFF' };
 
@@ -912,5 +922,7 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
   const secondary = ensureContrast(primary, enhanceJerseyColor(colors.secondary));
   const accent = resolveAccentColor(primary, secondary, colors.accent);
 
-  return { primary, secondary, accent };
+  const result: ResolvedTeamColors = { primary, secondary, accent };
+  teamColorsCache.set(cacheKey, result);
+  return result;
 }

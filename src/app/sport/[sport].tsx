@@ -404,9 +404,9 @@ const styles = StyleSheet.create({
   },
 
   // Filter Button
-  filterButton: {
-    marginRight: 12,
-  },
+  // Spacing between buttons is owned by `filterScrollContent.gap`; no per-button
+  // marginRight here or the gaps would be additive (24px) with a stray trailing margin.
+  filterButton: {},
   filterButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',

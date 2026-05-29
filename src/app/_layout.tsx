@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
 import { useSession } from '@/lib/auth/use-session';
 import { View, AppState, Platform } from 'react-native';
@@ -215,7 +216,7 @@ function RootLayoutNav({
           <Stack.Screen name="search-explore" options={{ freezeOnBlur: true, animation: 'fade' }} />
           <Stack.Screen name="picks-history" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="confidence-tiers" options={{ freezeOnBlur: false }} />
-          <Stack.Screen name="live-games" options={{ freezeOnBlur: true, animation: 'slide_from_right', animationDuration: 200 }} />
+          <Stack.Screen name="live-games" options={{ freezeOnBlur: true, gestureEnabled: false, animation: 'slide_from_right', animationDuration: 200 }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', freezeOnBlur: true, animation: 'slide_from_bottom', animationDuration: 250 }} />
         </Stack>
       </ThemeProvider>
@@ -244,8 +245,13 @@ export default function RootLayout() {
         <SplashProvider>
           <ErrorBoundary>
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <StatusBar style="light" hidden={false} />
-              <RootLayoutNav colorScheme={colorScheme} fontsReady={fontsReady} />
+              {/* initialWindowMetrics supplies the safe-area insets synchronously on
+                  the very first frame, so screens never paint under the status bar
+                  and then jump down once the inset resolves. */}
+              <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+                <StatusBar style="light" hidden={false} />
+                <RootLayoutNav colorScheme={colorScheme} fontsReady={fontsReady} />
+              </SafeAreaProvider>
             </GestureHandlerRootView>
           </ErrorBoundary>
         </SplashProvider>

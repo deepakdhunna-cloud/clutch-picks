@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -15,8 +15,10 @@ const ScrollContext = createContext<ScrollContextType | null>(null);
 export function ScrollProvider({ children }: { children: React.ReactNode }) {
   const tabBarVisible = useSharedValue(1);
 
+  const value = useMemo(() => ({ tabBarVisible }), [tabBarVisible]);
+
   return (
-    <ScrollContext.Provider value={{ tabBarVisible }}>
+    <ScrollContext.Provider value={value}>
       {children}
     </ScrollContext.Provider>
   );

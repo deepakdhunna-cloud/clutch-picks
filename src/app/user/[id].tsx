@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -70,11 +71,11 @@ function PublicPickItem({ pick, index }: { pick: Pick; index: number }) {
             <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9, fontWeight: '800' }}>{pick.sport || 'PICK'}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }} numberOfLines={2}>
               {pick.awayTeam && pick.homeTeam ? `${pick.awayTeam} @ ${pick.homeTeam}` : 'Game Pick'}
             </Text>
             {pick.pickedTeam ? (
-              <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 }} numberOfLines={1}>
                 Picked: <Text style={{ color: resultColor, fontWeight: '700' }}>{pick.pickedTeam === 'home' ? (pick.homeTeam ?? pick.pickedTeam) : (pick.awayTeam ?? pick.pickedTeam)}</Text>
               </Text>
             ) : null}
@@ -200,6 +201,7 @@ export default function UserProfileScreen() {
           <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
             <Pressable
               onPress={() => router.back()}
+              hitSlop={8}
               style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER }}
             >
               <ArrowLeft size={20} color="#FFFFFF" />
@@ -242,6 +244,7 @@ export default function UserProfileScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 }}>
             <Pressable
               onPress={() => router.back()}
+              hitSlop={8}
               style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER, marginRight: 12 }}
             >
               <ArrowLeft size={18} color="rgba(255,255,255,0.7)" />
@@ -297,14 +300,20 @@ export default function UserProfileScreen() {
                   }}
                 >
                   {profile.image ? (
-                    <Image source={{ uri: profile.image }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+                    <Image
+                      source={{ uri: profile.image }}
+                      style={{ width: 80, height: 80, borderRadius: 40 }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={160}
+                    />
                   ) : (
                     <Text style={{ color: '#FFFFFF', fontSize: 26, fontWeight: '800' }}>{displayInitials}</Text>
                   )}
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }}>{profile.name || 'Clutch User'}</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }} numberOfLines={1}>{profile.name || 'Clutch User'}</Text>
                   {profile.bio ? (
                     <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 4, lineHeight: 18 }} numberOfLines={2}>{profile.bio}</Text>
                   ) : null}

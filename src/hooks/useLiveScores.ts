@@ -289,8 +289,12 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
     if (verifiedScores.length === 0 && !hasUnverifiedScores) return;
     const scoreMap = new Map(verifiedScores.map((s) => [s.id, s]));
 
+    // Track which FINAL detail caches need invalidation only on the LIVE->FINAL
+    // transition, so we don't refetch the detail query on every final-status tick.
+    const finalTransitionIds: string[] = [];
+
     notifyManager.batch(() => {
-      queryClient.setQueriesData({ queryKey: ['games'] }, (old) =>
+      queryClient.setQueriesData({ queryKey: ['games'], type: 'active' }, (old) =>
         mergeLiveScoresIntoQueryData(old, scoreMap)
       );
       queryClient.setQueryData(['topPicks'], (old) =>
@@ -302,20 +306,29 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
           queryClient.setQueryData(['game', score.id], null);
           continue;
         }
+        // Only touch the detail cache for games that have actually been opened —
+        // never create a detail-cache entry for an unopened game.
+        if (!queryClient.getQueryState(['game', score.id])) continue;
+        const prior = queryClient.getQueryData(['game', score.id]) as
+          | GameWithPrediction
+          | null
+          | undefined;
+        const wasFinal = prior?.status === GameStatus.FINAL;
         queryClient.setQueryData(['game', score.id], (old) => {
           if (!old) return old;
           return mergeLiveScore(old as GameWithPrediction, scoreMap);
         });
+        if (score.status === GameStatus.FINAL && !wasFinal) {
+          finalTransitionIds.push(score.id);
+        }
       }
     });
 
-    for (const score of verifiedScores) {
-      if (score.status === GameStatus.FINAL) {
-        queryClient.invalidateQueries({
-          queryKey: ['game', score.id],
-          refetchType: 'active',
-        });
-      }
+    for (const id of finalTransitionIds) {
+      queryClient.invalidateQueries({
+        queryKey: ['game', id],
+        refetchType: 'active',
+      });
     }
   }, [queryClient]);
 
@@ -347,17 +360,22 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
         if (scores.length > 0) {
           lastUsefulScoresAt.current = Date.now();
         }
-        // Always update cache immediately (cheap — only writes if data changed)
-        applyScoresRef.current?.(scores);
-        if (!trackStateRef.current) return;
-        // Throttle setState to max once per 500ms to avoid render storms
+        // Buffer the latest scores and coalesce BOTH the cache write and the
+        // setState flush into a single ~200ms throttled timer with a trailing
+        // flush, so bursts of ticks collapse to one cache write + one render.
+        // The latest scores always win — the final update is never dropped.
         pendingScores.current = scores;
         if (!throttleTimer.current) {
           throttleTimer.current = setTimeout(() => {
             throttleTimer.current = null;
-            if (pendingScores.current && mountedRef.current) {
-              setLiveScores(pendingScores.current);
-              pendingScores.current = null;
+            const latest = pendingScores.current;
+            pendingScores.current = null;
+            if (!latest || !mountedRef.current) return;
+            // Cache write (cheap — only writes if data changed) always runs.
+            applyScoresRef.current?.(latest);
+            // setState only when this hook is tracking component state.
+            if (trackStateRef.current) {
+              setLiveScores(latest);
             }
           }, 200);
         }
@@ -392,6 +410,12 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
     if (throttleTimer.current) {
       clearTimeout(throttleTimer.current);
       throttleTimer.current = null;
+      // Flush any buffered scores to the cache so the latest update is never
+      // dropped when a disconnect interrupts the throttle window.
+      if (pendingScores.current) {
+        applyScoresRef.current?.(pendingScores.current);
+        pendingScores.current = null;
+      }
     }
     if (esRef.current) {
       esRef.current.close();
@@ -422,11 +446,14 @@ export function useLiveScores(options: { trackState?: boolean } = {}) {
   useEffect(() => {
     const watchdog = setInterval(() => {
       if (!mountedRef.current || appStateRef.current !== 'active') return;
-      if (!cacheHasLiveGames(queryClient)) return;
 
+      // Cheap staleness check first — bail before the expensive cache scan.
       const now = Date.now();
       const streamIsStale = now - lastUsefulScoresAt.current > LIVE_STREAM_STALE_MS;
       if (!streamIsStale) return;
+
+      // Only scan the full cache once the stream is actually suspected stale.
+      if (!cacheHasLiveGames(queryClient)) return;
 
       refetchActiveScoreQueries(queryClient);
 

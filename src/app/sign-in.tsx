@@ -146,7 +146,7 @@ const s = StyleSheet.create({
     height: 44,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingLeft: 24,
     marginTop: 8,
   },
   hero: {

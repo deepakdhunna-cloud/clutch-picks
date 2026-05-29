@@ -6,7 +6,7 @@ import { api } from '@/lib/api/api';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { X } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
@@ -94,6 +94,7 @@ function ShimmerButton({ onPress, loading, label }: {
     shimmerX.value = withRepeat(
       withTiming(SCREEN_W + 60, { duration: 2400, easing: Easing.linear }), -1, false
     );
+    return () => cancelAnimation(shimmerX);
   }, []);
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shimmerX.value }, { rotate: '20deg' }],
@@ -176,7 +177,7 @@ export default function PaywallScreen() {
       (g) => g.prediction && (g.status === GameStatus.SCHEDULED || g.status === GameStatus.LIVE)
     );
     return withPred.slice(0, 3).map((g) => ({
-      teams: `${g.awayTeam.abbreviation} vs ${g.homeTeam.abbreviation}`,
+      teams: `${g.awayTeam.name} vs ${g.homeTeam.name}`,
       league: g.sport,
       time: g.status === GameStatus.LIVE
         ? 'LIVE'
@@ -196,10 +197,10 @@ export default function PaywallScreen() {
       withTiming(1, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
       -1, true
     );
+    return () => cancelAnimation(ctaGlow);
   }, []);
   const ctaGlowStyle = useAnimatedStyle(() => ({
     shadowOpacity: interpolate(ctaGlow.value, [0, 1], [0.1, 0.3]),
-    shadowRadius: interpolate(ctaGlow.value, [0, 1], [10, 25]),
   }));
 
   useEffect(() => { loadOfferings(); }, []);
@@ -478,9 +479,9 @@ export default function PaywallScreen() {
                   borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.025)',
                   opacity: i === 2 ? 0.35 : 1,
                 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{p.teams}</Text>
-                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>{p.league} · {p.time}</Text>
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }} numberOfLines={1}>{p.teams}</Text>
+                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 2 }} numberOfLines={1}>{p.league} · {p.time}</Text>
                   </View>
                   {/* Blurred prediction bars — maroon + teal */}
                   <View style={{ flexDirection: 'row', gap: 6, opacity: 0.10 }}>
@@ -551,6 +552,7 @@ export default function PaywallScreen() {
               borderRadius: 22, overflow: 'hidden',
               shadowColor: MAROON,
               shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 17,
             }, ctaGlowStyle]}>
               <LinearGradient
                 colors={['rgba(224,234,240,0.44)', 'rgba(122,157,184,0.40)', 'rgba(139,10,31,0.48)', 'rgba(224,234,240,0.22)']}

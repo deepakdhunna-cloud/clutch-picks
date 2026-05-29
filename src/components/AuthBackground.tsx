@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
-  withDelay, withSequence, Easing, interpolate,
+  withDelay, withSequence, Easing, interpolate, cancelAnimation,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -24,6 +24,7 @@ function NeonStreak({ x, y, length, angle, color, delay, duration, maxOpacity }:
     progress.value = withDelay(delay, withRepeat(
       withTiming(1, { duration, easing: Easing.inOut(Easing.ease) }), -1, false
     ));
+    return () => cancelAnimation(progress);
   }, []);
 
   // Only animate opacity and translate — position/size/rotation are static
@@ -75,6 +76,7 @@ function StarGrain({ x, y, size, delay, duration, maxOpacity }: {
         withTiming(0, { duration: duration * 0.6, easing: Easing.in(Easing.ease) }),
       ), -1, false
     ));
+    return () => cancelAnimation(twinkle);
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({

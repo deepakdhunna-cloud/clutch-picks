@@ -1,11 +1,12 @@
-import { View, Text, Pressable, FlatList, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, FlatList, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, User, UserPlus, UserMinus } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/lib/auth/use-session';
 import {
   useFollowers,
@@ -27,7 +28,7 @@ interface UserItemProps {
   onNavigateToProfile: (userId: string) => void;
 }
 
-function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
+const UserItem = React.memo(function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
   const isOwnProfile = currentUserId === user.id;
   const { data: isFollowing, isLoading: isFollowingLoading } = useIsFollowing(
     isOwnProfile ? undefined : user.id
@@ -75,6 +76,10 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
           <Image
             source={{ uri: user.image }}
             style={{ width: '100%', height: '100%' }}
+            cachePolicy="memory-disk"
+            contentFit="cover"
+            recyclingKey={user.id}
+            transition={150}
           />
         ) : (
           <User size={24} color="#FFFFFF" />
@@ -98,6 +103,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
         <Pressable
           onPress={handleFollowToggle}
           disabled={isFollowLoading}
+          hitSlop={8}
           className="active:opacity-80"
           style={{
             flexDirection: 'row',
@@ -132,7 +138,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
       ) : null}
     </Pressable>
   );
-}
+});
 
 export default function FollowersScreen() {
   const router = useRouter();
@@ -162,13 +168,27 @@ export default function FollowersScreen() {
   const isLoading = activeTab === 'followers' ? followersLoading : followingLoading;
   const data = activeTab === 'followers' ? followers : following;
 
-  const handleNavigateToProfile = (id: string) => {
-    if (id === currentUserId) {
-      router.replace('/(tabs)/profile' as any);
-    } else {
-      router.push(`/user/${id}` as any);
-    }
-  };
+  const handleNavigateToProfile = useCallback(
+    (id: string) => {
+      if (id === currentUserId) {
+        router.replace('/(tabs)/profile' as any);
+      } else {
+        router.push(`/user/${id}` as any);
+      }
+    },
+    [currentUserId, router]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: SocialUser }) => (
+      <UserItem
+        user={item}
+        currentUserId={currentUserId}
+        onNavigateToProfile={handleNavigateToProfile}
+      />
+    ),
+    [currentUserId, handleNavigateToProfile]
+  );
 
   const renderEmptyState = () => (
     <View className="flex-1 items-center justify-center py-20">
@@ -205,6 +225,7 @@ export default function FollowersScreen() {
       >
         <Pressable
           onPress={() => router.back()}
+          hitSlop={8}
           className="active:opacity-70"
           style={{
             width: 40,
@@ -310,18 +331,16 @@ export default function FollowersScreen() {
             <FlatList
               data={data || []}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <UserItem
-                  user={item}
-                  currentUserId={currentUserId}
-                  onNavigateToProfile={handleNavigateToProfile}
-                />
-              )}
+              renderItem={renderItem}
               ListEmptyComponent={renderEmptyState}
               contentContainerStyle={{
                 flexGrow: 1,
               }}
               showsVerticalScrollIndicator={false}
+              removeClippedSubviews
+              windowSize={7}
+              maxToRenderPerBatch={8}
+              initialNumToRender={10}
             />
           )}
         </BlurView>

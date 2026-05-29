@@ -1,5 +1,5 @@
-import React from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, InteractionManager, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
   Defs,
@@ -69,7 +69,14 @@ const stadiumArcs = [
   },
 ];
 
-export default function ClutchPicksBackground() {
+function ClutchPicksBackground() {
+  const [showDetail, setShowDetail] = useState(false);
+
+  useEffect(() => {
+    const t = InteractionManager.runAfterInteractions(() => setShowDetail(true));
+    return () => t.cancel();
+  }, []);
+
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]} pointerEvents="none">
       <LinearGradient
@@ -77,6 +84,7 @@ export default function ClutchPicksBackground() {
         locations={[0, 0.28, 0.66, 1]}
         style={StyleSheet.absoluteFill}
       />
+      {showDetail ? (
       <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={StyleSheet.absoluteFill}>
         <Defs>
           <SvgLinearGradient id="blueSheet" x1="0" y1="0" x2="1" y2="1">
@@ -169,6 +177,7 @@ export default function ClutchPicksBackground() {
           fill="none"
         />
       </Svg>
+      ) : null}
 
       <LinearGradient
         colors={['rgba(1,1,1,0.6)', 'rgba(1,1,1,0.08)', 'rgba(1,1,1,0.62)']}
@@ -178,6 +187,8 @@ export default function ClutchPicksBackground() {
     </View>
   );
 }
+
+export default React.memo(ClutchPicksBackground);
 
 const styles = StyleSheet.create({
   root: {

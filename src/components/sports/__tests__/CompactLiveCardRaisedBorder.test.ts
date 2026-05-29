@@ -1,13 +1,21 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 
-describe('CompactLiveCard raised border treatment', () => {
-  it('uses a one-notch thicker raised border shell', () => {
+describe('CompactLiveCard shares the My Arena live-card design', () => {
+  it('delegates to the shared LiveArenaCard rail variant at the locked rail width', () => {
     const source = readFileSync(path.join(process.cwd(), 'src/components/sports/CompactLiveCard.tsx'), 'utf8');
 
-    expect(source).toContain('compactLiveRaisedBorder');
-    expect(source).toContain('padding: 3');
-    expect(source).toContain('compactLiveRaisedTopHighlight');
-    expect(source).toContain('compactLiveRaisedBottomShadow');
+    expect(source).toContain('LiveArenaCard');
+    expect(source).toContain("variant=\"rail\"");
+    expect(source).toContain('CARD_WIDTH = 300');
+  });
+
+  it('builds the rail card on the shared glass-frame primitives', () => {
+    const source = readFileSync(path.join(process.cwd(), 'src/components/sports/LiveArenaCard.tsx'), 'utf8');
+
+    // Shares the My Arena game-day visual: LED scoreboard + jerseys, glass frame.
+    expect(source).toContain('SharedArenaScoreboard');
+    expect(source).toContain('TeamJersey');
+    expect(source).toContain('padding: cfg.border');
   });
 });

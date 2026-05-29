@@ -22,6 +22,7 @@ export default function PrivacyPolicyScreen() {
         }}>
           <Pressable
             onPress={() => router.back()}
+            hitSlop={8}
             style={{ marginRight: 16, padding: 4 }}
           >
             <ChevronLeft size={28} color="#fff" />

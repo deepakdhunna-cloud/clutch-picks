@@ -18,8 +18,30 @@ const DEFAULT_POLLING_INTERVAL = 60000; // background freshness; SSE handles liv
 // Burst-poll while ANY visible game is missing its prediction. Keep this
 // responsive without creating a startup/network storm on large slates.
 const PREDICTION_BURST_INTERVAL = 8000;
+// Wall-clock cap on the prediction burst for a SCHEDULED game. After a game has
+// been observed without a prediction for this long, fall back to the default
+// background cadence so we don't drip an 8s poll forever on games whose
+// prediction is never going to arrive.
+const PREDICTION_BURST_MAX_MS = 90000;
 const STALE_TIME = 30000; // avoid refetching the whole board on every fast tab/screen hop
 const scheduledGameDetailWarmups = new Set<string>();
+
+// gameId -> epoch-ms when we first observed it missing a prediction. Cleared
+// once the prediction arrives or the game leaves SCHEDULED. Used to bound the
+// prediction burst by wall-clock so SCHEDULED games can't poll forever.
+const missingPredictionFirstSeen = new Map<string, number>();
+
+// Returns true while a SCHEDULED game is still inside its prediction-burst
+// window. Records the first-seen-missing timestamp on the first observation and
+// clears it once a prediction exists, so the 8s burst self-terminates.
+function withinPredictionBurstWindow(gameId: string, now: number): boolean {
+  const firstSeen = missingPredictionFirstSeen.get(gameId);
+  if (firstSeen === undefined) {
+    missingPredictionFirstSeen.set(gameId, now);
+    return true;
+  }
+  return now - firstSeen < PREDICTION_BURST_MAX_MS;
+}
 
 function runAfterNavigationStart(task: () => void) {
   const run = () => setTimeout(task, 0);
@@ -74,6 +96,31 @@ function findCachedGame(queryClient: ReturnType<typeof useQueryClient>, gameId: 
   return undefined;
 }
 
+// Resolve a sport hint for a gameId so /api/games/id/:id can do a deep,
+// targeted historical look-back when the game is older than the home slate
+// (e.g. tapping an old pick on the profile). We prefer the source game, then
+// any cached game, then the user's cached picks list (which carries `sport`
+// even for finished games no longer in any games cache).
+function resolveSportHint(
+  queryClient: ReturnType<typeof useQueryClient>,
+  gameId: string,
+  sourceGame?: GameWithPrediction,
+): string | undefined {
+  if (sourceGame?.sport) return sourceGame.sport;
+
+  const cachedGame = findCachedGame(queryClient, gameId);
+  if (cachedGame?.sport) return cachedGame.sport;
+
+  const picks = queryClient.getQueryData<Array<{ gameId: string; sport?: string | null }>>(['picks']);
+  const pick = picks?.find((p) => p.gameId === gameId);
+  return pick?.sport ?? undefined;
+}
+
+function gameByIdPath(gameId: string, sportHint?: string): string {
+  const base = `/api/games/id/${gameId}`;
+  return sportHint ? `${base}?sport=${encodeURIComponent(sportHint)}` : base;
+}
+
 function seedGameDetailCache(queryClient: ReturnType<typeof useQueryClient>, gameId: string, game?: GameWithPrediction) {
   if (!game || isUnverifiedScoreboardGame(game)) return;
   queryClient.setQueryData<GameWithPrediction | null>(['game', gameId], (current) => current ?? game);
@@ -104,7 +151,8 @@ function scheduleGameDetailWarmup(
           // eslint-disable-next-line @tanstack/query/exhaustive-deps
           queryKey: ['game', gameId],
           queryFn: async () => {
-            const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
+            const sportHint = resolveSportHint(queryClient, gameId, sourceGame);
+            const result = await api.get<GameWithPrediction>(gameByIdPath(gameId, sportHint));
             const enriched = await enrichCricketLiveGame(result ?? null);
             const current = findCachedGame(queryClient, gameId);
             if (!enriched) return current ?? null;
@@ -125,10 +173,20 @@ function scheduleGameDetailWarmup(
 }
 
 function shouldBurstForMissingPrediction(game: GameWithPrediction): boolean {
-  if (game.prediction) return false;
+  if (game.prediction) {
+    missingPredictionFirstSeen.delete(game.id);
+    return false;
+  }
+  // LIVE games keep their cadence regardless of the wall-clock cap.
   if (game.status === GameStatus.LIVE) return true;
-  if (game.status !== GameStatus.SCHEDULED) return false;
-  return formatLocalDate(new Date(game.gameTime)) === formatLocalDate(new Date());
+  if (game.status !== GameStatus.SCHEDULED) {
+    missingPredictionFirstSeen.delete(game.id);
+    return false;
+  }
+  if (formatLocalDate(new Date(game.gameTime)) !== formatLocalDate(new Date())) return false;
+  // SCHEDULED game missing a prediction: only burst while inside the
+  // wall-clock window so we don't poll forever on prediction-less games.
+  return withinPredictionBurstWindow(game.id, Date.now());
 }
 
 function formatLocalDate(date: Date): string {
@@ -414,7 +472,8 @@ export function useGame(gameId: string) {
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: ['game', gameId],
     queryFn: async () => {
-      const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
+      const sportHint = resolveSportHint(queryClient, gameId);
+      const result = await api.get<GameWithPrediction>(gameByIdPath(gameId, sportHint));
       const enriched = await enrichCricketLiveGame(result ?? null);
       const current = findCachedGame(queryClient, gameId);
       if (!enriched) return current ?? null;
@@ -436,13 +495,22 @@ export function useGame(gameId: string) {
     // Adaptive polling: burst when prediction missing, faster for live games
     refetchInterval: (query) => {
       const game = query.state.data;
-      // If the detail page is showing a game without a prediction yet, poll
-      // hard so it appears the moment background generation finishes.
-      if (game && !game.prediction) return PREDICTION_BURST_INTERVAL;
+      if (game?.prediction) {
+        missingPredictionFirstSeen.delete(game.id);
+      }
+      // LIVE games keep their cadence regardless of the wall-clock cap.
       if (game?.status === GameStatus.LIVE) {
         // SSE pushes live updates into detail caches, so avoid duplicate
         // polling churn unless the stream is disconnected.
         return sseConnectedRef.current ? DEFAULT_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;
+      }
+      // If the detail page is showing a game without a prediction yet, poll
+      // hard so it appears the moment background generation finishes — but only
+      // inside the wall-clock window so we don't drip an 8s poll forever.
+      if (game && !game.prediction) {
+        return withinPredictionBurstWindow(game.id, Date.now())
+          ? PREDICTION_BURST_INTERVAL
+          : DEFAULT_POLLING_INTERVAL;
       }
       return DEFAULT_POLLING_INTERVAL;
     },

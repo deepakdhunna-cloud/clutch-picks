@@ -4,10 +4,13 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import Animated, {
   withSpring,
   withTiming,
+  withSequence,
+  Easing,
   useSharedValue,
   useAnimatedStyle,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { Sport, SPORT_META } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
@@ -1308,28 +1311,46 @@ export const SportCard = memo(function SportCard({
   }, [onPress, router, shouldHandlePress, sport]);
 
   const scale = useSharedValue(1);
-  const selectedProgress = useSharedValue(isSelected ? 1 : 0);
+  const selectionScale = useSharedValue(1);
+  // Tile focus state: the selected tile grows + stays crisp, the rest shrink + fade.
+  const tileFocusScale = useSharedValue(1);
+  const dimProgress = useSharedValue(0);
 
   useEffect(() => {
-    selectedProgress.value = withTiming(isSelected ? 1 : 0, { duration: isSelected ? 180 : 220 });
-  }, [isSelected, selectedProgress]);
+    // Compact pill keeps its quick selection pop.
+    if (isSelected) {
+      selectionScale.value = withSequence(
+        withTiming(1.07, { duration: 130, easing: Easing.out(Easing.cubic) }),
+        withSpring(1, { damping: 10, stiffness: 240, mass: 0.7 })
+      );
+    }
+    // Tile focus: the chosen tile grows; the others recede (smaller + blurred).
+    // One shared spring for every direction so selecting AND unselecting feel
+    // equally smooth and satisfying.
+    const chosen = hasActiveFilter && isSelected;
+    const dimmed = hasActiveFilter && !isSelected;
+    const focusSpring = { damping: 13, stiffness: 200, mass: 0.7 };
+    tileFocusScale.value = withSpring(chosen ? 1.05 : dimmed ? 0.86 : 1, focusSpring);
+    dimProgress.value = withTiming(dimmed ? 1 : 0, { duration: 260, easing: Easing.inOut(Easing.ease) });
+  }, [isSelected, hasActiveFilter, selectionScale, tileFocusScale, dimProgress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.value * selectionScale.value }],
   }));
 
-  const selectedGlowStyle = useAnimatedStyle(() => ({
-    opacity: selectedProgress.value * 0.42,
+  // Tile: press scale × focus scale (grows when chosen, shrinks when dimmed).
+  const tileScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value * tileFocusScale.value }],
+  }));
+  // Unselected tiles fade and recede (cheap + smooth — no real-time blur).
+  const dimContainerStyle = useAnimatedStyle(() => ({
+    opacity: 1 - dimProgress.value * 0.58,
   }));
 
   // ═══════════════════════════════════════════════
   // TILE: SQUARE LED PANEL (real-LED look — uniform pixel grid + 4-layer bloom)
   // ═══════════════════════════════════════════════
   if (tile) {
-    const isDimmed = hasActiveFilter && !isSelected;
-    const isChosen = hasActiveFilter && isSelected;
-    const borderColor = isChosen ? 'rgba(122,157,184,0.24)' : LED_BORDER;
-
     return (
       <AnimatedPressable
         onPress={handlePress}
@@ -1338,63 +1359,30 @@ export const SportCard = memo(function SportCard({
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
-          scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          scale.value = withSpring(0.9, { damping: 16, stiffness: 420 });
         }}
         onPressOut={() => {
-          scale.value = withSpring(1, { damping: 12, stiffness: 300 });
+          scale.value = withSpring(1, { damping: 11, stiffness: 320, mass: 0.6 });
         }}
-        style={[
-          animatedStyle,
-          { position: 'relative' },
-          isChosen ? {
-            shadowColor: JB.blue,
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.18,
-            shadowRadius: 12,
-            elevation: 5,
-          } : null,
-        ]}
+        style={[tileScaleStyle, { position: 'relative' }]}
       >
-        {isChosen ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              {
-                position: 'absolute',
-                left: -10,
-                right: -10,
-                top: -10,
-                bottom: -10,
-                borderRadius: 18,
-                backgroundColor: 'rgba(122,157,184,0.11)',
-              },
-              selectedGlowStyle,
-            ]}
-          />
-        ) : null}
-        <View
-          style={{
-            width: tileSize,
-            height: tileSize,
-            borderRadius: 9,
-            overflow: 'hidden' as const,
-            backgroundColor: LED_BG,
-            borderWidth: 1,
-            borderColor,
-            opacity: isDimmed ? 0.45 : 1,
-          }}
+        <Animated.View
+          style={[
+            {
+              width: tileSize,
+              height: tileSize,
+              borderRadius: 9,
+              overflow: 'hidden' as const,
+              backgroundColor: LED_BG,
+              borderWidth: 1,
+              borderColor: LED_BORDER,
+            },
+            dimContainerStyle,
+          ]}
         >
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, selectedGlowStyle]}>
-            <LinearGradient
-              colors={['rgba(139,10,31,0.12)', 'rgba(122,157,184,0.08)', 'rgba(255,255,255,0.015)']}
-              locations={[0, 0.7, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-          </Animated.View>
           <LedTilePanel sport={sport} gameCount={gameCount} size={tileSize} />
-        </View>
+        </Animated.View>
       </AnimatedPressable>
     );
   }
@@ -1417,10 +1405,11 @@ export const SportCard = memo(function SportCard({
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
-          scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          scale.value = withSpring(0.9, { damping: 16, stiffness: 420 });
         }}
         onPressOut={() => {
-          scale.value = withSpring(1, { damping: 12, stiffness: 300 });
+          scale.value = withSpring(1, { damping: 11, stiffness: 320, mass: 0.6 });
         }}
         style={[animatedStyle, { flex: 1 }]}
       >

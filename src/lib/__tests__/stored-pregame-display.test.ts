@@ -188,7 +188,7 @@ describe('stored pregame display fallbacks', () => {
 
   it('does not overstate value or factor coverage for a thin stored snapshot', () => {
     expect(getValueSignalDisplay(storedTennisGame.prediction).label).toBe('Lean Edge');
-    expect(formatAnalysisLinkSubtitle(storedTennisGame.prediction)).toBe('Pregame snapshot - 53% lean');
+    expect(formatAnalysisLinkSubtitle(storedTennisGame.prediction)).toBe('Pregame snapshot · 53% lean');
   });
 
   it('replaces the raw locked-pregame fallback narration with useful matchup copy', () => {

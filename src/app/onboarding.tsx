@@ -9,8 +9,9 @@ import Animated, {
   FadeIn, FadeInDown, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft,
   useSharedValue, useAnimatedStyle,
   withSpring, withTiming, withSequence, withRepeat, withDelay,
-  interpolate, Easing,
+  interpolate, Easing, cancelAnimation,
 } from 'react-native-reanimated';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
@@ -65,6 +66,7 @@ function PulsingDot({ color = RED, size = 6 }: { color?: string; size?: number }
   const op = useSharedValue(1);
   useEffect(() => {
     op.value = withRepeat(withTiming(0.3, { duration: 1000, easing: Easing.inOut(Easing.ease) }), -1, true);
+    return () => cancelAnimation(op);
   }, []);
   const s = useAnimatedStyle(() => ({ opacity: op.value }));
   return <Animated.View style={[s, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]} />;
@@ -130,6 +132,9 @@ function FloatingParticle({ x, startY, size, color, dur, delay, drift }: typeof 
     return () => {
       clearTimeout(timer);
       if (interval) clearInterval(interval);
+      cancelAnimation(translateY);
+      cancelAnimation(translateX);
+      cancelAnimation(opacity);
     };
   }, [delay, dur, runCycle]);
 
@@ -162,6 +167,11 @@ function WelcomeStep({ onContinue }: { onContinue: () => void }) {
     glow2Op.value = withRepeat(withTiming(0.14, { duration: 6000, easing: Easing.inOut(Easing.ease) }), -1, true);
     // Grid breathes
     gridOp.value = withRepeat(withTiming(0.5, { duration: 4000, easing: Easing.inOut(Easing.ease) }), -1, true);
+    return () => {
+      cancelAnimation(glow1Op);
+      cancelAnimation(glow2Op);
+      cancelAnimation(gridOp);
+    };
   }, []);
 
   const glow1Style = useAnimatedStyle(() => ({ opacity: glow1Op.value }));
@@ -248,10 +258,10 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
     <View style={{ flex: 1 }}>
       <ProgressBar step={1} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
-        <Pressable onPress={onSkip} style={{ padding: 8 }}>
+        <Pressable onPress={onSkip} hitSlop={8} style={{ padding: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
         </Pressable>
       </View>
@@ -361,6 +371,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
   useEffect(() => {
     rotation.value = withTiming(360000, { duration: 360000 / 360 * 4500, easing: Easing.linear });
     glowPulse.value = withRepeat(withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }), -1, true);
+    return () => { cancelAnimation(glowPulse); };
   }, []);
   const rotatingStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value % 360}deg` }] }));
   const glowStyle = useAnimatedStyle(() => ({
@@ -372,10 +383,10 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
     <View style={{ flex: 1 }}>
       <ProgressBar step={2} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
-        <Pressable onPress={onSkip} style={{ padding: 8 }}>
+        <Pressable onPress={onSkip} hitSlop={8} style={{ padding: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
         </Pressable>
       </View>
@@ -545,10 +556,10 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
     <View style={{ flex: 1 }}>
       <ProgressBar step={3} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
-        <Pressable onPress={onSkip} style={{ padding: 8 }}>
+        <Pressable onPress={onSkip} hitSlop={8} style={{ padding: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
         </Pressable>
       </View>
@@ -871,7 +882,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
     <View style={{ flex: 1 }}>
       <ProgressBar step={4} />
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
       </View>
@@ -901,7 +912,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
                       {isUploading ? (
                         <ActivityIndicator color={TEAL} />
                       ) : profileImage ? (
-                        <Image source={{ uri: profileImage }} style={{ width: '100%', height: '100%' }} />
+                        <ExpoImage source={{ uri: profileImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
                       ) : (
                         <Text style={{ fontSize: 24, fontWeight: '800', color: WHITE }}>?</Text>
                       )}
@@ -992,7 +1003,7 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 16 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
       </View>
