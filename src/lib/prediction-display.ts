@@ -33,8 +33,12 @@ function formatConfidence(confidence: number): string {
 
 function isCanonicalTossUp(prediction: Prediction | null | undefined, finalPick: CanonicalFinalPick | null, confidence: number): boolean {
   if (finalPick === 'none') return true;
+  // Compare the ROUNDED displayed confidence (formatConfidence shows Math.round)
+  // so a card rendered at "53%" is never also flagged Toss-Up because the raw
+  // value was 52.9. Mirrors the backend isMarketAwareTossUp boundary exactly.
+  const displayedConfidence = Math.round(confidence);
   const canonical = getCanonicalResult(prediction);
-  if (!canonical) return Boolean(prediction?.isTossUp) || confidence < TOSS_UP_CONFIDENCE_THRESHOLD;
+  if (!canonical) return Boolean(prediction?.isTossUp) || displayedConfidence < TOSS_UP_CONFIDENCE_THRESHOLD;
 
   const entries = [
     { outcome: 'home' as const, probability: canonical.probabilities.home },
@@ -49,10 +53,10 @@ function isCanonicalTossUp(prediction: Prediction | null | undefined, finalPick:
 
   const lead = leader.probability - runnerUp.probability;
   if (canonical.marketType === 'three_way_result') {
-    return leader.probability < 0.37 || lead < 0.025;
+    return Math.round(leader.probability * 100) < 37 || lead < 0.025;
   }
 
-  return Boolean(prediction?.isTossUp) || confidence < TOSS_UP_CONFIDENCE_THRESHOLD || lead < 0.06;
+  return Boolean(prediction?.isTossUp) || displayedConfidence < TOSS_UP_CONFIDENCE_THRESHOLD || lead < 0.06;
 }
 
 export function isPredictionTossUpForDisplay(

@@ -299,3 +299,38 @@ even); high-scoring/discrete (NBA, NCAAB, NFL, NCAAF, IPL) stay whole (a +1 nudg
 is negligible); tennis stays sets. Total & spread always derived from the displayed home/away so the
 three numbers reconcile everywhere. Mobile mirrors the per-sport precision. Removes the earlier MLB
 margin-MAE distortion (+0.19). typecheck + 445 backend tests pass.
+
+### Projection↔confidence consistency + multi-agent pre-ship audit (2026-05-29)
+User caught a 59% NBA lean displaying a 111-110 (1-point) line — confidence and projected margin told
+two different stories. ROOT CAUSE: the displayed win probability is the orchestrator's calibrated value,
+but the projected score line came straight from the Monte Carlo mean margin; the reconcile step forced
+them to agree on the WINNER but never on the MAGNITUDE. FIX (display-layer, model/grading untouched):
+derive the displayed margin from the displayed confidence via the simulator's own Gaussian relation,
+margin = Φ⁻¹(p)·marginSd (added Acklam inverseNormalCdf + impliedMarginForProbability). Total stays from
+the sim; only the margin is sized to the confidence → monotonic in every league. NBA 59% now reads
+~112-109. accuracy/calibration unchanged (graded pick/probability not touched).
+
+Then ran a 5-dimension adversarial Workflow audit (34 agents) before ship. 8 findings confirmed (verifiers
+also REFUTED 2 overstatements — an NBA cross-game inversion that can't occur given totalMin=185, and a
+"visibly wrong card" that was actually a grading-loop issue). Fixed all:
+- H1: soccer sub-50% picks all clamped to p=0.5 → identical floor lines. Now use the head-to-head
+  CONDITIONAL prob p_pick/(p_pick+p_opp) for the margin (==win prob for 2-outcome sports); sub-50% picks
+  now scale with head-to-head strength.
+- H2/M3: whole-number quantizer parity made the spread share the total's parity → a 73% game could
+  outshow a 75% game. Now preserve the rounded margin EXACTLY and absorb parity into the total (±1 on a
+  100+/300+ total). Strictly monotonic; total clamped to sport bounds.
+- H3: IPL marginSd=36 printed 37-46 run blowouts at high confidence. Added displayMarginSd() capping the
+  DISPLAY SD to 18 for IPL — simulation/model untouched (no calibration risk, no IPL backtest needed).
+  85% now ~19 runs, 90% ~23.
+- M1: when self-learning flips the leader (predictedWinner=null), legacy predictedOutcome/confidence were
+  derived from the raw leader, mis-grading flipped picks into the self-learning loop. Now derived from
+  canonicalResult.finalPick; confidence is the PICK's probability, not an unconditional max().
+- M2: toss-up boundary (0.53) compared raw prob while the badge shows Math.round → "53% TOSS-UP".
+  Both backend (isMarketAwareTossUp) and frontend (prediction-display) now compare Math.round(conf).
+- L1: extreme-confidence low-scoring picks projected literal shutouts (NHL 4.0-0.0 at 99%). Reserved a
+  0.5 loser floor in maxMargin → 99% now ~3.5-0.5.
+- L2: mobile getProjectionDisplay computed scores from raw projectedHome/AwayScore; added a defensive
+  flip-guard so the score line can never lead the non-picked team on old/unreconciled stored data.
+Verification: 454 backend tests pass (+9 new incl. cross-game monotonicity, soccer sub-50% scaling, IPL
+realism, no-shutout), backend + mobile typecheck clean, live-reconciler sweep across all leagues sane.
+NOT yet deployed (awaiting user OK).

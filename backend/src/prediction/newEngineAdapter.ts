@@ -232,11 +232,15 @@ export function isMarketAwareTossUp(canonical: HonestPrediction["canonicalResult
   if (!leader || !runnerUp) return true;
 
   const lead = leader.probability - runnerUp.probability;
+  // Compare the ROUNDED displayed confidence, not the raw probability, so the
+  // badge and the toss-up flag never contradict (a card shown at "53%" is never
+  // also flagged toss-up because the raw value was 0.5299).
+  const displayedLeader = Math.round(leader.probability * 100);
   if (canonical.marketType === "three_way_result") {
-    return leader.probability < 0.37 || lead < 0.025;
+    return displayedLeader < 37 || lead < 0.025;
   }
 
-  return leader.probability < 0.53 || lead < 0.06;
+  return displayedLeader < 53 || lead < 0.06;
 }
 
 /**
@@ -278,13 +282,29 @@ export function translateNewEnginePrediction(
       newPred.predictedWinner.teamId === game.homeTeam.id ? "home" : "away";
     predictedOutcome = predictedWinner;
   } else {
-    predictedWinner = homeProbPct >= awayProbPct ? "home" : "away";
-    predictedOutcome = drawProbPct !== undefined ? "draw" : predictedWinner;
+    // predictedWinner is null when self-learning flipped/voided the raw leader.
+    // The canonical finalPick is authoritative — derive the legacy fields from it
+    // so the card, the grading loop, and the badge never disagree with the pick.
+    const finalPick = newPred.canonicalResult.finalPick;
+    if (finalPick === "home" || finalPick === "away") {
+      predictedWinner = finalPick;
+      predictedOutcome = finalPick;
+    } else {
+      predictedWinner = homeProbPct >= awayProbPct ? "home" : "away";
+      predictedOutcome = finalPick === "draw" ? "draw" : predictedWinner;
+    }
   }
 
-  // Confidence = raw outcome probability, no capping. Soccer draw reads must
-  // use the three-way max, not the larger of only home/away.
-  const confidence = Math.max(homeProbPct, awayProbPct, drawProbPct ?? 0);
+  // Confidence = the probability of the PICK itself, no capping. After a flip the
+  // raw leader and the pick can differ, so an unconditional max() would show a
+  // different team's probability than the one we picked. Soccer draw picks read
+  // the three-way draw probability (which is the pick's own probability).
+  const confidence =
+    predictedOutcome === "home"
+      ? homeProbPct
+      : predictedOutcome === "away"
+        ? awayProbPct
+        : drawProbPct ?? Math.max(homeProbPct, awayProbPct);
 
   const decisionProfile = newPred.canonicalResult.decisionProfile;
 

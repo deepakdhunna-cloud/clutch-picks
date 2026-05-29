@@ -263,8 +263,19 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
   // Total & spread are always derived from the displayed home/away so the three
   // numbers reconcile exactly.
   const lowScoring = isLowScoringSport(input.sport);
-  const homeNum = lowScoring ? roundTenth(input.projection.projectedHomeScore) : Math.round(input.projection.projectedHomeScore);
-  const awayNum = lowScoring ? roundTenth(input.projection.projectedAwayScore) : Math.round(input.projection.projectedAwayScore);
+  let homeNum = lowScoring ? roundTenth(input.projection.projectedHomeScore) : Math.round(input.projection.projectedHomeScore);
+  let awayNum = lowScoring ? roundTenth(input.projection.projectedAwayScore) : Math.round(input.projection.projectedAwayScore);
+  // Defensive: the authoritative pick (side) must lead the displayed line. The
+  // backend now reconciles this, but guard old/unreconciled stored predictions so
+  // the score line can never lead the team the badge did NOT pick.
+  if ((side === 'home' || side === 'away') && homeNum !== awayNum) {
+    const leaderIsHome = homeNum > awayNum;
+    if ((side === 'home') !== leaderIsHome) {
+      const swap = homeNum;
+      homeNum = awayNum;
+      awayNum = swap;
+    }
+  }
   const totalNum = lowScoring ? roundTenth(homeNum + awayNum) : homeNum + awayNum;
   const spreadNum = lowScoring ? roundTenth(homeNum - awayNum) : homeNum - awayNum;
   const fmtScore = (v: number) => (lowScoring ? formatDecimal(v) : formatInteger(v));

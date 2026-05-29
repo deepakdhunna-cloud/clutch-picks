@@ -29,6 +29,7 @@ import { getConfidenceBand } from "./types";
 import { ratingDeltaToHomeWinProb, applySoccerDrawAdjustment } from "./probability";
 import { isFullScaleRatingEnabled } from "./flags";
 import { simulateGameProjection } from "./simulation";
+import { getSportSimulationProfile } from "./simulators/profiles";
 import { computeBaseFactors } from "./factors/base";
 import { computeNFLFactors } from "./factors/nfl";
 import { computeNBAFactors } from "./factors/nba";
@@ -228,6 +229,106 @@ function projectionMinimumScore(sport: string): number {
   return 0;
 }
 
+/**
+ * Inverse of the standard normal CDF (probit): returns z such that Φ(z) = p.
+ * Acklam's rational approximation, accurate to ~1.15e-9 over (0,1). Pure math,
+ * no dependency. This is the inverse of the normalCdf the simulator samples
+ * against, so it lets us recover the margin a given win probability implies.
+ */
+function inverseNormalCdf(p: number): number {
+  // Coefficients for Acklam's rational approximation.
+  const a0 = -3.969683028665376e1, a1 = 2.209460984245205e2, a2 = -2.759285104469687e2,
+    a3 = 1.38357751867269e2, a4 = -3.066479806614716e1, a5 = 2.506628277459239e0;
+  const b0 = -5.447609879822406e1, b1 = 1.615858368580409e2, b2 = -1.556989798598866e2,
+    b3 = 6.680131188771972e1, b4 = -1.328068155288572e1;
+  const c0 = -7.784894002430293e-3, c1 = -3.223964580411365e-1, c2 = -2.400758277161838e0,
+    c3 = -2.549732539343734e0, c4 = 4.374664141464968e0, c5 = 2.938163982698783e0;
+  const d0 = 7.784695709041462e-3, d1 = 3.224671290700398e-1, d2 = 2.445134137142996e0,
+    d3 = 3.754408661907416e0;
+  const pLow = 0.02425;
+  const pHigh = 1 - pLow;
+  const x = clamp(p, 1e-9, 1 - 1e-9);
+  if (x < pLow) {
+    const q = Math.sqrt(-2 * Math.log(x));
+    return (
+      (((((c0 * q + c1) * q + c2) * q + c3) * q + c4) * q + c5) /
+      ((((d0 * q + d1) * q + d2) * q + d3) * q + 1)
+    );
+  }
+  if (x <= pHigh) {
+    const q = x - 0.5;
+    const r = q * q;
+    return (
+      ((((((a0 * r + a1) * r + a2) * r + a3) * r + a4) * r + a5) * q) /
+      (((((b0 * r + b1) * r + b2) * r + b3) * r + b4) * r + 1)
+    );
+  }
+  const q = Math.sqrt(-2 * Math.log(1 - x));
+  return -(
+    (((((c0 * q + c1) * q + c2) * q + c3) * q + c4) * q + c5) /
+    ((((d0 * q + d1) * q + d2) * q + d3) * q + 1)
+  );
+}
+
+/**
+ * The projected MARGIN a displayed win probability implies, so the public score
+ * line and the public confidence always tell the same story. Under the
+ * simulator's Gaussian margin model, P(favorite wins) = Φ(margin / sd), so the
+ * margin a probability `p` implies is Φ⁻¹(p) · sd. We anchor on the sport's
+ * calibrated BASELINE margin SD (the documented spread↔probability relationship)
+ * rather than a single game's realized volatility, which keeps the mapping
+ * stable, monotonic, and immune to a pathologically low per-game variance that
+ * would shrink a confident pick back toward a near-tie. Clamped to the sport's
+ * meaningful-margin floor and to a value the total can physically hold.
+ *
+ * Soccer (3-way) note: the home-vs-away GOAL margin is orthogonal to the draw,
+ * so we condition on the two SIDES only — p_pick / (p_pick + p_opponent) — which
+ * is >0.5 whenever the pick genuinely leads its opponent. Feeding the raw 3-way
+ * win probability (often <50% because the draw absorbs 20-30%) would collapse
+ * every sub-50% pick to the same floor line. For 2-outcome sports the opponent
+ * probability is 1-p_pick, so the conditional equals the win probability exactly.
+ */
+function displayMarginSd(sport: string, baselineMarginSd: number): number {
+  // IPL run-margin SD (36) is realistic for the SIMULATION but, mapped through
+  // the confidence→margin curve, prints implausible 30-46 run blowouts at high
+  // confidence. Cap the DISPLAY SD only — the simulation/model is untouched, so
+  // win probabilities and calibration do not change.
+  if (sport === "IPL") return Math.min(baselineMarginSd, 18);
+  return baselineMarginSd;
+}
+
+function impliedMarginForProbability(
+  sport: string,
+  finalProbabilities: { home: number; away: number; draw?: number },
+  finalPick: ProjectionOutcome,
+  total: number,
+): number {
+  const baseline = getSportSimulationProfile(sport).baseline;
+  const marginSd = displayMarginSd(sport, baseline.marginSd);
+  const threshold = meaningfulProjectionSpreadThreshold(sport);
+  const minScore = projectionMinimumScore(sport);
+  // Reserve a small loser floor on low-scoring sports (minScore is 0 there) so an
+  // extreme-confidence pick projects e.g. 3.5-0.5 rather than a literal 4.0-0.0
+  // shutout pinned to the total floor — the loser almost always scores something.
+  const loserFloor = LOW_SCORING_SPORTS.has(sport) ? Math.max(minScore, 0.5) : minScore;
+  const maxMargin = Math.max(threshold, total - loserFloor * 2);
+  // Head-to-head favorite probability (see soccer note above).
+  let pPick = 0.5;
+  let pOther = 0.5;
+  if (finalPick === "home") {
+    pPick = finalProbabilities.home;
+    pOther = finalProbabilities.away;
+  } else if (finalPick === "away") {
+    pPick = finalProbabilities.away;
+    pOther = finalProbabilities.home;
+  }
+  const denom = pPick + pOther;
+  const conditional = denom > 0 ? pPick / denom : 0.5;
+  const p = clamp(Number.isFinite(conditional) ? conditional : 0.5, 0.5, 0.999);
+  const z = inverseNormalCdf(p); // >= 0 for p >= 0.5
+  return roundTo(clamp(z * marginSd, threshold, maxMargin), 2);
+}
+
 function projectedScoreOutcome(
   sport: string,
   homeScore: number,
@@ -332,6 +433,7 @@ function reconciledScoreLineForPick(args: {
   total: number;
   finalPick: Exclude<ProjectionOutcome, "none">;
   selectedProbability?: number;
+  targetMargin?: number;
 }): { home: number; away: number; spread: number; total: number } {
   if (args.sport === "TENNIS" && (args.finalPick === "home" || args.finalPick === "away")) {
     return tennisGameLineForPick(args.finalPick, args.selectedProbability, args.total);
@@ -353,7 +455,10 @@ function reconciledScoreLineForPick(args: {
 
   const direction = args.finalPick === "home" ? 1 : -1;
   const threshold = meaningfulProjectionSpreadThreshold(args.sport);
-  let targetMagnitude = threshold;
+  // Start from the margin the win probability implies (so the line matches the
+  // confidence), never below the meaningful-margin floor. The loop below only
+  // nudges UP if rounding to one decimal would collapse the winner.
+  let targetMagnitude = Math.max(threshold, args.targetMargin ?? threshold);
   let fallback: { home: number; away: number; spread: number; total: number } | null = null;
 
   // Public score projections are displayed to one decimal. Small raw spreads
@@ -422,18 +527,25 @@ function quantizeProjectedScoreLine(
     const a = roundTo(away, 1);
     return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
   }
-  // High-scoring / discrete sports (NBA/NCAAB/NFL/NCAAF/IPL): whole numbers, with
-  // the favorite leading by >=1 (a +1 nudge on a 100+/300+ total is negligible).
-  // Derive home/away from the rounded TOTAL + margin so the total stays within
-  // the sport bound and home+away always equals total exactly.
-  const total = Math.round(home + away);
+  // High-scoring / discrete sports (NBA/NCAAB/NFL/NCAAF/IPL): whole numbers.
+  // The MARGIN carries the confidence, so we preserve the rounded margin EXACTLY
+  // and absorb any integer-parity mismatch into the TOTAL (a +/-1 shift on a
+  // 100+/300+ total is negligible). This keeps the displayed spread equal to the
+  // implied margin for every game — strictly monotonic in confidence, with no
+  // parity stairstep where one game's total silently bumps the margin by 1.
+  const baseTotal = Math.round(home + away);
   if (finalPick === "draw") {
-    const each = Math.round(total / 2);
+    const each = Math.round(baseTotal / 2);
     return { home: each, away: each, spread: 0, total: each * 2 };
   }
   let margin = Math.round(Math.abs(home - away));
   if ((finalPick === "home" || finalPick === "away") && margin < 1) margin = 1; // favorite must lead the line
-  const favorite = Math.round((total + margin) / 2);
+  // total and margin must share parity for integer team scores that sum exactly.
+  let total = (baseTotal - margin) % 2 === 0 ? baseTotal : baseTotal + 1;
+  const { totalMin, totalMax } = getSportSimulationProfile(sport).baseline;
+  if (total > totalMax) total -= 2; // -2 keeps parity while staying in bound
+  if (total < totalMin) total += 2;
+  const favorite = (total + margin) / 2;
   const underdog = total - favorite;
   const homeIsFavorite =
     finalPick === "home" || (finalPick !== "away" && home >= away);
@@ -512,12 +624,6 @@ export function reconcileProjectionToFinal(args: {
   if (args.sport === "TENNIS") {
     return tennisSetProjection(args.projection, finalPick, args.finalProbabilities, args.tennisWinSets ?? 2);
   }
-  const rawScorePick = projectedScoreOutcome(
-    args.sport,
-    args.projection.projectedHomeScore,
-    args.projection.projectedAwayScore,
-  );
-
   let projectedHomeScore = args.projection.projectedHomeScore;
   let projectedAwayScore = args.projection.projectedAwayScore;
   let projectedSpread = roundTo(projectedHomeScore - projectedAwayScore, 1);
@@ -526,22 +632,29 @@ export function reconcileProjectionToFinal(args: {
     Math.abs(projectedSpread - args.projection.projectedSpread) > 0.001 ||
     Math.abs(projectedTotal - args.projection.projectedTotal) > 0.001;
   const selectedProbability = probabilityForFinalPick(args.finalProbabilities, finalPick);
-  const hasInvalidTennisGameLine =
-    args.sport === "TENNIS" &&
-    (finalPick === "home" || finalPick === "away") &&
-    !isPlausibleTennisGameLine(projectedHomeScore, projectedAwayScore);
-  const hasWeakTennisGameMargin =
-    args.sport === "TENNIS" &&
-    (finalPick === "home" || finalPick === "away") &&
-    isPlausibleTennisGameLine(projectedHomeScore, projectedAwayScore) &&
-    Math.abs(projectedSpread) + 0.001 < tennisGameMarginForProbability(selectedProbability, projectedTotal);
 
-  if (finalPick !== "none" && (rawScorePick !== finalPick || hasInvalidTennisGameLine || hasWeakTennisGameMargin)) {
+  // Align the DISPLAYED projected margin to the DISPLAYED win probability so the
+  // score line and the confidence always tell the same story. The simulator's
+  // raw mean margin reflects its OWN win probability, but the public confidence
+  // is the orchestrator's calibrated probability — the two can disagree in
+  // magnitude, which is how a 59% lean used to show a 1-point near-tie. We keep
+  // the simulator's TOTAL and re-size only the margin to Φ⁻¹(p)·volatility, so
+  // higher confidence always shows a bigger margin (monotonic) and the winner of
+  // the line always matches the pick. The raw simulator line stays in
+  // engineBreakdown for transparency. Tennis returns above with a real set score.
+  if (finalPick !== "none") {
+    const targetMargin = impliedMarginForProbability(
+      args.sport,
+      args.finalProbabilities,
+      finalPick,
+      projectedTotal,
+    );
     const reconciledScores = reconciledScoreLineForPick({
       sport: args.sport,
       total: projectedTotal,
       finalPick,
       selectedProbability,
+      targetMargin,
     });
     projectedHomeScore = reconciledScores.home;
     projectedAwayScore = reconciledScores.away;
