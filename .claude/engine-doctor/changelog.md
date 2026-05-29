@@ -289,3 +289,13 @@ games/quantize path; mobile shows whole-number "Projected Sets". Validated on th
 POST-DEPLOY (live): tennis serving set scores — best-of-3 (2-0/2-1) and men's RG best-of-5 (3-1/3-2),
 winner always = pick; stale pre-deploy stored snapshots roll off as matches finish.
 Also: committed the engine-doctor audit trail + agent def + .vscode/extensions.json (clean tree).
+
+### Restore decimals for low-scoring sports (team scores now sum to the total)
+User reported team scores not adding up to the total. Cause: the whole-number quantizer forced the
+favorite +1, which on a low-scoring sport DISTORTS the total (1 run on an ~8-run game) so home+away no
+longer equalled the real projected total. Fix: LOW_SCORING_SPORTS (MLB, NHL, MLS, EPL, UCL) keep ONE
+decimal (the honest expected value — reconciles exactly, sub-unit lean stays visible, draw line forced
+even); high-scoring/discrete (NBA, NCAAB, NFL, NCAAF, IPL) stay whole (a +1 nudge on a 100+/300+ total
+is negligible); tennis stays sets. Total & spread always derived from the displayed home/away so the
+three numbers reconcile everywhere. Mobile mirrors the per-sport precision. Removes the earlier MLB
+margin-MAE distortion (+0.19). typecheck + 445 backend tests pass.

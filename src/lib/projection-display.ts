@@ -63,6 +63,14 @@ function isCricketSport(sport: string | undefined): boolean {
   return String(sport ?? '').toUpperCase() === 'IPL';
 }
 
+// Low-scoring sports keep ONE decimal (the real expected value): runs/goals are
+// small, so a whole number would distort the total or hide a sub-unit lean.
+// Must match LOW_SCORING_SPORTS in backend/src/prediction/index.ts.
+function isLowScoringSport(sport: string | undefined): boolean {
+  const s = String(sport ?? '').toUpperCase();
+  return s === 'MLB' || s === 'NHL' || s === 'MLS' || s === 'EPL' || s === 'UCL';
+}
+
 export function cleanProjectionCopy(text: string | null | undefined): string {
   if (!text) return 'Projected score and margin for the final pick';
   const cleaned = text
@@ -249,20 +257,24 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
   const confidence = Math.round((canonicalProbability ?? projectionConfidence ?? ((input.confidence ?? 0) / 100)) * 100);
   const confidenceText = confidence > 0 ? ` ${confidence}%` : '';
 
-  // Every sport now projects WHOLE numbers — points/runs/goals are integers, and
-  // tennis projects a SET score (e.g. 2-1). Derive total & spread from the rounded
-  // home/away so the three numbers always reconcile.
-  const homeNum = Math.round(input.projection.projectedHomeScore);
-  const awayNum = Math.round(input.projection.projectedAwayScore);
-  const totalNum = homeNum + awayNum;
-  const spreadNum = homeNum - awayNum;
+  // High-scoring sports (NBA/NFL/college), cricket runs, and tennis sets show
+  // WHOLE numbers; low-scoring sports (MLB/NHL/soccer) keep ONE decimal so the
+  // team scores sum to the true projected total and the sub-unit lean shows.
+  // Total & spread are always derived from the displayed home/away so the three
+  // numbers reconcile exactly.
+  const lowScoring = isLowScoringSport(input.sport);
+  const homeNum = lowScoring ? roundTenth(input.projection.projectedHomeScore) : Math.round(input.projection.projectedHomeScore);
+  const awayNum = lowScoring ? roundTenth(input.projection.projectedAwayScore) : Math.round(input.projection.projectedAwayScore);
+  const totalNum = lowScoring ? roundTenth(homeNum + awayNum) : homeNum + awayNum;
+  const spreadNum = lowScoring ? roundTenth(homeNum - awayNum) : homeNum - awayNum;
+  const fmtScore = (v: number) => (lowScoring ? formatDecimal(v) : formatInteger(v));
 
   return {
     label: tennis ? 'Projected Sets' : cricket ? 'Projected Runs' : 'Projected Score',
-    homeScore: formatInteger(homeNum),
-    awayScore: formatInteger(awayNum),
-    total: tennis ? `${formatInteger(totalNum)} sets` : cricket ? `${formatInteger(totalNum)} runs` : formatInteger(totalNum),
-    spread: formatInteger(spreadNum),
+    homeScore: fmtScore(homeNum),
+    awayScore: fmtScore(awayNum),
+    total: tennis ? `${formatInteger(totalNum)} sets` : cricket ? `${formatInteger(totalNum)} runs` : fmtScore(totalNum),
+    spread: fmtScore(spreadNum),
     spreadValue: spreadNum,
     leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
     contextText: tennis

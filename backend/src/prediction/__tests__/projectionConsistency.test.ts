@@ -34,15 +34,16 @@ describe("reconcileProjectionToFinal — projected score line consistency", () =
     expect(r.projectedHomeScore).toBeGreaterThan(r.projectedAwayScore); // home pick
   });
 
-  test("MLB: a sub-1 lean does NOT collapse to a tie — favorite leads by >=1 whole run", () => {
+  test("MLB: low-scoring sports keep a decimal so the lean shows AND the team scores sum to the real total (no whole-number distortion)", () => {
     const r = reconcileProjectionToFinal({
       sport: "MLB",
       projection: proj(4.3, 4.1),
       finalProbabilities: { home: 0.55, away: 0.45 },
     });
-    expect(isInt(r.projectedHomeScore) && isInt(r.projectedAwayScore)).toBe(true);
-    expect(r.projectedHomeScore).toBeGreaterThan(r.projectedAwayScore);
-    expect(r.projectedTotal).toBe(r.projectedHomeScore + r.projectedAwayScore);
+    expect(r.projectedHomeScore).toBeGreaterThan(r.projectedAwayScore); // home pick favored
+    expect(r.projectedTotal).toBeCloseTo(r.projectedHomeScore + r.projectedAwayScore, 5); // reconciles
+    expect(r.projectedSpread).toBeCloseTo(r.projectedHomeScore - r.projectedAwayScore, 5);
+    expect(r.projectedTotal).toBeGreaterThan(7.5); // real ~8.4 preserved, NOT forced down to a whole 7
   });
 
   test("away pick: the away team leads the whole-number line", () => {
@@ -56,15 +57,15 @@ describe("reconcileProjectionToFinal — projected score line consistency", () =
     expect(r.projectedSpread).toBeLessThan(0);
   });
 
-  test("soccer draw: equal whole-number score line", () => {
+  test("soccer draw: equal score line (decimal, low-scoring)", () => {
     const r = reconcileProjectionToFinal({
       sport: "EPL",
       projection: proj(1.4, 1.3),
       finalProbabilities: { home: 0.3, away: 0.3, draw: 0.4 },
     });
-    expect(isInt(r.projectedHomeScore) && isInt(r.projectedAwayScore)).toBe(true);
     expect(r.projectedHomeScore).toBe(r.projectedAwayScore);
     expect(r.projectedSpread).toBe(0);
+    expect(r.projectedTotal).toBeCloseTo(r.projectedHomeScore + r.projectedAwayScore, 5);
   });
 
   test("tennis: keeps one decimal (expected games), not forced to whole", () => {

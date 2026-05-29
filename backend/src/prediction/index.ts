@@ -66,6 +66,10 @@ const SPORT_FACTORS: Record<string, (ctx: GameContext) => FactorContribution[]> 
 };
 
 const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
+// Sports whose projected scores stay as ONE decimal (the real expected value):
+// runs/goals are small, so the projected margin is often sub-1 and rounding to a
+// whole number would either collapse the lean to a tie or distort the total.
+const LOW_SCORING_SPORTS = new Set(["MLB", "NHL", "MLS", "EPL", "UCL"]);
 
 type ConsensusOutcome = "home" | "away" | "draw";
 type ProjectionOutcome = ConsensusOutcome | "none";
@@ -404,9 +408,24 @@ function quantizeProjectedScoreLine(
     const a = roundTo(away, 1);
     return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
   }
-  // Derive home/away from the rounded TOTAL + margin so total stays within the
-  // sport bound (rounding each score independently could push the total 1 over)
-  // and home+away always equals total exactly.
+  // Low-scoring sports keep ONE decimal. Forcing a whole-number >=1 margin would
+  // badly distort the total here (one run on an ~8-run game), so the two team
+  // scores would no longer sum to the true projected total. Decimals are the
+  // honest expected values; they reconcile exactly and the sub-unit lean (already
+  // oriented toward the pick by the reconcile step above) stays visible.
+  if (LOW_SCORING_SPORTS.has(sport)) {
+    if (finalPick === "draw") {
+      const each = roundTo((home + away) / 2, 1);
+      return { home: each, away: each, spread: 0, total: roundTo(each * 2, 1) };
+    }
+    const h = roundTo(home, 1);
+    const a = roundTo(away, 1);
+    return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
+  }
+  // High-scoring / discrete sports (NBA/NCAAB/NFL/NCAAF/IPL): whole numbers, with
+  // the favorite leading by >=1 (a +1 nudge on a 100+/300+ total is negligible).
+  // Derive home/away from the rounded TOTAL + margin so the total stays within
+  // the sport bound and home+away always equals total exactly.
   const total = Math.round(home + away);
   if (finalPick === "draw") {
     const each = Math.round(total / 2);
