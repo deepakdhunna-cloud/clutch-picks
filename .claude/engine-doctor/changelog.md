@@ -279,3 +279,13 @@ POST-DEPLOY VERIFICATION (live prod): /health 200, engine 2.11.0; finalPick===pr
 directional picks (0 mismatches — consistency fix working); whole-number projections clean on the live
 path (8 fractional were stale pre-deploy stored snapshots, 0 live-path); qa:predictions:live sweep
 issueCount=0 (was 93 this morning — top-picks gate + tennis-warning + consistency all confirmed live).
+
+### Tennis set-score projection — SHIPPED + DEPLOYED (d4d802f; deploy b3782037)
+Replaced the synthetic "projected games" line (clamped 18.5-30.5, margin <=7.5, overstated blowouts,
+unvalidatable) with a real SET score. Winner takes the match set count — best-of-3 (2) or men's Grand
+Slam best-of-5 (3, detected via Grand-Slam venue + ATP tour); loser sets reflect closeness. Bypasses the
+games/quantize path; mobile shows whole-number "Projected Sets". Validated on the tennis-capable replay
+(ranked n=184: pick acc unchanged 64.7%, set-MAE ~0.65/side). Updated 5 tennis tests games->sets.
+POST-DEPLOY (live): tennis serving set scores — best-of-3 (2-0/2-1) and men's RG best-of-5 (3-1/3-2),
+winner always = pick; stale pre-deploy stored snapshots roll off as matches finish.
+Also: committed the engine-doctor audit trail + agent def + .vscode/extensions.json (clean tree).
