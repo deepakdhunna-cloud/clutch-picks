@@ -16,6 +16,7 @@ import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
+import { getDisplayProjection } from '@/lib/stored-pregame-display';
 import {
   getCanonicalConfidence,
   getCanonicalResult,
@@ -40,6 +41,9 @@ interface GameCardProps {
   game: GameWithPrediction;
   index?: number;
 }
+
+const GAME_CARD_JERSEY_SIZE = 60;
+const LIVE_CARD_JERSEY_SIZE = 46;
 
 // Compact Pulsing Live Badge component
 const PulsingLiveBadge = memo(function PulsingLiveBadge({ label = 'LIVE' }: { label?: string }) {
@@ -121,7 +125,7 @@ const TappableJersey = memo(function TappableJersey({
   side: _side,
   isLoser,
   isWinner,
-  size = 48,
+  size = GAME_CARD_JERSEY_SIZE,
 }: {
   team: { abbreviation: string; name: string; record: string };
   teamColors: { primary: string; secondary: string };
@@ -300,7 +304,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
       >
         {/* Red glow for live */}
         <View style={{
-          borderRadius: 22,
+          borderRadius: 24,
           shadowColor: '#DC2626',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.18,
@@ -308,48 +312,58 @@ const LiveGameLayout = memo(function LiveGameLayout({
           elevation: 6,
         }}>
         {/* Depth shadow */}
-        <View style={{
-          borderRadius: 22,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 16 },
-          shadowOpacity: 0.95,
-          shadowRadius: 32,
-          elevation: 30,
-        }}>
-        {/* Glass border — dark reflective with team colors */}
-        <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
+        <View style={styles.cardShadowContainer}>
+        {/* Raised glass border — thick reflective bevel with team colors */}
+        <View style={styles.raisedCardOuterBorder}>
           <LinearGradient
             colors={[
-              `${awayAccent}90`,
-              `${awayAccent}50`,
+              'rgba(255,255,255,0.40)',
+              `${awayAccent}B8`,
+              `${awayAccent}58`,
               '#0D1118',
-              '#080C12',
-              '#0D1118',
-              `${homeAccent}50`,
-              `${homeAccent}90`,
+              '#020409',
+              `${homeAccent}58`,
+              `${homeAccent}B8`,
+              'rgba(255,255,255,0.22)',
             ]}
-            locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
+            locations={[0, 0.08, 0.22, 0.43, 0.57, 0.78, 0.92, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22 }}
+            style={styles.raisedCardOuterFill}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255,255,255,0.34)', 'rgba(255,255,255,0.08)', 'transparent']}
+            locations={[0, 0.42, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.cardRaisedTopHighlight}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['transparent', 'rgba(0,0,0,0.28)', 'rgba(0,0,0,0.82)']}
+            locations={[0, 0.55, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.cardRaisedBottomShadow}
           />
           {/* Inner bevel — specular highlight top, deep shadow bottom */}
-          <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
+          <View style={styles.raisedCardInnerBevel}>
             <LinearGradient
               colors={[
-                `${awayAccent}60`,
-                'rgba(255,255,255,0.12)',
-                '#080C12',
-                'rgba(0,0,0,0.6)',
-                `${homeAccent}50`,
+                `${awayAccent}74`,
+                'rgba(255,255,255,0.18)',
+                '#0A1018',
+                'rgba(0,0,0,0.72)',
+                `${homeAccent}64`,
               ]}
               locations={[0, 0.2, 0.5, 0.8, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 19 }}
+              style={styles.raisedCardInnerFill}
             />
           {/* Card body */}
-          <View style={{ borderRadius: 18, overflow: 'hidden' }}>
+          <View style={styles.raisedCardBody}>
           {/* Dark base */}
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(4,5,10,0.85)' }} />
 
@@ -448,7 +462,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 teamName={game.awayTeam.name}
                 primaryColor={awayTeamColors.primary}
                 secondaryColor={awayTeamColors.secondary}
-                size={40}
+                size={LIVE_CARD_JERSEY_SIZE}
                 sport={sportEnumToJersey(game.sport)}
               />
               <View style={{ marginLeft: 10, flex: 1 }}>
@@ -501,7 +515,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                 teamName={game.homeTeam.name}
                 primaryColor={homeTeamColors.primary}
                 secondaryColor={homeTeamColors.secondary}
-                size={40}
+                size={LIVE_CARD_JERSEY_SIZE}
                 sport={sportEnumToJersey(game.sport)}
               />
               <View style={{ marginLeft: 10, flex: 1 }}>
@@ -768,28 +782,30 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const canonicalConfidence = getCanonicalConfidence(game.prediction);
   const predictionDisplay = useMemo(() => getGamePredictionDisplay(game), [game]);
   const hasPrediction = Boolean(game.prediction);
+  const displayProjection = useMemo(() => getDisplayProjection(game), [game]);
 
   useEffect(() => {
     traceCanonicalUiConsumption('GameCard', game);
   }, [game]);
 
   const projectionDisplay = useMemo(() => {
-    if (!game.prediction?.projection) return null;
+    const prediction = game.prediction;
+    if (!displayProjection || !prediction) return null;
     return getProjectionDisplay({
       sport: game.sport,
       homeAbbr: game.homeTeam.abbreviation,
       awayAbbr: game.awayTeam.abbreviation,
       canonicalResult,
-      predictedWinner: game.prediction.predictedWinner,
-      predictedOutcome: game.prediction.predictedOutcome,
+      predictedWinner: prediction.predictedWinner,
+      predictedOutcome: prediction.predictedOutcome,
       confidence: canonicalConfidence,
       isTossUp: predictionDisplay.isTossUp,
-      projection: game.prediction.projection,
+      projection: displayProjection,
     });
-  }, [game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction, canonicalResult, canonicalConfidence, predictionDisplay.isTossUp]);
+  }, [displayProjection, game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction, canonicalResult, canonicalConfidence, predictionDisplay.isTossUp]);
   const projectionRiskTier = useMemo(
-    () => game.prediction?.projection ? getProjectionRiskTier(game.prediction.projection.upsetRisk) : null,
-    [game.prediction?.projection]
+    () => displayProjection ? getProjectionRiskTier(displayProjection.upsetRisk) : null,
+    [displayProjection]
   );
 
   // Get pending team for modal
@@ -835,40 +851,57 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       >
       {/* Depth shadow */}
       <View style={styles.cardShadowContainer}>
-      {/* Glass border — dark reflective with team colors */}
-      <View style={{ borderRadius: 22, padding: 3, overflow: 'hidden' }}>
+      {/* Raised glass border — thick reflective bevel with team colors */}
+      <View style={styles.raisedCardOuterBorder}>
         <LinearGradient
           colors={[
-            `${awayAccent}90`,
-            `${awayAccent}50`,
+            'rgba(255,255,255,0.40)',
+            `${awayAccent}B8`,
+            `${awayAccent}58`,
             '#0D1118',
-            '#080C12',
-            '#0D1118',
-            `${homeAccent}50`,
-            `${homeAccent}90`,
+            '#020409',
+            `${homeAccent}58`,
+            `${homeAccent}B8`,
+            'rgba(255,255,255,0.22)',
           ]}
-          locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
+          locations={[0, 0.08, 0.22, 0.43, 0.57, 0.78, 0.92, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22 }}
+          style={styles.raisedCardOuterFill}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(255,255,255,0.34)', 'rgba(255,255,255,0.08)', 'transparent']}
+          locations={[0, 0.42, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardRaisedTopHighlight}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(0,0,0,0.28)', 'rgba(0,0,0,0.82)']}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardRaisedBottomShadow}
         />
         {/* Inner bevel — specular highlight on top edge, deep shadow on bottom */}
-        <View style={{ borderRadius: 19, padding: 1, overflow: 'hidden' }}>
+        <View style={styles.raisedCardInnerBevel}>
           <LinearGradient
             colors={[
-              `${awayAccent}60`,
-              'rgba(255,255,255,0.12)',
-              '#080C12',
-              'rgba(0,0,0,0.6)',
-              `${homeAccent}50`,
+              `${awayAccent}74`,
+              'rgba(255,255,255,0.18)',
+              '#0A1018',
+              'rgba(0,0,0,0.72)',
+              `${homeAccent}64`,
             ]}
             locations={[0, 0.2, 0.5, 0.8, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 19 }}
+            style={styles.raisedCardInnerFill}
           />
         {/* Card body */}
-        <View style={{ position: 'relative', borderRadius: 18, overflow: 'hidden' }}>
+        <View style={styles.raisedCardBody}>
           {/* Away team color - bottom left corner fading up */}
           <LinearGradient
             colors={[`${awayAccent}${colorOpacities.away.opacity}`, `${awayAccent}${colorOpacities.away.opacityLight}`, `${awayAccent}18`, 'transparent']}
@@ -1202,6 +1235,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                       size="small"
                       showBar={false}
                       isTossUp={predictionDisplay.isTossUp}
+                      marketType={predictionDisplay.marketType}
                     />
                   )}
 
@@ -1221,7 +1255,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     ) : null}
                   </View>
                 </View>
-                {game.prediction.projection ? (
+                {displayProjection ? (
                   <View
                     style={{
                       marginTop: 8,
@@ -1236,7 +1270,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                           {projectionDisplay?.label.toUpperCase() ?? 'EXPECTED SCORE'}
                         </Text>
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', marginTop: 2 }}>
-                          {game.homeTeam.abbreviation} {projectionDisplay?.homeScore ?? Math.round(game.prediction.projection.projectedHomeScore)} · {game.awayTeam.abbreviation} {projectionDisplay?.awayScore ?? Math.round(game.prediction.projection.projectedAwayScore)}
+                          {game.awayTeam.abbreviation} {projectionDisplay?.awayScore ?? Math.round(displayProjection.projectedAwayScore)} · {game.homeTeam.abbreviation} {projectionDisplay?.homeScore ?? Math.round(displayProjection.projectedHomeScore)}
                         </Text>
                         <Text style={{ color: 'rgba(255,255,255,0.52)', fontSize: 10, fontWeight: '700', marginTop: 2 }}>
                           {projectionDisplay?.leanText ?? predictionDisplay.leanLabel}
@@ -1454,16 +1488,67 @@ const styles = StyleSheet.create({
   },
   // GameCard main card — hyper glass raised border
   cardShadowContainer: {
-    borderRadius: 22,
+    borderRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.95,
-    shadowRadius: 32,
-    elevation: 30,
+    shadowOffset: { width: 0, height: 17 },
+    shadowOpacity: 0.94,
+    shadowRadius: 34,
+    elevation: 32,
+  },
+  raisedCardOuterBorder: {
+    borderRadius: 24,
+    padding: 4,
+    overflow: 'hidden',
+    backgroundColor: '#05080E',
+  },
+  raisedCardOuterFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 24,
+  },
+  cardRaisedTopHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 2,
+    right: 2,
+    height: 14,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+  },
+  cardRaisedBottomShadow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 22,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  raisedCardInnerBevel: {
+    borderRadius: 20,
+    padding: 1,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.76)',
+  },
+  raisedCardInnerFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+  },
+  raisedCardBody: {
+    position: 'relative',
+    borderRadius: 19,
+    overflow: 'hidden',
   },
   cardOverflowContainer: {
     overflow: 'hidden',
-    borderRadius: 18,
+    borderRadius: 19,
   },
   cardContentPadding: {
     padding: 12,

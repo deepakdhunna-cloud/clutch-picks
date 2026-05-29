@@ -1,9 +1,12 @@
 import type { GameWithPrediction, Prediction, PredictionFactor, Sport, Team } from '@/types/sports';
 import { getCanonicalFinalPick } from './canonical-result';
 import { cleanProjectionCopy } from './projection-display';
+import { buildStoredPregameNarrative, isStoredPregamePrediction } from './stored-pregame-display';
 
 const STALE_RAW_NARRATIVE =
-  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating case\b|\bworking against the pick\b|\bexpected-score projection adds context\b/i;
+  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating (?:case|setup)\b|\bworking against the pick\b|\bexpected-score projection adds context\b|\bstart here\b|\bcopy-paste pick\b|\bgets? the nod\b|\bgot (?:a |the )?(?:slight |solid |clear )?edge\b|don['’]t sleep|\brather grim\b|\blighting up\b/i;
+const LOCKED_PREGAME_FALLBACK =
+  /the pregame read (?:favored|flagged).+this pick is locked now that the event has started.+does not rewrite the recommendation/i;
 
 type NarrativeGame = Pick<GameWithPrediction, 'sport' | 'homeTeam' | 'awayTeam' | 'seasonContext'> & {
   prediction?: Prediction;
@@ -63,13 +66,13 @@ function rebuildStaleNarrative(game: NarrativeGame, prediction: Prediction): str
   const seasonLabel = game.seasonContext?.label;
 
   const sentences = [
-    `${seasonLabel ? `Given the ${seasonLabel}, ` : ''}${winnerSubject} have the better case against ${loserSubject}, but this is a real matchup read, not a copy-paste pick.`,
+    `${seasonLabel ? `Given the ${seasonLabel}, ` : ''}${winnerSubject} have the better case against ${loserSubject}, with the available matchup data pointing to a narrow but usable edge.`,
   ];
 
   if (diff !== null) {
-    sentences.push(`The model's main lean is the power-rating setup: with location baked in, ${winnerSubject} show about ${diff} rating points of edge.`);
+    sentences.push(`The strongest rating signal is venue-adjusted: ${winnerSubject} show about ${diff} rating points of separation.`);
   } else if (ratingFactor?.description) {
-    sentences.push(`The model's main lean comes from the power-rating setup, which points toward ${winner.name}.`);
+    sentences.push(`The strongest rating signal points toward ${winner.name}.`);
   }
 
   if (seasonLabel) {
@@ -89,6 +92,11 @@ export function displayPredictionAnalysis(game: NarrativeGame): string {
   const prediction = game.prediction;
   const analysis = prediction?.analysis ?? '';
   if (!analysis) return analysis;
+  if (prediction && isStoredPregamePrediction(prediction) && LOCKED_PREGAME_FALLBACK.test(analysis)) {
+    const storedNarrative = buildStoredPregameNarrative({ ...game, prediction } as GameWithPrediction);
+    if (storedNarrative) return cleanProjectionCopy(storedNarrative);
+  }
+
   if (!STALE_RAW_NARRATIVE.test(analysis)) {
     return cleanProjectionCopy(analysis);
   }

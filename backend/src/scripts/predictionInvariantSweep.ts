@@ -95,7 +95,7 @@ function projectedTotalBounds(sportKey: string): { min: number; max: number } {
     EPL: { min: 1.4, max: 4.5 },
     UCL: { min: 1.5, max: 4.8 },
     IPL: { min: 245, max: 430 },
-    TENNIS: { min: 2.0, max: 3.0 },
+    TENNIS: { min: 16.0, max: 38.0 },
   };
   return bounds[sportKey] ?? { min: 0, max: Number.POSITIVE_INFINITY };
 }

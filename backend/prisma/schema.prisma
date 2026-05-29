@@ -189,6 +189,9 @@ model PredictionResult {
   awayWinProb      Float?    // 0..1 — point-in-time away probability
   drawProb         Float?    // 0..1 — point-in-time draw probability for three-way sports
   modelVersion     String?   // engine/version that produced this row
+  analysisSnapshot String?   // point-in-time user-facing narrative captured before start
+  projectionJson   String?   // JSON.stringify of the pregame projection payload
+  canonicalResultJson String? // JSON.stringify of the canonical result shown pregame
   selectedOutcomeProb Float? // 0..1 — probability assigned to the predicted outcome
   brierScore       Float?    // per-row selected-outcome Brier contribution
   logLoss          Float?    // per-row selected-outcome log-loss contribution

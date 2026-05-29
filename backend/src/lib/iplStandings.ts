@@ -10,6 +10,8 @@ export interface IPLStandingEntry {
   noResult: number;
   matchPoints: number | null;
   netRunRate: number | null;
+  runRateFor: number | null;
+  runRateAgainst: number | null;
   record: string | null;
 }
 
@@ -78,6 +80,8 @@ export function parseIPLStandingEntry(entry: ESPNStandingEntry): IPLStandingEntr
     noResult,
     matchPoints: statValue(entry, ["matchPoints", "matchpoints", "points"]),
     netRunRate: statValue(entry, ["netrr", "netRunRate", "netrunrate", "nrr"]),
+    runRateFor: statValue(entry, ["for"]),
+    runRateAgainst: statValue(entry, ["against"]),
     record,
   };
 }

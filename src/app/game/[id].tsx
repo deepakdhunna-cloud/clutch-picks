@@ -49,6 +49,12 @@ import {
   getCanonicalWinProbabilities,
 } from '@/lib/canonical-result';
 import {
+  formatAnalysisLinkSubtitle,
+  getDisplayProjection,
+  getValueSignalDisplay,
+  isStoredPregamePrediction,
+} from '@/lib/stored-pregame-display';
+import {
   cricketBattingSide,
   cricketInningsContext,
   cricketInningsRuns,
@@ -63,6 +69,7 @@ import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeTe
 import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceAppUrl, getWatchSourceUrl } from '@/lib/watch-url';
 import { readFollowedGameIds, toggleFollowedGame } from '@/lib/followed-games';
+import { firstRouteParam } from '@/lib/route-params';
 import { ExternalLink, Globe, Smartphone, Tv } from 'lucide-react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -1058,7 +1065,7 @@ function ConfidenceBarSegment({ filled }: { filled: boolean }) {
   );
 }
 
-function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, seasonContext, isLocked }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport']; gameId: string; seasonContext?: Game['seasonContext']; isLocked?: boolean }) {
+function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, seasonContext }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Game['sport']; gameId: string; seasonContext?: Game['seasonContext'] }) {
   const router = useRouter();
   const predictionDisplay = getPredictionDisplay({
     prediction: prediction as Prediction,
@@ -1079,10 +1086,9 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
   const winProbabilities = getCanonicalWinProbabilities(prediction as Prediction);
 
   // Tier mapping (canonical — single source of truth in display-confidence.ts)
-  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp);
+  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp, predictionDisplay.marketType);
 
-  const valueLabel = prediction.valueRating >= 7 ? 'High Value' : prediction.valueRating >= 4 ? 'Fair Value' : 'Low Value';
-  const valueColor = prediction.valueRating >= 7 ? '#7A9DB8' : prediction.valueRating >= 4 ? '#6B7C94' : 'rgba(255,255,255,0.3)';
+  const valueSignal = getValueSignalDisplay(prediction as Prediction);
 
   const rotation = useSharedValue(0);
   const glowPulse = useSharedValue(0);
@@ -1197,11 +1203,6 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                 {winnerName}
               </Text>
             </View>
-            {isLocked ? (
-              <View style={{ borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.24)' }}>
-                <Text style={{ color: '#9AB8CC', fontSize: 8, fontWeight: '900', letterSpacing: 0.9 }}>PREGAME LOCK</Text>
-              </View>
-            ) : null}
           </View>
 
           {/* Pick Strength */}
@@ -1220,6 +1221,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                   awayProb: String(winProbabilities.away),
                   ...(winProbabilities.draw !== undefined ? { drawProb: String(winProbabilities.draw) } : {}),
                   isTossUp: predictionDisplay.isTossUp ? '1' : '0',
+                  marketType: predictionDisplay.marketType ?? 'moneyline',
                 },
               });
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1259,10 +1261,10 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
             <Text style={{ fontSize: 8, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6 }}>
               VALUE SIGNAL
             </Text>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: valueColor }}>
-              {valueLabel}
+            <Text style={{ fontSize: 18, fontWeight: '800', color: valueSignal.color }}>
+              {valueSignal.label}
             </Text>
-            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>Model edge signal</Text>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>{valueSignal.detail}</Text>
           </View>
         </View>
       </View>
@@ -1276,11 +1278,13 @@ function ProjectionTrackerRow({
   tone,
   expected,
   actual,
+  expectedText,
 }: {
   label: string;
   tone: string;
   expected: number;
   actual?: number;
+  expectedText?: string;
 }) {
   const hasActual = typeof actual === 'number';
   const currentValue = actual ?? 0;
@@ -1307,7 +1311,7 @@ function ProjectionTrackerRow({
           ) : null}
         </View>
         <View style={styles.projectionTrackerTarget}>
-          <Text style={styles.projectionTrackerTargetValue} numberOfLines={1}>{expected.toFixed(1)}</Text>
+          <Text style={styles.projectionTrackerTargetValue} numberOfLines={1}>{expectedText ?? expected.toFixed(1)}</Text>
         </View>
       </View>
     </View>
@@ -1317,7 +1321,7 @@ function ProjectionTrackerRow({
 function ProjectionEngineBlock({ game }: { game: Game }) {
   const { prediction, homeTeam, awayTeam, sport } = game;
   if (!prediction) return null;
-  const projection = prediction.projection;
+  const projection = getDisplayProjection(game as any);
   if (!projection) return null;
 
   const homeColors = getTeamColors(homeTeam.abbreviation, sport as Sport, homeTeam.color);
@@ -1339,12 +1343,13 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
     isTossUp: getPredictionDisplay({ prediction: prediction as Prediction, homeTeam, awayTeam }).isTossUp,
     projection,
   });
+  const isTennisProjection = String(sport).toUpperCase() === 'TENNIS';
 
   return (
     <View style={styles.projectionSectionShell}>
       <View style={styles.projectionSectionCard}>
         <View style={styles.projectionHeaderRow}>
-          <Text style={styles.projectionEyebrow}>{isLive ? 'Live Projection' : 'Projection Board'}</Text>
+          <Text style={styles.projectionEyebrow}>{isStoredPregamePrediction(prediction as Prediction) ? 'Pregame Projection' : isLive ? 'Live Projection' : 'Projection Board'}</Text>
         </View>
 
         <View style={styles.projectionTrackerStack}>
@@ -1352,18 +1357,21 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
             label={homeTeam.abbreviation}
             tone={homeColors.accent}
             expected={projection.projectedHomeScore}
+            expectedText={isTennisProjection ? projectionDisplay.homeScore : undefined}
             actual={hasActualTotals ? liveHome : undefined}
           />
           <ProjectionTrackerRow
             label={awayTeam.abbreviation}
             tone={awayColors.accent}
             expected={projection.projectedAwayScore}
+            expectedText={isTennisProjection ? projectionDisplay.awayScore : undefined}
             actual={hasActualTotals ? liveAway : undefined}
           />
           <ProjectionTrackerRow
             label="Total"
             tone="#DAEEFB"
             expected={projection.projectedTotal}
+            expectedText={isTennisProjection ? String(Math.round(projection.projectedTotal)) : undefined}
             actual={hasActualTotals ? liveTotal : undefined}
           />
         </View>
@@ -1386,6 +1394,9 @@ function RecentForm({ game }: { game: Game }) {
 
   const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
+  const emptyFormText = isStoredPregamePrediction(prediction as Prediction)
+    ? 'Pregame form detail is not available for this locked snapshot.'
+    : 'Recent results are not available yet.';
 
   return (
     <View>
@@ -1445,7 +1456,7 @@ function RecentForm({ game }: { game: Game }) {
                 ))}
               </ScrollView>
               ) : (
-                <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '600' }}>Recent results are warming up for this team.</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '600' }}>{emptyFormText}</Text>
               )}
             </View>
           );
@@ -1624,7 +1635,8 @@ function GameDetailLoading() {
 }
 
 function GameDetailContent() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const gameId = firstRouteParam(id);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
@@ -1632,30 +1644,30 @@ function GameDetailContent() {
 
   // Load follow state from AsyncStorage on mount
   useEffect(() => {
-    if (!id) return;
+    if (!gameId) return;
     (async () => {
       try {
         const list = await readFollowedGameIds();
-        setFollowed(list.includes(id));
+        setFollowed(list.includes(gameId));
       } catch {}
     })();
-  }, [id]);
+  }, [gameId]);
 
   // Toggle follow with persistence
   const toggleFollow = useCallback(async () => {
-    if (!id) return;
+    if (!gameId) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const updated = await toggleFollowedGame(id);
-      setFollowed(updated.includes(id));
+      const updated = await toggleFollowedGame(gameId);
+      setFollowed(updated.includes(gameId));
     } catch {}
-  }, [id]);
+  }, [gameId]);
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
   const [pendingPickAction, setPendingPickAction] = useState<'pick' | 'remove'>('pick');
-  const { data: userPick } = useGamePick(id ?? '');
+  const { data: userPick } = useGamePick(gameId);
   const makePick = useMakePick();
   const removePick = useRemovePick();
-  const { data: game, dataUpdatedAt, isLoading, error, refetch } = useGame(id ?? '') as { data: Game | null | undefined; dataUpdatedAt: number; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
+  const { data: game, isLoading, error, refetch } = useGame(gameId) as { data: Game | null | undefined; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
   const { refreshing, onRefresh } = useSmoothRefresh(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     return refetch();
@@ -1668,19 +1680,11 @@ function GameDetailContent() {
     setPendingPick(side);
   }, [userPick?.pickedTeam]);
 
-  useEffect(() => {
-    if (!id || !hasGameData) return;
-    if (Date.now() - dataUpdatedAt < 8000) return;
-    const timeout = setTimeout(() => {
-      void refetch();
-    }, 120);
-    return () => clearTimeout(timeout);
-  }, [dataUpdatedAt, hasGameData, id, refetch]);
   // Tick the pre-game countdown clock — called unconditionally to respect
   // the rules of hooks. Returns +Infinity until we have a valid gameTime
   // and 0 once tip-off has passed.
   const secondsUntilStart = useSecondsUntil(game?.gameTime ?? '');
-  if (isLoading) return <GameDetailLoading />;
+  if (!gameId || (isLoading && !game)) return <GameDetailLoading />;
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
@@ -1688,7 +1692,7 @@ function GameDetailContent() {
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
-  const predictionFactors = prediction?.factors ?? [];
+  const predictionContextSubtitle = formatAnalysisLinkSubtitle(prediction as Prediction | undefined);
   const isLive = game.status === 'LIVE';
   const suspended = isSuspendedGame(game);
   const suspensionStatus = suspendedLabel(game);
@@ -1942,10 +1946,10 @@ function GameDetailContent() {
           </View>
           {prediction && isPremium ? (
             <>
-              {prediction.projection ? (
+              {getDisplayProjection(game as any) ? (
                 <View style={{ marginBottom: 28 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Projection Center</Text><ProjectionEngineBlock game={game} /></View>
               ) : null}
-              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} isLocked={game.status === 'LIVE' || game.status === 'FINAL'} /></View>
+              <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
               <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
@@ -1953,7 +1957,7 @@ function GameDetailContent() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.analysisLinkTitle}>Why We Made This Pick</Text>
-                  <Text style={styles.analysisLinkSub}>{predictionFactors.length} factors · {predictionFactors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
+                  <Text style={styles.analysisLinkSub}>{predictionContextSubtitle}</Text>
                 </View>
                 <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', fontWeight: '600' }}>›</Text>
               </Pressable>
@@ -1979,7 +1983,7 @@ function GameDetailContent() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.analysisLinkTitle}>Why We Made This Pick</Text>
-                  <Text style={styles.analysisLinkSub}>{predictionFactors.length} factors · {predictionFactors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
+                  <Text style={styles.analysisLinkSub}>{predictionContextSubtitle}</Text>
                 </View>
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
                   <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
@@ -2002,13 +2006,13 @@ function GameDetailContent() {
         action={pendingPickAction}
         isChanging={pendingPickAction === 'pick' && !!userPick && userPick.pickedTeam !== pendingPick}
         onConfirm={async () => {
-          if (pendingPick && id) {
+          if (pendingPick && gameId) {
             try {
               if (pendingPickAction === 'remove') {
-                await removePick.mutateAsync({ gameId: id });
+                await removePick.mutateAsync({ gameId });
               } else {
                 await makePick.mutateAsync({
-                  gameId: id,
+                  gameId,
                   pickedTeam: pendingPick,
                   homeTeam: game.homeTeam.abbreviation,
                   awayTeam: game.awayTeam.abbreviation,
@@ -2032,10 +2036,12 @@ function GameDetailContent() {
 }
 
 export default function GameDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const gameId = firstRouteParam(id);
   const router = useRouter();
+  if (!gameId) return <GameDetailLoading />;
   return (
-    <ErrorBoundary key={id ?? 'game-detail'} onGoBack={() => router.back()}>
+    <ErrorBoundary key={gameId} onGoBack={() => router.back()}>
       <GameDetailContent />
     </ErrorBoundary>
   );

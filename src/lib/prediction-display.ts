@@ -1,5 +1,5 @@
 import type { CanonicalFinalPick, GameWithPrediction, Prediction, Team } from '@/types/sports';
-import { getCanonicalConfidence, getCanonicalFinalPick } from './canonical-result';
+import { getCanonicalConfidence, getCanonicalFinalPick, getCanonicalResult } from './canonical-result';
 
 export type PredictionDisplayOutcome = 'home' | 'away' | 'draw' | 'toss_up' | 'none';
 export type PredictionDisplayTeam = Pick<Team, 'name' | 'abbreviation'>;
@@ -13,6 +13,7 @@ type PredictionDisplayInput = {
 export type PredictionDisplay = {
   outcome: PredictionDisplayOutcome;
   finalPick: CanonicalFinalPick | null;
+  marketType: 'moneyline' | 'three_way_result' | null;
   team: PredictionDisplayTeam | null;
   teamSide: 'home' | 'away' | null;
   confidence: number;
@@ -30,12 +31,36 @@ function formatConfidence(confidence: number): string {
   return ` ${Math.round(confidence)}%`;
 }
 
+function isCanonicalTossUp(prediction: Prediction | null | undefined, finalPick: CanonicalFinalPick | null, confidence: number): boolean {
+  if (finalPick === 'none') return true;
+  const canonical = getCanonicalResult(prediction);
+  if (!canonical) return Boolean(prediction?.isTossUp) || confidence < TOSS_UP_CONFIDENCE_THRESHOLD;
+
+  const entries = [
+    { outcome: 'home' as const, probability: canonical.probabilities.home },
+    { outcome: 'away' as const, probability: canonical.probabilities.away },
+    ...(canonical.probabilities.draw !== undefined
+      ? [{ outcome: 'draw' as const, probability: canonical.probabilities.draw }]
+      : []),
+  ].sort((a, b) => b.probability - a.probability);
+  const leader = entries[0];
+  const runnerUp = entries[1];
+  if (!leader || !runnerUp) return true;
+
+  const lead = leader.probability - runnerUp.probability;
+  if (canonical.marketType === 'three_way_result') {
+    return leader.probability < 0.37 || lead < 0.025;
+  }
+
+  return Boolean(prediction?.isTossUp) || confidence < TOSS_UP_CONFIDENCE_THRESHOLD || lead < 0.06;
+}
+
 export function isPredictionTossUpForDisplay(
   prediction: Prediction | null | undefined,
   confidence: number,
   finalPick: CanonicalFinalPick | null,
 ): boolean {
-  return finalPick === 'none' || Boolean(prediction?.isTossUp) || confidence < TOSS_UP_CONFIDENCE_THRESHOLD;
+  return isCanonicalTossUp(prediction, finalPick, confidence);
 }
 
 export function getPredictionDisplay(input: PredictionDisplayInput): PredictionDisplay {
@@ -47,6 +72,7 @@ export function getPredictionDisplay(input: PredictionDisplayInput): PredictionD
     return {
       outcome: 'none',
       finalPick,
+      marketType: null,
       team: null,
       teamSide: null,
       confidence,
@@ -63,10 +89,11 @@ export function getPredictionDisplay(input: PredictionDisplayInput): PredictionD
     return {
       outcome: 'draw',
       finalPick: 'draw',
+      marketType: getCanonicalResult(prediction)?.marketType ?? 'three_way_result',
       team: null,
       teamSide: null,
       confidence,
-      isTossUp: false,
+      isTossUp: isPredictionTossUpForDisplay(prediction, confidence, 'draw'),
       label: 'Draw',
       shortLabel: 'Draw',
       badgeLabel: 'DRAW',
@@ -80,6 +107,7 @@ export function getPredictionDisplay(input: PredictionDisplayInput): PredictionD
     return {
       outcome: 'toss_up',
       finalPick,
+      marketType: getCanonicalResult(prediction)?.marketType ?? null,
       team: null,
       teamSide: null,
       confidence,
@@ -103,6 +131,7 @@ export function getPredictionDisplay(input: PredictionDisplayInput): PredictionD
   return {
     outcome: teamSide,
     finalPick,
+    marketType: getCanonicalResult(prediction)?.marketType ?? null,
     team,
     teamSide,
     confidence,

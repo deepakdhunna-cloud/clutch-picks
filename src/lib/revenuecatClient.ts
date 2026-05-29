@@ -26,25 +26,22 @@ import Purchases, {
   type PurchasesPackage,
   type CustomerInfoUpdateListener,
 } from "react-native-purchases";
+import { selectRevenueCatApiKey } from "./revenuecat-key-selection";
 
 // Check if running on web
 const isWeb = Platform.OS === "web";
 
 const devFallbackAppleKey = "appl_ttiiqmHPmKTuvfALCxMccyWRjcE";
-const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY ?? devFallbackAppleKey;
+const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY;
 const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
 const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY;
 
-// Use __DEV__ and Platform to determine which key to use
-const getApiKey = (): string | undefined => {
-  if (isWeb) return undefined;
-  if (__DEV__) return testKey;
-
-  // Production: use platform-specific key
-  return Platform.OS === "ios" ? appleKey : googleKey;
-};
-
-const apiKey = getApiKey();
+const apiKey = selectRevenueCatApiKey({
+  platform: Platform.OS,
+  appleKey: appleKey ?? devFallbackAppleKey,
+  googleKey,
+  testKey,
+});
 
 // Track if RevenueCat is enabled
 const isEnabled = !!apiKey && !isWeb;

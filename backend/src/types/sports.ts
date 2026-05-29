@@ -52,6 +52,8 @@ export interface Team {
   standingsRank?: number;
   standingsPoints?: number;
   netRunRate?: number;
+  runRateFor?: number;
+  runRateAgainst?: number;
   matchesPlayed?: number;
 }
 

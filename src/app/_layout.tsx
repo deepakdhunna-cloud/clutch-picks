@@ -62,82 +62,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Prefetch games immediately on app load — don't wait for auth or splash.
-// This runs at module level so it fires before any component renders.
-// Must mirror the per-date fetch in useGames.ts (the /api/games aggregator
-// drops today's non-LIVE games + EPL; date endpoints return the full slate).
-const GAMES_CACHE_KEY = 'rq_cache_games_v1';
-const GAMES_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
-const GAMES_CACHE_WRITE_DEBOUNCE_MS = 8000;
-let pendingGamesCacheData: unknown[] | null = null;
-let gamesCacheWriteTimer: ReturnType<typeof setTimeout> | null = null;
-
-function isPersistableGamesArray(data: unknown): data is unknown[] {
-  return Array.isArray(data) && data.every((item) => {
-    if (!item || typeof item !== 'object') return false;
-    const game = item as {
-      id?: unknown;
-      gameTime?: unknown;
-      homeTeam?: unknown;
-      awayTeam?: unknown;
-    };
-    return (
-      typeof game.id === 'string' &&
-      typeof game.gameTime === 'string' &&
-      !!game.homeTeam &&
-      typeof game.homeTeam === 'object' &&
-      !!game.awayTeam &&
-      typeof game.awayTeam === 'object'
-    );
-  });
-}
-
-function scheduleGamesCacheWrite(data: unknown[]) {
-  pendingGamesCacheData = data;
-  if (gamesCacheWriteTimer) return;
-
-  gamesCacheWriteTimer = setTimeout(() => {
-    const snapshot = pendingGamesCacheData;
-    pendingGamesCacheData = null;
-    gamesCacheWriteTimer = null;
-    if (!snapshot || snapshot.length === 0) return;
-    AsyncStorage.setItem(
-      GAMES_CACHE_KEY,
-      JSON.stringify({ data: snapshot, timestamp: Date.now() })
-    ).catch(() => {});
-  }, GAMES_CACHE_WRITE_DEBOUNCE_MS);
-}
-
-// Hydrate games cache from disk synchronously-ish so cold opens show last-known
-// games instantly while the network fetch runs in the background.
-AsyncStorage.getItem(GAMES_CACHE_KEY)
-  .then((raw) => {
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as { data: unknown; timestamp: number };
-      if (!isPersistableGamesArray(parsed.data) || parsed.data.length === 0) return;
-      if (Date.now() - parsed.timestamp > GAMES_CACHE_MAX_AGE_MS) return;
-      // Only seed if a network fetch hasn't already populated the cache
-      if (!queryClient.getQueryData(['games'])) {
-        queryClient.setQueryData(['games'], parsed.data);
-      }
-    } catch {
-      // Ignore corrupt cache
-    }
-  })
-  .catch(() => {});
-
-// Persist games cache to disk whenever it updates
-queryClient.getQueryCache().subscribe((event) => {
-  if (event.type !== 'updated') return;
-  if (event.action.type !== 'success' || event.action.manual) return;
-  const key = event.query.queryKey;
-  if (!Array.isArray(key) || key.length !== 1 || key[0] !== 'games') return;
-  const data = event.query.state.data;
-  if (!isPersistableGamesArray(data) || data.length === 0) return;
-  scheduleGamesCacheWrite(data);
-});
-
 function RootLayoutNav({
   colorScheme,
   fontsReady,
@@ -273,8 +197,8 @@ function RootLayoutNav({
           <Stack.Screen name="sign-in" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="sign-up" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="verify-otp" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="(tabs)" options={{ freezeOnBlur: true, gestureEnabled: false, fullScreenGestureEnabled: false }} />
-          <Stack.Screen name="game/[id]" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="(tabs)" options={{ freezeOnBlur: false, gestureEnabled: false, fullScreenGestureEnabled: false }} />
+          <Stack.Screen name="game/[id]" options={{ freezeOnBlur: false }} />
           <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="user/[id]" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="followers/[userId]" options={{ freezeOnBlur: true }} />

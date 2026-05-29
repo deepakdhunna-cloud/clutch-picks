@@ -17,9 +17,22 @@ type ConfidenceParams = {
   awayProb?: string;
   drawProb?: string;
   isTossUp?: string;
+  marketType?: string;
 };
 
-const TIERS = CONFIDENCE_TIER_DEFINITIONS;
+const THREE_WAY_TIER_DEFINITIONS = CONFIDENCE_TIER_DEFINITIONS.map((tier) => {
+  const threeWayRanges: Record<string, string> = {
+    'Toss-Up': '< 37%',
+    'Lean Pick': '37-42%',
+    'Solid Pick': '43-49%',
+    'Strong Pick': '50-57%',
+    Lock: '58%+',
+  };
+  return {
+    ...tier,
+    range: threeWayRanges[tier.label] ?? tier.range,
+  };
+});
 
 const FACTORS = [
   { num: '1', title: 'Team Strength', detail: 'Elo power ratings, season win rate, and strength of schedule.' },
@@ -89,6 +102,8 @@ export default function ConfidenceExplainedScreen() {
   const homeAbbr = Array.isArray(params.homeAbbr) ? params.homeAbbr[0] : params.homeAbbr;
   const awayAbbr = Array.isArray(params.awayAbbr) ? params.awayAbbr[0] : params.awayAbbr;
   const isTossUp = parseBoolParam(params.isTossUp);
+  const marketTypeRaw = Array.isArray(params.marketType) ? params.marketType[0] : params.marketType;
+  const marketType = marketTypeRaw === 'three_way_result' ? 'three_way_result' : 'moneyline';
 
   if (confidence === null || homeProb === null || awayProb === null || !homeAbbr || !awayAbbr) {
     return (
@@ -100,8 +115,9 @@ export default function ConfidenceExplainedScreen() {
     );
   }
 
-  const tier = getConfidenceTier(confidence, isTossUp);
-  const currentTierIdx = TIERS.findIndex((item) => item.label === tier.label);
+  const tier = getConfidenceTier(confidence, isTossUp, marketType);
+  const tierDefinitions = marketType === 'three_way_result' ? THREE_WAY_TIER_DEFINITIONS : CONFIDENCE_TIER_DEFINITIONS;
+  const currentTierIdx = tierDefinitions.findIndex((item) => item.label === tier.label);
   const dp = displayWinProbability(homeProb, awayProb, drawProb ?? undefined);
   const hasDraw = typeof dp.draw === 'number';
   const drawColor = '#C9BDA8';
@@ -168,7 +184,7 @@ export default function ConfidenceExplainedScreen() {
           {/* Tier legend */}
           <View style={{ marginBottom: 24 }}>
             <Text style={{ fontSize: 10, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 1.5, marginBottom: 12 }}>TIER LEGEND</Text>
-            {TIERS.map((t, i) => {
+            {tierDefinitions.map((t, i) => {
               const isActive = i === currentTierIdx;
               return (
                 <View key={i} style={{

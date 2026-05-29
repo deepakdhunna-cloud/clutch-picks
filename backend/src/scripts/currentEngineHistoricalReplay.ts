@@ -628,9 +628,10 @@ async function main(): Promise<void> {
     rows,
     warnings,
     dataQualityNote:
-      "Approximate replay: final scores are real ESPN historical results and Elo is rolled forward chronologically, " +
-      "but rebuilt context such as injuries, form, standings, weather, and provider enrichment may reflect current availability " +
-      "instead of the exact pregame snapshot. Exact accuracy requires saved point-in-time GameContext fixtures.",
+      "Approximate replay: final scores are real ESPN historical results, Elo is rolled forward chronologically, " +
+      "and ESPN recent-form/stat windows are capped before each event. Rebuilt context such as injuries, standings, " +
+      "weather, and provider enrichment can still reflect current availability instead of the exact pregame snapshot. " +
+      "Exact accuracy requires saved point-in-time GameContext fixtures.",
   };
 
   const outDir = join(import.meta.dir, "../../backtest-results");

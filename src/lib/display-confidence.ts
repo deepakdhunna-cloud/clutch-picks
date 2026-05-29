@@ -142,8 +142,23 @@ export interface ConfidenceTier {
   filled: number;
 }
 
-export function getConfidenceTier(confidence: number, isTossUp?: boolean): ConfidenceTier {
-  if (isTossUp || confidence < 53) return CONFIDENCE_TIER_DEFINITIONS[0];
+type ConfidenceMarketType = 'moneyline' | 'three_way_result' | null | undefined;
+
+export function getConfidenceTier(
+  confidence: number,
+  isTossUp?: boolean,
+  marketType?: ConfidenceMarketType,
+): ConfidenceTier {
+  if (isTossUp) return CONFIDENCE_TIER_DEFINITIONS[0];
+  const threeWay = marketType === 'three_way_result' || confidence < 50;
+  if (threeWay) {
+    if (confidence < 37) return CONFIDENCE_TIER_DEFINITIONS[0];
+    if (confidence < 43) return CONFIDENCE_TIER_DEFINITIONS[1];
+    if (confidence < 50) return CONFIDENCE_TIER_DEFINITIONS[2];
+    if (confidence < 58) return CONFIDENCE_TIER_DEFINITIONS[3];
+    return CONFIDENCE_TIER_DEFINITIONS[4];
+  }
+  if (confidence < 53) return CONFIDENCE_TIER_DEFINITIONS[0];
   if (confidence < 60)             return CONFIDENCE_TIER_DEFINITIONS[1];
   if (confidence < 67)             return CONFIDENCE_TIER_DEFINITIONS[2];
   if (confidence < 75)             return CONFIDENCE_TIER_DEFINITIONS[3];

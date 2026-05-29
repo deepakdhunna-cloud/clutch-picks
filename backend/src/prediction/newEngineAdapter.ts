@@ -6,11 +6,15 @@
  * actual computation to the new engine when USE_NEW_PREDICTION_ENGINE=true.
  */
 
-import { predictGame } from "./index";
+import { predictGame, reconcileProjectionToFinal } from "./index";
 import { buildGameContext } from "./shadow";
 import { buildDeterministicNarrative, buildNarrativeInput } from "./narrative";
 import type { HonestPrediction, FactorContribution, GameContext } from "./types";
 import { getConfidenceBand } from "./types";
+import {
+  applySelfLearningCalibration,
+  getSelfLearningCalibrationSnapshot,
+} from "./selfLearningCalibration";
 import type { Game, GamePrediction, PredictionFactor } from "../routes/games";
 import { prisma } from "../prisma";
 import { enqueueWrite } from "../lib/writeQueue";
@@ -212,6 +216,28 @@ function bestBookForPick(
     : null;
 }
 
+function isMarketAwareTossUp(canonical: HonestPrediction["canonicalResult"]): boolean {
+  if (canonical.finalPick === "none") return true;
+
+  const entries = [
+    { outcome: "home", probability: canonical.probabilities.home },
+    { outcome: "away", probability: canonical.probabilities.away },
+    ...(canonical.probabilities.draw !== undefined
+      ? [{ outcome: "draw", probability: canonical.probabilities.draw }]
+      : []),
+  ].sort((a, b) => b.probability - a.probability);
+  const leader = entries[0];
+  const runnerUp = entries[1];
+  if (!leader || !runnerUp) return true;
+
+  const lead = leader.probability - runnerUp.probability;
+  if (canonical.marketType === "three_way_result") {
+    return leader.probability < 0.37 || lead < 0.025;
+  }
+
+  return leader.probability < 0.53 || lead < 0.06;
+}
+
 /**
  * Build a GamePrediction from a HonestPrediction + Game shell.
  * Confidence is deliberately the RAW max probability — no ceilings, no
@@ -293,7 +319,7 @@ export function translateNewEnginePrediction(
     recentFormAway: recentFormString(ctx?.awayForm),
     homeStreak: ctx?.homeForm?.streak ?? 0,
     awayStreak: ctx?.awayForm?.streak ?? 0,
-    isTossUp: Math.abs(homeProbPct - awayProbPct) < 5,
+    isTossUp: isMarketAwareTossUp(newPred.canonicalResult),
     lowDataWarning: decisionProfile?.lowDataWarning ?? false,
     ensembleDivergence: decisionProfile?.engineDivergence ?? false,
     marketComparison: newPred.marketComparison
@@ -334,7 +360,33 @@ export function shouldUpdatePredictionSnapshot(
  */
 export async function runNewEnginePrediction(game: Game): Promise<GamePrediction> {
   const ctx = await buildGameContext(game);
-  const newPred = predictGame(ctx);
+  let newPred = predictGame(ctx);
+  const learningSnapshot = await getSelfLearningCalibrationSnapshot(ctx.sport);
+  const learnedPred = applySelfLearningCalibration(newPred, learningSnapshot);
+  if (learnedPred !== newPred) {
+    const alignedProjection = learnedPred.projection
+      ? reconcileProjectionToFinal({
+          sport: ctx.sport,
+          projection: learnedPred.projection,
+          finalProbabilities: learnedPred.canonicalResult.probabilities,
+        })
+      : undefined;
+    newPred = {
+      ...learnedPred,
+      projection: alignedProjection,
+      canonicalResult: {
+        ...learnedPred.canonicalResult,
+        projectedScore: alignedProjection
+          ? {
+              home: alignedProjection.projectedHomeScore,
+              away: alignedProjection.projectedAwayScore,
+              spread: alignedProjection.projectedSpread,
+              total: alignedProjection.projectedTotal,
+            }
+          : learnedPred.canonicalResult.projectedScore,
+      },
+    };
+  }
 
   // Populate the narrative with the deterministic template: synchronous,
   // always valid, no LLM latency tax on cold requests. LLM enrichment can
@@ -403,6 +455,9 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
         awayWinProb,
         drawProb,
         modelVersion,
+        analysisSnapshot: prediction.analysis,
+        projectionJson: prediction.projection ? JSON.stringify(prediction.projection) : null,
+        canonicalResultJson: prediction.canonicalResult ? JSON.stringify(prediction.canonicalResult) : null,
         selectedOutcomeProb: selectedProb,
         marketHomeProb: ctx.marketConsensus?.noVigHomeProb ?? null,
         marketAwayProb: ctx.marketConsensus?.noVigAwayProb ?? null,

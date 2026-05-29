@@ -8,6 +8,64 @@ import { prisma } from "../prisma";
 
 export const accuracyRouter = new Hono();
 
+export interface DriftResponseData {
+  isDrifting: boolean;
+  rollingAccuracy7d: number | null;
+  rollingAccuracy30d: number | null;
+  allTimeAccuracy: number | null;
+  sample: { total: number; last7d: number; last30d: number };
+  message?: string;
+}
+
+type DriftPredictionRow = {
+  wasCorrect: boolean | null;
+  createdAt: Date;
+};
+
+export function buildDriftApiResponse(
+  predictions: DriftPredictionRow[],
+  now = Date.now(),
+): { data: DriftResponseData } {
+  const DAY = 86400000;
+  const resolved = predictions.filter(
+    (p): p is DriftPredictionRow & { wasCorrect: boolean } => p.wasCorrect !== null,
+  );
+  const last7d = resolved.filter((p) => now - p.createdAt.getTime() < 7 * DAY);
+  const last30d = resolved.filter((p) => now - p.createdAt.getTime() < 30 * DAY);
+
+  if (resolved.length < 20) {
+    return {
+      data: {
+        isDrifting: false,
+        rollingAccuracy7d: null,
+        rollingAccuracy30d: null,
+        allTimeAccuracy: null,
+        sample: { total: resolved.length, last7d: last7d.length, last30d: last30d.length },
+        message: "Need 20+ resolved predictions",
+      },
+    };
+  }
+
+  const calcAcc = (preds: Array<DriftPredictionRow & { wasCorrect: boolean }>) =>
+    preds.length === 0 ? null : preds.filter((p) => p.wasCorrect).length / preds.length;
+  const acc7d = calcAcc(last7d);
+  const acc30d = calcAcc(last30d);
+  const accAll = calcAcc(resolved);
+  const isDrifting =
+    (acc7d !== null && accAll !== null && last7d.length >= 5 && accAll - acc7d > 0.08) ||
+    (acc30d !== null && accAll !== null && last30d.length >= 15 && accAll - acc30d > 0.08);
+
+  return {
+    data: {
+      isDrifting,
+      rollingAccuracy7d: acc7d !== null ? Math.round(acc7d * 100) : null,
+      rollingAccuracy30d: acc30d !== null ? Math.round(acc30d * 100) : null,
+      allTimeAccuracy: accAll !== null ? Math.round(accAll * 100) : null,
+      sample: { total: resolved.length, last7d: last7d.length, last30d: last30d.length },
+    },
+  };
+}
+
 const BUCKETS = [
   { label: "25-29", min: 25, max: 29 },
   { label: "30-34", min: 30, max: 34 },
@@ -46,9 +104,9 @@ accuracyRouter.get("/accuracy", async (c) => {
   });
 
   // --- Confidence buckets ---
-  const bucketMap = new Map<string, { total: number; correct: number }>();
+  const bucketMap = new Map<string, { total: number; correct: number; probabilitySum: number }>();
   for (const b of BUCKETS) {
-    bucketMap.set(b.label, { total: 0, correct: 0 });
+    bucketMap.set(b.label, { total: 0, correct: 0, probabilitySum: 0 });
   }
 
   // --- Per-sport ---
@@ -98,11 +156,18 @@ accuracyRouter.get("/accuracy", async (c) => {
       signalCoverageCount++;
     }
 
-    // Bucket
-    const bucket = BUCKETS.find((b) => row.confidence >= b.min && row.confidence <= b.max);
+    // Bucket by the selected-outcome probability captured at prediction time.
+    // This is more precise than the rounded display confidence and keeps
+    // three-way soccer/draw reads in the correct sub-50 buckets.
+    const selectedProbPct =
+      typeof row.selectedOutcomeProb === "number" && Number.isFinite(row.selectedOutcomeProb)
+        ? row.selectedOutcomeProb * 100
+        : row.confidence;
+    const bucket = BUCKETS.find((b) => selectedProbPct >= b.min && selectedProbPct <= b.max);
     if (bucket) {
       const entry = bucketMap.get(bucket.label)!;
       entry.total++;
+      entry.probabilitySum += selectedProbPct;
       if (correct) entry.correct++;
     }
 
@@ -136,11 +201,20 @@ accuracyRouter.get("/accuracy", async (c) => {
 
   const buckets = BUCKETS.map((b) => {
     const entry = bucketMap.get(b.label)!;
+    const expectedAccuracy = entry.total > 0
+      ? Math.round((entry.probabilitySum / entry.total) * 10) / 10
+      : null;
+    const accuracy = entry.total > 0 ? Math.round((entry.correct / entry.total) * 100) : null;
     return {
       bucket: b.label,
       totalPredictions: entry.total,
       correctPredictions: entry.correct,
-      accuracy: entry.total > 0 ? Math.round((entry.correct / entry.total) * 100) : null,
+      accuracy,
+      expectedAccuracy,
+      calibrationErrorPts:
+        accuracy !== null && expectedAccuracy !== null
+          ? Math.round((expectedAccuracy - accuracy) * 10) / 10
+          : null,
     };
   });
 
@@ -191,31 +265,11 @@ accuracyRouter.get("/drift", async (c) => {
     const sport = c.req.query("sport") || undefined;
     const predictions = await prisma.predictionResult.findMany({
       where: { wasCorrect: { not: null }, ...(sport ? { sport } : {}) },
-      select: { wasCorrect: true, confidence: true, createdAt: true, sport: true },
+      select: { wasCorrect: true, confidence: true, selectedOutcomeProb: true, createdAt: true, sport: true },
       orderBy: { createdAt: "desc" },
       take: 500,
     });
-    const now = Date.now();
-    const DAY = 86400000;
-    const resolved = predictions.filter(p => p.wasCorrect !== null);
-    if (resolved.length < 20) {
-      return c.json({ isDrifting: false, message: "Need 20+ resolved predictions", data: null });
-    }
-    const calcAcc = (preds: typeof resolved) => preds.length === 0 ? null : preds.filter(p => p.wasCorrect).length / preds.length;
-    const last7d = resolved.filter(p => now - p.createdAt.getTime() < 7 * DAY);
-    const last30d = resolved.filter(p => now - p.createdAt.getTime() < 30 * DAY);
-    const acc7d = calcAcc(last7d);
-    const acc30d = calcAcc(last30d);
-    const accAll = calcAcc(resolved);
-    const isDrifting = (acc7d !== null && accAll !== null && last7d.length >= 5 && accAll - acc7d > 0.08) ||
-                       (acc30d !== null && accAll !== null && last30d.length >= 15 && accAll - acc30d > 0.08);
-    return c.json({
-      isDrifting,
-      rollingAccuracy7d: acc7d !== null ? Math.round(acc7d * 100) : null,
-      rollingAccuracy30d: acc30d !== null ? Math.round(acc30d * 100) : null,
-      allTimeAccuracy: accAll !== null ? Math.round(accAll * 100) : null,
-      sample: { total: resolved.length, last7d: last7d.length, last30d: last30d.length },
-    });
+    return c.json(buildDriftApiResponse(predictions));
   } catch (err) {
     return c.json({ error: "Drift detection failed" }, 500);
   }

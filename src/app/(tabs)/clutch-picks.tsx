@@ -185,7 +185,7 @@ const TopPickCard = memo(function TopPickCard({
   const chartColors = getDistinctColors(awayColors.primary, homeColors.primary);
   const conf = game.prediction ? getCanonicalConfidence(game.prediction) : 70;
   const predictionDisplay = getGamePredictionDisplay(game);
-  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp);
+  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp, predictionDisplay.marketType);
   // Use real model probabilities — same data as game detail and analysis pages
   const canonicalProbabilities = getCanonicalWinProbabilities(game.prediction);
   const realHome = canonicalProbabilities.home;
@@ -206,6 +206,7 @@ const TopPickCard = memo(function TopPickCard({
     awayProb: String(realAway),
     ...(hasDraw ? { drawProb: String(drawPct) } : {}),
     isTossUp: predictionDisplay.isTossUp ? '1' : '0',
+    marketType: predictionDisplay.marketType ?? 'moneyline',
   };
 
   const isAwayPick = predictionDisplay.outcome === 'away';

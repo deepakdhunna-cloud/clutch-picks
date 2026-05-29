@@ -46,7 +46,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.10.0-source-aware-availability";
+export const MODEL_VERSION = "2.11.0-self-learning-calibration";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -137,20 +137,22 @@ function applyWeakSportCalibration(
   } else if (ctx.sport === "TENNIS") {
     const ranking = factorByKey(factors, "tennis_ranking_edge");
     const form = factorByKey(factors, "tennis_recent_form");
+    const hasRankingSignal = Boolean(ranking?.available && ranking.hasSignal);
 
     // Tennis has no true home field and ESPN often lacks enough player-level
-    // context. Rankings remain useful, but we should not present ranking-only
-    // reads as strong model signal.
-    multiplier *= 0.78;
-    if (!ranking?.available || !ranking.hasSignal) {
+    // context. Rankings remain the best public pre-match anchor, so a clear
+    // rank edge should not be crushed back into the toss-up band just because
+    // recent-form or market feeds are missing.
+    multiplier *= hasRankingSignal ? 0.88 : 0.78;
+    if (!hasRankingSignal) {
       multiplier *= 0.60;
       warnings.push("Tennis ranking signal missing or neutral; confidence compressed.");
     }
     if (!form?.available) {
-      multiplier *= 0.86;
+      multiplier *= hasRankingSignal ? 0.96 : 0.86;
     }
     if (!ctx.marketConsensus) {
-      multiplier *= 0.92;
+      multiplier *= hasRankingSignal ? 0.98 : 0.92;
     }
 
     multiplier = Math.max(0.45, multiplier);
@@ -209,7 +211,7 @@ function meaningfulProjectionSpreadThreshold(sport: string): number {
   if (sport === "NFL" || sport === "NCAAF") return 0.45;
   if (sport === "IPL") return 3;
   if (sport === "MLB" || sport === "NHL" || SOCCER_LEAGUES.has(sport)) return 0.12;
-  if (sport === "TENNIS") return 0.08;
+  if (sport === "TENNIS") return 0.8;
   return 0.25;
 }
 
@@ -217,6 +219,7 @@ function projectionMinimumScore(sport: string): number {
   if (sport === "NBA") return 75;
   if (sport === "NCAAB") return 45;
   if (sport === "IPL") return 80;
+  if (sport === "TENNIS") return 6;
   return 0;
 }
 
@@ -256,11 +259,79 @@ function scoresForTargetSpread(args: {
   };
 }
 
+function tennisProjectionDominance(selectedProbability?: number): number {
+  const probability =
+    typeof selectedProbability === "number" && Number.isFinite(selectedProbability)
+      ? clamp(selectedProbability > 1 ? selectedProbability / 100 : selectedProbability, 0, 1)
+      : 0.55;
+  return clamp((probability - 0.5) * 4, 0, 1.4);
+}
+
+function tennisGameMarginForProbability(selectedProbability?: number, total?: number): number {
+  const dominance = tennisProjectionDominance(selectedProbability);
+  const maxMargin =
+    typeof total === "number" && Number.isFinite(total)
+      ? Math.max(1.2, total - 12)
+      : 7.5;
+  return roundTo(clamp(1.6 + dominance * 4.8, 1.2, Math.min(7.5, maxMargin)), 1);
+}
+
+function tennisGameLineForPick(
+  finalPick: "home" | "away",
+  selectedProbability?: number,
+  currentTotal?: number,
+): { home: number; away: number; spread: number; total: number } {
+  const dominance = tennisProjectionDominance(selectedProbability);
+  const hasUsableTotal =
+    typeof currentTotal === "number" &&
+    Number.isFinite(currentTotal) &&
+    currentTotal >= 16 &&
+    currentTotal <= 40;
+  const total = roundTo(
+    hasUsableTotal
+      ? clamp(currentTotal, 16, 40)
+      : clamp(26.5 - dominance * 4.5, 18.5, 30.5),
+    1,
+  );
+  const margin = tennisGameMarginForProbability(selectedProbability, total);
+  const spread = finalPick === "home" ? margin : -margin;
+  const home = roundTo((total + spread) / 2, 1);
+  const away = roundTo((total - spread) / 2, 1);
+
+  return {
+    home,
+    away,
+    spread: roundTo(home - away, 1),
+    total: roundTo(home + away, 1),
+  };
+}
+
+function isPlausibleTennisGameLine(home: number, away: number): boolean {
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return false;
+  const total = home + away;
+  return total >= 16 && total <= 40 && home >= 5 && away >= 5;
+}
+
+function probabilityForFinalPick(
+  probabilities: { home: number; away: number; draw?: number },
+  pick: ProjectionOutcome,
+): number | undefined {
+  if (pick === "home") return probabilities.home;
+  if (pick === "away") return probabilities.away;
+  if (pick === "draw") return probabilities.draw;
+  return undefined;
+}
+
 function reconciledScoreLineForPick(args: {
   sport: string;
   total: number;
   finalPick: Exclude<ProjectionOutcome, "none">;
+  selectedProbability?: number;
 }): { home: number; away: number; spread: number; total: number } {
+  if (args.sport === "TENNIS" && (args.finalPick === "home" || args.finalPick === "away")) {
+    return tennisGameLineForPick(args.finalPick, args.selectedProbability, args.total);
+  }
+
   if (args.finalPick === "draw") {
     const scores = scoresForTargetSpread({
       sport: args.sport,
@@ -334,12 +405,23 @@ export function reconcileProjectionToFinal(args: {
   let scoreAdjusted =
     Math.abs(projectedSpread - args.projection.projectedSpread) > 0.001 ||
     Math.abs(projectedTotal - args.projection.projectedTotal) > 0.001;
+  const selectedProbability = probabilityForFinalPick(args.finalProbabilities, finalPick);
+  const hasInvalidTennisGameLine =
+    args.sport === "TENNIS" &&
+    (finalPick === "home" || finalPick === "away") &&
+    !isPlausibleTennisGameLine(projectedHomeScore, projectedAwayScore);
+  const hasWeakTennisGameMargin =
+    args.sport === "TENNIS" &&
+    (finalPick === "home" || finalPick === "away") &&
+    isPlausibleTennisGameLine(projectedHomeScore, projectedAwayScore) &&
+    Math.abs(projectedSpread) + 0.001 < tennisGameMarginForProbability(selectedProbability, projectedTotal);
 
-  if (finalPick !== "none" && rawScorePick !== finalPick) {
+  if (finalPick !== "none" && (rawScorePick !== finalPick || hasInvalidTennisGameLine || hasWeakTennisGameMargin)) {
     const reconciledScores = reconciledScoreLineForPick({
       sport: args.sport,
       total: projectedTotal,
       finalPick,
+      selectedProbability,
     });
     projectedHomeScore = reconciledScores.home;
     projectedAwayScore = reconciledScores.away;
@@ -645,22 +727,38 @@ function applyLeagueReliabilityGuards(
   }
 
   const ratingDirection = Math.sign(rating.homeDelta);
-  const matchupTargets = factors.filter((factor) =>
+  const counterTargets = factors.filter((factor) =>
     factor.available &&
     factor.hasSignal &&
     factor.key !== "rating_diff" &&
     Math.sign(factor.homeDelta) === -ratingDirection &&
     factor.weight > 0
   );
-  const targetWeight = matchupTargets.reduce((sum, factor) => sum + factor.weight, 0);
+  const supportingTargets = factors.filter((factor) =>
+    factor.available &&
+    factor.hasSignal &&
+    factor.key !== "rating_diff" &&
+    Math.sign(factor.homeDelta) === ratingDirection &&
+    factor.weight > 0
+  );
+  const redistributionTargets =
+    counterTargets.length > 0
+      ? counterTargets
+      : thinSignal
+        ? []
+        : supportingTargets;
+  const targetWeight = redistributionTargets.reduce((sum, factor) => sum + factor.weight, 0);
   const excess = rating.weight - ratingCap;
+  const redistributingToCounter = counterTargets.length > 0;
   const redistributionShare =
-    matchupTargets.length > 0
-      ? isNbaHighLeverageWindow(ctx) ? 0.75 : 0.55
+    redistributionTargets.length > 0
+      ? redistributingToCounter
+        ? isNbaHighLeverageWindow(ctx) ? 0.75 : 0.55
+        : isNbaHighLeverageWindow(ctx) ? 0.65 : 0.45
       : 0;
   const redistributedExcess = excess * redistributionShare;
   const reserveWeight = excess - redistributedExcess;
-  const targetKeys = new Set(matchupTargets.map((factor) => factor.key));
+  const targetKeys = new Set(redistributionTargets.map((factor) => factor.key));
   const missingLabels = criticalMissing
     .map(({ key, factor }) => factor?.label ?? key)
     .filter(Boolean);

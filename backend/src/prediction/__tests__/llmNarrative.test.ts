@@ -261,6 +261,18 @@ describe("validateAnalystNarrative", () => {
     expect(validateAnalystNarrative(text).ok).toBe(false);
   });
 
+  it("rejects casual or stale narration phrases", () => {
+    const text =
+      "Detroit has got the slight edge because the pitching matchup gives them the cleaner path into this game tonight. Keider Montero brings the better full profile with a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but 3.63 FIP. The Tigers also have the form edge, sitting 8-2 over their last 10 while Milwaukee is 4-6. The one concern is rest, since the Brewers come in with three days off against Detroit's one. Don't sleep on Milwaukee, but Detroit has the better baseball case.";
+    expect(validateAnalystNarrative(text).ok).toBe(false);
+  });
+
+  it("rejects multiple paragraphs", () => {
+    const text =
+      "Detroit is the pick because the pitching matchup gives them the cleanest path into this game tonight. Keider Montero brings the better full profile with a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but 3.63 FIP.\n\nThe Tigers also have the form edge, sitting 8-2 over their last 10 while Milwaukee is 4-6. The one concern is rest, since the Brewers come in with three days off against Detroit's one. The main baseball reasons point to Detroit.";
+    expect(validateAnalystNarrative(text).ok).toBe(false);
+  });
+
   it("rejects more than 10 sentences even if word count is valid", () => {
     const text =
       "Detroit is the pick tonight. The pitching matchup points their way. Montero has a 3.12 ERA. His FIP sits at 1.70. Harrison's FIP is 3.63. Detroit is 8-2 over its last 10. Milwaukee is 4-6 over that same window. Rest is the counterpoint. The Brewers are fresher. The fan angle is the mound edge. That is enough detail.";

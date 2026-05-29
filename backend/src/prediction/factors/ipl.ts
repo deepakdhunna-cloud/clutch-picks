@@ -28,7 +28,16 @@ function splitWinPct(record: { wins: number; losses: number }): number | null {
   return record.wins / games;
 }
 
-function numericTeamField(team: GameContext["game"]["homeTeam"], field: "standingsRank" | "standingsPoints" | "netRunRate" | "matchesPlayed"): number | null {
+function numericTeamField(
+  team: GameContext["game"]["homeTeam"],
+  field:
+    | "standingsRank"
+    | "standingsPoints"
+    | "netRunRate"
+    | "matchesPlayed"
+    | "runRateFor"
+    | "runRateAgainst",
+): number | null {
   const value = (team as unknown as Record<string, unknown>)[field];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -70,28 +79,56 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
 
   const homeBattingTrend = ctx.homeExtended.scoringTrend;
   const awayBattingTrend = ctx.awayExtended.scoringTrend;
-  const battingDelta = clamp((homeBattingTrend - awayBattingTrend) * 38, -45, 45);
+  const homeRunRateFor = numericTeamField(ctx.game.homeTeam, "runRateFor");
+  const awayRunRateFor = numericTeamField(ctx.game.awayTeam, "runRateFor");
+  const battingTrendAvailable =
+    ctx.homeExtended.avgScoreLast10 > 0 &&
+    ctx.awayExtended.avgScoreLast10 > 0;
+  const battingRunRateAvailable = homeRunRateFor !== null && awayRunRateFor !== null;
+  const battingAvailable = battingTrendAvailable || battingRunRateAvailable;
+  const battingDelta = battingTrendAvailable
+    ? clamp((homeBattingTrend - awayBattingTrend) * 38, -45, 45)
+    : battingRunRateAvailable
+      ? clamp((homeRunRateFor! - awayRunRateFor!) * 22, -45, 45)
+      : 0;
   factors.push({
     key: "ipl_batting_trend",
-    label: "Batting run trend",
+    label: battingTrendAvailable ? "Batting run trend" : "Batting run rate",
     homeDelta: battingDelta,
     weight: 0.08,
-    available: true,
-    hasSignal: battingDelta !== 0,
-    evidence: `Home batting trend ${homeBattingTrend >= 0 ? "+" : ""}${homeBattingTrend.toFixed(2)} vs Away ${awayBattingTrend >= 0 ? "+" : ""}${awayBattingTrend.toFixed(2)}`,
+    available: battingAvailable,
+    hasSignal: battingAvailable && battingDelta !== 0,
+    evidence: battingTrendAvailable
+      ? `Home batting trend ${homeBattingTrend >= 0 ? "+" : ""}${homeBattingTrend.toFixed(2)} vs Away ${awayBattingTrend >= 0 ? "+" : ""}${awayBattingTrend.toFixed(2)}`
+      : battingRunRateAvailable
+        ? `${ctx.game.homeTeam.abbreviation} season run rate ${homeRunRateFor!.toFixed(2)} rpo vs ${ctx.game.awayTeam.abbreviation} ${awayRunRateFor!.toFixed(2)} rpo`
+        : "IPL batting run-rate data unavailable",
   });
 
   const homeBowlingTrend = ctx.homeExtended.defenseTrend;
   const awayBowlingTrend = ctx.awayExtended.defenseTrend;
-  const bowlingDelta = clamp((homeBowlingTrend - awayBowlingTrend) * 34, -40, 40);
+  const homeRunRateAgainst = numericTeamField(ctx.game.homeTeam, "runRateAgainst");
+  const awayRunRateAgainst = numericTeamField(ctx.game.awayTeam, "runRateAgainst");
+  const bowlingTrendAvailable = battingTrendAvailable;
+  const bowlingRunRateAvailable = homeRunRateAgainst !== null && awayRunRateAgainst !== null;
+  const bowlingAvailable = bowlingTrendAvailable || bowlingRunRateAvailable;
+  const bowlingDelta = bowlingTrendAvailable
+    ? clamp((homeBowlingTrend - awayBowlingTrend) * 34, -40, 40)
+    : bowlingRunRateAvailable
+      ? clamp((awayRunRateAgainst! - homeRunRateAgainst!) * 22, -40, 40)
+      : 0;
   factors.push({
     key: "ipl_bowling_trend",
-    label: "Bowling / fielding trend",
+    label: bowlingTrendAvailable ? "Bowling / fielding trend" : "Bowling run prevention",
     homeDelta: bowlingDelta,
     weight: 0.08,
-    available: true,
-    hasSignal: bowlingDelta !== 0,
-    evidence: `Home run-prevention trend ${homeBowlingTrend >= 0 ? "+" : ""}${homeBowlingTrend.toFixed(2)} vs Away ${awayBowlingTrend >= 0 ? "+" : ""}${awayBowlingTrend.toFixed(2)}`,
+    available: bowlingAvailable,
+    hasSignal: bowlingAvailable && bowlingDelta !== 0,
+    evidence: bowlingTrendAvailable
+      ? `Home run-prevention trend ${homeBowlingTrend >= 0 ? "+" : ""}${homeBowlingTrend.toFixed(2)} vs Away ${awayBowlingTrend >= 0 ? "+" : ""}${awayBowlingTrend.toFixed(2)}`
+      : bowlingRunRateAvailable
+        ? `${ctx.game.homeTeam.abbreviation} concede ${homeRunRateAgainst!.toFixed(2)} rpo vs ${ctx.game.awayTeam.abbreviation} ${awayRunRateAgainst!.toFixed(2)} rpo`
+        : "IPL run-prevention data unavailable",
   });
 
   const directHomeVenuePct = splitWinPct(ctx.homeExtended.homeRecord);

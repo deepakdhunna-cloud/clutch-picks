@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { api } from '@/lib/api/api';
 import { MAROON, TEAL, GREEN_UP, LOSS, BG } from '@/lib/theme';
+import { getCalibrationBadge, type CalibrationBadgeTone } from '@/lib/model-calibration-display';
 import { useCalibration, type LeagueCalibration, type ReliabilityBucket } from '@/hooks/useCalibration';
 
 const AMBER = '#F59E0B'; // warning / mid-tier badge — not in theme exports
@@ -17,6 +18,8 @@ interface AccuracyBucket {
   totalPredictions: number;
   correctPredictions: number;
   accuracy: number | null;
+  expectedAccuracy?: number | null;
+  calibrationErrorPts?: number | null;
 }
 
 interface SportAccuracy {
@@ -48,6 +51,7 @@ interface DriftData {
   rollingAccuracy30d: number | null;
   allTimeAccuracy: number | null;
   sample: { total: number; last7d: number; last30d: number };
+  message?: string;
 }
 
 export default function ModelAccuracyScreen() {
@@ -133,25 +137,29 @@ export default function ModelAccuracyScreen() {
             <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.card}>
               <Text style={s.cardTitle}>Calibration by Confidence</Text>
               <Text style={s.cardSubtitle}>Does 70% confidence actually win 70% of the time?</Text>
-              {(accuracy?.buckets ?? []).filter(b => b.totalPredictions > 0).map((bucket) => (
-                <View key={bucket.bucket} style={s.bucketRow}>
-                  <Text style={s.bucketLabel}>{bucket.bucket}%</Text>
-                  <View style={s.bucketBarBg}>
-                    <View
-                      style={[s.bucketBarFill, {
-                        width: `${Math.min(bucket.accuracy ?? 0, 100)}%`,
-                        backgroundColor: bucket.accuracy != null
-                          ? Math.abs(bucket.accuracy - parseInt(bucket.bucket)) <= 10 ? GREEN_UP : MAROON
-                          : 'rgba(255,255,255,0.1)',
-                      }]}
-                    />
+              {(accuracy?.buckets ?? []).filter(b => b.totalPredictions > 0).map((bucket) => {
+                const expected = bucket.expectedAccuracy ?? parseInt(bucket.bucket, 10);
+                const isAligned = bucket.accuracy != null && Math.abs(bucket.accuracy - expected) <= 10;
+                return (
+                  <View key={bucket.bucket} style={s.bucketRow}>
+                    <Text style={s.bucketLabel}>{bucket.bucket}%</Text>
+                    <View style={s.bucketBarBg}>
+                      <View
+                        style={[s.bucketBarFill, {
+                          width: `${Math.min(bucket.accuracy ?? 0, 100)}%`,
+                          backgroundColor: bucket.accuracy != null
+                            ? isAligned ? GREEN_UP : MAROON
+                            : 'rgba(255,255,255,0.1)',
+                        }]}
+                      />
+                    </View>
+                    <Text style={s.bucketValue}>
+                      {bucket.accuracy != null ? `${bucket.accuracy}%` : '--'}
+                    </Text>
+                    <Text style={s.bucketCount}>({bucket.totalPredictions})</Text>
                   </View>
-                  <Text style={s.bucketValue}>
-                    {bucket.accuracy != null ? `${bucket.accuracy}%` : '--'}
-                  </Text>
-                  <Text style={s.bucketCount}>({bucket.totalPredictions})</Text>
-                </View>
-              )) ?? null}
+                );
+              }) ?? null}
               {(accuracy?.buckets ?? []).every(b => b.totalPredictions === 0) ? (
                 <Text style={s.subtitle}>No resolved predictions yet</Text>
               ) : null}
@@ -257,13 +265,22 @@ export default function ModelAccuracyScreen() {
 
 // ─── Calibration helpers ────────────────────────────────────────────────────
 
-function brierBadge(brier: number, sampleSize: number): { color: string; bg: string; label: string } {
-  if (sampleSize < 100) {
-    return { color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.08)', label: 'insufficient data' };
+function calibrationBadgeColors(tone: CalibrationBadgeTone): { color: string; bg: string } {
+  switch (tone) {
+    case 'positive':
+      return { color: GREEN_UP, bg: `${GREEN_UP}20` };
+    case 'warning':
+      return { color: AMBER, bg: `${AMBER}20` };
+    case 'danger':
+      return { color: LOSS, bg: `${LOSS}20` };
+    case 'neutral':
+    default:
+      return { color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.08)' };
   }
-  if (brier < 0.22) return { color: GREEN_UP, bg: `${GREEN_UP}20`, label: 'well-calibrated' };
-  if (brier < 0.24) return { color: AMBER, bg: `${AMBER}20`, label: 'borderline' };
-  return { color: LOSS, bg: `${LOSS}20`, label: 'miscalibrated' };
+}
+
+function formatCalibrationMetric(value: number | null): string {
+  return value !== null ? value.toFixed(3) : '--';
 }
 
 function errorColor(errPts: number | null): string {
@@ -292,30 +309,31 @@ function LeagueCalibrationCard({
   league: LeagueCalibration;
   delayMs: number;
 }) {
-  const badge = brierBadge(league.brierScore, league.sampleSize);
+  const badge = getCalibrationBadge(league);
+  const badgeColors = calibrationBadgeColors(badge.tone);
   const populated = league.reliabilityCurve.filter((b) => b.count > 0);
 
   return (
     <Animated.View entering={FadeInDown.delay(delayMs).duration(400)} style={s.card}>
       <View style={s.calHeaderRow}>
         <Text style={s.calLeague}>{league.league}</Text>
-        <View style={[s.statusBadge, { backgroundColor: badge.bg }]}>
-          <View style={[s.statusDot, { backgroundColor: badge.color }]} />
-          <Text style={[s.statusText, { color: badge.color }]}>{badge.label}</Text>
+        <View style={[s.statusBadge, { backgroundColor: badgeColors.bg }]}>
+          <View style={[s.statusDot, { backgroundColor: badgeColors.color }]} />
+          <Text style={[s.statusText, { color: badgeColors.color }]}>{badge.label}</Text>
         </View>
       </View>
 
       <View style={s.calBigRow}>
         <View style={{ alignItems: 'flex-start', flex: 1 }}>
-          <Text style={[s.bigNumber, { fontSize: 32, color: badge.color }]}>
-            {league.brierScore.toFixed(3)}
+          <Text style={[s.bigNumber, { fontSize: 32, color: badgeColors.color }]}>
+            {formatCalibrationMetric(league.brierScore)}
           </Text>
           <Text style={s.calMetricLabel}>Brier score</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={s.calSampleSize}>n = {league.sampleSize}</Text>
           <Text style={s.calSecondary}>
-            log loss {league.logLoss.toFixed(3)}
+            log loss {formatCalibrationMetric(league.logLoss)}
           </Text>
           <Text style={s.calSecondary}>
             accuracy {league.overallAccuracy != null ? `${league.overallAccuracy.toFixed(1)}%` : '--'}

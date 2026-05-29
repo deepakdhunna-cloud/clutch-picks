@@ -133,9 +133,15 @@ export function buildDecisionProfile(args: {
   const eloPick = pickFromRatingFactor(args.factors);
 
   const availableFactorCount = args.factors.filter((factor) => factor.available).length;
-  const signalFactorCount = args.factors.filter((factor) => factor.available && factor.hasSignal).length;
-  const dataCoverage = args.factors.length > 0 ? availableFactorCount / args.factors.length : 1;
-  const signalCoverage = args.factors.length > 0 ? signalFactorCount / args.factors.length : 1;
+  const totalFactorWeight = args.factors.reduce((sum, factor) => sum + factor.weight, 0);
+  const availableFactorWeight = args.factors
+    .filter((factor) => factor.available)
+    .reduce((sum, factor) => sum + factor.weight, 0);
+  const signalFactorWeight = args.factors
+    .filter((factor) => factor.available && factor.hasSignal)
+    .reduce((sum, factor) => sum + factor.weight, 0);
+  const dataCoverage = totalFactorWeight > 0 ? availableFactorWeight / totalFactorWeight : 1;
+  const signalCoverage = totalFactorWeight > 0 ? signalFactorWeight / totalFactorWeight : 1;
 
   const weights = args.engineWeights ?? {
     factor: args.marketProbabilities ? 0.8 : 0.86,

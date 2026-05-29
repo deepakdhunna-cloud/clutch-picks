@@ -1,10 +1,16 @@
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '@/lib/api/api';
-import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
-import { useCallback, useMemo } from 'react';
+import { GameWithPrediction, GameStatus } from '@/types/sports';
+import { useCallback, useEffect, useMemo } from 'react';
 import { sseConnectedRef } from './useLiveScores';
 import { enrichCricketLiveGame, enrichCricketLiveGames } from '@/lib/cricket-live-enrichment';
 import { filterVerifiedGames, isUnverifiedScoreboardGame } from '@/lib/verified-games';
+import { getHomeGamesRequestPlan } from '@/lib/home-games-request-plan';
+import { prepareHomeGamesFirstPaint } from '@/lib/home-games-first-paint';
+import { HOME_GAMES_CACHE_KEY, selectPersistableHomeGames } from '@/lib/home-games-cache';
+import { GAME_DETAIL_STALE_TIME_MS, shouldRefetchGameDetailOnMount } from '@/lib/game-detail-load-stability';
+import { mergeGameData, mergeGameLists } from '@/lib/game-cache-merge';
 
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 3000; // fast fallback when SSE drops, without hammering JS/network
@@ -13,8 +19,6 @@ const DEFAULT_POLLING_INTERVAL = 60000; // background freshness; SSE handles liv
 // responsive without creating a startup/network storm on large slates.
 const PREDICTION_BURST_INTERVAL = 8000;
 const STALE_TIME = 30000; // avoid refetching the whole board on every fast tab/screen hop
-const GAME_DETAIL_STALE_TIME = 10000;
-type DatedGamesResult = { games: GameWithPrediction[]; successfulDates: Set<string> };
 const scheduledGameDetailWarmups = new Set<string>();
 
 function runAfterNavigationStart(task: () => void) {
@@ -93,20 +97,23 @@ function scheduleGameDetailWarmup(
       const cachedGame = sourceGame ?? findCachedGame(queryClient, gameId);
       seedGameDetailCache(queryClient, gameId, cachedGame);
 
-      void queryClient.prefetchQuery({
-        // queryClient is cache plumbing, not part of the server identity for this request.
-        // eslint-disable-next-line @tanstack/query/exhaustive-deps
-        queryKey: ['game', gameId],
-        queryFn: async () => {
-          const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
-          const enriched = await enrichCricketLiveGame(result ?? null);
-          const current = findCachedGame(queryClient, gameId);
-          if (!enriched) return current ?? null;
-          if (isUnverifiedScoreboardGame(enriched)) return null;
-          return current ? mergeGameData(current, enriched) : enriched;
-        },
-        staleTime: GAME_DETAIL_STALE_TIME,
-      });
+      const detailState = queryClient.getQueryState(['game', gameId]);
+      if (detailState?.fetchStatus !== 'fetching') {
+        void queryClient.prefetchQuery({
+          // queryClient is cache plumbing, not part of the server identity for this request.
+          // eslint-disable-next-line @tanstack/query/exhaustive-deps
+          queryKey: ['game', gameId],
+          queryFn: async () => {
+            const result = await api.get<GameWithPrediction>(`/api/games/id/${gameId}`);
+            const enriched = await enrichCricketLiveGame(result ?? null);
+            const current = findCachedGame(queryClient, gameId);
+            if (!enriched) return current ?? null;
+            if (isUnverifiedScoreboardGame(enriched)) return null;
+            return current ? mergeGameData(current, enriched) : enriched;
+          },
+          staleTime: GAME_DETAIL_STALE_TIME_MS,
+        });
+      }
 
       if (cachedGame) {
         void prefetchNewsForGame(queryClient, cachedGame);
@@ -117,85 +124,15 @@ function scheduleGameDetailWarmup(
   });
 }
 
-function formatLocalDate(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function boardDates() {
-  const today = new Date();
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayAfter = new Date(today); dayAfter.setDate(dayAfter.getDate() + 2);
-  return {
-    priority: [formatLocalDate(yesterday), formatLocalDate(today)],
-    deferred: [formatLocalDate(tomorrow), formatLocalDate(dayAfter)],
-  };
-}
-
-async function fetchGamesForDates(dates: string[]): Promise<DatedGamesResult> {
-  const results = await Promise.allSettled(
-    dates.map((date) => api.get<GameWithPrediction[]>(`/api/games/date/${date}`))
-  );
-  const successfulDates = new Set<string>();
-  const games: GameWithPrediction[] = [];
-
-  results.forEach((result, index) => {
-    const date = dates[index];
-    if (!date || result.status !== 'fulfilled') return;
-    successfulDates.add(date);
-    games.push(...(result.value ?? []));
-  });
-
-  return { games: filterVerifiedGames(await enrichCricketLiveGames(games)), successfulDates };
-}
-
-function mergeGameData(previous: GameWithPrediction, incoming: GameWithPrediction): GameWithPrediction {
-  return {
-    ...previous,
-    ...incoming,
-    homeTeam: { ...previous.homeTeam, ...incoming.homeTeam },
-    awayTeam: { ...previous.awayTeam, ...incoming.awayTeam },
-    prediction: incoming.prediction ?? previous.prediction,
-    seasonContext: incoming.seasonContext ?? previous.seasonContext,
-    watchSources: incoming.watchSources ?? previous.watchSources,
-    homeLinescores: incoming.homeLinescores ?? previous.homeLinescores,
-    awayLinescores: incoming.awayLinescores ?? previous.awayLinescores,
-    cricketState: incoming.cricketState ?? previous.cricketState,
-    liveState: incoming.liveState ?? previous.liveState,
-  };
-}
-
-function dedupeGames(games: GameWithPrediction[], previousGames?: GameWithPrediction[]): GameWithPrediction[] {
-  const byId = new Map<string, GameWithPrediction>();
-  const previousById = new Map(filterVerifiedGames(previousGames).map((game) => [game.id, game]));
-  for (const game of filterVerifiedGames(games)) {
-    const existing = byId.get(game.id) ?? previousById.get(game.id);
-    byId.set(game.id, existing ? mergeGameData(existing, game) : game);
-  }
-  return Array.from(byId.values());
-}
-
-function gamesOutsideDates(games: GameWithPrediction[] | undefined, dates: Set<string>): GameWithPrediction[] {
-  if (!games) return [];
-  return filterVerifiedGames(games).filter((game) => !dates.has(formatLocalDate(new Date(game.gameTime))));
-}
-
-function mergeFetchedGames(
-  currentGames: GameWithPrediction[] | undefined,
-  fetchedGames: GameWithPrediction[],
-  successfulDates: Set<string>,
-): GameWithPrediction[] {
-  return dedupeGames([
-    ...gamesOutsideDates(currentGames, successfulDates),
-    ...fetchedGames,
-  ], currentGames);
-}
-
 function shouldBurstForMissingPrediction(game: GameWithPrediction): boolean {
   if (game.prediction) return false;
   if (game.status === GameStatus.LIVE) return true;
   if (game.status !== GameStatus.SCHEDULED) return false;
   return formatLocalDate(new Date(game.gameTime)) === formatLocalDate(new Date());
+}
+
+function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 // Prefetch news for a game's teams
@@ -233,28 +170,58 @@ async function prefetchNewsForGame(queryClient: ReturnType<typeof useQueryClient
 export function useGames() {
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    let cancelled = false;
+    if (queryClient.getQueryData<GameWithPrediction[]>(['games'])) return;
+
+    void AsyncStorage.getItem(HOME_GAMES_CACHE_KEY)
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return;
+        const games = prepareHomeGamesFirstPaint(parsed as GameWithPrediction[]);
+        if (games.length > 0) {
+          queryClient.setQueryData<GameWithPrediction[]>(['games'], games);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient]);
+
   const query = useQuery({
     queryKey: ['games'],
     queryFn: async () => {
-      // Render the first screen from yesterday/today first; future slates are
-      // filled in after first paint so cold starts don't wait on four endpoints.
-      const dates = boardDates();
-      const priorityResult = await fetchGamesForDates(dates.priority);
-      const currentGames = queryClient.getQueryData<GameWithPrediction[]>(['games']);
-      const firstPaintGames = mergeFetchedGames(
-        currentGames,
-        priorityResult.games,
-        priorityResult.successfulDates
+      const plan = getHomeGamesRequestPlan();
+      const fullGames = prepareHomeGamesFirstPaint(
+        await api.get<GameWithPrediction[]>(plan.firstPaintPath),
       );
+      const currentGames = queryClient.getQueryData<GameWithPrediction[]>(['games']);
+      const firstPaintGames = mergeGameLists(fullGames, currentGames);
+      const publishGames = (games: GameWithPrediction[]) => {
+        const merged = mergeGameLists(games, queryClient.getQueryData<GameWithPrediction[]>(['games']));
+        queryClient.setQueryData<GameWithPrediction[]>(['games'], merged);
+        return merged;
+      };
+      const enrichAndPublish = (games: GameWithPrediction[]) => {
+        void enrichCricketLiveGames(games)
+          .then((enriched) => {
+            if (enriched === games) return;
+            publishGames(enriched);
+          })
+          .catch(() => {});
+      };
 
-      void fetchGamesForDates(dates.deferred)
-        .then((futureResult) => {
-          queryClient.setQueryData<GameWithPrediction[]>(['games'], (current) => {
-            const currentSlate = Array.isArray(current) ? current : firstPaintGames;
-            return mergeFetchedGames(currentSlate, futureResult.games, futureResult.successfulDates);
-          });
-        })
-        .catch(() => {});
+      if (firstPaintGames.length > 0) {
+        void AsyncStorage.setItem(
+          HOME_GAMES_CACHE_KEY,
+          JSON.stringify(selectPersistableHomeGames(firstPaintGames)),
+        ).catch(() => {});
+      }
+
+      enrichAndPublish(firstPaintGames);
 
       return firstPaintGames;
     },
@@ -328,6 +295,8 @@ function liveAwareBucketInterval(
 
 // Hook to fetch games for a specific sport, with optional date filter
 export function useGamesBySport(sport: string, date?: string) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['games', 'sport', sport, date],
     queryFn: async () => {
@@ -335,7 +304,11 @@ export function useGamesBySport(sport: string, date?: string) {
         ? `/api/games/${sport.toLowerCase()}?date=${date}`
         : `/api/games/${sport.toLowerCase()}`;
       const result = await api.get<GameWithPrediction[]>(url);
-      return filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
+      const enriched = filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
+      return mergeGameLists(
+        enriched,
+        queryClient.getQueryData<GameWithPrediction[]>(['games', 'sport', sport, date]),
+      );
     },
     enabled: !!sport,
     staleTime: STALE_TIME,
@@ -348,11 +321,17 @@ export function useGamesBySport(sport: string, date?: string) {
 
 // Hook to fetch games for a specific date
 export function useGamesByDate(date: string) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['games', 'date', date],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction[]>(`/api/games/date/${date}`);
-      return filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
+      const enriched = filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
+      return mergeGameLists(
+        enriched,
+        queryClient.getQueryData<GameWithPrediction[]>(['games', 'date', date]),
+      );
     },
     enabled: !!date,
     staleTime: STALE_TIME,
@@ -443,7 +422,7 @@ export function useGame(gameId: string) {
       return current ? mergeGameData(current, enriched) : enriched;
     },
     enabled: !!gameId,
-    staleTime: GAME_DETAIL_STALE_TIME, // Quick stale time to get fresh predictions
+    staleTime: GAME_DETAIL_STALE_TIME_MS, // Quick stale time to get fresh predictions
     placeholderData: keepPreviousData,
     // Seed from list cache for instant navigation
     initialData: () => {
@@ -468,11 +447,8 @@ export function useGame(gameId: string) {
       return DEFAULT_POLLING_INTERVAL;
     },
     refetchIntervalInBackground: false,
-    // Paint cached game data first. Detail refreshes are scheduled by the
-    // screen after the navigation interaction has cleared.
     refetchOnMount: (query) => {
-      const data = query.state.data;
-      return !data || (data.sport === Sport.IPL && data.status === GameStatus.LIVE);
+      return shouldRefetchGameDetailOnMount(query.state.data, query.state.dataUpdatedAt);
     },
   });
 
@@ -481,6 +457,8 @@ export function useGame(gameId: string) {
 
 // Hook to fetch 3 days of games for a specific sport (today + 2 days)
 export function useWeekGamesBySport(sport: string) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['games', 'week', sport],
     queryFn: async () => {
@@ -500,12 +478,19 @@ export function useWeekGamesBySport(sport: string) {
           const games = await api.get<GameWithPrediction[]>(
             `/api/games/${sport.toLowerCase()}?date=${date}`
           );
-          return { date, games: filterVerifiedGames(await enrichCricketLiveGames(games ?? [])) };
+          const enriched = filterVerifiedGames(await enrichCricketLiveGames(games ?? []));
+          const previousBuckets = queryClient.getQueryData<Array<{ date: string; games: GameWithPrediction[] }>>([
+            'games',
+            'week',
+            sport,
+          ]);
+          const previousGames = previousBuckets?.find((bucket) => bucket.date === date)?.games;
+          return { date, games: mergeGameLists(enriched, previousGames) };
         })
       );
     },
     enabled: !!sport,
-    staleTime: GAME_DETAIL_STALE_TIME,
+    staleTime: GAME_DETAIL_STALE_TIME_MS,
     placeholderData: keepPreviousData,
     refetchInterval: (query) => liveAwareBucketInterval(query.state.data?.map((bucket) => ({
       ...bucket,
@@ -545,11 +530,14 @@ export function useRefreshGames() {
 
 // Hook to fetch top picks with guaranteed predictions
 export function useTopPicks() {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['topPicks'],
     queryFn: async () => {
       const result = await api.get<GameWithPrediction[]>('/api/games/top-picks');
-      return filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
+      const enriched = filterVerifiedGames(await enrichCricketLiveGames(result ?? []));
+      return mergeGameLists(enriched, queryClient.getQueryData<GameWithPrediction[]>(['topPicks']));
     },
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,

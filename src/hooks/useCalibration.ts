@@ -16,8 +16,8 @@ export interface ReliabilityBucket {
 
 export interface LeagueCalibration {
   league: string;                    // "NFL" | ... | "ALL"
-  brierScore: number;
-  logLoss: number;
+  brierScore: number | null;
+  logLoss: number | null;
   sampleSize: number;
   overallAccuracy: number | null;    // 0..100 with 1 decimal
   reliabilityCurve: ReliabilityBucket[];

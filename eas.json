@@ -6,6 +6,14 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_ttiiqmHPmKTuvfALCxMccyWRjcE",
+        "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_qpsKxRjYMoggqPCnnJBukFkeFbq",
+        "EXPO_PUBLIC_REVENUECAT_TEST_KEY": "test_ySGTdedRmOLfYFyuTHWENpeZmiX",
+        "EXPO_PUBLIC_BACKEND_URL": "https://clutch-picks-production.up.railway.app",
+        "BACKEND_URL": "https://clutch-picks-production.up.railway.app",
+        "EXPO_IOS_BUILD_NUMBER": "41"
+      },
       "ios": {
         "simulator": false
       }

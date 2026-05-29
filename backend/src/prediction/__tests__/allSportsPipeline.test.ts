@@ -262,7 +262,7 @@ const projectionBounds: Record<Sport, { min: number; max: number }> = {
   [Sport.EPL]: { min: 1.4, max: 4.5 },
   [Sport.UCL]: { min: 1.5, max: 4.8 },
   [Sport.IPL]: { min: 245, max: 430 },
-  [Sport.TENNIS]: { min: 2.0, max: 3.0 },
+  [Sport.TENNIS]: { min: 16.0, max: 38.0 },
 };
 
 const thinDataRatingCaps: Record<Sport, number> = {

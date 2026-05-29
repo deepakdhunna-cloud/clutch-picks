@@ -56,16 +56,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
   const watchOption = useMemo(() => getFeaturedWatchOption(game.tvChannel, game.watchSources), [game.tvChannel, game.watchSources]);
 
   return (
-    <View style={{
-      width: CARD_WIDTH,
-      marginRight: 10,
-      borderRadius: 18,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.9,
-      shadowRadius: 24,
-      elevation: 20,
-    }}>
+    <View style={styles.compactLiveShadowContainer}>
     <Pressable
       onPressIn={onPressIn}
       onPress={() => {
@@ -78,40 +69,57 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
       onTouchCancel={onTouchCancel}
       className="active:opacity-85"
     >
-      {/* Glass border — dark reflective with team colors */}
-      <View style={{ borderRadius: 18, padding: 2, overflow: 'hidden' }}>
+      {/* Raised glass border — scaled to the compact live rail */}
+      <View style={styles.compactLiveRaisedBorder}>
         <LinearGradient
           colors={[
-            `${awayAccent}90`,
-            `${awayAccent}50`,
+            'rgba(255,255,255,0.32)',
+            `${awayAccent}A8`,
+            `${awayAccent}54`,
             '#0D1118',
-            '#080C12',
-            '#0D1118',
-            `${homeAccent}50`,
-            `${homeAccent}90`,
+            '#020409',
+            `${homeAccent}54`,
+            `${homeAccent}A8`,
+            'rgba(255,255,255,0.18)',
           ]}
-          locations={[0, 0.15, 0.35, 0.5, 0.65, 0.85, 1]}
+          locations={[0, 0.08, 0.22, 0.43, 0.57, 0.78, 0.92, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 18 }}
+          style={styles.compactLiveRaisedOuterFill}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(255,255,255,0.28)', 'rgba(255,255,255,0.07)', 'transparent']}
+          locations={[0, 0.42, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.compactLiveRaisedTopHighlight}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['transparent', 'rgba(0,0,0,0.24)', 'rgba(0,0,0,0.70)']}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.compactLiveRaisedBottomShadow}
         />
         {/* Inner bevel — specular highlight top, deep shadow bottom */}
-        <View style={{ borderRadius: 16, padding: 1, overflow: 'hidden' }}>
+        <View style={styles.compactLiveInnerBevel}>
           <LinearGradient
             colors={[
-              `${awayAccent}60`,
-              'rgba(255,255,255,0.12)',
-              '#080C12',
-              'rgba(0,0,0,0.6)',
-              `${homeAccent}50`,
+              `${awayAccent}68`,
+              'rgba(255,255,255,0.16)',
+              '#0A1018',
+              'rgba(0,0,0,0.68)',
+              `${homeAccent}58`,
             ]}
             locations={[0, 0.2, 0.5, 0.8, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16 }}
+            style={styles.compactLiveInnerFill}
           />
         {/* Card body */}
-        <View style={{ borderRadius: 15, overflow: 'hidden', height: CARD_HEIGHT }}>
+        <View style={styles.compactLiveBody}>
       {/* Dark glass base */}
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(4,5,10,0.82)' }} />
 
@@ -358,6 +366,70 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
     </Pressable>
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  compactLiveShadowContainer: {
+    width: CARD_WIDTH,
+    marginRight: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 13 },
+    shadowOpacity: 0.9,
+    shadowRadius: 26,
+    elevation: 22,
+  },
+  compactLiveRaisedBorder: {
+    borderRadius: 20,
+    padding: 3,
+    overflow: 'hidden',
+    backgroundColor: '#05080E',
+  },
+  compactLiveRaisedOuterFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+  },
+  compactLiveRaisedTopHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 2,
+    right: 2,
+    height: 12,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+  },
+  compactLiveRaisedBottomShadow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 18,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  compactLiveInnerBevel: {
+    borderRadius: 17,
+    padding: 1,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
+  compactLiveInnerFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 17,
+  },
+  compactLiveBody: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    height: CARD_HEIGHT,
+  },
 });
 
 export default CompactLiveCard;

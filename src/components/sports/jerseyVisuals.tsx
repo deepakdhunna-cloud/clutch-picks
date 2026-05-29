@@ -34,6 +34,7 @@ interface ModelShape {
 }
 
 let jerseyModelId = 0;
+const WORDMARK_FONT_FAMILY = 'BebasNeue_400Regular';
 
 function parseHex(hex: string | undefined): { r: number; g: number; b: number } | null {
   if (!hex || !hex.startsWith('#')) return null;
@@ -128,36 +129,36 @@ function wordmarkFitConfig(variant: JerseyModelVariant): { maxWidth: number; min
   switch (variant) {
     case 'basketball':
     case 'college-basketball':
-      return { maxWidth: 48, minFontSize: 7.6 };
+      return { maxWidth: 52, minFontSize: 8.2 };
     case 'football':
-      return { maxWidth: 48, minFontSize: 7.2 };
+      return { maxWidth: 52, minFontSize: 7.8 };
     case 'baseball':
-      return { maxWidth: 54, minFontSize: 7.2 };
+      return { maxWidth: 68, minFontSize: 8.8 };
     case 'hockey':
-      return { maxWidth: 50, minFontSize: 7 };
+      return { maxWidth: 54, minFontSize: 7.8 };
     case 'soccer':
     case 'ucl':
-      return { maxWidth: 44, minFontSize: 6.6 };
+      return { maxWidth: 48, minFontSize: 7.4 };
     case 'tennis':
-      return { maxWidth: 50, minFontSize: 7.2 };
+      return { maxWidth: 54, minFontSize: 7.8 };
     case 'cricket':
-      return { maxWidth: 44, minFontSize: 6.8 };
+      return { maxWidth: 48, minFontSize: 7.4 };
     default:
-      return { maxWidth: 46, minFontSize: 6.8 };
+      return { maxWidth: 50, minFontSize: 7.4 };
   }
 }
 
 function jerseyWordmarkFontSize(label: string, variant: JerseyModelVariant): number {
   const length = label.replace(/\s/g, '').length;
   if (variant === 'basketball' || variant === 'college-basketball') {
-    return length >= 12 ? 8.8 : length >= 10 ? 9.4 : length >= 8 ? 10.2 : 11.2;
+    return length >= 12 ? 9.6 : length >= 10 ? 10.4 : length >= 8 ? 11.2 : 12.4;
   }
 
   return wordmarkFontSize(label, variant);
 }
 
 function wordmarkStrokeReserve(fontSize: number): number {
-  return Math.max(1.4, fontSize * 0.16);
+  return Math.max(1.1, fontSize * 0.12);
 }
 
 function wordmarkInnerWidth(maxWidth: number, fontSize: number): number {
@@ -252,12 +253,12 @@ function teamWordmark(teamName: string | undefined, abbr: string, variant: Jerse
 
 function estimatedTextWidth(label: string, fontSize: number): number {
   const widthUnits = label.split('').reduce((sum, char) => {
-    if (/\s/.test(char)) return sum + 0.34;
-    if (/[MW]/.test(char)) return sum + 0.86;
-    if (/[I1JL]/.test(char)) return sum + 0.38;
-    if (/[0-9]/.test(char)) return sum + 0.58;
-    if (/[-.]/.test(char)) return sum + 0.3;
-    return sum + 0.66;
+    if (/\s/.test(char)) return sum + 0.28;
+    if (/[MW]/.test(char)) return sum + 0.74;
+    if (/[I1JL]/.test(char)) return sum + 0.32;
+    if (/[0-9]/.test(char)) return sum + 0.52;
+    if (/[-.]/.test(char)) return sum + 0.26;
+    return sum + 0.56;
   }, 0);
 
   return Math.max(1, widthUnits) * fontSize;
@@ -398,13 +399,13 @@ function jerseyFontSize(label: string, variant: JerseyModelVariant): number {
 
 function wordmarkFontSize(label: string, variant: JerseyModelVariant): number {
   const length = label.replace(/\s/g, '').length;
-  if (variant === 'baseball') return length >= 11 ? 8.8 : length >= 9 ? 9.4 : length >= 7 ? 10.2 : 11.2;
-  if (variant === 'football') return length >= 11 ? 8.6 : length >= 9 ? 9.2 : length >= 7 ? 10 : 11.3;
-  if (variant === 'hockey') return length >= 11 ? 8.4 : length >= 9 ? 9.1 : length >= 7 ? 9.8 : 10.8;
-  if (variant === 'tennis') return length >= 10 ? 8.6 : length >= 8 ? 9.2 : length >= 5 ? 10.2 : 11.2;
-  if (variant === 'cricket') return length >= 8 ? 8.8 : length >= 5 ? 9.8 : 11;
-  if (variant === 'soccer' || variant === 'ucl') return length >= 8 ? 7.8 : length >= 5 ? 8.6 : 9.6;
-  return length >= 11 ? 8.4 : length >= 9 ? 9.1 : length >= 7 ? 9.8 : 10.8;
+  if (variant === 'baseball') return length >= 11 ? 9.8 : length >= 9 ? 10.7 : length >= 7 ? 11.4 : 12.6;
+  if (variant === 'football') return length >= 11 ? 9.2 : length >= 9 ? 9.9 : length >= 7 ? 10.8 : 12.1;
+  if (variant === 'hockey') return length >= 11 ? 9.1 : length >= 9 ? 9.8 : length >= 7 ? 10.6 : 11.7;
+  if (variant === 'tennis') return length >= 10 ? 9.2 : length >= 8 ? 9.9 : length >= 5 ? 10.9 : 12;
+  if (variant === 'cricket') return length >= 8 ? 9.5 : length >= 5 ? 10.6 : 11.8;
+  if (variant === 'soccer' || variant === 'ucl') return length >= 8 ? 8.4 : length >= 5 ? 9.4 : 10.4;
+  return length >= 11 ? 9 : length >= 9 ? 9.8 : length >= 7 ? 10.5 : 11.6;
 }
 
 function TextureLayer({
@@ -812,6 +813,8 @@ function EmbroideredLabel({
   minFontSize,
   rotation = 0,
   stitch = true,
+  surface,
+  surfaceAccent,
 }: {
   x: number;
   y: number;
@@ -823,6 +826,8 @@ function EmbroideredLabel({
   minFontSize?: number;
   rotation?: number;
   stitch?: boolean;
+  surface?: string;
+  surfaceAccent?: string;
 }) {
   const targetMaxWidth = maxWidth ? wordmarkInnerWidth(maxWidth, fontSize) : undefined;
   const layout = fittedLabelLayout(label, fontSize, targetMaxWidth, minFontSize ?? 6.8);
@@ -830,13 +835,21 @@ function EmbroideredLabel({
   const baselineStart = y - ((layout.lines.length - 1) * layout.lineHeight) / 2;
   const lineYs = layout.lines.map((_, index) => baselineStart + index * layout.lineHeight);
   const lineWidths = layout.lines.map((line) => estimatedTextWidth(line, layout.fontSize));
-  const outerStroke = Math.max(1.1, Math.min(3.1, layout.fontSize * 0.24));
-  const shadowStroke = outerStroke + Math.max(0.36, layout.fontSize * 0.06);
+  const outerStroke = Math.max(0.95, Math.min(2.35, layout.fontSize * 0.18));
+  const shadowStroke = outerStroke + Math.max(0.32, layout.fontSize * 0.055);
   const insetStroke = Math.max(0.22, Math.min(0.54, layout.fontSize * 0.04));
   const stitchStroke = Math.max(0.18, Math.min(0.42, layout.fontSize * 0.035));
   const stitchDash = `${Math.max(0.52, layout.fontSize * 0.09)},${Math.max(1.08, layout.fontSize * 0.18)}`;
   const lightThread = lighten(fill, luminance(fill) > 0.58 ? 0.16 : 0.38);
   const darkThread = darken(fill, luminance(fill) > 0.58 ? 0.32 : 0.18);
+  const jerseySurface = surface ?? mixColor(fill, stroke, 0.22);
+  const jerseyThread = surfaceAccent ?? mixColor(jerseySurface, fill, 0.32);
+  const integratedFill = mixColor(fill, jerseySurface, luminance(fill) > 0.62 ? 0.12 : 0.07);
+  const integratedStroke = mixColor(stroke, jerseySurface, 0.12);
+  const fabricShadow = darken(jerseySurface, 0.5);
+  const fabricHighlight = lighten(jerseySurface, 0.55);
+  const fabricStroke = Math.max(0.16, Math.min(0.34, layout.fontSize * 0.025));
+  const fabricDash = `${Math.max(0.36, layout.fontSize * 0.055)},${Math.max(0.78, layout.fontSize * 0.12)}`;
 
   return (
     <G transform={transform}>
@@ -844,7 +857,7 @@ function EmbroideredLabel({
         <Path
           key={`applique_shadow_${line}_${index}`}
           d={`M${x - lineWidths[index] / 2} ${lineYs[index] + layout.fontSize * 0.35} C${x - lineWidths[index] * 0.22} ${lineYs[index] + layout.fontSize * 0.47} ${x + lineWidths[index] * 0.22} ${lineYs[index] + layout.fontSize * 0.47} ${x + lineWidths[index] / 2} ${lineYs[index] + layout.fontSize * 0.35}`}
-          stroke="#000000"
+          stroke={fabricShadow}
           strokeWidth={Math.max(0.4, layout.fontSize * 0.045)}
           strokeOpacity={0.16}
           strokeLinecap="round"
@@ -854,16 +867,16 @@ function EmbroideredLabel({
       {layout.lines.map((line, index) => (
         <SvgText
           key={`applique_depth_${line}_${index}`}
-          x={x + Math.max(0.22, layout.fontSize * 0.025)}
-          y={lineYs[index] + Math.max(0.34, layout.fontSize * 0.045)}
+          x={x + Math.max(0.1, layout.fontSize * 0.012)}
+          y={lineYs[index] + Math.max(0.16, layout.fontSize * 0.022)}
           textAnchor="middle"
           fontSize={layout.fontSize}
           fontWeight="900"
-          fontFamily="System"
+          fontFamily={WORDMARK_FONT_FAMILY}
           fill="none"
-          stroke="#000000"
-          strokeWidth={shadowStroke}
-          strokeOpacity={0.2}
+          stroke={fabricShadow}
+          strokeWidth={shadowStroke * 0.58}
+          strokeOpacity={0.1}
           strokeLinejoin="round"
           strokeLinecap="round"
         >
@@ -878,11 +891,11 @@ function EmbroideredLabel({
           textAnchor="middle"
           fontSize={layout.fontSize}
           fontWeight="900"
-          fontFamily="System"
+          fontFamily={WORDMARK_FONT_FAMILY}
           fill="none"
-          stroke={stroke}
+          stroke={integratedStroke}
           strokeWidth={outerStroke}
-          strokeOpacity={0.98}
+          strokeOpacity={0.84}
           strokeLinejoin="round"
           strokeLinecap="round"
         >
@@ -897,9 +910,39 @@ function EmbroideredLabel({
           textAnchor="middle"
           fontSize={layout.fontSize}
           fontWeight="900"
-          fontFamily="System"
-          fill={fill}
-          fillOpacity={0.97}
+          fontFamily={WORDMARK_FONT_FAMILY}
+          fill={integratedFill}
+          fillOpacity={0.95}
+        >
+          {line}
+        </SvgText>
+      ))}
+      {layout.lines.map((line, index) => (
+        <SvgText
+          key={`applique_surface_shadow_${line}_${index}`}
+          x={x + Math.max(0.12, layout.fontSize * 0.014)}
+          y={lineYs[index] + Math.max(0.16, layout.fontSize * 0.018)}
+          textAnchor="middle"
+          fontSize={layout.fontSize}
+          fontWeight="900"
+          fontFamily={WORDMARK_FONT_FAMILY}
+          fill={fabricShadow}
+          fillOpacity={0.11}
+        >
+          {line}
+        </SvgText>
+      ))}
+      {layout.lines.map((line, index) => (
+        <SvgText
+          key={`applique_surface_highlight_${line}_${index}`}
+          x={x - Math.max(0.1, layout.fontSize * 0.012)}
+          y={lineYs[index] - Math.max(0.12, layout.fontSize * 0.015)}
+          textAnchor="middle"
+          fontSize={layout.fontSize}
+          fontWeight="900"
+          fontFamily={WORDMARK_FONT_FAMILY}
+          fill={fabricHighlight}
+          fillOpacity={0.08}
         >
           {line}
         </SvgText>
@@ -912,11 +955,31 @@ function EmbroideredLabel({
           textAnchor="middle"
           fontSize={layout.fontSize}
           fontWeight="900"
-          fontFamily="System"
+          fontFamily={WORDMARK_FONT_FAMILY}
           fill="none"
           stroke={darkThread}
           strokeWidth={insetStroke}
-          strokeOpacity={0.45}
+          strokeOpacity={0.3}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        >
+          {line}
+        </SvgText>
+      ))}
+      {layout.lines.map((line, index) => (
+        <SvgText
+          key={`applique_cloth_grain_${line}_${index}`}
+          x={x}
+          y={lineYs[index]}
+          textAnchor="middle"
+          fontSize={layout.fontSize}
+          fontWeight="900"
+          fontFamily={WORDMARK_FONT_FAMILY}
+          fill="none"
+          stroke={jerseyThread}
+          strokeWidth={fabricStroke}
+          strokeDasharray={fabricDash}
+          strokeOpacity={0.18}
           strokeLinejoin="round"
           strokeLinecap="round"
         >
@@ -931,9 +994,9 @@ function EmbroideredLabel({
           textAnchor="middle"
           fontSize={layout.fontSize}
           fontWeight="900"
-          fontFamily="System"
+          fontFamily={WORDMARK_FONT_FAMILY}
           fill={lightThread}
-          fillOpacity={0.18}
+          fillOpacity={0.13}
         >
           {line}
         </SvgText>
@@ -947,12 +1010,12 @@ function EmbroideredLabel({
             textAnchor="middle"
             fontSize={layout.fontSize}
             fontWeight="900"
-            fontFamily="System"
+            fontFamily={WORDMARK_FONT_FAMILY}
             fill="none"
             stroke={lightThread}
             strokeWidth={stitchStroke}
             strokeDasharray={stitchDash}
-            strokeOpacity={0.24}
+            strokeOpacity={0.3}
             strokeLinejoin="round"
             strokeLinecap="round"
           >
@@ -993,7 +1056,7 @@ function LegalSafeCrest({
         <Circle cx={x} cy={y} r={5.8} fill={`url(#${ids.trim})`} fillOpacity={0.76} stroke={accent} strokeWidth={0.78} strokeOpacity={0.48} />
         <Path d={`M${x - 3.7} ${y + 3.2} L${x + 3.8} ${y - 3.2}`} stroke={stroke} strokeWidth={0.78} strokeOpacity={0.44} strokeLinecap="round" />
         {showMark ? (
-          <SvgText x={x} y={y + 2.1} textAnchor="middle" fontSize={4.5} fontWeight="900" fill={fill} stroke={stroke} strokeWidth={0.42}>
+          <SvgText x={x} y={y + 2.1} textAnchor="middle" fontSize={4.5} fontWeight="900" fontFamily={WORDMARK_FONT_FAMILY} fill={fill} stroke={stroke} strokeWidth={0.42}>
             {mark}
           </SvgText>
         ) : null}
@@ -1007,7 +1070,7 @@ function LegalSafeCrest({
         <Path d={`M${x} ${y - 6.7} L${x + 6.2} ${y} L${x} ${y + 6.7} L${x - 6.2} ${y} Z`} fill="#000000" fillOpacity={0.22} />
         <Path d={`M${x} ${y - 5.6} L${x + 5.2} ${y} L${x} ${y + 5.6} L${x - 5.2} ${y} Z`} fill={`url(#${ids.trim})`} fillOpacity={0.78} stroke={accent} strokeWidth={0.7} strokeOpacity={0.46} />
         {showMark ? (
-          <SvgText x={x} y={y + 1.9} textAnchor="middle" fontSize={4.3} fontWeight="900" fill={fill} stroke={stroke} strokeWidth={0.38}>
+          <SvgText x={x} y={y + 1.9} textAnchor="middle" fontSize={4.3} fontWeight="900" fontFamily={WORDMARK_FONT_FAMILY} fill={fill} stroke={stroke} strokeWidth={0.38}>
             {mark}
           </SvgText>
         ) : null}
@@ -1021,7 +1084,7 @@ function LegalSafeCrest({
       <Path d={`M${x - 4.9} ${y - 5.1} L${x + 4.9} ${y - 5.1} L${x + 4.1} ${y + 2.9} Q${x} ${y + 6.5} ${x - 4.1} ${y + 2.9} Z`} fill={`url(#${ids.trim})`} fillOpacity={0.78} stroke={accent} strokeWidth={0.72} strokeOpacity={0.48} />
       <Path d={`M${x - 2.9} ${y - 2.4} L${x + 2.9} ${y - 2.4}`} stroke="#ffffff" strokeWidth={0.62} strokeOpacity={0.22} strokeLinecap="round" />
       {showMark ? (
-        <SvgText x={x} y={y + 1.9} textAnchor="middle" fontSize={4.2} fontWeight="900" fill={fill} stroke={stroke} strokeWidth={0.38}>
+        <SvgText x={x} y={y + 1.9} textAnchor="middle" fontSize={4.2} fontWeight="900" fontFamily={WORDMARK_FONT_FAMILY} fill={fill} stroke={stroke} strokeWidth={0.38}>
           {mark}
         </SvgText>
       ) : null}
@@ -1038,6 +1101,7 @@ function GarmentMarkings({
   fill,
   stroke,
   accent,
+  surface,
 }: {
   variant: JerseyModelVariant;
   label: string;
@@ -1047,6 +1111,7 @@ function GarmentMarkings({
   fill: string;
   stroke: string;
   accent: string;
+  surface: string;
 }) {
   const fontSize = jerseyFontSize(label, variant);
   const wordSize = wordmarkFontSize(wordmark, variant);
@@ -1058,9 +1123,9 @@ function GarmentMarkings({
         <Ellipse cx={50} cy={64} rx={17.5} ry={13.4} fill="#000000" fillOpacity={0.24} />
         <Ellipse cx={50} cy={63.2} rx={16} ry={12} fill={`url(#${ids.trim})`} fillOpacity={0.66} stroke={accent} strokeWidth={0.8} strokeOpacity={0.42} />
         <Ellipse cx={47.5} cy={59} rx={10.5} ry={2.8} fill="#ffffff" fillOpacity={0.17} />
-        <EmbroideredLabel x={50} y={shape.labelY} label={label} fill={fill} stroke={stroke} fontSize={fontSize} maxWidth={26} />
+        <EmbroideredLabel x={50} y={shape.labelY} label={label} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={fontSize} maxWidth={28} />
         {!wordIsLabel ? (
-          <EmbroideredLabel x={50} y={84} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={50} minFontSize={7} />
+          <EmbroideredLabel x={50} y={84} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={54} minFontSize={7.8} />
         ) : null}
       </>
     );
@@ -1070,7 +1135,7 @@ function GarmentMarkings({
     return (
       <>
         <LegalSafeCrest x={34} y={42.5} label={label} ids={ids} fill={fill} stroke={stroke} accent={accent} showMark={!wordIsLabel} shape="circle" />
-        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={44} minFontSize={6.6} />
+        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={48} minFontSize={7.4} />
       </>
     );
   }
@@ -1079,7 +1144,7 @@ function GarmentMarkings({
     return (
       <>
         <LegalSafeCrest x={35} y={45} label={label} ids={ids} fill={fill} stroke={stroke} accent={accent} showMark={!wordIsLabel} shape="circle" />
-        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={44} minFontSize={6.8} rotation={-10} />
+        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={48} minFontSize={7.4} rotation={-10} />
         <Path d="M31 72 C42 76 58 77 70 72" stroke={stroke} strokeWidth={0.9} strokeOpacity={0.16} strokeLinecap="round" fill="none" />
       </>
     );
@@ -1089,7 +1154,7 @@ function GarmentMarkings({
     return (
       <>
         <LegalSafeCrest x={35} y={45} label={label} ids={ids} fill={fill} stroke={stroke} accent={accent} showMark={!wordIsLabel} shape="circle" />
-        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={50} minFontSize={7.2} rotation={-6} />
+        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={54} minFontSize={7.8} rotation={-6} />
         <Path d="M32 72 C43 75 57 75 68 72" stroke={stroke} strokeWidth={0.82} strokeOpacity={0.14} strokeLinecap="round" fill="none" />
       </>
     );
@@ -1098,7 +1163,7 @@ function GarmentMarkings({
   if (variant === 'baseball') {
     return (
       <>
-        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={54} minFontSize={7.2} rotation={-5} />
+        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={68} minFontSize={8.8} rotation={-5} />
         <LegalSafeCrest x={85} y={42} label={label} ids={ids} fill={fill} stroke={stroke} accent={accent} showMark={!wordIsLabel} shape="shield" />
         <Rect x={31} y={98} width={12} height={3.4} rx={0.9} fill={accent} fillOpacity={0.36} />
         <Rect x={57} y={98} width={12} height={3.4} rx={0.9} fill={`url(#${ids.trim})`} fillOpacity={0.48} />
@@ -1110,7 +1175,7 @@ function GarmentMarkings({
     return (
       <>
         <LegalSafeCrest x={50} y={45} label={label} ids={ids} fill={fill} stroke={stroke} accent={accent} showMark={!wordIsLabel} shape="shield" />
-        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={48} minFontSize={7.2} />
+        <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={52} minFontSize={7.8} />
         <Path d="M15 43 L25 40 L23 47 L14 50 Z" fill={stroke} fillOpacity={0.18} stroke={accent} strokeWidth={0.55} strokeOpacity={0.22} />
         <Path d="M85 43 L75 40 L77 47 L86 50 Z" fill={stroke} fillOpacity={0.18} stroke={accent} strokeWidth={0.55} strokeOpacity={0.22} />
       </>
@@ -1123,7 +1188,7 @@ function GarmentMarkings({
 
     return (
       <>
-        <EmbroideredLabel x={shape.labelX} y={y} label={wordmark} fill={fill} stroke={stroke} fontSize={basketballWordSize} maxWidth={48} minFontSize={7.6} />
+        <EmbroideredLabel x={shape.labelX} y={y} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={basketballWordSize} maxWidth={52} minFontSize={8.2} />
       </>
     );
   }
@@ -1131,9 +1196,9 @@ function GarmentMarkings({
   return (
     <>
       <LegalSafeCrest x={38} y={43} label={label} ids={ids} fill={fill} stroke={stroke} accent={accent} showMark={!wordIsLabel} shape="diamond" />
-      <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} fontSize={wordSize} maxWidth={46} minFontSize={6.8} />
+      <EmbroideredLabel x={shape.labelX} y={shape.labelY} label={wordmark} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={wordSize} maxWidth={50} minFontSize={7.4} />
       {!wordIsLabel ? (
-        <EmbroideredLabel x={50} y={77} label={safeLabel(label, 2)} fill={fill} stroke={stroke} fontSize={fontSize} maxWidth={22} />
+        <EmbroideredLabel x={50} y={77} label={safeLabel(label, 2)} fill={fill} stroke={stroke} surface={surface} surfaceAccent={accent} fontSize={fontSize} maxWidth={22} />
       ) : null}
     </>
   );
@@ -1272,8 +1337,8 @@ function BasketballSleevelessModel({
       <Path d="M73 22 C70 32 70 39 71 47" stroke="#05070a" strokeWidth={1.08} strokeOpacity={0.18} fill="none" strokeLinecap="round" />
 
       <G clipPath={`url(#${ids.clip})`}>
-        <EmbroideredLabel x={50} y={54.5} label={wordmark} fill={detail} stroke={outline} fontSize={wordSize} maxWidth={48} minFontSize={7.6} />
-        <EmbroideredLabel x={50} y={77} label={number} fill={detail} stroke={outline} fontSize={14} maxWidth={25} />
+        <EmbroideredLabel x={50} y={54.5} label={wordmark} fill={detail} stroke={outline} surface={primary} surfaceAccent={accent} fontSize={wordSize} maxWidth={52} minFontSize={8.2} />
+        <EmbroideredLabel x={50} y={77} label={number} fill={detail} stroke={outline} surface={primary} surfaceAccent={accent} fontSize={14} maxWidth={25} />
       </G>
       <Path d={body} fill={`url(#${ids.glass})`} fillOpacity={0.32} />
     </Svg>
@@ -1362,6 +1427,7 @@ export function MiniJerseyModel({
           fill={detail}
           stroke={outline}
           accent={accent}
+          surface={primary}
         />
       </G>
       <Path d={shape.body} fill={`url(#${ids.glass})`} fillOpacity={0.34} />

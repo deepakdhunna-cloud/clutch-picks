@@ -10,6 +10,7 @@ interface PredictionBadgeProps {
   size?: 'small' | 'medium' | 'large';
   showBar?: boolean;
   isTossUp?: boolean;
+  marketType?: 'moneyline' | 'three_way_result' | null;
 }
 
 export const PredictionBadge = memo(function PredictionBadge({
@@ -18,8 +19,9 @@ export const PredictionBadge = memo(function PredictionBadge({
   size = 'medium',
   showBar = true,
   isTossUp = false,
+  marketType = null,
 }: PredictionBadgeProps) {
-  const tier = getConfidenceTier(confidence, isTossUp);
+  const tier = getConfidenceTier(confidence, isTossUp, marketType);
   const pickLabel = isTossUp ? 'Toss-Up' : predictedWinner;
 
   const sizeStyles = {

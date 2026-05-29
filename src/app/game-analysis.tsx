@@ -12,6 +12,7 @@ import {
   getCanonicalResult,
   getCanonicalWinProbabilities,
 } from '@/lib/canonical-result';
+import { getDisplayProjection, isStoredPregamePrediction } from '@/lib/stored-pregame-display';
 import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
@@ -398,7 +399,8 @@ export default function GameAnalysisScreen() {
   });
   const winnerName = predictionDisplay.label;
   const canonicalConfidence = getCanonicalConfidence(prediction as unknown as Prediction);
-  const projectionDisplay = prediction.projection
+  const displayProjection = getDisplayProjection(game as any);
+  const projectionDisplay = displayProjection
     ? getProjectionDisplay({
         sport: game.sport,
         homeAbbr: homeTeam.abbreviation,
@@ -408,10 +410,10 @@ export default function GameAnalysisScreen() {
         predictedOutcome: prediction.predictedOutcome,
         confidence: canonicalConfidence,
         isTossUp: predictionDisplay.isTossUp,
-        projection: prediction.projection,
+        projection: displayProjection,
       })
     : null;
-  const projectionRiskTier = prediction.projection ? getProjectionRiskTier(prediction.projection.upsetRisk) : null;
+  const projectionRiskTier = displayProjection ? getProjectionRiskTier(displayProjection.upsetRisk) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -533,7 +535,7 @@ export default function GameAnalysisScreen() {
           } as any)}</Text>
         </View>
 
-        {prediction.projection ? (
+        {displayProjection ? (
           <View style={s.projectionCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <View>
@@ -548,17 +550,17 @@ export default function GameAnalysisScreen() {
             <View style={s.projectionScoreRow}>
               <View style={s.projectionScoreTile}>
                 <Text style={[s.projectionTeam, { color: TEAL }]}>{homeTeam.abbreviation}</Text>
-                <Text style={s.projectionScore}>{projectionDisplay?.homeScore ?? Math.round(prediction.projection.projectedHomeScore)}</Text>
+                <Text style={s.projectionScore}>{projectionDisplay?.homeScore ?? Math.round(displayProjection.projectedHomeScore)}</Text>
               </View>
               <View style={s.projectionMid}>
                 <Text style={s.projectionMidLabel}>{projectionDisplay?.label ?? 'Projected Score'}</Text>
                 <Text style={s.projectionMidValue}>{projectionDisplay?.leanText ?? predictionDisplay.leanLabel}</Text>
-                <Text style={s.projectionMidValue}>Total {projectionDisplay?.total ?? Math.round(prediction.projection.projectedTotal)}</Text>
-                <Text style={s.projectionMidValue}>Spread {(projectionDisplay?.spreadValue ?? prediction.projection.projectedSpread) >= 0 ? '+' : ''}{projectionDisplay?.spread ?? Math.round(prediction.projection.projectedSpread)}</Text>
+                <Text style={s.projectionMidValue}>Total {projectionDisplay?.total ?? Math.round(displayProjection.projectedTotal)}</Text>
+                <Text style={s.projectionMidValue}>Spread {(projectionDisplay?.spreadValue ?? displayProjection.projectedSpread) >= 0 ? '+' : ''}{projectionDisplay?.spread ?? Math.round(displayProjection.projectedSpread)}</Text>
               </View>
               <View style={s.projectionScoreTile}>
                 <Text style={[s.projectionTeam, { color: MAROON }]}>{awayTeam.abbreviation}</Text>
-                <Text style={s.projectionScore}>{projectionDisplay?.awayScore ?? Math.round(prediction.projection.projectedAwayScore)}</Text>
+                <Text style={s.projectionScore}>{projectionDisplay?.awayScore ?? Math.round(displayProjection.projectedAwayScore)}</Text>
               </View>
             </View>
 
@@ -574,7 +576,11 @@ export default function GameAnalysisScreen() {
         }
         ListEmptyComponent={
           <View style={s.emptyFactors}>
-            <Text style={s.emptyFactorsText}>No factor breakdown is available for this game yet.</Text>
+            <Text style={s.emptyFactorsText}>
+              {isStoredPregamePrediction(prediction as unknown as Prediction)
+                ? 'This original pregame snapshot does not include a factor-by-factor breakdown.'
+                : 'No factor breakdown is available for this game yet.'}
+            </Text>
           </View>
         }
         ListFooterComponent={

@@ -136,7 +136,9 @@ export function getCanonicalTeam(game: GameWithPrediction): Team | null {
 }
 
 export function traceCanonicalUiConsumption(surface: string, game: GameWithPrediction): void {
-  if (!__DEV__ || process.env.EXPO_PUBLIC_PREDICTION_TRACE !== '1') return;
+  const traceFlag = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env?.['EXPO_PUBLIC_PREDICTION_TRACE'];
+  if (!__DEV__ || traceFlag !== '1') return;
   const canonical = getCanonicalResult(game.prediction);
   if (!canonical) return;
   console.log('[prediction-ui-trace]', {

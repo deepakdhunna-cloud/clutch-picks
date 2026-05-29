@@ -135,6 +135,159 @@ describe('canonical UI result helpers', () => {
     expect(analysis).toContain('projection lean');
   });
 
+  it('displays stale tennis set averages as projected match games instead of recycled set scores', () => {
+    const game = makeGame();
+    game.sport = Sport.TENNIS;
+    game.homeTeam.abbreviation = 'ALC';
+    game.awayTeam.abbreviation = 'SIN';
+    game.prediction!.predictedWinner = 'away';
+    game.prediction!.predictedOutcome = 'away';
+    game.prediction!.confidence = 55;
+    game.prediction!.projection = {
+      ...game.prediction!.projection!,
+      homeWinProbability: 45,
+      awayWinProbability: 55,
+      projectedHomeScore: 1.3,
+      projectedAwayScore: 1.5,
+      projectedSpread: -0.2,
+      projectedTotal: 2.8,
+    };
+    game.prediction!.canonicalResult = {
+      ...game.prediction!.canonicalResult!,
+      finalPick: 'away',
+      finalProbability: 0.55,
+      confidence: 55,
+      probabilities: { home: 0.45, away: 0.55 },
+    };
+
+    const projectionDisplay = getProjectionDisplay({
+      sport: game.sport,
+      homeAbbr: game.homeTeam.abbreviation,
+      awayAbbr: game.awayTeam.abbreviation,
+      canonicalResult: game.prediction!.canonicalResult,
+      predictedWinner: game.prediction!.predictedWinner,
+      predictedOutcome: game.prediction!.predictedOutcome,
+      confidence: game.prediction!.confidence,
+      projection: game.prediction!.projection!,
+    });
+
+    expect(projectionDisplay.label).toBe('Projected Games');
+    expect(Number(projectionDisplay.homeScore)).toBeGreaterThan(8);
+    expect(Number(projectionDisplay.awayScore)).toBeGreaterThan(Number(projectionDisplay.homeScore));
+    expect(projectionDisplay.total).toContain('games');
+    expect(projectionDisplay.total).not.toBe('3 sets');
+    expect(projectionDisplay.spreadValue).toBeLessThan(0);
+    expect(projectionDisplay.leanText).toBe('Lean SIN 55%');
+  });
+
+  it('preserves real tennis match-game projections instead of replacing every moderate favorite with 2-1', () => {
+    const game = makeGame();
+    game.sport = Sport.TENNIS;
+    game.homeTeam.abbreviation = 'ALC';
+    game.awayTeam.abbreviation = 'SIN';
+    game.prediction!.predictedWinner = 'away';
+    game.prediction!.predictedOutcome = 'away';
+    game.prediction!.confidence = 58;
+    game.prediction!.projection = {
+      ...game.prediction!.projection!,
+      homeWinProbability: 42,
+      awayWinProbability: 58,
+      projectedHomeScore: 10.2,
+      projectedAwayScore: 13.8,
+      projectedSpread: -3.6,
+      projectedTotal: 24,
+    };
+    game.prediction!.canonicalResult = {
+      ...game.prediction!.canonicalResult!,
+      finalPick: 'away',
+      finalProbability: 0.58,
+      confidence: 58,
+      probabilities: { home: 0.42, away: 0.58 },
+    };
+
+    const projectionDisplay = getProjectionDisplay({
+      sport: game.sport,
+      homeAbbr: game.homeTeam.abbreviation,
+      awayAbbr: game.awayTeam.abbreviation,
+      canonicalResult: game.prediction!.canonicalResult,
+      predictedWinner: game.prediction!.predictedWinner,
+      predictedOutcome: game.prediction!.predictedOutcome,
+      confidence: game.prediction!.confidence,
+      projection: game.prediction!.projection!,
+    });
+
+    expect(projectionDisplay.homeScore).toBe('10.2');
+    expect(projectionDisplay.awayScore).toBe('13.8');
+    expect(projectionDisplay.total).toBe('24.0 games');
+    expect(projectionDisplay.spread).toBe('-3.6');
+    expect(projectionDisplay.spreadValue).toBe(-3.6);
+  });
+
+  it('displays cricket projections as whole-run totals instead of decimal score averages', () => {
+    const game = makeGame();
+    game.sport = Sport.IPL;
+    game.homeTeam.abbreviation = 'RCB';
+    game.awayTeam.abbreviation = 'KKR';
+    game.prediction!.predictedWinner = 'home';
+    game.prediction!.predictedOutcome = 'home';
+    game.prediction!.confidence = 61;
+    game.prediction!.projection = {
+      ...game.prediction!.projection!,
+      homeWinProbability: 61,
+      awayWinProbability: 39,
+      projectedHomeScore: 192.4,
+      projectedAwayScore: 161.2,
+      projectedSpread: 31.2,
+      projectedTotal: 353.6,
+    };
+    game.prediction!.canonicalResult = {
+      ...game.prediction!.canonicalResult!,
+      finalPick: 'home',
+      finalProbability: 0.61,
+      confidence: 61,
+      probabilities: { home: 0.61, away: 0.39 },
+    };
+
+    const projectionDisplay = getProjectionDisplay({
+      sport: game.sport,
+      homeAbbr: game.homeTeam.abbreviation,
+      awayAbbr: game.awayTeam.abbreviation,
+      canonicalResult: game.prediction!.canonicalResult,
+      predictedWinner: game.prediction!.predictedWinner,
+      predictedOutcome: game.prediction!.predictedOutcome,
+      confidence: game.prediction!.confidence,
+      projection: game.prediction!.projection!,
+    });
+
+    expect(projectionDisplay.label).toBe('Projected Runs');
+    expect(projectionDisplay.homeScore).toBe('192');
+    expect(projectionDisplay.awayScore).toBe('161');
+    expect(projectionDisplay.total).toBe('354 runs');
+    expect(projectionDisplay.spread).toBe('31');
+    expect(projectionDisplay.spreadValue).toBe(31);
+  });
+
+  it('does not reintroduce stale model narration while repairing copy', () => {
+    const game = makeGame();
+    game.homeTeam.name = 'Washington Nationals';
+    game.homeTeam.abbreviation = 'WSH';
+    game.awayTeam.name = 'Cleveland Guardians';
+    game.awayTeam.abbreviation = 'CLE';
+    game.sport = Sport.MLB;
+    game.prediction!.predictedWinner = 'away';
+    game.prediction!.homeWinProbability = 45;
+    game.prediction!.awayWinProbability = 55;
+    game.prediction!.confidence = 55;
+    game.prediction!.analysis =
+      'the Cleveland Guardians get the call over the Washington Nationals, mostly because the matchup gives them a few more usable edges. Start here: the power-rating setup points their way. Working against the pick: recent form favors Washington.';
+
+    const analysis = displayPredictionAnalysis(game);
+
+    expect(analysis).toContain('Cleveland Guardians');
+    expect(analysis).toContain('Washington Nationals');
+    expect(analysis).not.toMatch(/get the call|usable edges|power-rating|working against|the model|copy-paste|start here/i);
+  });
+
   it('uses one shared display outcome for draw reads', () => {
     const game = makeGame();
     game.sport = Sport.EPL;
@@ -171,6 +324,33 @@ describe('canonical UI result helpers', () => {
       projection: game.prediction!.projection!,
     });
     expect(projectionDisplay.leanText).toBe('Draw 40%');
+  });
+
+  it('does not hide a meaningful three-way home/away edge as a binary toss-up', () => {
+    const game = makeGame();
+    game.sport = Sport.EPL;
+    game.prediction!.predictedWinner = 'home';
+    game.prediction!.predictedOutcome = 'home';
+    game.prediction!.confidence = 42;
+    game.prediction!.homeWinProbability = 42;
+    game.prediction!.awayWinProbability = 29;
+    game.prediction!.drawProbability = 29;
+    game.prediction!.isTossUp = true;
+    game.prediction!.canonicalResult = {
+      ...game.prediction!.canonicalResult!,
+      marketType: 'three_way_result',
+      finalPick: 'home',
+      finalProbability: 0.42,
+      confidence: 42,
+      probabilities: { home: 0.42, away: 0.29, draw: 0.29 },
+    };
+
+    const display = getGamePredictionDisplay(game);
+
+    expect(display.outcome).toBe('home');
+    expect(display.badgeLabel).toBe('HOM');
+    expect(display.isTossUp).toBe(false);
+    expect(display.marketType).toBe('three_way_result');
   });
 
   it('uses one shared display outcome for toss-up reads', () => {

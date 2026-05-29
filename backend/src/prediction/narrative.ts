@@ -30,7 +30,7 @@ const BANNED_WORDS = [
 
 const BANNED_REGEX = new RegExp(BANNED_WORDS.join("|"), "i");
 const BAD_STYLE_REGEX =
-  /\bget the call\b|\busable edges\b|\bpower-rating case\b|\bworking against the pick\b|\bthe model\b|\bthe algorithm\b/i;
+  /\bget the call\b|\busable edges\b|\bpower-rating (?:case|setup)\b|\bworking against the pick\b|\bthe model\b|\bthe algorithm\b|\bstart here\b|\bgets? the nod\b|\bgot (?:a |the )?(?:slight |solid |clear )?edge\b|don['’]t sleep|\brather grim\b|\blighting up\b/i;
 
 // ─── Neutral-context factor keys ────────────────────────────────────────
 // These factors describe environmental / game-level context that affects
@@ -590,7 +590,7 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     pickVariant(
       [
         `The main reason: ${leadInsight}.`,
-        `Start here: ${leadInsight}.`,
+        `The clearest starting point is ${leadInsight}.`,
         `The first thing that stands out: ${leadInsight}.`,
       ],
       `${seed}|lead`,

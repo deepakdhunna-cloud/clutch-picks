@@ -16,7 +16,7 @@ import { join } from "path";
 import { predictGame } from "./index";
 import { prisma } from "../prisma";
 import type { GameContext } from "./types";
-import type { Game } from "../types/sports";
+import type { Game, Team } from "../types/sports";
 import { Sport, League, GameStatus } from "../types/sports";
 import { getEloRating } from "../lib/elo";
 import {
@@ -26,6 +26,7 @@ import {
   fetchStartingLineup,
   fetchGameWeather,
   fetchFixtureCongestion,
+  type TeamRecentForm,
 } from "../lib/espnStats";
 import { fetchGameInjuries, toTeamInjuryReport, mergePlayerAvailability } from "../lib/espnInjuries";
 import {
@@ -117,6 +118,48 @@ export function useNewEngine(): boolean {
   return useNewPredictionEngine;
 }
 
+function finiteTeamNumber(team: Team | null | undefined, field: "runRateFor" | "runRateAgainst"): number | null {
+  const value = team?.[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function t20RunsFromRate(rate: number | null): number | null {
+  if (rate === null) return null;
+  return Math.max(80, Math.min(240, rate * 20));
+}
+
+function averageFinite(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (finite.length === 0) return null;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function resolveIPLScoringForm(
+  sport: string,
+  form: TeamRecentForm,
+  team: Team,
+  opponent: Team,
+): TeamRecentForm {
+  if (sport !== "IPL") return form;
+
+  const estimatedScore = averageFinite([
+    t20RunsFromRate(finiteTeamNumber(team, "runRateFor")),
+    t20RunsFromRate(finiteTeamNumber(opponent, "runRateAgainst")),
+  ]);
+  const estimatedAllowed = averageFinite([
+    t20RunsFromRate(finiteTeamNumber(team, "runRateAgainst")),
+    t20RunsFromRate(finiteTeamNumber(opponent, "runRateFor")),
+  ]);
+
+  if (estimatedScore === null && estimatedAllowed === null) return form;
+
+  return {
+    ...form,
+    avgScore: form.avgScore > 0 ? form.avgScore : estimatedScore ?? form.avgScore,
+    avgAllowed: form.avgAllowed > 0 ? form.avgAllowed : estimatedAllowed ?? form.avgAllowed,
+  };
+}
+
 // ─── Log rotation (keep last 14 days) ───────────────────────────────────
 
 export async function cleanOldShadowLogs(): Promise<void> {
@@ -202,8 +245,8 @@ export async function buildGameContext(
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
-    fetchTeamRecentForm(game.homeTeam.id, sport),
-    fetchTeamRecentForm(game.awayTeam.id, sport),
+    fetchTeamRecentForm(game.homeTeam.id, sport, 10, gameDate),
+    fetchTeamRecentForm(game.awayTeam.id, sport, 10, gameDate),
     fetchTeamExtendedStats(game.homeTeam.id, sport, game.awayTeam.id, gameDate),
     fetchTeamExtendedStats(game.awayTeam.id, sport, game.homeTeam.id, gameDate),
     // Per-game injuries via ESPN summary endpoint. Soccer/NFL/NCAA return
@@ -367,6 +410,8 @@ export async function buildGameContext(
       standingsRank: game.homeTeam.standingsRank,
       standingsPoints: game.homeTeam.standingsPoints,
       netRunRate: game.homeTeam.netRunRate,
+      runRateFor: game.homeTeam.runRateFor,
+      runRateAgainst: game.homeTeam.runRateAgainst,
       matchesPlayed: game.homeTeam.matchesPlayed,
       record: {
         wins: typeof game.homeTeam.record === "string"
@@ -389,6 +434,8 @@ export async function buildGameContext(
       standingsRank: game.awayTeam.standingsRank,
       standingsPoints: game.awayTeam.standingsPoints,
       netRunRate: game.awayTeam.netRunRate,
+      runRateFor: game.awayTeam.runRateFor,
+      runRateAgainst: game.awayTeam.runRateAgainst,
       matchesPlayed: game.awayTeam.matchesPlayed,
       record: {
         wins: typeof game.awayTeam.record === "string"
@@ -411,8 +458,8 @@ export async function buildGameContext(
     sport,
     homeElo,
     awayElo,
-    homeForm: resolvedHomeForm,
-    awayForm: resolvedAwayForm,
+    homeForm: resolveIPLScoringForm(sport, resolvedHomeForm, sportsGame.homeTeam, sportsGame.awayTeam),
+    awayForm: resolveIPLScoringForm(sport, resolvedAwayForm, sportsGame.awayTeam, sportsGame.homeTeam),
     homeExtended,
     awayExtended,
     homeInjuries,

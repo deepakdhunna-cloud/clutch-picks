@@ -56,6 +56,7 @@ export interface LLMNarrativeResult {
   tokensUsed: number;
   /** Reason for a null text — for logging. */
   reason?:
+    | "disabled"
     | "validation_failed"
     | "empty_response"
     | "openai_error"
@@ -120,10 +121,10 @@ export function extractInjuryListForLLM(
 
 // ─── Prompt construction ───────────────────────────────────────────────
 
-export const ANALYST_SYSTEM_PROMPT = `You are a sports analyst who talks like a knowledgeable friend at a bar. You explain why the listed team is the pick in 80-150 words and 4-6 sentences.
+export const ANALYST_SYSTEM_PROMPT = `You are a professional sports analyst writing for a paid prediction product. Explain why the listed team is the pick in 80-150 words and 4-6 sentences.
 
 VOICE
-Casual but informed. Contractions are fine. Confident, but never hypey. No preachiness, no clichés, no gambling tout energy. Talk like a person who actually watches the games, not a recap bot. A little wit is good when it fits, but the analysis still has to carry the room.
+Clear, direct, and specific. Confident, but never hypey. No slang, no preachiness, no clichés, no gambling tout energy. The tone should feel like a serious analyst explaining a matchup to both beginners and experts.
 
 MUST INCLUDE
 - The picked team, unless the input says pick'em.
@@ -135,14 +136,14 @@ MUST INCLUDE
 - Why this game is interesting from a fan perspective, using only the provided matchup, factors, injury list, or season context.
 
 STRUCTURAL VARIETY (CRITICAL)
-Every analysis must open differently and follow a different shape. Do NOT settle into a formulaic intro. Vary which angle leads: sometimes the headline factor, sometimes a specific stat, sometimes the wildcard, sometimes a wry observation about the matchup, sometimes a player. Pick the angle that's most interesting for THIS game and lead with it — don't default to the same template.
+Every analysis must open differently and follow a different shape. Do NOT settle into a formulaic intro. Vary which angle leads: sometimes the headline factor, sometimes a specific stat, sometimes the highest-leverage risk, sometimes a matchup-specific detail, sometimes a player. Pick the angle that's most useful for THIS game and lead with it — don't default to the same template.
 
 Example opening *patterns* (mimic the shape, not the words):
-- Lead with the team and what they bring — e.g. "The Cubs come in with..." / "Burnley's biggest issue..."
-- Lead with the deciding factor — e.g. "Home record's doing the heavy lifting here..." / "Pitching matchup tilts this one..."
-- Lead with a stat — e.g. "Seven of ten at home for the Cubs..." / "Leeds is averaging 1.8 goals at Elland Road..."
-- Lead with the matchup — e.g. "Two teams headed in opposite directions..." / "Classic mismatch on paper..."
-- Lead with the X-factor — e.g. "Watch the bullpen tonight..." / "Whoever wins midfield wins this..."
+- Lead with the team and the concrete edge.
+- Lead with the deciding factor.
+- Lead with a stat from the input.
+- Lead with the matchup tension.
+- Lead with the highest-leverage risk.
 
 FORBIDDEN OPENERS (do not start with any of these, in any casing):
 "Alright", "So,", "Let's break", "Here's the deal", "Buckle up", "Listen", "Look,", "Okay so", "Real talk".
@@ -154,7 +155,10 @@ If the scoring projection is nearly level but the pick has a clear lean, explain
 NEVER MENTION
 Spread, over/under, Vegas lines, numeric Elo values, the algorithm, the model, or generic hedges like "anything can happen." Do not use hype/tout terms: lock, guaranteed, can't lose, can’t lose, easy money, slam dunk, smash, dominant, sharp play, hammer, sure thing.
 
-End on the last real point — do not tack on a confidence call at the end.`;
+DO NOT USE THESE PHRASES
+"get the call", "usable edges", "power-rating case", "power-rating setup", "start here", "gets the nod", "got the edge", "don't sleep", "rather grim", "lighting up".
+
+Return one paragraph only. End on the last real point — do not tack on a confidence call at the end.`;
 
 export function mapConfidenceTier(confidencePct: number): ConfidenceTier {
   if (confidencePct < 55) return "low";
@@ -229,6 +233,20 @@ const BANNED_SUBSTRINGS = [
   "let's break",
   "here's the deal",
   "buckle up",
+  "get the call",
+  "usable edges",
+  "power-rating case",
+  "power-rating setup",
+  "start here",
+  "gets the nod",
+  "get the nod",
+  "got the edge",
+  "got a slight edge",
+  "got the slight edge",
+  "don't sleep",
+  "don’t sleep",
+  "rather grim",
+  "lighting up",
 ];
 
 function countSentences(text: string): number {
@@ -253,6 +271,9 @@ export interface ValidationResult {
 export function validateAnalystNarrative(text: string): ValidationResult {
   if (!text || text.trim().length === 0) {
     return { ok: false, reason: "empty" };
+  }
+  if (/\n/.test(text.trim())) {
+    return { ok: false, reason: "multiple paragraphs" };
   }
   const sentences = countSentences(text);
   if (sentences < 4 || sentences > 7) {
@@ -363,6 +384,10 @@ const TEMPERATURE = 0.7;
 const MAX_TOKENS = 250;
 const TIMEOUT_MS = 8000;
 
+function llmNarrativesEnabled(): boolean {
+  return process.env.ENABLE_LLM_NARRATIVES === "true" || activeClient !== defaultOpenAIClient;
+}
+
 /**
  * Call OpenAI, validate, and return {text, tokensUsed}. Returns
  * text=null with a reason on any failure (no API key, rate cap hit,
@@ -372,6 +397,9 @@ const TIMEOUT_MS = 8000;
 export async function generateLLMNarrative(
   input: LLMNarrativeInput,
 ): Promise<LLMNarrativeResult> {
+  if (!llmNarrativesEnabled()) {
+    return { text: null, tokensUsed: 0, reason: "disabled" };
+  }
   if (!process.env.OPENAI_API_KEY && activeClient === defaultOpenAIClient) {
     return { text: null, tokensUsed: 0, reason: "no_api_key" };
   }

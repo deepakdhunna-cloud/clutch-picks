@@ -1284,8 +1284,8 @@ export async function generatePrediction(
   // soccer/NFL/NCAA resolve to empty "unavailable" without a network call).
   const [homeForm, awayForm, homeExtended, awayExtended, gameInjuries, homeAdvanced, awayAdvanced, homeLineup, awayLineup, weatherData] =
     await Promise.all([
-      fetchTeamRecentForm(game.homeTeam.id, sportKey),
-      fetchTeamRecentForm(game.awayTeam.id, sportKey),
+      fetchTeamRecentForm(game.homeTeam.id, sportKey, 10, new Date(game.dateTime)),
+      fetchTeamRecentForm(game.awayTeam.id, sportKey, 10, new Date(game.dateTime)),
       fetchTeamExtendedStats(game.homeTeam.id, sportKey, game.awayTeam.id, new Date(game.dateTime)),
       fetchTeamExtendedStats(game.awayTeam.id, sportKey, game.homeTeam.id, new Date(game.dateTime)),
       fetchGameInjuries(sportKey, game.id, game.homeTeam.id, game.awayTeam.id),

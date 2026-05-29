@@ -54,6 +54,8 @@ export interface Team {
   standingsRank?: number;
   standingsPoints?: number;
   netRunRate?: number;
+  runRateFor?: number;
+  runRateAgainst?: number;
   matchesPlayed?: number;
 }
 
@@ -293,7 +295,7 @@ export interface Prediction {
   recentFormAway?: string;
   homeStreak?: number;
   awayStreak?: number;
-  isTossUp?: boolean; // true if game is within 45-55% probability range
+  isTossUp?: boolean; // true when the top outcome is too close to the runner-up for that market type
   lowDataWarning?: boolean; // true when dataCoverage < 0.6
   ensembleDivergence?: boolean; // true when sub-models disagree on winner
   snapshotType?: 'stored-pregame';

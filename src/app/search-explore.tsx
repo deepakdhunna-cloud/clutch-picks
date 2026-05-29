@@ -146,7 +146,7 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
   const timeStr = live ? null : final ? null : fmtTime(game.gameTime);
   const predictionDisplay = showModelSignals ? getGamePredictionDisplay(game) : null;
   const confidence = showModelSignals && game.prediction ? Math.round(displayConfidence(getCanonicalConfidence(game.prediction))) : null;
-  const tier = showModelSignals && game.prediction ? getConfidenceTier(confidence ?? 50, predictionDisplay?.isTossUp) : null;
+  const tier = showModelSignals && game.prediction ? getConfidenceTier(confidence ?? 50, predictionDisplay?.isTossUp, predictionDisplay?.marketType) : null;
   const statusLabel = live ? (formatGameTime(game.sport, game.quarter, game.clock) ?? 'LIVE') : final ? 'FINAL' : (timeStr ?? 'TBD');
   const showScores = live || final;
   const awayScore = game.awayScore ?? 0;
@@ -236,7 +236,7 @@ const ResultGameRow = memo(function ResultGameRow({
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
   const predictionDisplay = showModelSignals ? getGamePredictionDisplay(game) : null;
   const confidence = showModelSignals && game.prediction ? Math.round(displayConfidence(getCanonicalConfidence(game.prediction))) : null;
-  const tier = showModelSignals && game.prediction ? getConfidenceTier(confidence ?? 50, predictionDisplay?.isTossUp) : null;
+  const tier = showModelSignals && game.prediction ? getConfidenceTier(confidence ?? 50, predictionDisplay?.isTossUp, predictionDisplay?.marketType) : null;
   const statusLabel = live
     ? (formatGameTime(game.sport, game.quarter, game.clock) ?? 'LIVE')
     : final
@@ -563,7 +563,16 @@ export default function SearchExploreScreen() {
     if (!isPremium) return [];
     if (!allGames) return [];
     return [...allGames]
-      .filter(g => g.prediction?.isTossUp || ((g.prediction?.confidence ?? 100) >= 48 && (g.prediction?.confidence ?? 0) <= 53))
+      .filter((g) => {
+        if (!g.prediction) return false;
+        const display = getGamePredictionDisplay(g);
+        const confidence = getCanonicalConfidence(g.prediction);
+        return display.isTossUp || (
+          display.marketType !== 'three_way_result' &&
+          confidence >= 48 &&
+          confidence <= 53
+        );
+      })
       .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
       .slice(0, 6);
   }, [allGames, isPremium]);

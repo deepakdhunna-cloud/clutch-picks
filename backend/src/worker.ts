@@ -238,7 +238,7 @@ cleanupLogger.info({ intervalMs: 24 * 60 * 60 * 1000 }, "scheduled");
 const cleanupInterval = setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 setTimeout(cleanupOldData, 60_000);
 
-// ─── Weekly calibration (Mondays at 03:00 UTC) ──────────────────────────
+// ─── Daily calibration (03:00 UTC) ──────────────────────────────────────
 
 let calibrationRunning = false;
 async function calibrationGuarded() {
@@ -263,8 +263,8 @@ async function calibrationGuarded() {
   }
 }
 
-calibrationLogger.info({ schedule: "0 3 * * 1", tz: "UTC" }, "scheduled");
-const calibrationCron = cron.schedule("0 3 * * 1", calibrationGuarded, {
+calibrationLogger.info({ schedule: "0 3 * * *", tz: "UTC" }, "scheduled");
+const calibrationCron = cron.schedule("0 3 * * *", calibrationGuarded, {
   timezone: "UTC",
 });
 

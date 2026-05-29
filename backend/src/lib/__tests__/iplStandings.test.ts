@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { indexIPLStandings, parseIPLStandingEntry } from "../iplStandings";
 
 describe("IPL standings enrichment helpers", () => {
-  test("parses rank, points, record, and net run rate from ESPN standings rows", () => {
+  test("parses rank, points, record, net run rate, and scoring rates from ESPN standings rows", () => {
     const parsed = parseIPLStandingEntry({
       team: { id: "335970", abbreviation: "RCB" },
       stats: [
@@ -12,6 +12,8 @@ describe("IPL standings enrichment helpers", () => {
         { name: "matchesLost", value: 4, displayValue: "4" },
         { name: "matchPoints", value: 18, displayValue: "18" },
         { name: "netrr", value: 1.065, displayValue: "1.065" },
+        { name: "for", value: 10.393, displayValue: "2642/254.2" },
+        { name: "against", value: 9.615, displayValue: "2619/272.4" },
       ],
     });
 
@@ -25,6 +27,8 @@ describe("IPL standings enrichment helpers", () => {
       noResult: 0,
       matchPoints: 18,
       netRunRate: 1.065,
+      runRateFor: 10.393,
+      runRateAgainst: 9.615,
       record: "9-4",
     });
   });
@@ -41,6 +45,8 @@ describe("IPL standings enrichment helpers", () => {
         noResult: 0,
         matchPoints: 16,
         netRunRate: 0.35,
+        runRateFor: 10.1,
+        runRateAgainst: 9.7,
         record: "8-5",
       },
     ]);

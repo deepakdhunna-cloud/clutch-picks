@@ -513,7 +513,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   const resultAccent = winningColors?.accent ?? SILVER;
   const prediction = game.prediction;
   const predictionDisplay = prediction ? getGamePredictionDisplay(game) : null;
-  const tier = prediction ? getConfidenceTier(getCanonicalConfidence(prediction), predictionDisplay?.isTossUp) : null;
+  const tier = prediction ? getConfidenceTier(getCanonicalConfidence(prediction), predictionDisplay?.isTossUp, predictionDisplay?.marketType) : null;
   const startLabel =
     game.sport === Sport.MLB ? 'First Pitch' :
     game.sport === Sport.IPL ? 'First Ball' :
@@ -778,8 +778,16 @@ const YourGames = memo(function YourGames({
 // Maps the existing confidence ladder to the user-facing strength labels
 // used by this card. Distinct from getConfidenceTier (which is the global
 // neutral palette) — these labels and colors only appear here.
-function getPickStrengthDisplay(confidence: number, isTossUp?: boolean): { label: string; color: string } {
-  if (isTossUp || confidence < 53) return { label: 'Avoid',  color: '#ef4444' };
+function getPickStrengthDisplay(confidence: number, isTossUp?: boolean, marketType?: 'moneyline' | 'three_way_result' | null): { label: string; color: string } {
+  if (isTossUp) return { label: 'Avoid',  color: '#ef4444' };
+  if (marketType === 'three_way_result' || confidence < 50) {
+    if (confidence < 37) return { label: 'Avoid',  color: '#ef4444' };
+    if (confidence < 43) return { label: 'Lean',   color: '#facc15' };
+    if (confidence < 50) return { label: 'Solid',  color: '#4ade80' };
+    if (confidence < 58) return { label: 'Strong', color: '#86efac' };
+    return                      { label: 'Lock',   color: '#f8fafc' };
+  }
+  if (confidence < 53) return { label: 'Avoid',  color: '#ef4444' };
   if (confidence < 60)             return { label: 'Lean',   color: '#facc15' };
   if (confidence < 67)             return { label: 'Solid',  color: '#4ade80' };
   if (confidence < 75)             return { label: 'Strong', color: '#86efac' };
@@ -1189,6 +1197,7 @@ const LiveCard = memo(function LiveCard({
   const strength = getPickStrengthDisplay(
     game.prediction ? getCanonicalConfidence(game.prediction) : 50,
     livePredictionDisplay?.isTossUp,
+    livePredictionDisplay?.marketType,
   );
   const homeLeading = hs > as2;
   const awayLeading = as2 > hs;
@@ -1632,7 +1641,7 @@ function modelWatchBody(game: GameWithPrediction, leader: GameWithPrediction['ho
   const predictionDisplay = getGamePredictionDisplay(game);
   const predictedTeam = predictionDisplay.team;
   const conf = Math.round(displayConfidence(getCanonicalConfidence(pred)));
-  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp).label;
+  const tier = getConfidenceTier(conf, predictionDisplay.isTossUp, predictionDisplay.marketType).label;
 
   if (predictionDisplay.outcome === 'draw') {
     return isTied
@@ -2033,7 +2042,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   const predictionDisplay = getGamePredictionDisplay(game);
   const tags: string[] = [];
   const conf = getCanonicalConfidence(p) || 55; const edge = p.edgeRating ?? 5; const value = p.valueRating ?? 5;
-  const mTier = getConfidenceTier(conf, predictionDisplay.isTossUp).label;
+  const mTier = getConfidenceTier(conf, predictionDisplay.isTossUp, predictionDisplay.marketType).label;
   const hStreak = p.homeStreak ?? 0; const aStreak = p.awayStreak ?? 0;
   const sport = game.sport;
   const canonicalProbabilities = getCanonicalWinProbabilities(p);
@@ -2101,7 +2110,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   }
 
   // 4. TOSS-UP — close model split
-  if (!hl && (p.isTossUp || (conf >= 48 && conf <= 53)) && trySet('toss_up')) {
+  if (!hl && (predictionDisplay.isTossUp || (predictionDisplay.marketType !== 'three_way_result' && conf >= 48 && conf <= 53)) && trySet('toss_up')) {
     hl = 'True toss-up profile';
     tags.push('TOSS-UP', `${homeWP}-${awayWP} SPLIT`);
     const separator = predictionDisplay.teamSide === 'home'
@@ -2787,7 +2796,7 @@ const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR, bot
       {pfg.length>0?<View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}><Text style={{fontSize:12, fontWeight:'700', color:WHITE, marginBottom:14}}>Results</Text>{pfg.map(g=><ResultCard key={g.id} game={g} pick={pm.get(g.id)} />)}</View>:null}
       {fg.length>0?<View style={{backgroundColor:PANEL_DARK, borderRadius:18, borderWidth:1, borderColor:BORDER_MED, padding:18, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}>
         <Text style={{fontSize:12.5, lineHeight:16, fontWeight:'700', color:WHITE, marginBottom:14}}>Model Notes</Text>
-        {fg.slice(0, 3).map(g=>{const p=g.prediction;if(!p) return null;const pick=getCanonicalFinalPick(p);const conf=getCanonicalConfidence(p);const predictionDisplay=getGamePredictionDisplay(g);const ok=(pick==='home'&&(g.homeScore??0)>(g.awayScore??0))||(pick==='away'&&(g.awayScore??0)>(g.homeScore??0))||(pick==='draw'&&(g.homeScore??0)===(g.awayScore??0));return <View key={g.id} style={{marginBottom:12, paddingLeft:12, borderLeftWidth:3, borderLeftColor:ok?TEAL:LOSS}}><Text style={{fontSize:11.5, lineHeight:15, fontWeight:'600', color:WHITE, marginBottom:4}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11.5, color:TEXT_SECONDARY, lineHeight:18}}>{(() => { const tl = `a ${getConfidenceTier(conf, predictionDisplay.isTossUp).label}`; const tm = predictionDisplay.badgeLabel; return ok ? `Model correctly predicted ${tm} as ${tl}.` : `Model missed — rated ${tm} as ${tl} but the upset came through.`; })()}</Text></View>;})}
+        {fg.slice(0, 3).map(g=>{const p=g.prediction;if(!p) return null;const pick=getCanonicalFinalPick(p);const conf=getCanonicalConfidence(p);const predictionDisplay=getGamePredictionDisplay(g);const ok=(pick==='home'&&(g.homeScore??0)>(g.awayScore??0))||(pick==='away'&&(g.awayScore??0)>(g.homeScore??0))||(pick==='draw'&&(g.homeScore??0)===(g.awayScore??0));return <View key={g.id} style={{marginBottom:12, paddingLeft:12, borderLeftWidth:3, borderLeftColor:ok?TEAL:LOSS}}><Text style={{fontSize:11.5, lineHeight:15, fontWeight:'600', color:WHITE, marginBottom:4}}>{g.awayTeam.abbreviation} vs {g.homeTeam.abbreviation}</Text><Text style={{fontSize:11.5, color:TEXT_SECONDARY, lineHeight:18}}>{(() => { const tl = `a ${getConfidenceTier(conf, predictionDisplay.isTossUp, predictionDisplay.marketType).label}`; const tm = predictionDisplay.badgeLabel; return ok ? `Model correctly predicted ${tm} as ${tl}.` : `Model missed — rated ${tm} as ${tl} but the upset came through.`; })()}</Text></View>;})}
       </View>:null}
       <View style={{backgroundColor:PANEL_DARK, borderWidth:1, borderColor:'rgba(139,10,31,0.12)', borderRadius:18, padding:18, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
         <View style={{flex:1, minWidth:0}}><Text style={{fontSize:9, fontWeight:'700', color:MAROON, letterSpacing:1.5, marginBottom:4}}>SEASON RECORD</Text><Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={1} style={{fontSize:28, fontWeight:'800', color:WHITE}}>{stats?.wins??0}-{stats?.losses??0}</Text></View>

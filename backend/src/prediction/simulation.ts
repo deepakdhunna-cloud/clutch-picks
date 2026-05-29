@@ -280,7 +280,7 @@ function applyLeagueScoringAdjustments(args: {
       !/women/i.test(venueText);
     if (bestOfFive) {
       const previousTotal = totalMean;
-      totalMean = clamp(totalMean + 0.18, 2.0, 3.0);
+      totalMean = clamp(totalMean + 3.5, 20.0, 38.0);
       marginSd *= 1.04;
       args.signals.push({
         key: "tennis-format-total",
@@ -639,6 +639,14 @@ export function simulateGameProjection(
     else draws++;
   }
 
+  if (ctx.sport === "TENNIS") {
+    model.signals.unshift({
+      key: "tennis-match-game-projection",
+      label: "Tennis projected games",
+      value: round((homeScoreSum - awayScoreSum) / ITERATIONS, 1),
+      evidence: "Projected tennis line uses expected match games from the matchup model, not a recycled set score",
+    });
+  }
   const boundedScores = boundedProjectedScoreLine(
     ctx.sport,
     homeScoreSum / ITERATIONS,

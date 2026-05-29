@@ -1,10 +1,6 @@
 import { fetch } from "expo/fetch";
 import { getAuthHeaders } from "../auth/auth-client";
-
-// Response envelope type - all app routes return { data: T }
-interface ApiResponse<T> {
-  data: T;
-}
+import { definedApiResult, unwrapApiResponse } from "./response";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
@@ -48,7 +44,7 @@ const request = async <T>(
 
   // 1. Handle 204 No Content
   if (response.status === 204) {
-    return undefined as T;
+    return null as T;
   }
 
   // 2. JSON responses: parse and unwrap { data }
@@ -61,7 +57,7 @@ const request = async <T>(
       throw new Error(apiErrorMessage(json, response.status));
     }
 
-    return (json as ApiResponse<T>).data;
+    return definedApiResult(unwrapApiResponse<T>(json)) as T;
   }
 
   // 3. Non-OK non-JSON: throw
@@ -69,8 +65,9 @@ const request = async <T>(
     throw new Error(`Request failed with status ${response.status}`);
   }
 
-  // 4. Non-JSON: return undefined
-  return undefined as T;
+  // 4. Non-JSON OK responses have no useful payload. Return null so React
+  // Query never receives undefined from a query function.
+  return null as T;
 };
 
 export const api = {
