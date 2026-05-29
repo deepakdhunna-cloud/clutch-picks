@@ -410,6 +410,7 @@ export default function GameAnalysisScreen() {
         predictedOutcome: prediction.predictedOutcome,
         confidence: canonicalConfidence,
         isTossUp: predictionDisplay.isTossUp,
+        leanSide: predictionDisplay.outcome,
         projection: displayProjection,
       })
     : null;

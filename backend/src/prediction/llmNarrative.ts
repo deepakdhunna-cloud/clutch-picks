@@ -268,7 +268,10 @@ export interface ValidationResult {
   reason?: string;
 }
 
-export function validateAnalystNarrative(text: string): ValidationResult {
+export function validateAnalystNarrative(
+  text: string,
+  expect?: { pickTeamName: string | null },
+): ValidationResult {
   if (!text || text.trim().length === 0) {
     return { ok: false, reason: "empty" };
   }
@@ -287,6 +290,18 @@ export function validateAnalystNarrative(text: string): ValidationResult {
   for (const banned of BANNED_SUBSTRINGS) {
     if (lower.includes(banned)) {
       return { ok: false, reason: `contains banned substring: "${banned.trim()}"` };
+    }
+  }
+  // Pick-name consistency: when there is a directional pick, the narrative must
+  // actually name the picked team (so it can never describe a different winner
+  // than the badge/card). Conservative — only fails if neither the full name nor
+  // its nickname token appears; on failure the caller falls back to the
+  // deterministic narrative (which is always pick-consistent).
+  if (expect?.pickTeamName) {
+    const name = expect.pickTeamName.toLowerCase();
+    const token = name.split(/\s+/).filter(Boolean).pop() ?? name;
+    if (!lower.includes(name) && !lower.includes(token)) {
+      return { ok: false, reason: "narrative does not name the picked team" };
     }
   }
   return { ok: true };
@@ -427,7 +442,7 @@ export async function generateLLMNarrative(
   if (!raw.text) {
     return { text: null, tokensUsed: raw.tokensUsed, reason: "empty_response" };
   }
-  const check = validateAnalystNarrative(raw.text);
+  const check = validateAnalystNarrative(raw.text, { pickTeamName: input.pickTeamName });
   if (!check.ok) {
     return {
       text: null,

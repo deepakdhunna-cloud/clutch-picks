@@ -8,7 +8,7 @@ import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
 import type { PredictionResult as StoredPredictionResult } from "@prisma/client";
 import { cleanOldShadowLogs } from "../prediction/shadow";
-import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
+import { runNewEnginePrediction, isMarketAwareTossUp } from "../prediction/newEngineAdapter";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "../prediction/seasonContext";
 import { buildDeterministicNarrative, buildNarrativeInput } from "../prediction/narrative";
 import { getConfidenceBand, type CanonicalEngineRead, type CanonicalPredictionResult, type FactorContribution } from "../prediction/types";
@@ -645,10 +645,19 @@ function predictionFactorToContribution(factor: PredictionFactor): FactorContrib
 function rebuildNarrativeFromPrediction(game: Game, prediction: GamePrediction): string | null {
   if (!prediction.factors || prediction.factors.length === 0) return null;
 
+  // Narrate the canonical pick (the single source of truth). Draw/none → no
+  // single winner; fall back to the legacy field only if canonical is absent.
+  const finalPick = prediction.canonicalResult?.finalPick;
   const winnerAbbr =
-    prediction.predictedWinner === "home"
+    finalPick === "home"
       ? game.homeTeam.abbreviation
-      : game.awayTeam.abbreviation;
+      : finalPick === "away"
+        ? game.awayTeam.abbreviation
+        : finalPick === "draw" || finalPick === "none"
+          ? null
+          : prediction.predictedWinner === "home"
+            ? game.homeTeam.abbreviation
+            : game.awayTeam.abbreviation;
   const winnerProb = Math.max(
     (prediction.homeWinProbability ?? 50) / 100,
     (prediction.awayWinProbability ?? 50) / 100,
@@ -1651,8 +1660,47 @@ function withCanonicalPredictionResult(
   };
 }
 
+/**
+ * Force the legacy mirror fields (predictedWinner/predictedOutcome/confidence/
+ * win probabilities/isTossUp) to equal the canonical result, so EVERY surface —
+ * prediction card, AI pick badge, projection lean, projected score line, and
+ * narration — shows the same winner. canonicalResult.finalPick is the single
+ * source of truth. Without this, self-learning (which recomputes finalPick but
+ * kept the stale predictedWinner) and other paths could ship mirror fields that
+ * disagree with the canonical pick.
+ */
+function reconcileLegacyFieldsToCanonical(prediction: GamePrediction): GamePrediction {
+  const canonical = prediction.canonicalResult;
+  if (!canonical) return prediction;
+  const probs = canonical.probabilities;
+  const homePct = Math.round((probs.home ?? 0) * 100);
+  const awayPct = Math.round((probs.away ?? 0) * 100);
+  const drawPct = probs.draw !== undefined ? Math.round(probs.draw * 100) : undefined;
+  const leader: "home" | "away" = homePct >= awayPct ? "home" : "away";
+  const predictedWinner: "home" | "away" =
+    canonical.finalPick === "home" || canonical.finalPick === "away" ? canonical.finalPick : leader;
+  const predictedOutcome: "home" | "away" | "draw" =
+    canonical.finalPick === "draw"
+      ? "draw"
+      : canonical.finalPick === "home" || canonical.finalPick === "away"
+        ? canonical.finalPick
+        : drawPct !== undefined && drawPct >= homePct && drawPct >= awayPct
+          ? "draw"
+          : leader;
+  return {
+    ...prediction,
+    predictedWinner,
+    predictedOutcome,
+    confidence: Math.round(canonical.confidence),
+    homeWinProbability: homePct,
+    awayWinProbability: awayPct,
+    drawProbability: drawPct,
+    isTossUp: isMarketAwareTossUp(canonical),
+  };
+}
+
 function ensureCanonicalPredictionResult(game: Game, prediction: GamePrediction): GamePrediction {
-  if (prediction.canonicalResult) return prediction;
+  if (prediction.canonicalResult) return reconcileLegacyFieldsToCanonical(prediction);
   return withCanonicalPredictionResult(prediction, game.sport);
 }
 

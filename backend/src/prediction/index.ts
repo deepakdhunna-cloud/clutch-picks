@@ -383,6 +383,46 @@ function reconciledScoreLineForPick(args: {
   };
 }
 
+/**
+ * Quantize the projected score line for display truthfulness + consistency:
+ * integer-scored sports (everything except tennis) show WHOLE numbers — a team
+ * cannot score 4.5 runs — and the winner of the score line always matches the
+ * final pick. When rounding the expected means would collapse a real sub-unit
+ * lean into a tie (common in low-scoring MLB/NHL/soccer), the favorite is nudged
+ * +1 so the line never contradicts the pick. Spread/total are derived from the
+ * rounded scores so the three numbers always reconcile. Tennis keeps one decimal
+ * (expected games) everywhere.
+ */
+function quantizeProjectedScoreLine(
+  sport: string,
+  home: number,
+  away: number,
+  finalPick: ProjectionOutcome,
+): { home: number; away: number; spread: number; total: number } {
+  if (sport === "TENNIS") {
+    const h = roundTo(home, 1);
+    const a = roundTo(away, 1);
+    return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
+  }
+  // Derive home/away from the rounded TOTAL + margin so total stays within the
+  // sport bound (rounding each score independently could push the total 1 over)
+  // and home+away always equals total exactly.
+  const total = Math.round(home + away);
+  if (finalPick === "draw") {
+    const each = Math.round(total / 2);
+    return { home: each, away: each, spread: 0, total: each * 2 };
+  }
+  let margin = Math.round(Math.abs(home - away));
+  if ((finalPick === "home" || finalPick === "away") && margin < 1) margin = 1; // favorite must lead the line
+  const favorite = Math.round((total + margin) / 2);
+  const underdog = total - favorite;
+  const homeIsFavorite =
+    finalPick === "home" || (finalPick !== "away" && home >= away);
+  const h = homeIsFavorite ? favorite : underdog;
+  const a = homeIsFavorite ? underdog : favorite;
+  return { home: h, away: a, spread: h - a, total: h + a };
+}
+
 export function reconcileProjectionToFinal(args: {
   sport: string;
   projection: SimulationProjection;
@@ -448,6 +488,8 @@ export function reconcileProjectionToFinal(args: {
     });
   }
 
+  const quantized = quantizeProjectedScoreLine(args.sport, projectedHomeScore, projectedAwayScore, finalPick);
+
   return {
     ...args.projection,
     homeWinProbability: roundTo(args.finalProbabilities.home, 4),
@@ -456,10 +498,10 @@ export function reconcileProjectionToFinal(args: {
       args.finalProbabilities.draw !== undefined
         ? roundTo(args.finalProbabilities.draw, 4)
         : undefined,
-    projectedHomeScore,
-    projectedAwayScore,
-    projectedSpread,
-    projectedTotal,
+    projectedHomeScore: quantized.home,
+    projectedAwayScore: quantized.away,
+    projectedSpread: quantized.spread,
+    projectedTotal: quantized.total,
     signals: signals.slice(0, 5),
   };
 }

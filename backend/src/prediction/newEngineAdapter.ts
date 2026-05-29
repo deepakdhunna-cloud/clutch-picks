@@ -85,7 +85,7 @@ export function buildAdapterNarrative(
   const band = getConfidenceBand(
     Math.max(newPred.homeWinProbability, newPred.awayWinProbability, newPred.drawProbability ?? 0),
   );
-  const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const winnerAbbr = winnerAbbrFromCanonical(newPred, game);
   const seasonContext =
     game.seasonContext ??
     deriveSeasonContext({ sport, gameTime: game.gameTime });
@@ -217,7 +217,7 @@ function bestBookForPick(
     : null;
 }
 
-function isMarketAwareTossUp(canonical: HonestPrediction["canonicalResult"]): boolean {
+export function isMarketAwareTossUp(canonical: HonestPrediction["canonicalResult"]): boolean {
   if (canonical.finalPick === "none") return true;
 
   const entries = [
@@ -237,6 +237,17 @@ function isMarketAwareTossUp(canonical: HonestPrediction["canonicalResult"]): bo
   }
 
   return leader.probability < 0.53 || lead < 0.06;
+}
+
+/**
+ * The narrated winner MUST be the canonical pick, not the legacy predictedWinner
+ * (which can lag a self-learning flip). Draw/none → no single winner to name.
+ */
+function winnerAbbrFromCanonical(newPred: HonestPrediction, game: Game): string | null {
+  const finalPick = newPred.canonicalResult.finalPick;
+  if (finalPick === "home") return game.homeTeam.abbreviation;
+  if (finalPick === "away") return game.awayTeam.abbreviation;
+  return null;
 }
 
 /**
@@ -672,7 +683,7 @@ function buildLLMNarrativeInput(
       newPred.drawProbability ?? 0,
     ),
   );
-  const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const winnerAbbr = winnerAbbrFromCanonical(newPred, game);
   const seasonContext =
     game.seasonContext ??
     deriveSeasonContext({ sport, gameTime: game.gameTime });

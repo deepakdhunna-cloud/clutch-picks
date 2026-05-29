@@ -9,6 +9,9 @@ type ProjectionDisplayInput = {
   predictedOutcome?: 'home' | 'away' | 'draw' | null;
   confidence?: number | null;
   isTossUp?: boolean | null;
+  // The card/badge's already-resolved pick. When provided it is authoritative so
+  // the projection lean abbr can never disagree with the badge.
+  leanSide?: 'home' | 'away' | 'draw' | 'toss_up' | 'none' | null;
   projection: {
     iterations: number;
     homeWinProbability?: number;
@@ -74,8 +77,18 @@ export function cleanProjectionCopy(text: string | null | undefined): string {
 }
 
 function projectionSide(input: ProjectionDisplayInput): ProjectionSide {
+  // The card's resolved pick is authoritative when supplied, so the projection
+  // lean always matches the badge.
+  if (input.leanSide) {
+    if (input.leanSide === 'home' || input.leanSide === 'away' || input.leanSide === 'draw') return input.leanSide;
+    if (input.leanSide === 'toss_up' || input.leanSide === 'none') return 'toss_up';
+  }
   if (input.canonicalResult?.finalPick === 'draw') return 'draw';
-  if (input.canonicalResult?.finalPick === 'none' || input.isTossUp || ((input.confidence ?? 0) > 0 && (input.confidence ?? 0) < 53)) {
+  // Toss-up is decided ONCE by the canonical, market-aware flag (input.isTossUp,
+  // computed in prediction-display.ts) plus finalPick==='none'. Do NOT re-derive
+  // it from a raw confidence threshold here — that made the projection show
+  // "Toss-Up" while the card showed "Lean X" for the same game.
+  if (input.canonicalResult?.finalPick === 'none' || input.isTossUp) {
     return 'toss_up';
   }
   if (input.canonicalResult?.finalPick === 'home' || input.canonicalResult?.finalPick === 'away') {
@@ -236,13 +249,24 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
   const confidence = Math.round((canonicalProbability ?? projectionConfidence ?? ((input.confidence ?? 0) / 100)) * 100);
   const confidenceText = confidence > 0 ? ` ${confidence}%` : '';
 
+  // Tennis shows expected GAMES (one decimal, the only fractional sport). Every
+  // other sport shows WHOLE numbers — a team cannot score a fractional run/goal/
+  // point. Derive total & spread from the displayed home/away so the three
+  // numbers always reconcile (and the backend already sends whole, pick-consistent
+  // scores for non-tennis, so this just formats them).
+  const homeNum = tennisScores ? tennisScores.home : input.projection.projectedHomeScore;
+  const awayNum = tennisScores ? tennisScores.away : input.projection.projectedAwayScore;
+  const totalNum = tennisScores ? roundTenth(homeNum + awayNum) : Math.round(homeNum) + Math.round(awayNum);
+  const spreadNum = tennisScores ? roundTenth(homeNum - awayNum) : Math.round(homeNum) - Math.round(awayNum);
+  const fmtScore = (v: number) => (tennisScores ? formatDecimal(v) : formatInteger(v));
+
   return {
     label: tennisScores ? 'Projected Games' : cricket ? 'Projected Runs' : 'Projected Score',
-    homeScore: tennisScores ? formatDecimal(tennisScores.home) : cricket ? formatInteger(input.projection.projectedHomeScore) : formatDecimal(input.projection.projectedHomeScore),
-    awayScore: tennisScores ? formatDecimal(tennisScores.away) : cricket ? formatInteger(input.projection.projectedAwayScore) : formatDecimal(input.projection.projectedAwayScore),
-    total: tennisScores ? `${formatDecimal(tennisScores.total)} games` : cricket ? `${formatInteger(input.projection.projectedTotal)} runs` : formatDecimal(input.projection.projectedTotal),
-    spread: tennisScores ? formatDecimal(tennisScores.spread) : cricket ? formatInteger(input.projection.projectedSpread) : formatDecimal(input.projection.projectedSpread),
-    spreadValue: tennisScores ? tennisScores.spread : cricket ? Math.round(input.projection.projectedSpread) : input.projection.projectedSpread,
+    homeScore: fmtScore(homeNum),
+    awayScore: fmtScore(awayNum),
+    total: tennisScores ? `${formatDecimal(totalNum)} games` : cricket ? `${formatInteger(totalNum)} runs` : formatInteger(totalNum),
+    spread: fmtScore(spreadNum),
+    spreadValue: spreadNum,
     leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
     contextText: tennisScores
       ? 'Indicative games derived from the win-probability model'

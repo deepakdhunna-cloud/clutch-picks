@@ -1311,7 +1311,7 @@ function ProjectionTrackerRow({
           ) : null}
         </View>
         <View style={styles.projectionTrackerTarget}>
-          <Text style={styles.projectionTrackerTargetValue} numberOfLines={1}>{expectedText ?? expected.toFixed(1)}</Text>
+          <Text style={styles.projectionTrackerTargetValue} numberOfLines={1}>{expectedText ?? (Number.isInteger(expected) ? `${expected}` : expected.toFixed(1))}</Text>
         </View>
       </View>
     </View>
@@ -1332,6 +1332,7 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
   const liveAway = game.awayScore ?? 0;
   const liveTotal = liveHome + liveAway;
   const projectionRiskTier = getProjectionRiskTier(projection.upsetRisk);
+  const projectionPredictionDisplay = getPredictionDisplay({ prediction: prediction as Prediction, homeTeam, awayTeam });
   const projectionDisplay = getProjectionDisplay({
     sport,
     homeAbbr: homeTeam.abbreviation,
@@ -1340,7 +1341,8 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
     predictedWinner: prediction.predictedWinner,
     predictedOutcome: prediction.predictedOutcome,
     confidence: getCanonicalConfidence(prediction as Prediction),
-    isTossUp: getPredictionDisplay({ prediction: prediction as Prediction, homeTeam, awayTeam }).isTossUp,
+    isTossUp: projectionPredictionDisplay.isTossUp,
+    leanSide: projectionPredictionDisplay.outcome,
     projection,
   });
   const isTennisProjection = String(sport).toUpperCase() === 'TENNIS';
@@ -1371,7 +1373,7 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
             label="Total"
             tone="#DAEEFB"
             expected={projection.projectedTotal}
-            expectedText={isTennisProjection ? String(Math.round(projection.projectedTotal)) : undefined}
+            expectedText={isTennisProjection ? (Math.round(projection.projectedTotal * 10) / 10).toFixed(1) : undefined}
             actual={hasActualTotals ? liveTotal : undefined}
           />
         </View>

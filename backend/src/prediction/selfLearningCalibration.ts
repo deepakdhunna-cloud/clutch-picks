@@ -256,12 +256,26 @@ export function applySelfLearningCalibration(
     adjustment,
   );
 
+  // Derive predictedWinner from the RECOMPUTED finalPick so it never keeps a
+  // stale side after a three-way adjustment flips the leader. Keep the existing
+  // {teamId, abbr} only when it still matches finalPick's side; otherwise null
+  // (downstream reconcile + translate fall back to the correct side).
+  const homeTeamId = prediction.canonicalResult.modelInputs?.homeTeamId;
+  const staleSide =
+    prediction.predictedWinner && homeTeamId
+      ? prediction.predictedWinner.teamId === homeTeamId
+        ? "home"
+        : "away"
+      : null;
+  const reconciledWinner =
+    (finalPick === "home" || finalPick === "away") && staleSide === finalPick
+      ? prediction.predictedWinner
+      : null;
+
   return {
     ...prediction,
     canonicalResult,
-    predictedWinner: finalPick === "home" || finalPick === "away"
-      ? prediction.predictedWinner
-      : null,
+    predictedWinner: reconciledWinner,
     homeWinProbability: adjustedProbabilities.home,
     awayWinProbability: adjustedProbabilities.away,
     drawProbability: adjustedProbabilities.draw,

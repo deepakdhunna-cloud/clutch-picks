@@ -800,9 +800,10 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       predictedOutcome: prediction.predictedOutcome,
       confidence: canonicalConfidence,
       isTossUp: predictionDisplay.isTossUp,
+      leanSide: predictionDisplay.outcome,
       projection: displayProjection,
     });
-  }, [displayProjection, game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction, canonicalResult, canonicalConfidence, predictionDisplay.isTossUp]);
+  }, [displayProjection, game.sport, game.homeTeam.abbreviation, game.awayTeam.abbreviation, game.prediction, canonicalResult, canonicalConfidence, predictionDisplay.isTossUp, predictionDisplay.outcome]);
   const projectionRiskTier = useMemo(
     () => displayProjection ? getProjectionRiskTier(displayProjection.upsetRisk) : null,
     [displayProjection]
