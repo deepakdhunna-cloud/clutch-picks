@@ -333,4 +333,7 @@ also REFUTED 2 overstatements — an NBA cross-game inversion that can't occur g
   flip-guard so the score line can never lead the non-picked team on old/unreconciled stored data.
 Verification: 454 backend tests pass (+9 new incl. cross-game monotonicity, soccer sub-50% scaling, IPL
 realism, no-shutout), backend + mobile typecheck clean, live-reconciler sweep across all leagues sane.
-NOT yet deployed (awaiting user OK).
+SHIPPED + DEPLOYED (commit fcb5ef4; Railway deploy 2026-05-29). POST-DEPLOY: /health 200, engine
+2.11.0; live spot-check of 48 predictions -> 0 confident-pick-with-near-tie-line inconsistencies. Stale
+pre-deploy stored snapshots (decimal NBA, games-based tennis) regenerate to the new format as the slate
+refreshes. Mobile (prediction-display/projection-display) ships on the next app build/reload.
