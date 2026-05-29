@@ -423,16 +423,76 @@ function quantizeProjectedScoreLine(
   return { home: h, away: a, spread: h - a, total: h + a };
 }
 
+const GRAND_SLAM_VENUE_RE = /grand slam|australian open|roland garros|french open|wimbledon|us open/i;
+
+/**
+ * Sets needed to WIN a tennis match: men's Grand Slam main draw is best-of-5
+ * (3 sets to win); everything else (all WTA, all non-Slam ATP) is best-of-3.
+ * Defaults to best-of-3 when the tour is unknown.
+ */
+export function tennisWinSets(venue: string | undefined, tour: string | undefined): number {
+  return GRAND_SLAM_VENUE_RE.test(venue ?? "") && tour === "ATP" ? 3 : 2;
+}
+
+/**
+ * Tennis projects a real SET score (e.g. 2-0 / 2-1, or 3-x at a men's Slam) —
+ * the natural unit for a tennis result — instead of a synthetic games total.
+ * The winner takes the full set count; the loser's sets reflect how close the
+ * match is (a clear favorite wins in straight sets; a tight pick drops one).
+ */
+function tennisSetProjection(
+  projection: SimulationProjection,
+  finalPick: ProjectionOutcome,
+  finalProbabilities: { home: number; away: number; draw?: number },
+  winSets: number,
+): SimulationProjection {
+  const favSide: "home" | "away" =
+    finalPick === "home" || finalPick === "away"
+      ? finalPick
+      : finalProbabilities.home >= finalProbabilities.away
+        ? "home"
+        : "away";
+  const favProb = favSide === "home" ? finalProbabilities.home : finalProbabilities.away;
+  const loserSets =
+    winSets >= 3
+      ? favProb >= 0.68
+        ? 0
+        : favProb >= 0.56
+          ? 1
+          : 2
+      : favProb >= 0.6
+        ? 0
+        : 1;
+  const home = favSide === "home" ? winSets : loserSets;
+  const away = favSide === "home" ? loserSets : winSets;
+  return {
+    ...projection,
+    homeWinProbability: roundTo(finalProbabilities.home, 4),
+    awayWinProbability: roundTo(finalProbabilities.away, 4),
+    drawProbability: undefined,
+    projectedHomeScore: home,
+    projectedAwayScore: away,
+    projectedSpread: home - away,
+    projectedTotal: home + away,
+    signals: projection.signals.slice(0, 5),
+  };
+}
+
 export function reconcileProjectionToFinal(args: {
   sport: string;
   projection: SimulationProjection;
   finalProbabilities: { home: number; away: number; draw?: number };
+  tennisWinSets?: number;
 }): SimulationProjection {
   const finalPick = finalOutcomeFromProbabilities(
     args.finalProbabilities.home,
     args.finalProbabilities.away,
     args.finalProbabilities.draw,
   );
+  // Tennis: project a set score directly (and bypass the games/quantize path).
+  if (args.sport === "TENNIS") {
+    return tennisSetProjection(args.projection, finalPick, args.finalProbabilities, args.tennisWinSets ?? 2);
+  }
   const rawScorePick = projectedScoreOutcome(
     args.sport,
     args.projection.projectedHomeScore,
@@ -1017,6 +1077,9 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       away: awayWinProb,
       draw: drawProb,
     },
+    tennisWinSets: ctx.sport === "TENNIS"
+      ? tennisWinSets(ctx.game.venue, (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour)
+      : undefined,
   });
 
   // 7. Collect unavailable factors for display

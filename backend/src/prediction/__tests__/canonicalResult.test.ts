@@ -280,7 +280,7 @@ describe("canonical prediction result", () => {
     expect(reconciled.signals[0]?.key).toBe("orchestrator-projection-reconciliation");
   });
 
-  it("converts stale tennis set averages into projected match games aligned to the final pick", () => {
+  it("projects a tennis set score aligned to the final pick (away favorite, best-of-3)", () => {
     const reconciled = reconcileProjectionToFinal({
       sport: "TENNIS",
       projection: projection({
@@ -294,10 +294,11 @@ describe("canonical prediction result", () => {
       finalProbabilities: { home: 0.46, away: 0.54 },
     });
 
-    expect(reconciled.projectedHomeScore).toBeGreaterThan(8);
+    // away is the pick → wins 2 sets (best-of-3); a close 54% match → loser takes 1.
+    expect(reconciled.projectedAwayScore).toBe(2);
+    expect(reconciled.projectedHomeScore).toBe(1);
     expect(reconciled.projectedAwayScore).toBeGreaterThan(reconciled.projectedHomeScore);
-    expect(reconciled.projectedTotal).toBeGreaterThan(18);
-    expect(reconciled.projectedTotal).toBeLessThan(32);
+    expect(reconciled.projectedTotal).toBe(3);
   });
 
   it("keeps rounded football score projections above the sport threshold", () => {
@@ -318,7 +319,7 @@ describe("canonical prediction result", () => {
     expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
   });
 
-  it("normalizes stale tennis projection spread and total from the displayed game line", () => {
+  it("projects a consistent tennis set score (home favorite, best-of-3)", () => {
     const reconciled = reconcileProjectionToFinal({
       sport: "TENNIS",
       projection: projection({
@@ -332,10 +333,12 @@ describe("canonical prediction result", () => {
       finalProbabilities: { home: 0.54, away: 0.46 },
     });
 
-    expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
-    expect(reconciled.projectedAwayScore).toBeGreaterThan(8);
-    expect(reconciled.projectedTotal).toBeGreaterThan(18);
-    expect(reconciled.projectedTotal).toBeLessThan(32);
+    // home is the pick → 2 sets; close 54% match → away takes 1. Whole numbers,
+    // arithmetically consistent.
+    expect(reconciled.projectedHomeScore).toBe(2);
+    expect(reconciled.projectedAwayScore).toBe(1);
+    expect(reconciled.projectedTotal).toBe(3);
+    expect(reconciled.projectedSpread).toBe(1);
   });
 
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {

@@ -497,17 +497,20 @@ describe("game-script simulation", () => {
     );
   });
 
-  it("wires tennis into ranking factors and projected match-game scale", () => {
+  it("wires tennis into ranking factors and projects a set score", () => {
     const prediction = predictGame(makeTennisContext());
 
     expect(prediction.league).toBe("TENNIS");
     expect(prediction.factors.some((factor) => factor.key === "tennis_ranking_edge")).toBe(true);
     expect(prediction.factors.some((factor) => factor.key === "tennis_round_pressure")).toBe(true);
     expect(prediction.projection).toBeDefined();
-    expect(prediction.projection!.projectedTotal).toBeGreaterThan(18);
-    expect(prediction.projection!.projectedTotal).toBeLessThan(34);
-    expect(prediction.projection!.projectedHomeScore).toBeGreaterThan(8);
-    expect(prediction.projection!.projectedAwayScore).toBeGreaterThan(8);
+    // Tennis projects a SET score: winner takes >=2 sets, whole numbers, total is
+    // the sets played (<=5), and the three numbers reconcile.
+    expect(prediction.projection!.projectedAwayScore).toBeGreaterThan(prediction.projection!.projectedHomeScore);
+    expect(prediction.projection!.projectedAwayScore).toBeGreaterThanOrEqual(2);
+    expect(Number.isInteger(prediction.projection!.projectedHomeScore)).toBe(true);
+    expect(Number.isInteger(prediction.projection!.projectedAwayScore)).toBe(true);
+    expect(prediction.projection!.projectedTotal).toBeLessThanOrEqual(5);
     expect(prediction.projection!.projectedTotal).toBe(
       prediction.projection!.projectedHomeScore + prediction.projection!.projectedAwayScore,
     );
@@ -562,7 +565,8 @@ describe("game-script simulation", () => {
     expect(prediction.confidence).toBeGreaterThanOrEqual(53);
     expect(prediction.homeWinProbability - prediction.awayWinProbability).toBeGreaterThanOrEqual(0.06);
     expect(prediction.projection?.projectedHomeScore).toBeGreaterThan(prediction.projection?.projectedAwayScore ?? 0);
-    expect(Math.abs((prediction.projection?.projectedSpread ?? 0))).toBeGreaterThan(2);
+    // Set-score margin: the clear favorite leads by at least one set.
+    expect(Math.abs((prediction.projection?.projectedSpread ?? 0))).toBeGreaterThanOrEqual(1);
   });
 
   it("treats adverse tennis weather as variance instead of home-side edge", () => {

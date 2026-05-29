@@ -227,8 +227,8 @@ function tennisProjectionScores(
 
 export function getProjectionDisplay(input: ProjectionDisplayInput) {
   const side = projectionSide(input);
-  const tennisScores = isTennisSport(input.sport) ? tennisProjectionScores(input, side) : null;
-  const cricket = !tennisScores && isCricketSport(input.sport);
+  const tennis = isTennisSport(input.sport);
+  const cricket = !tennis && isCricketSport(input.sport);
   const leanAbbr = side === 'home' ? input.homeAbbr : side === 'away' ? input.awayAbbr : side === 'draw' ? 'Draw' : 'Toss-Up';
   const canonicalProbability =
     side === 'home'
@@ -249,27 +249,24 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
   const confidence = Math.round((canonicalProbability ?? projectionConfidence ?? ((input.confidence ?? 0) / 100)) * 100);
   const confidenceText = confidence > 0 ? ` ${confidence}%` : '';
 
-  // Tennis shows expected GAMES (one decimal, the only fractional sport). Every
-  // other sport shows WHOLE numbers — a team cannot score a fractional run/goal/
-  // point. Derive total & spread from the displayed home/away so the three
-  // numbers always reconcile (and the backend already sends whole, pick-consistent
-  // scores for non-tennis, so this just formats them).
-  const homeNum = tennisScores ? tennisScores.home : input.projection.projectedHomeScore;
-  const awayNum = tennisScores ? tennisScores.away : input.projection.projectedAwayScore;
-  const totalNum = tennisScores ? roundTenth(homeNum + awayNum) : Math.round(homeNum) + Math.round(awayNum);
-  const spreadNum = tennisScores ? roundTenth(homeNum - awayNum) : Math.round(homeNum) - Math.round(awayNum);
-  const fmtScore = (v: number) => (tennisScores ? formatDecimal(v) : formatInteger(v));
+  // Every sport now projects WHOLE numbers — points/runs/goals are integers, and
+  // tennis projects a SET score (e.g. 2-1). Derive total & spread from the rounded
+  // home/away so the three numbers always reconcile.
+  const homeNum = Math.round(input.projection.projectedHomeScore);
+  const awayNum = Math.round(input.projection.projectedAwayScore);
+  const totalNum = homeNum + awayNum;
+  const spreadNum = homeNum - awayNum;
 
   return {
-    label: tennisScores ? 'Projected Games' : cricket ? 'Projected Runs' : 'Projected Score',
-    homeScore: fmtScore(homeNum),
-    awayScore: fmtScore(awayNum),
-    total: tennisScores ? `${formatDecimal(totalNum)} games` : cricket ? `${formatInteger(totalNum)} runs` : formatInteger(totalNum),
-    spread: fmtScore(spreadNum),
+    label: tennis ? 'Projected Sets' : cricket ? 'Projected Runs' : 'Projected Score',
+    homeScore: formatInteger(homeNum),
+    awayScore: formatInteger(awayNum),
+    total: tennis ? `${formatInteger(totalNum)} sets` : cricket ? `${formatInteger(totalNum)} runs` : formatInteger(totalNum),
+    spread: formatInteger(spreadNum),
     spreadValue: spreadNum,
     leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
-    contextText: tennisScores
-      ? 'Indicative games derived from the win-probability model'
+    contextText: tennis
+      ? 'Projected set score for the final pick'
       : cricket
         ? 'Projected run score for the final pick'
         : 'Projected score and margin for the final pick',

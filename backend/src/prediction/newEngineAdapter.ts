@@ -6,7 +6,7 @@
  * actual computation to the new engine when USE_NEW_PREDICTION_ENGINE=true.
  */
 
-import { predictGame, reconcileProjectionToFinal } from "./index";
+import { predictGame, reconcileProjectionToFinal, tennisWinSets } from "./index";
 import { buildGameContext } from "./shadow";
 import { buildDeterministicNarrative, buildNarrativeInput } from "./narrative";
 import type { HonestPrediction, FactorContribution, GameContext } from "./types";
@@ -391,6 +391,9 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
           sport: ctx.sport,
           projection: learnedPred.projection,
           finalProbabilities: learnedPred.canonicalResult.probabilities,
+          tennisWinSets: ctx.sport === "TENNIS"
+            ? tennisWinSets(ctx.game.venue, (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour)
+            : undefined,
         })
       : undefined;
     newPred = {

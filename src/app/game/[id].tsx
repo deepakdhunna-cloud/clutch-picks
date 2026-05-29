@@ -1373,7 +1373,7 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
             label="Total"
             tone="#DAEEFB"
             expected={projection.projectedTotal}
-            expectedText={isTennisProjection ? (Math.round(projection.projectedTotal * 10) / 10).toFixed(1) : undefined}
+            expectedText={isTennisProjection ? String(Math.round(projection.projectedTotal)) : undefined}
             actual={hasActualTotals ? liveTotal : undefined}
           />
         </View>
