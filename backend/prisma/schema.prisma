@@ -193,6 +193,13 @@ model PredictionResult {
   projectionJson   String?   // JSON.stringify of the pregame projection payload
   canonicalResultJson String? // JSON.stringify of the canonical result shown pregame
   selectedOutcomeProb Float? // 0..1 — probability assigned to the predicted outcome
+  // Raw (pre-self-learning-calibration) probabilities. Null for rows written
+  // before this column existed and when self-learning is disabled. Grading and
+  // recalibration fit on these to avoid the self-learning feedback loop.
+  rawHomeWinProb       Float? // 0..1 — raw model home probability, before self-learning
+  rawAwayWinProb       Float? // 0..1 — raw model away probability, before self-learning
+  rawDrawProb          Float? // 0..1 — raw model draw probability, before self-learning
+  rawSelectedOutcomeProb Float? // 0..1 — raw probability assigned to the predicted outcome
   brierScore       Float?    // per-row selected-outcome Brier contribution
   logLoss          Float?    // per-row selected-outcome log-loss contribution
   finalHomeScore   Int?

@@ -156,6 +156,7 @@ export async function computeAndStoreCalibration(
       homeWinProb: true,
       awayWinProb: true,
       drawProb: true,
+      rawSelectedOutcomeProb: true,
       wasCorrect: true,
       predictedWinner: true,
       predictedOutcome: true,
@@ -165,11 +166,18 @@ export async function computeAndStoreCalibration(
   // Convert to (predictedProb, actualOutcome) pairs
   // predictedProb = probability assigned to the selected outcome
   // actualOutcome = 1 if that selected outcome happened, 0 otherwise
+  // Prefer the RAW (pre-self-learning) probability when present so the scoreboard
+  // grades the raw model and is not contaminated by the self-learning loop (#3).
+  // Falls back to the served selected-outcome prob for rows written before the
+  // raw column existed (and when self-learning is disabled, raw == served).
   const pairs = results
     .filter((r) => r.wasCorrect !== null)
     .map((r) => {
+      const raw = r.rawSelectedOutcomeProb;
+      const predictedProb =
+        typeof raw === "number" && Number.isFinite(raw) ? raw : selectedOutcomeProbability(r);
       return {
-        predictedProb: selectedOutcomeProbability(r),
+        predictedProb,
         actualOutcome: (r.wasCorrect ? 1 : 0) as 0 | 1,
       };
     });

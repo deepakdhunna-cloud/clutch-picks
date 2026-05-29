@@ -362,6 +362,13 @@ export function shouldUpdatePredictionSnapshot(
 export async function runNewEnginePrediction(game: Game): Promise<GamePrediction> {
   const ctx = await buildGameContext(game);
   let newPred = predictGame(ctx);
+  // Capture the RAW (pre-self-learning) probabilities as primitives now, before
+  // any self-learning adjustment reassigns/mutates newPred. Persisted alongside
+  // the served values so calibration/recalibration can grade the raw model and
+  // avoid the self-learning feedback loop (#3).
+  const rawHomeWinProb = newPred.homeWinProbability;
+  const rawAwayWinProb = newPred.awayWinProbability;
+  const rawDrawProb = newPred.drawProbability ?? null;
   // Self-learning calibration is gated by a kill-switch so it can be disabled in
   // production without a revert. When disabled we serve the raw model output.
   const learnedPred = isSelfLearningCalibrationEnabled()
@@ -440,6 +447,16 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
     awayWinProb,
     drawProb,
   });
+  // Raw selected-outcome probability uses the SAME pick but the pre-self-learning
+  // probabilities, so the raw model's calibration can be measured independently.
+  const rawSelectedProb = selectedOutcomeProbability({
+    predictedWinner,
+    predictedOutcome,
+    confidence,
+    homeWinProb: rawHomeWinProb,
+    awayWinProb: rawAwayWinProb,
+    drawProb: rawDrawProb,
+  });
 
   if (shouldPersistPredictionSnapshot(game)) {
     enqueueWrite(async () => {
@@ -463,6 +480,10 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
         projectionJson: prediction.projection ? JSON.stringify(prediction.projection) : null,
         canonicalResultJson: prediction.canonicalResult ? JSON.stringify(prediction.canonicalResult) : null,
         selectedOutcomeProb: selectedProb,
+        rawHomeWinProb,
+        rawAwayWinProb,
+        rawDrawProb,
+        rawSelectedOutcomeProb: rawSelectedProb,
         marketHomeProb: ctx.marketConsensus?.noVigHomeProb ?? null,
         marketAwayProb: ctx.marketConsensus?.noVigAwayProb ?? null,
         marketDrawProb: ctx.marketConsensus?.noVigDrawProb ?? null,
