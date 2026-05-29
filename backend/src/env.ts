@@ -94,6 +94,13 @@ const envSchema = z.object({
   // the layer in production without a code revert — predictions then serve the
   // raw model probability with no self-learning adjustment.
   SELF_LEARNING_CALIBRATION_ENABLED: z.string().optional(),
+  // When "true"/"1"/"on", the Elo rating differential (incl. home-field) enters
+  // the probability logistic at FULL scale, with the remaining factors added as
+  // weighted Elo-point adjustments — instead of shrinking the rating delta by
+  // its ~0.40 weight inside a weighted average. Fixes systemic under-confidence
+  // (78% of picks pile into the 50-60% band). Default OFF (legacy behavior)
+  // until validated out-of-sample per league.
+  ENGINE_FULL_SCALE_RATING: z.string().optional(),
 
   // ─── Paths ────────────────────────────────────────────────────────────
   // Where prediction_shadow_*.jsonl files land; defaults to backend/logs

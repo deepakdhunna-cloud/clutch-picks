@@ -27,6 +27,7 @@
 import type { GameContext, FactorContribution, HonestPrediction, LeagueKey, SimulationProjection, CanonicalEngineWeights } from "./types";
 import { getConfidenceBand } from "./types";
 import { ratingDeltaToHomeWinProb, applySoccerDrawAdjustment } from "./probability";
+import { isFullScaleRatingEnabled } from "./flags";
 import { simulateGameProjection } from "./simulation";
 import { computeBaseFactors } from "./factors/base";
 import { computeNFLFactors } from "./factors/nfl";
@@ -827,6 +828,36 @@ export function blendFactors(factors: FactorContribution[]): FactorContribution[
 }
 
 /**
+ * Sum factor contributions into a single home rating advantage (Elo points).
+ *
+ * Legacy: a weighted average of every factor's homeDelta, INCLUDING the Elo
+ * differential — which shrinks a 100-pt home edge to ~40 effective points and
+ * compresses confidence toward 50%.
+ *
+ * Full-scale (flag): the Elo differential (rating_diff) enters at full scale and
+ * the remaining factors are added as weighted adjustments, so earned confidence
+ * is preserved while secondary factors still nudge the line.
+ */
+export function sumRatingDelta(factors: FactorContribution[]): number {
+  if (!isFullScaleRatingEnabled()) {
+    let total = 0;
+    for (const factor of factors) {
+      if (factor.available) total += factor.homeDelta * factor.weight;
+    }
+    return total;
+  }
+
+  const ratingFactor = factors.find((f) => f.key === "rating_diff");
+  const eloBase = ratingFactor?.available ? ratingFactor.homeDelta : 0;
+  let adjustments = 0;
+  for (const factor of factors) {
+    if (factor.key === "rating_diff") continue;
+    if (factor.available) adjustments += factor.homeDelta * factor.weight;
+  }
+  return eloBase + adjustments;
+}
+
+/**
  * Generate an honest prediction for a single game.
  *
  * The narrative field is left empty ("") — it's filled by narrative.ts
@@ -862,15 +893,10 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   //     redistributed above; confirmed no-edge inputs should not amplify Elo.
   const adjustedFactors = blendFactors(contextWeightedFactors);
 
-  // 3. Sum weighted deltas → total rating advantage for home
-  // Each factor's contribution = homeDelta * weight (if available)
-  // The sum is in "Elo rating points in favor of home"
-  let totalRatingDelta = 0;
-  for (const factor of adjustedFactors) {
-    if (factor.available) {
-      totalRatingDelta += factor.homeDelta * factor.weight;
-    }
-  }
+  // 3. Sum factor deltas → total rating advantage for home (Elo points).
+  // Legacy: weighted average of every factor incl. the Elo differential.
+  // Full-scale (flag): Elo enters at full scale + weighted factor adjustments.
+  let totalRatingDelta = sumRatingDelta(adjustedFactors);
 
   const weakSportCalibration = applyWeakSportCalibration(ctx, totalRatingDelta, adjustedFactors, rawCoverage);
   totalRatingDelta = weakSportCalibration.ratingDelta;
