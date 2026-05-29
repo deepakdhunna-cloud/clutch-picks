@@ -626,7 +626,7 @@ function setCachedPrediction(gameId: string, prediction: GamePrediction): void {
 }
 
 const STALE_NARRATIVE_REGEX =
-  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating (?:case|setup)\b|\bworking against the pick\b|\bexpected-score projection adds context\b|\bstart here\b|\bgets? the nod\b|\bgot (?:a |the )?(?:slight |solid |clear )?edge\b|don['’]t sleep|\brather grim\b|\blighting up\b/i;
+  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating (?:case|setup)\b|\bworking against the pick\b|\bexpected-score projection adds context\b|\bstart here\b|\bgets? the nod\b|\bgot (?:a |the )?(?:slight |solid |clear )?edge\b|don['’]t sleep|\brather grim\b|\blighting up\b|The main reason:|The clearest starting point|The first thing that stands out|Additional support:|There is backup for it too|The concern:|are the lean over|get the narrow nod|The next layer supports/i;
 
 function predictionFactorToContribution(factor: PredictionFactor): FactorContribution {
   const homeScore = Number.isFinite(factor.homeScore) ? factor.homeScore : 0.5;

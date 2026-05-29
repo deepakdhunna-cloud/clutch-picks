@@ -121,44 +121,32 @@ export function extractInjuryListForLLM(
 
 // ─── Prompt construction ───────────────────────────────────────────────
 
-export const ANALYST_SYSTEM_PROMPT = `You are a professional sports analyst writing for a paid prediction product. Explain why the listed team is the pick in 80-150 words and 4-6 sentences.
+export const ANALYST_SYSTEM_PROMPT = `You write game takes for a sports prediction app. Explain why the listed team is the pick in 80-150 words and 4-7 sentences.
 
 VOICE
-Clear, direct, and specific. Confident, but never hypey. No slang, no preachiness, no clichés, no gambling tout energy. The tone should feel like a serious analyst explaining a matchup to both beginners and experts.
+Talk like a sharp friend who knows ball and is hyped to put you on. Casual, confident, a little playful — current, natural slang is welcome (e.g. "the better squad," "been cooking," "built different," "the vibes," "locked in," "has the juice," "it's the move," "could get spicy," "low-key"). Use it naturally, not stuffed in every sentence — sound like a real person texting, not a press release and not a try-hard. Stay grounded: every claim ties to a real detail from the input. Be honest about close games — a coin flip is a coin flip, say so.
 
 MUST INCLUDE
 - The picked team, unless the input says pick'em.
-- A verbal version of how the pick was made: the top factor, expected-score projection when provided, injury/availability notes when provided, schedule/rest, form, ratings, and the best risk flag.
-- 2-3 supporting reasons from the factor data when available. Do not reduce the pick to only "home field" or "recent form" if other factors are present.
-- A meaningful counterpoint or risk when one is provided.
-- Out/Doubtful injuries when they are provided, especially if they affect the pick.
-- Season context when provided: playoff, tournament, stretch-run, bowl, or late-season games should sound different from ordinary regular-season games.
-- Why this game is interesting from a fan perspective, using only the provided matchup, factors, injury list, or season context.
+- Why it's the pick in plain language: the top factor, expected-score projection when provided, injury/availability notes when provided, schedule/rest, form, ratings, and the best risk flag.
+- 2-3 supporting reasons from the factor data when available. Don't reduce the pick to only "home field" or "recent form" if other factors are present.
+- A real counterpoint or risk when one is provided — keep it honest, not a throwaway.
+- Out/Doubtful injuries when provided, especially if they affect the pick.
+- Season context when provided: playoff, tournament, stretch-run, bowl, or late-season games should feel like that moment, not a random regular-season night.
+- Why this game is fun to watch, using only the provided matchup, factors, injury list, or season context.
 
 STRUCTURAL VARIETY (CRITICAL)
-Every analysis must open differently and follow a different shape. Do NOT settle into a formulaic intro. Vary which angle leads: sometimes the headline factor, sometimes a specific stat, sometimes the highest-leverage risk, sometimes a matchup-specific detail, sometimes a player. Pick the angle that's most useful for THIS game and lead with it — don't default to the same template.
-
-Example opening *patterns* (mimic the shape, not the words):
-- Lead with the team and the concrete edge.
-- Lead with the deciding factor.
-- Lead with a stat from the input.
-- Lead with the matchup tension.
-- Lead with the highest-leverage risk.
-
-FORBIDDEN OPENERS (do not start with any of these, in any casing):
-"Alright", "So,", "Let's break", "Here's the deal", "Buckle up", "Listen", "Look,", "Okay so", "Real talk".
+Every take opens differently and follows a different shape. Don't settle into one formula. Vary the lead: sometimes the team and the edge, sometimes the deciding factor, sometimes a specific stat, sometimes the matchup tension, sometimes the biggest risk, sometimes a player. Pick the angle that's most fun and useful for THIS game.
 
 SPECIFICITY
-Reference at least one concrete, verifiable detail from the input — a record, a stat, a player name, or the venue. Don't lean on generic phrasing like "they've been rolling" or "scuffling a bit"; ground every claim in something real from the prompt.
-If the scoring projection is nearly level but the pick has a clear lean, explain that average scoring can be tight while the win lean comes from the whole factor stack.
+Reference at least one concrete, verifiable detail from the input — a record, a stat, a player name, or the venue. Don't lean on empty hype ("they've been rolling") with nothing behind it; ground every claim in something real from the prompt.
+If the scoring projection is nearly level but the pick has a clear lean, say average scoring can be tight while the win lean comes from the whole stack of factors.
 
-NEVER MENTION
-Spread, over/under, Vegas lines, numeric Elo values, the algorithm, the model, or generic hedges like "anything can happen." Do not use hype/tout terms: lock, guaranteed, can't lose, can’t lose, easy money, slam dunk, smash, dominant, sharp play, hammer, sure thing.
+NEVER DO
+- Never promise or imply a guaranteed win. No gambling-tout language: "lock," "guaranteed," "can't lose," "easy money," "sure thing," "free money."
+- Never mention the spread, over/under, Vegas lines, numeric Elo values, "the model," "the algorithm," or empty hedges like "anything can happen."
 
-DO NOT USE THESE PHRASES
-"get the call", "usable edges", "power-rating case", "power-rating setup", "start here", "gets the nod", "got the edge", "don't sleep", "rather grim", "lighting up".
-
-Return one paragraph only. End on the last real point — do not tack on a confidence call at the end.`;
+Return one paragraph only. End on the last real point — don't tack on a confidence call at the end.`;
 
 export function mapConfidenceTier(confidencePct: number): ConfidenceTier {
   if (confidencePct < 55) return "low";
@@ -207,46 +195,35 @@ export function buildUserPrompt(input: LLMNarrativeInput): string {
 
 // ─── Validation ────────────────────────────────────────────────────────
 
+// We keep ONLY the substrings that protect compliance + honesty: gambling
+// line/tout language that implies a guaranteed win, and internals that should
+// never leak (Elo numbers, "the model"). The casual/slang voice is intentional
+// now, so the old "no slang / forbidden openers" bans were removed — they would
+// bounce the cool-friend voice straight back to the deterministic template.
 const BANNED_SUBSTRINGS = [
+  // betting-line references (we are not a sportsbook). NB: bare "vegas" is NOT
+  // banned — it collides with team names (Las Vegas Raiders, Vegas Golden
+  // Knights). The prompt still forbids Vegas-line talk, and these line terms
+  // catch the actual betting context.
   "spread",
   "over/under",
-  "vegas",
+  "vegas line",
+  "vegas odds",
+  "cover ",
+  " ats",
+  // engine internals that must never surface
   "elo",
   "the model",
   "the algorithm",
   "according to our",
+  // empty hedges + guaranteed-win tout language
   "anything can happen",
-  "lock",
   "guaranteed",
   "can't lose",
   "can’t lose",
   "easy money",
-  "slam dunk",
-  "smash",
-  "dominant",
-  "sharp play",
-  "hammer",
+  "free money",
   "sure thing",
-  "cover ",
-  " ats",
-  "alright, so",
-  "let's break",
-  "here's the deal",
-  "buckle up",
-  "get the call",
-  "usable edges",
-  "power-rating case",
-  "power-rating setup",
-  "start here",
-  "gets the nod",
-  "get the nod",
-  "got the edge",
-  "got a slight edge",
-  "got the slight edge",
-  "don't sleep",
-  "don’t sleep",
-  "rather grim",
-  "lighting up",
 ];
 
 function countSentences(text: string): number {
@@ -279,8 +256,8 @@ export function validateAnalystNarrative(
     return { ok: false, reason: "multiple paragraphs" };
   }
   const sentences = countSentences(text);
-  if (sentences < 4 || sentences > 7) {
-    return { ok: false, reason: `sentence count ${sentences} outside [4,7]` };
+  if (sentences < 4 || sentences > 8) {
+    return { ok: false, reason: `sentence count ${sentences} outside [4,8]` };
   }
   const words = countWords(text);
   if (words < 80 || words > 150) {

@@ -324,19 +324,19 @@ function renderFactorInsight(
 
   if (factor.key.includes("rating") || label.includes("elo")) {
     const diff = parseEloDifferential(factor.evidence);
-    const edgeText = diff ? `about ${diff} rating points` : "the stronger rating profile";
+    const edgeText = diff ? `by about ${diff} rating points` : "on paper";
 
     if (role === "counter") {
-      return `the ratings keep ${opposingDisplay} close enough to respect`;
+      return `the rating gap isn't huge, so ${opposingDisplay} are still very much in this`;
     }
 
     if (side === "home") {
       const venueEdge = homeVenueEdge(input);
       return pickVariant(
         [
-          `${venueEdge} helps, but the cleaner point is that ${winnerDisplay} rate ahead by ${edgeText} after venue is accounted for`,
-          `the ratings lean toward ${winnerDisplay} by ${edgeText} once venue is included`,
-          `the venue-adjusted rating read puts ${winnerDisplay} in front by ${edgeText}`,
+          `${venueEdge} is a nice bonus, but the real story is ${winnerDisplay} just grade out as the better squad ${edgeText}`,
+          `even setting the ${venueEdge} aside, ${winnerDisplay} are the stronger team here ${edgeText}`,
+          `${winnerDisplay} rate ahead ${edgeText} once you bake in the ${venueEdge} — they're the better roster`,
         ],
         `${seed}|elo-home|${role}`,
       );
@@ -344,9 +344,9 @@ function renderFactorInsight(
 
     return pickVariant(
       [
-        `the ratings still lean toward ${winnerDisplay} by ${edgeText} even after venue is accounted for`,
-        `${winnerDisplay} rate ahead by ${edgeText}, which is enough to keep them on top of the matchup read`,
-        `the road or neutral setting is baked in, and the rating read still points to ${winnerDisplay} by ${edgeText}`,
+        `${winnerDisplay} are just the better team here ${edgeText}, even on the road`,
+        `road game or not, ${winnerDisplay} grade out ahead ${edgeText} — that's the backbone of the pick`,
+        `${winnerDisplay} carry the stronger profile ${edgeText}, and the neutral/road spot is already factored in`,
       ],
       `${seed}|elo-away|${role}`,
     );
@@ -358,53 +358,53 @@ function renderFactorInsight(
       const winnerForm = side === "home" ? form.home : form.away;
       const loserForm = side === "home" ? form.away : form.home;
       if (role === "counter") {
-        return `${teamPossessive(input, opposingAbbr)} recent form is the main concern: ${loserForm} lately`;
+        return `${teamPossessive(input, opposingAbbr)} form is the thing keeping me honest — they've been ${loserForm} lately`;
       }
-      return `${teamName(input, input.winnerAbbr)} have the better recent-form line at ${winnerForm}, compared with ${loserForm} for ${loser}`;
+      return `${teamName(input, input.winnerAbbr)} have been the hotter team at ${winnerForm}, while ${loser} sit at ${loserForm}`;
     }
     return role === "counter"
-      ? `${teamPossessive(input, opposingAbbr)} recent form gives them the cleanest counter`
-      : `recent form gives ${winnerDisplay} another reason to like the pick`;
+      ? `${teamPossessive(input, opposingAbbr)} recent form is the cleanest reason to second-guess this`
+      : `${winnerDisplay} have the momentum lately, which only helps the pick`;
   }
 
   if (factor.key.includes("rest") || label.includes("rest")) {
     return role === "counter"
-      ? `${opposingDisplay} have the rest angle, which can matter late`
-      : `the rest setup helps ${winnerDisplay}: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `${opposingDisplay} get the rest edge, and that can bite late`
+      : `the schedule's doing ${winnerDisplay} a favor: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (factor.key.includes("back_to_back") || label.includes("back-to-back")) {
     return role === "counter"
-      ? `${opposingDisplay} get the cleaner schedule spot`
-      : `the schedule spot helps too: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `${opposingDisplay} land the comfier schedule spot`
+      : `the schedule spot is in their corner too: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (factor.key.includes("injur") || label.includes("availability")) {
     return role === "counter"
-      ? `availability is the piece that could tug this back toward ${opposingDisplay}: ${cleanEvidenceForNarrative(factor.evidence)}`
-      : `availability supports the pick: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `the injury picture is what could drag this back toward ${opposingDisplay}: ${cleanEvidenceForNarrative(factor.evidence)}`
+      : `the availability stuff lines up for the pick: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (factor.key.includes("travel") || label.includes("travel")) {
     return role === "counter"
-      ? `${opposingDisplay} have the travel/schedule counter`
-      : `the travel setup also leans toward ${winnerDisplay}: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `${opposingDisplay} have the travel/schedule angle working for them`
+      : `the travel setup tilts ${winnerDisplay}'s way too: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (factor.key.includes("simulation_projection") || label.includes("game-script")) {
     return role === "counter"
-      ? `the projected score keeps this close: ${cleanEvidenceForNarrative(factor.evidence)}`
-      : `the projected score supports the lean: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `the projected score says this stays tight: ${cleanEvidenceForNarrative(factor.evidence)}`
+      : `the projected score is on board with the lean: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (factor.key.includes("market_comparison") || label.includes("consensus")) {
     return role === "counter"
-      ? `outside consensus is the warning label here: ${cleanEvidenceForNarrative(factor.evidence)}`
-      : `outside consensus does not fight the pick much: ${cleanEvidenceForNarrative(factor.evidence)}`;
+      ? `the read is going a little against the room here: ${cleanEvidenceForNarrative(factor.evidence)}`
+      : `the broader consensus doesn't really push back: ${cleanEvidenceForNarrative(factor.evidence)}`;
   }
 
   if (role === "counter") {
-    return `${readableFactorLabel(factor)} gives ${opposingDisplay} a real counter`;
+    return `${readableFactorLabel(factor)} gives ${opposingDisplay} a legit counter`;
   }
 
   return `${readableFactorLabel(factor)}: ${cleanEvidenceForNarrative(factor.evidence)}`;
@@ -424,9 +424,9 @@ function renderFanAngle(
   if (seasonContext && counterpoint && opposingAbbr) {
     return pickVariant(
       [
-        `The hinge is whether ${teamSubject(input, opposingAbbr)} can turn ${readableFactorLabel(counterpoint)} into enough pressure in the ${seasonContext.label}.`,
-        `The matchup stays interesting because ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} can still pull this back.`,
-        `The deciding question is whether ${teamPossessive(input, winnerAbbr!)} top edge holds with ${readableFactorLabel(counterpoint)} pushing the other way.`,
+        `The fun part: whether ${teamSubject(input, opposingAbbr)} can turn ${readableFactorLabel(counterpoint)} into real pressure with the ${seasonContext.label} stakes cranked up.`,
+        `This one's got juice because ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} can absolutely pull it back.`,
+        `Big question in the ${seasonContext.label}: does ${teamPossessive(input, winnerAbbr!)} top edge hold up with ${readableFactorLabel(counterpoint)} pushing back?`,
       ],
       `${seed}|fan-season-counter`,
     );
@@ -435,9 +435,9 @@ function renderFanAngle(
   if (seasonContext) {
     return pickVariant(
       [
-        `The ${seasonContext.label} makes the cleaner matchup edges matter more than a normal calendar spot.`,
-        `The question is which of these concrete edges holds up in the ${seasonContext.label}.`,
-        `This setting puts the cleanest matchup data under a brighter light.`,
+        `The ${seasonContext.label} turns the volume up — these matchup edges matter way more than a random calendar night.`,
+        `In the ${seasonContext.label}, the question is which of these edges actually shows up when it counts.`,
+        `This is the kind of spot where the cleanest edges get put under the lights.`,
       ],
       `${seed}|fan-season`,
     );
@@ -446,9 +446,9 @@ function renderFanAngle(
   if (counterpoint && opposingAbbr && winnerAbbr) {
     return pickVariant(
       [
-        `${sentenceStart(teamSubject(input, opposingAbbr))} still have a path if ${readableFactorLabel(counterpoint)} shows up.`,
-        `${sentenceStart(teamSubject(input, opposingAbbr))} have one clear way to make this uncomfortable.`,
-        `The hinge is whether ${teamPossessive(input, winnerAbbr)} main edge outweighs ${teamPossessive(input, opposingAbbr)} best counter.`,
+        `${sentenceStart(teamSubject(input, opposingAbbr))} still have a path if ${readableFactorLabel(counterpoint)} shows up — that's what keeps it spicy.`,
+        `${sentenceStart(teamSubject(input, opposingAbbr))} have one real way to make this uncomfortable, so the upset isn't crazy.`,
+        `It comes down to whether ${teamPossessive(input, winnerAbbr)} main edge outmuscles ${teamPossessive(input, opposingAbbr)} best counter.`,
       ],
       `${seed}|fan-counter`,
     );
@@ -458,11 +458,11 @@ function renderFanAngle(
   const leadLabel = readableFactorLabel(leadFactor);
   return pickVariant(
     [
-      `The question is whether that ${leadLabel} edge is enough to shape the final result.`,
+      `Really it's about whether that ${leadLabel} edge is enough to carry the night.`,
       supportLabel
-        ? `${sentenceStart(leadLabel)} starts the case, and ${supportLabel} is the next piece to watch.`
-        : `This one mostly comes down to whether ${leadLabel} is as meaningful as the numbers say.`,
-      `One clean edge may tell the story early.`,
+        ? `${sentenceStart(leadLabel)} gets it started, and ${supportLabel} is the next thing to keep an eye on.`
+        : `This basically rides on whether ${leadLabel} is as real as the numbers say.`,
+      `One clean edge could tell the whole story early.`,
     ],
     `${seed}|fan-basic`,
   );
@@ -481,9 +481,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
   const seasonLead = seasonContext
     ? pickVariant(
       [
-        `${seasonContext.label}: `,
-        `Given the ${seasonContext.label}, `,
-        `Context matters here: ${seasonContext.label}, `,
+        `${seasonContext.label} stakes here. `,
+        `It's a ${seasonContext.label} spot. `,
+        `Big ${seasonContext.label} energy. `,
       ],
       `${seed}|season`,
     )
@@ -495,19 +495,19 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
       seasonLead +
       pickVariant(
         [
-          `this is basically a coin flip between ${homeTeamAbbr} and ${awayTeamAbbr}, so there is no need to force a side.`,
-          `${homeTeamAbbr}-${awayTeamAbbr} is tight enough that the honest read is no clear edge.`,
-          `I would call this one a true toss-up between ${homeTeamAbbr} and ${awayTeamAbbr}.`,
+          `Real talk, ${homeTeamAbbr}-${awayTeamAbbr} is a coin flip — no need to force a side here.`,
+          `${homeTeamAbbr} vs ${awayTeamAbbr} is too close to call cleanly, and the honest read is there's no real edge.`,
+          `This one's a true pick'em between ${homeTeamAbbr} and ${awayTeamAbbr} — it could legit go either way.`,
         ],
         `${seed}|pickem`,
       ),
     );
     if (leadFactor.key !== "none") {
-      parts.push(`The biggest separator is ${readableFactorLabel(leadFactor)}: ${cleanEvidenceForNarrative(leadFactor.evidence)}.`);
+      parts.push(`If anything tips it, it's ${readableFactorLabel(leadFactor)}: ${cleanEvidenceForNarrative(leadFactor.evidence)}.`);
     }
     if (supportingFactors.length > 0) {
       parts.push(
-        `The other useful reads are ${supportingFactors
+        `Also worth a look: ${supportingFactors
           .map((f) => `${readableFactorLabel(f)} (${cleanEvidenceForNarrative(f.evidence)})`)
           .join(" and ")}.`,
       );
@@ -519,9 +519,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
       parts.push(seasonContext.detail);
     }
     parts.push(renderFanAngle(input, seed, null));
-    parts.push(`Neither team has enough separation to make this more than a lean.`);
+    parts.push(`Bottom line: nobody's separating enough here to make this more than a lean.`);
     if (unavailableKeyFactors.length > 0) {
-      parts.push(`Worth noting: ${unavailableKeyFactors[0]}.`);
+      parts.push(`One thing to flag: ${unavailableKeyFactors[0]}.`);
     }
     return parts.join(" ");
   }
@@ -535,9 +535,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the lean over ${teamSubject(input, loserAbbr)}, but this is still close to a toss-up.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} get the narrow nod over ${teamSubject(input, loserAbbr)}, though it is still a toss-up type margin.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick, but this is more toss-up lean than declaration against ${teamSubject(input, loserAbbr)}.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} get the slight lean over ${teamSubject(input, loserAbbr)}, but real talk this is basically a coin flip.`,
+            `If you're picking, give it to ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} — but barely; it's a true toss-up vibe.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick, but keep it light: this is a coin-flip spot, not a statement against ${teamSubject(input, loserAbbr)}.`,
           ],
           `${seed}|coinflip`,
         ),
@@ -548,9 +548,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the lean over ${teamSubject(input, loserAbbr)} because the best pieces of the matchup point their way.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick over ${teamSubject(input, loserAbbr)}, but the margin is narrow.`,
-            `The read tilts toward ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}, even though this is not a separation play.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the side over ${teamSubject(input, loserAbbr)} — the matchup tilts their way, just not by a ton.`,
+            `Leaning ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} here; the edge is real but it's a thin one.`,
+            `The read nudges toward ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} — there's an edge, just don't oversell it.`,
           ],
           `${seed}|slight`,
         ),
@@ -561,9 +561,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick over ${teamSubject(input, loserAbbr)}, and the case starts with one matchup edge carrying real weight.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are ahead of ${teamSubject(input, loserAbbr)} in the matchup read because the data gives them cleaner paths to win.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} have the better case against ${teamSubject(input, loserAbbr)}, with the top factors pointing the same direction.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the play over ${teamSubject(input, loserAbbr)}, and the matchup genuinely sets up in their favor.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} have the better case against ${teamSubject(input, loserAbbr)} — the key pieces all point the same way.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are cooking in this spot against ${teamSubject(input, loserAbbr)}; the read likes them with room to work.`,
           ],
           `${seed}|clear`,
         ),
@@ -574,9 +574,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         seasonLead +
         pickVariant(
           [
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the side here, with more than one signal backing up the pick.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the strongest read in this matchup because the biggest indicators are stacked their way.`,
-            `${sentenceStart(teamSubject(input, winnerAbbr))} are the cleaner pick over ${teamSubject(input, loserAbbr)}, and it is not just one stat doing the work.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the clear side here, and it's not just one thing carrying it.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} look built different in this spot — multiple signals stacked their way over ${teamSubject(input, loserAbbr)}.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the strong read against ${teamSubject(input, loserAbbr)}, with the biggest factors all lined up.`,
           ],
           `${seed}|strong`,
         ),
@@ -589,9 +589,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
   parts.push(
     pickVariant(
       [
-        `The main reason: ${leadInsight}.`,
-        `The clearest starting point is ${leadInsight}.`,
-        `The first thing that stands out: ${leadInsight}.`,
+        `The main thing: ${leadInsight}.`,
+        `Where it really starts — ${leadInsight}.`,
+        `What's driving it: ${leadInsight}.`,
       ],
       `${seed}|lead`,
     ),
@@ -605,9 +605,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     parts.push(
       pickVariant(
         [
-          `Additional support: ${supportText}.`,
-          `There is backup for it too: ${supportText}.`,
-          `The next layer supports the pick: ${supportText}.`,
+          `It's backed up too: ${supportText}.`,
+          `And there's more on the stack: ${supportText}.`,
+          `The next layer's in their corner too: ${supportText}.`,
         ],
         `${seed}|support`,
       ),
@@ -640,7 +640,14 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
       "counter",
     );
     parts.push(
-      `The concern: ${counterInsight}.`,
+      pickVariant(
+        [
+          `The one thing that gives me pause: ${counterInsight}.`,
+          `What could flip it: ${counterInsight}.`,
+          `Not all one-way though — ${counterInsight}.`,
+        ],
+        `${seed}|counter`,
+      ),
     );
   }
 
@@ -655,12 +662,12 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     supportingFactors.length === 0 &&
     effectiveCounterpoint === null
   ) {
-    parts.push(`There is not much supporting context available, so the read leans heavily on that main edge.`);
+    parts.push(`Not a ton of extra context tonight, so the pick mostly rides on that one main edge.`);
   }
 
   // ── Unavailable caveats ──
   if (unavailableKeyFactors.length > 0) {
-    parts.push(`One caveat: ${unavailableKeyFactors[0]}.`);
+    parts.push(`One thing to flag: ${unavailableKeyFactors[0]}.`);
   }
 
   let text = parts.join(" ");
@@ -686,7 +693,7 @@ function formatInjuryNotes(injuries: NarrativeInjury[]): string[] {
   return injuries.slice(0, 3).map((injury) => {
     const pos = injury.position ? `, ${injury.position}` : "";
     const reason = injury.reason ? ` with ${injury.reason}` : "";
-    return `Injury-wise, ${injury.name} (${injury.team}${pos}) is ${injury.status.toLowerCase()}${reason}`;
+    return `Injury check: ${injury.name} (${injury.team}${pos}) is ${injury.status.toLowerCase()}${reason}`;
   });
 }
 

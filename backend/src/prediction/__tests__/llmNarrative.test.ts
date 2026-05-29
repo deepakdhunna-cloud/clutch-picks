@@ -175,12 +175,12 @@ describe("buildUserPrompt", () => {
 describe("ANALYST_SYSTEM_PROMPT", () => {
   it("bans numeric Elo, Vegas lines, and algorithm references", () => {
     expect(ANALYST_SYSTEM_PROMPT).toContain("80-150 words");
-    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("never mention");
+    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("never do");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("vegas");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("elo");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("lock");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("season context");
-    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("fan perspective");
+    expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("fun to watch");
     expect(ANALYST_SYSTEM_PROMPT.toLowerCase()).toContain("sure thing");
   });
 });
@@ -261,10 +261,13 @@ describe("validateAnalystNarrative", () => {
     expect(validateAnalystNarrative(text).ok).toBe(false);
   });
 
-  it("rejects casual or stale narration phrases", () => {
+  it("allows the casual / slang voice (it is no longer bounced to the template)", () => {
+    // The cool-friend voice is intentional now. Phrases like "got the slight
+    // edge" and "don't sleep on" used to be banned; they are welcome as long as
+    // the text stays clear of gambling-guarantee/line/internals language.
     const text =
-      "Detroit has got the slight edge because the pitching matchup gives them the cleaner path into this game tonight. Keider Montero brings the better full profile with a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but 3.63 FIP. The Tigers also have the form edge, sitting 8-2 over their last 10 while Milwaukee is 4-6. The one concern is rest, since the Brewers come in with three days off against Detroit's one. Don't sleep on Milwaukee, but Detroit has the better baseball case.";
-    expect(validateAnalystNarrative(text).ok).toBe(false);
+      "Detroit's low-key the move tonight because the pitching matchup is just cleaner top to bottom. Keider Montero's been absolutely cooking lately, carrying a 3.12 ERA and 1.70 FIP against Kyle Harrison's 2.87 ERA but much shakier 3.63 FIP. The Tigers are rolling too, sitting 8-2 over their last 10 while Milwaukee is stuck at 4-6. The one thing that gives me pause is rest, since the Brewers come in with three full days off against Detroit's one. Don't sleep on Milwaukee here, but Detroit's just got the better baseball case tonight.";
+    expect(validateAnalystNarrative(text).ok).toBe(true);
   });
 
   it("rejects multiple paragraphs", () => {

@@ -145,7 +145,7 @@ describe("buildAdapterNarrative", () => {
 
     expect(narrative).toContain("Boston Celtics");
     expect(narrative).not.toContain("Elo");
-    expect(narrative.toLowerCase()).toContain("not much supporting context available");
+    expect(narrative.toLowerCase()).toMatch(/not a ton of extra context|rides on that one main edge/);
   });
 
   it("produces a valid narrative even for a pick'em (winner=null)", () => {
