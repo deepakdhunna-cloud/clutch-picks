@@ -13,6 +13,7 @@
 
 import type { GameContext, FactorContribution } from "../types";
 import { getHomeBonus } from "../../lib/elo";
+import { isTennisRankReclaimEnabled } from "../flags";
 
 // ─── Rest-cap sanity guard ──────────────────────────────────────────────────
 // Resolved-game data can go stale (resolve-picks falling behind leaves a team's
@@ -58,14 +59,22 @@ export function computeBaseFactors(ctx: GameContext): FactorContribution[] {
   const homeBonus = getHomeBonus(ctx.sport);
   const eloDelta = (ctx.homeElo + homeBonus) - ctx.awayElo;
 
+  // #11: tennis has no real player-Elo pipeline, so this 40% factor is dead
+  // weight that dilutes the ATP/WTA ranking signal. When the rank-reclaim flag
+  // is on, mark it unavailable so redistributeWeights reallocates the weight to
+  // the live tennis factors.
+  const tennisRankReclaim = ctx.sport === "TENNIS" && isTennisRankReclaimEnabled();
+
   factors.push({
     key: "rating_diff",
     label: "Elo rating differential",
     homeDelta: eloDelta,
     weight: 0.40,
-    available: true, // Elo is always available (default 1500 for new teams)
-    hasSignal: true, // Elo + home-field advantage is always real signal
-    evidence: `Home ${ctx.game.homeTeam.abbreviation} Elo ${Math.round(ctx.homeElo)} + ${homeBonus} HFA vs Away ${ctx.game.awayTeam.abbreviation} Elo ${Math.round(ctx.awayElo)} = ${Math.round(eloDelta)} pt differential`,
+    available: !tennisRankReclaim, // Elo is always available (default 1500 for new teams)
+    hasSignal: !tennisRankReclaim, // Elo + home-field advantage is always real signal
+    evidence: tennisRankReclaim
+      ? "Tennis player Elo not modeled — rating factor inactive; weight reallocated to ranking/form"
+      : `Home ${ctx.game.homeTeam.abbreviation} Elo ${Math.round(ctx.homeElo)} + ${homeBonus} HFA vs Away ${ctx.game.awayTeam.abbreviation} Elo ${Math.round(ctx.awayElo)} = ${Math.round(eloDelta)} pt differential`,
   });
 
   // ── 2. Rest differential ──────────────────────────────────────────────

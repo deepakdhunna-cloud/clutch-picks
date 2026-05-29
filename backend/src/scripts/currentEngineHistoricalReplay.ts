@@ -22,6 +22,11 @@ type TeamInfo = {
   abbreviation: string;
   logo: string;
   record: string;
+  // Tennis-only: player ranking signal flows through buildGameContext into the
+  // tennis ranking factor. Undefined for team sports.
+  rank?: number;
+  seed?: number;
+  rankingPoints?: number;
 };
 
 type HistoricalEvent = {
@@ -116,7 +121,13 @@ const ESPN_PATHS: Record<string, string> = {
   EPL: "soccer/eng.1",
   UCL: "soccer/uefa.champions",
   IPL: "cricket/8048",
+  // Sentinel so TENNIS clears the supported-sports gate. Tennis is fetched
+  // specially (ATP+WTA tours, tournament→round→match nesting) — see
+  // fetchTennisScoreboardForDate; this path string is not used directly.
+  TENNIS: "tennis",
 };
+
+const TENNIS_TOURS = ["atp", "wta"];
 
 const DEFAULT_SPORTS = ["NBA", "MLB", "NHL", "MLS", "EPL", "UCL", "IPL", "NFL", "NCAAF", "NCAAB"];
 
@@ -312,7 +323,110 @@ function historicalEventFromEspn(sport: string, event: any): HistoricalEvent | n
   };
 }
 
+// ─── Tennis (ATP/WTA) ───────────────────────────────────────────────────────
+// Tennis on ESPN nests matches under tournament → grouping(round) → competition,
+// and competitors are players (athlete, not team). Ranking comes from
+// curatedRank.current. There is no team-style score, so home/away "score" is
+// sets won and the winner is taken from the winner flag. Score MAE is therefore
+// meaningless for tennis (sets ≠ projected games) — only accuracy/Brier matter.
+function tennisCompetitorRank(competitor: any): number | undefined {
+  const raw = competitor?.curatedRank?.current ?? competitor?.athlete?.rank?.current ?? competitor?.athlete?.rank;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && n < 2000 ? n : undefined;
+}
+
+function tennisTeamInfo(competitor: any): TeamInfo | null {
+  const ath = competitor?.athlete;
+  if (!ath) return null;
+  const id = String(ath.guid ?? ath.id ?? ath.displayName ?? "");
+  if (!id) return null;
+  const seed = Number(competitor?.seed ?? ath?.seed);
+  return {
+    id,
+    name: String(ath.displayName ?? ath.fullName ?? ath.shortName ?? id),
+    abbreviation: String(ath.shortName ?? ath.displayName ?? id).slice(0, 24),
+    logo: "",
+    record: "0-0",
+    rank: tennisCompetitorRank(competitor),
+    seed: Number.isFinite(seed) && seed > 0 ? seed : undefined,
+  };
+}
+
+function tennisSetsWon(competitor: any, opponent: any): number {
+  const a: any[] = competitor?.linescores ?? [];
+  const b: any[] = opponent?.linescores ?? [];
+  let won = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const av = Number(a[i]?.value);
+    const bv = Number(b[i]?.value);
+    if (Number.isFinite(av) && Number.isFinite(bv) && av > bv) won++;
+  }
+  return won;
+}
+
+function tennisMatchToEvent(match: any): HistoricalEvent | null {
+  const statusType = match?.status?.type ?? {};
+  const completed = statusType.completed === true || String(statusType.state ?? "").toLowerCase() === "post";
+  if (!completed) return null;
+  const competitors: any[] = match?.competitors ?? [];
+  if (competitors.length < 2) return null;
+  const home = competitors.find((c) => c?.homeAway === "home") ?? competitors[0];
+  const away = competitors.find((c) => c?.homeAway === "away") ?? competitors[1];
+  const homeTeam = tennisTeamInfo(home);
+  const awayTeam = tennisTeamInfo(away);
+  if (!homeTeam || !awayTeam || homeTeam.id === awayTeam.id) return null;
+  // Evaluate only ranked-vs-ranked matchups — the population the tennis model is
+  // designed for and what the live app serves. Unranked qualifier/challenger
+  // matches have neither a ranking signal nor meaningful player history, so
+  // including them measures noise rather than the model.
+  if (homeTeam.rank === undefined || awayTeam.rank === undefined) return null;
+
+  const homeSets = tennisSetsWon(home, away);
+  const awaySets = tennisSetsWon(away, home);
+  let actualPick: FinalPick;
+  if (isWinner(home.winner)) actualPick = "home";
+  else if (isWinner(away.winner)) actualPick = "away";
+  else if (homeSets !== awaySets) actualPick = homeSets > awaySets ? "home" : "away";
+  else return null; // walkover/retirement with no winner flag — unscoreable
+
+  return {
+    id: String(match.id ?? match.uid ?? `${homeTeam.id}-${awayTeam.id}-${match.date ?? ""}`),
+    sport: "TENNIS",
+    date: String(match.date ?? match.startDate ?? ""),
+    venue: String(match.venue?.fullName ?? "Unknown"),
+    homeTeam,
+    awayTeam,
+    homeScore: homeSets,
+    awayScore: awaySets,
+    actualPick,
+  };
+}
+
+async function fetchTennisScoreboardForDate(dateYYYYMMDD: string): Promise<HistoricalEvent[]> {
+  const out: HistoricalEvent[] = [];
+  for (const tour of TENNIS_TOURS) {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/tennis/${tour}/scoreboard?${new URLSearchParams({ dates: dateYYYYMMDD }).toString()}`;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15_000), headers: FETCH_HEADERS });
+      if (!response.ok) continue;
+      const data = await response.json() as any;
+      for (const event of data?.events ?? []) {
+        for (const grouping of event?.groupings ?? []) {
+          for (const match of grouping?.competitions ?? []) {
+            const parsed = tennisMatchToEvent(match);
+            if (parsed) out.push(parsed);
+          }
+        }
+      }
+    } catch {
+      // ignore per-tour fetch errors
+    }
+  }
+  return out;
+}
+
 async function fetchScoreboardForDate(sport: string, dateYYYYMMDD: string): Promise<HistoricalEvent[]> {
+  if (sport === "TENNIS") return fetchTennisScoreboardForDate(dateYYYYMMDD);
   const url = scoreboardUrl(sport, dateYYYYMMDD);
   try {
     const response = await fetch(url, {

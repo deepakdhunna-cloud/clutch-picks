@@ -27,3 +27,14 @@ function envEnabled(name: string): boolean {
 export function isFullScaleRatingEnabled(): boolean {
   return envEnabled("ENGINE_FULL_SCALE_RATING");
 }
+
+/**
+ * Tennis rank-reclaim (#11). Tennis has no real player-Elo pipeline, so the 40%
+ * rating_diff weight is dead and dilutes the only real signal (ATP/WTA ranking).
+ * When enabled, the tennis rating_diff factor is marked unavailable so
+ * redistributeWeights reallocates its weight onto the live ranking/form factors.
+ * Separate flag from #2 so it can be validated independently. Default OFF.
+ */
+export function isTennisRankReclaimEnabled(): boolean {
+  return envEnabled("ENGINE_TENNIS_RANK_RECLAIM");
+}
