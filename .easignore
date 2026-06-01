@@ -1,15 +1,32 @@
+# Dependencies
 node_modules/
+
+# Expo/local build output
 .expo/
 dist/
 web-build/
 ios/
 android/
-private/
+
+# Local logs and generated diagnostics
+expo.log
+*.tsbuildinfo
+
+# Local environment and credentials
 .env
 .env.*
-backend/.env
-app-store-screenshots/
+!.env.example
+private/
+*.pem
+*.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Local simulator/audit artifacts
+tmp/
+*.mp4
+
+# macOS
+.DS_Store
