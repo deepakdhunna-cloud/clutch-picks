@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, memo, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from 'react';
 import {
   View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, Platform, InteractionManager,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withRepeat, Easing, cancelAnimation,
 } from 'react-native-reanimated';
@@ -1292,11 +1293,13 @@ const LiveCard = memo(function LiveCard({
   pick,
   cardWidth,
   showModelEdge = true,
+  showMomentum = true,
 }: {
   game: GameWithPrediction;
   pick?: UserPick;
   cardWidth: number;
   showModelEdge?: boolean;
+  showMomentum?: boolean;
 }) {
   const { openGame, warmGame } = useGameDetailActions();
   // Per-item guard: this card lives in a horizontal snap FlatList, so a swipe
@@ -1678,45 +1681,47 @@ const LiveCard = memo(function LiveCard({
             <Text style={{ color: pickStatusColor, fontSize: 9, fontWeight: '800', marginTop: 3 }} numberOfLines={1}>{pickStatusText}</Text>
           </View>
 
-          {/* Tile 2 — MOMENTUM */}
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: 'rgba(2,5,12,0.72)',
-              borderWidth: 1,
-              borderColor: 'rgba(122,157,184,0.2)',
-              borderRadius: 14,
-              minHeight: 58,
-              justifyContent: 'center',
-              paddingVertical: 7,
-              paddingHorizontal: 7,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#8a95a6', fontSize: 8, fontWeight: '900', letterSpacing: 1.7, marginBottom: 4 }}>MOMENTUM</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 14 }}>
-              {momentumBars.map((v, i) => {
-                const isPeak = i === peakIndex;
-                const c = isPeak ? LIVE_RED : v >= 0.75 ? '#c8d4df' : v >= 0.5 ? '#7A9DB8' : '#4b5563';
-                return (
-                  <View
-                    key={i}
-                    style={{
-                      width: 5,
-                      height: Math.max(3, Math.round(v * 14)),
-                      borderRadius: 2,
-                      backgroundColor: c,
-                      shadowColor: c,
-                      shadowOpacity: isPeak ? 0.55 : 0,
-                      shadowRadius: 5,
-                      marginHorizontal: 1,
-                    }}
-                  />
-                );
-              })}
+          {/* Tile 2 — MOMENTUM (Pro only) */}
+          {showMomentum ? (
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(2,5,12,0.72)',
+                borderWidth: 1,
+                borderColor: 'rgba(122,157,184,0.2)',
+                borderRadius: 14,
+                minHeight: 58,
+                justifyContent: 'center',
+                paddingVertical: 7,
+                paddingHorizontal: 7,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#8a95a6', fontSize: 8, fontWeight: '900', letterSpacing: 1.7, marginBottom: 4 }}>MOMENTUM</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 14 }}>
+                {momentumBars.map((v, i) => {
+                  const isPeak = i === peakIndex;
+                  const c = isPeak ? LIVE_RED : v >= 0.75 ? '#c8d4df' : v >= 0.5 ? '#7A9DB8' : '#4b5563';
+                  return (
+                    <View
+                      key={i}
+                      style={{
+                        width: 5,
+                        height: Math.max(3, Math.round(v * 14)),
+                        borderRadius: 2,
+                        backgroundColor: c,
+                        shadowColor: c,
+                        shadowOpacity: isPeak ? 0.55 : 0,
+                        shadowRadius: 5,
+                        marginHorizontal: 1,
+                      }}
+                    />
+                  );
+                })}
+              </View>
+              <Text style={{ color: '#b8c3d1', fontSize: 9, fontWeight: '700', marginTop: 4 }} numberOfLines={1}>{momentumLabel}</Text>
             </View>
-            <Text style={{ color: '#b8c3d1', fontSize: 9, fontWeight: '700', marginTop: 4 }} numberOfLines={1}>{momentumLabel}</Text>
-          </View>
+          ) : null}
 
           {showModelEdge ? (
             <View
@@ -2054,8 +2059,8 @@ const LiveIntelStage = memo(function LiveIntelStage({ game, intel }: { game: Gam
 
 const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress }: { game: GameWithPrediction | null; onPress: () => void }) {
   if (!game) return null;
-  // Header intentionally omitted — the "Live board" heading above the live game
-  // card already opens this section; the locked card flows under it as one unit.
+  // Header intentionally omitted — the "Live intelligence" heading above the live
+  // game card already opens this section; the locked card flows under it as one unit.
   return (
     <View style={{ paddingHorizontal: ARENA_SIDE_PADDING, marginTop: 6, marginBottom: ARENA_SECTION_GAP }}>
       <Pressable onPress={onPress}>
@@ -2095,19 +2100,25 @@ const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress 
                 <Lock size={17} color="#9AB8CC" strokeWidth={2.6} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 8.5, lineHeight: 11, fontWeight: '900', color: '#7A9DB8', letterSpacing: 1.7 }}>LIVE INTEL</Text>
-                <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '900', color: WHITE, marginTop: 2 }}>Game pulse is ready</Text>
+                <Text style={{ fontSize: 8.5, lineHeight: 11, fontWeight: '900', color: '#7A9DB8', letterSpacing: 1.7 }}>LIVE INTELLIGENCE</Text>
+                <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '900', color: WHITE, marginTop: 2 }}>Read the live game like a pro</Text>
               </View>
             </View>
             <Text style={{ fontSize: 12.5, lineHeight: 19, fontWeight: '700', color: TEXT_SECONDARY, marginBottom: 13 }}>
-              Pressure points, momentum shifts, and model watch notes unlock while the game is moving.
+              The full read on every live game — real-time pulse, the pressure point that decides it, how the model line is holding, upset alerts, and injury & ejection news. All updating as it plays.
             </Text>
             <View style={{ marginBottom: 14 }}>
-              {['Pulse', 'Pressure point', 'Model watch'].map((item, index) => (
-                <View key={item} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30, borderRadius: 10, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 10, marginBottom: index === 2 ? 0 : 7 }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: index === 0 ? '#9AB8CC' : index === 1 ? 'rgba(139,10,31,0.78)' : 'rgba(224,234,240,0.55)', marginRight: 8 }} />
-                  <Text style={{ flex: 1, minWidth: 0, fontSize: 10.5, lineHeight: 14, fontWeight: '800', color: 'rgba(224,234,240,0.72)' }}>{item}</Text>
-                  <View style={{ width: index === 0 ? 72 : index === 1 ? 96 : 84, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.055)' }} />
+              {[
+                { label: 'Real-time game pulse', dot: '#9AB8CC', bar: 76 },
+                { label: 'Pressure point read', dot: 'rgba(139,10,31,0.78)', bar: 96 },
+                { label: 'Model vs. live watch', dot: 'rgba(224,234,240,0.55)', bar: 84 },
+                { label: 'Upset watch', dot: LIVE_RED, bar: 62 },
+                { label: 'Injury & ejection alerts', dot: '#9AB8CC', bar: 104 },
+              ].map((item, index, arr) => (
+                <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30, borderRadius: 10, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 10, marginBottom: index === arr.length - 1 ? 0 : 7 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: item.dot, marginRight: 8 }} />
+                  <Text style={{ flex: 1, minWidth: 0, fontSize: 10.5, lineHeight: 14, fontWeight: '800', color: 'rgba(224,234,240,0.72)' }} numberOfLines={1}>{item.label}</Text>
+                  <View style={{ width: item.bar, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.055)' }} />
                 </View>
               ))}
             </View>
@@ -2583,14 +2594,14 @@ const GameDay = memo(function GameDay({
       {/* 2. Your Games */}
       <YourGames games={followed} {...horizontalGestureGuard} />
 
-      {/* 3. Live board search */}
+      {/* 3. Live intelligence search */}
       <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginTop:0, marginBottom:14}}>
         <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'flex-end', marginBottom:10}}>
           <View style={{flexDirection:'row', alignItems:'stretch', flex:1, minWidth:0, paddingRight:12}}>
             <View style={{width:3, borderRadius:2, backgroundColor:LIVE_RED, marginRight:11}} />
             <View style={{flex:1, minWidth:0}}>
-              <Text style={{fontSize:9.5, fontWeight:'900', color:LIVE_RED, letterSpacing:2.2, marginBottom:4}}>LIVE FEED</Text>
-              <Text style={{fontSize:18, lineHeight:22, fontWeight:'900', color:WHITE}} numberOfLines={1}>{liveIntelLocked ? 'Live board' : 'Live intelligence'}</Text>
+              <Text style={{fontSize:9.5, fontWeight:'900', color:LIVE_RED, letterSpacing:2.2, marginBottom:4}}>LIVE</Text>
+              <Text style={{fontSize:18, lineHeight:22, fontWeight:'900', color:WHITE}} numberOfLines={1}>Live intelligence</Text>
             </View>
           </View>
           <View style={{borderRadius:999, paddingHorizontal:10, paddingVertical:6, backgroundColor:'rgba(239,68,68,0.10)', borderWidth:1, borderColor:'rgba(239,68,68,0.20)', flexDirection:'row', alignItems:'center'}}>
@@ -2686,6 +2697,7 @@ const GameDay = memo(function GameDay({
             pick={pm.get(filteredLive[0].id)}
             cardWidth={CARD_W}
             showModelEdge={!liveIntelLocked}
+            showMomentum={!liveIntelLocked}
           />
         </View>
       ) : (
@@ -2711,6 +2723,7 @@ const GameDay = memo(function GameDay({
               pick={pm.get(item.id)}
               cardWidth={CARD_W}
               showModelEdge={!liveIntelLocked}
+              showMomentum={!liveIntelLocked}
             />
           )}
           getItemLayout={(_, index) => ({ length: LIVE_CARD_SNAP_INTERVAL, offset: LIVE_CARD_SNAP_INTERVAL * index, index })}
@@ -3181,6 +3194,7 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed, bottomP
 // ─── MAIN ───
 export default function MyArenaScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<React.ElementRef<typeof PagerView>>(null);
@@ -3190,13 +3204,24 @@ export default function MyArenaScreen() {
   const [arenaPagerEnabled, setArenaPagerEnabled] = useState(true);
   const [contentReady, setContentReady] = useState(false);
   const [fgi, setFgi] = useState<Set<string>>(new Set());
-  const {data:allGames, isLoading, isError, refetch} = useGames();
-  const {data:userPicks} = useUserPicks(isPremium && contentReady);
-  const {data:userStats} = useUserStats(isPremium && contentReady && am !== 0);
-  const {data:teamFollows} = useTeamFollows(contentReady);
+  const {data:allGames, isLoading, isError, refetch} = useGames({
+    enabled: isFocused,
+    subscribed: isFocused,
+  });
+  const {data:userPicks} = useUserPicks({
+    enabled: isFocused && isPremium && contentReady,
+    subscribed: isFocused,
+  });
+  const {data:userStats} = useUserStats({
+    enabled: isFocused && isPremium && contentReady && am !== 0,
+    subscribed: isFocused,
+  });
+  const {data:teamFollows} = useTeamFollows({
+    enabled: isFocused && contentReady,
+    subscribed: isFocused,
+  });
   const sh = useHideOnScroll();
   const { refreshing: isR, onRefresh: onR } = useSmoothRefresh(refetch);
-  const deferredSf = useDeferredValue(sf);
   const arenaBottomPadding = useMemo(() => getArenaBottomPadding(insets.bottom), [insets.bottom]);
 
   const loadFollowedGames = useCallback(async () => {
@@ -3245,7 +3270,7 @@ export default function MyArenaScreen() {
     if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
   }, []);
 
-  const games = useMemo(() => { if (!allGames) return []; return deferredSf==='All'?allGames:allGames.filter(g=>g.sport===deferredSf); }, [allGames, deferredSf]);
+  const games = useMemo(() => { if (!allGames) return []; return sf==='All'?allGames:allGames.filter(g=>g.sport===sf); }, [allGames, sf]);
   const availableSports = useMemo(() => new Set((allGames ?? []).map(g => g.sport)), [allGames]);
   const followed = useMemo(() => { if (!allGames) return []; const ta = new Set((teamFollows??[]).map(t=>t.teamAbbreviation.toUpperCase())); return allGames.filter(g=>fgi.has(g.id)||ta.has(g.homeTeam.abbreviation.toUpperCase())||ta.has(g.awayTeam.abbreviation.toUpperCase())); }, [allGames, fgi, teamFollows]);
   const live = useMemo(() => games.filter(g=>g.status===GameStatus.LIVE), [games]);
@@ -3341,7 +3366,7 @@ export default function MyArenaScreen() {
         <ErrorBoundary>
         <FreeArena
           games={allGames ?? []}
-          sportFilter={deferredSf}
+          sportFilter={sf}
           router={router}
           sh={sh}
           onR={onR}

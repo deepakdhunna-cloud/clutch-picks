@@ -26,6 +26,11 @@ const PREDICTION_BURST_MAX_MS = 90000;
 const STALE_TIME = 30000; // avoid refetching the whole board on every fast tab/screen hop
 const scheduledGameDetailWarmups = new Set<string>();
 
+type QueryActivityOptions = {
+  enabled?: boolean;
+  subscribed?: boolean;
+};
+
 // gameId -> epoch-ms when we first observed it missing a prediction. Cleared
 // once the prediction arrives or the game leaves SCHEDULED. Used to bound the
 // prediction burst by wall-clock so SCHEDULED games can't poll forever.
@@ -225,8 +230,9 @@ async function prefetchNewsForGame(queryClient: ReturnType<typeof useQueryClient
 }
 
 // Hook to fetch all games for today with auto-refresh
-export function useGames() {
+export function useGames(options: QueryActivityOptions = {}) {
   const queryClient = useQueryClient();
+  const enabled = options.enabled ?? true;
 
   useEffect(() => {
     let cancelled = false;
@@ -286,6 +292,8 @@ export function useGames() {
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
     select: filterVerifiedGames,
+    enabled,
+    subscribed: options.subscribed,
     refetchInterval: (query) => {
       const games = filterVerifiedGames(query.state.data);
       // Burst-poll while predictions are still being generated server-side.
@@ -597,7 +605,7 @@ export function useRefreshGames() {
 }
 
 // Hook to fetch top picks with guaranteed predictions
-export function useTopPicks() {
+export function useTopPicks(options: QueryActivityOptions = {}) {
   const queryClient = useQueryClient();
 
   return useQuery({
@@ -610,6 +618,8 @@ export function useTopPicks() {
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
     select: filterVerifiedGames,
+    enabled: options.enabled ?? true,
+    subscribed: options.subscribed,
     refetchInterval: (query) => liveAwareInterval(filterVerifiedGames(query.state.data)),
     refetchIntervalInBackground: false,
   });

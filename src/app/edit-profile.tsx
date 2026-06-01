@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
-import { setDisplayName } from '@/lib/revenuecatClient';
+import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 
@@ -63,7 +63,10 @@ export default function EditProfileScreen() {
       return api.put<UserProfile>('/api/profile', data);
     },
     onSuccess: async (profile) => {
-      await setDisplayName(profile.name);
+      await syncSubscriberInfo({
+        email: profile.email,
+        displayName: profile.name,
+      });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       await invalidateSession();
       router.back();

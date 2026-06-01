@@ -11,9 +11,9 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
-import { useFocusEffect } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
+import { clearAuthStorage } from '@/lib/auth/auth-storage';
 import { useUserStats, useUserPicks } from '@/hooks/usePicks';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { getSignatureCalls, type SignatureCall, type SignatureCallReason } from '@/lib/signature-calls';
@@ -54,19 +54,6 @@ const C = {
   TEXT_SECONDARY: '#A1B3C9',
   TEXT_MUTED: '#6B7C94',
 } as const;
-
-const AUTH_STORAGE_KEYS = [
-  'vibecode_cookie',
-  'vibecode_session_data',
-  'vibecode_session_token',
-  'vibecode_refresh_token',
-  'vibecode_bearer_token',
-  'clutchpicks_cookie',
-  'clutchpicks_session_data',
-  'clutchpicks_session_token',
-  'clutchpicks_refresh_token',
-  'clutchpicks_bearer_token',
-] as const;
 
 const PROFILE_RECENT_PICK_LIMIT = 10;
 
@@ -535,12 +522,23 @@ const RecentPickTile = memo(function RecentPickTile({
 export default function ProfileScreen() {
   const router = useRouter();
   const appVersionLabel = getAppVersionLabel();
+  const isFocused = useIsFocused();
   const { data: session, isLoading: sessionLoading } = useSession();
   const userId = session?.user?.id;
   const hasUser = Boolean(userId);
-  const { data: stats, refetch: refetchStats } = useUserStats(hasUser);
-  const { data: picks, isLoading: picksLoading } = useUserPicks(hasUser);
-  const { data: allGames, isLoading: gamesLoading } = useGames();
+  const activeProfileData = hasUser && isFocused;
+  const { data: stats, refetch: refetchStats } = useUserStats({
+    enabled: activeProfileData,
+    subscribed: isFocused,
+  });
+  const { data: picks, isLoading: picksLoading } = useUserPicks({
+    enabled: activeProfileData,
+    subscribed: isFocused,
+  });
+  const { data: allGames, isLoading: gamesLoading } = useGames({
+    enabled: activeProfileData,
+    subscribed: isFocused,
+  });
   const prefetchGame = usePrefetchGame();
   const invalidateSession = useInvalidateSession();
   const scrollHandler = useHideOnScroll();
@@ -550,7 +548,8 @@ export default function ProfileScreen() {
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<{ id: string; name: string; email: string | null; image: string | null; bio: string | null }>('/api/profile'),
-    enabled: !!userId,
+    enabled: activeProfileData,
+    subscribed: isFocused,
   });
 
   useFocusEffect(useCallback(() => {
@@ -597,7 +596,6 @@ export default function ProfileScreen() {
   // Recent picks with game data for jersey tiles — works even for old games not in today's list
   const recentPickTiles = useMemo(() => {
     if (displayPicks.length === 0) return [];
-    if (__DEV__) console.log('[Profile] picks count:', displayPicks.length, 'games count:', allGames?.length ?? 0);
     const gameMap = new Map((allGames ?? []).map((g) => [g.id, g]));
     const tiles = [...displayPicks]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -626,7 +624,6 @@ export default function ProfileScreen() {
           game,
         };
       });
-    if (__DEV__) console.log('[Profile] tiles generated:', tiles.length, tiles.slice(0, 3).map(t => `${t.abbreviation} vs ${t.opponentAbbr} (${t.result})`));
     return tiles;
   }, [displayPicks, allGames]);
 
@@ -773,9 +770,7 @@ export default function ProfileScreen() {
       await unregisterCurrentDeviceForPushNotifications();
       await authClient.signOut();
       if (isRevenueCatEnabled()) { try { await logoutUser(); } catch {} }
-      for (const key of AUTH_STORAGE_KEYS) {
-        await SecureStore.deleteItemAsync(key).catch(() => {});
-      }
+      await clearAuthStorage();
       await invalidateSession();
       router.replace('/welcome');
     } catch {

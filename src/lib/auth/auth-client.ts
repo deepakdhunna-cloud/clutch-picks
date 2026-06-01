@@ -2,7 +2,7 @@ import "./online-manager-shim";
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
 import { emailOTPClient } from "better-auth/client/plugins";
-import * as SecureStore from "expo-secure-store";
+import { authStorage } from "./auth-storage";
 
 // Bearer-token store. We rely on this in addition to the expo plugin's
 // cookie store because iOS NSURLSession can swallow Set-Cookie response
@@ -24,10 +24,10 @@ function readToken(): string | null {
   }
 
   try {
-    let v = SecureStore.getItem(TOKEN_KEY);
+    let v = authStorage.getItem(TOKEN_KEY);
     if (!v) {
       for (const key of LEGACY_TOKEN_KEYS) {
-        v = SecureStore.getItem(key);
+        v = authStorage.getItem(key);
         if (v) break;
       }
     }
@@ -46,12 +46,12 @@ function writeToken(token: string | null) {
   try {
     if (token) {
       if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] writeToken: storing token len=', token.length);
-      SecureStore.setItem(TOKEN_KEY, token);
+      authStorage.setItem(TOKEN_KEY, token);
     } else {
       if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] writeToken: clearing');
-      void SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+      void authStorage.deleteItemAsync(TOKEN_KEY).catch(() => {});
       for (const key of LEGACY_TOKEN_KEYS) {
-        void SecureStore.deleteItemAsync(key).catch(() => {});
+        void authStorage.deleteItemAsync(key).catch(() => {});
       }
     }
   } catch (e) {
@@ -68,10 +68,10 @@ export const authClient = createAuthClient({
     onRequest: (context) => {
       const token = readToken();
       const url = context.url?.toString() ?? '';
-      if (url.includes("/api/auth/")) {
+      if (token && url.includes("/api/auth/")) {
         // Native fetches do not reliably send browser-style Origin headers.
-        // Prefer bearer auth for Better Auth endpoints so stale cookies cannot
-        // trigger the server's CSRF origin check during sign-in/session calls.
+        // Prefer bearer auth for Better Auth endpoints when a bearer token is
+        // present, but keep cookie auth available for OAuth browser sessions.
         context.headers.delete("cookie");
       }
       if (token && !context.headers.has("authorization")) {
@@ -103,7 +103,7 @@ export const authClient = createAuthClient({
     expoClient({
       scheme: "vibecode",
       storagePrefix: "vibecode",
-      storage: SecureStore,
+      storage: authStorage,
     }),
     emailOTPClient(),
   ],

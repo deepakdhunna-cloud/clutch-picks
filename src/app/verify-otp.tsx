@@ -8,10 +8,11 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
+import { authUserIdentityFromPayload } from '@/lib/auth/auth-user';
 import { useInvalidateSession } from '@/lib/auth/use-session';
-import { setUserId, setEmail } from '@/lib/revenuecatClient';
+import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
-import { BG, TEAL, TEAL_DARK, MAROON } from '@/lib/theme';
+import { BG, TEAL, MAROON } from '@/lib/theme';
 
 const CODE_LENGTH = 6;
 
@@ -99,15 +100,11 @@ export default function VerifyOTP() {
       if (sessionToken) setBearerToken(sessionToken);
 
       try {
-        const userId = result.data?.user?.id;
-        if (userId) {
-          await setUserId(userId);
-        }
-        // Also push the email to RC so the customer dashboard shows it.
-        const userEmail = result.data?.user?.email ?? email.trim();
-        if (userEmail) {
-          await setEmail(userEmail);
-        }
+        const identity = authUserIdentityFromPayload(result.data);
+        await syncSubscriberInfo({
+          ...identity,
+          email: identity.email ?? email.trim(),
+        });
       } catch (identityError) {
         if (__DEV__) console.log('[auth] RevenueCat identity sync failed:', identityError);
       }
@@ -205,8 +202,10 @@ export default function VerifyOTP() {
                 setError(null);
               }}
               keyboardType="number-pad"
+              inputMode="numeric"
               textContentType="oneTimeCode"
               autoComplete="one-time-code"
+              importantForAutofill="yes"
               autoFocus
               maxLength={CODE_LENGTH}
               style={{

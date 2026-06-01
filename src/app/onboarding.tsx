@@ -4,11 +4,11 @@ import {
   ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, {
   FadeIn, FadeInDown, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft,
   useSharedValue, useAnimatedStyle,
-  withSpring, withTiming, withSequence, withRepeat, withDelay,
+  withSpring, withTiming, withSequence, withRepeat,
   interpolate, Easing, cancelAnimation,
 } from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
@@ -24,7 +24,7 @@ import { useInvalidateSession } from '@/lib/auth/use-session';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
-import { setDisplayName as setRevenueCatDisplayName } from '@/lib/revenuecatClient';
+import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { ArenaScoreboard } from '@/components/sports/ArenaScoreboard';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
@@ -73,74 +73,52 @@ function PulsingDot({ color = RED, size = 6 }: { color?: string; size?: number }
 }
 
 // ─── FLOATING PARTICLE ───────────────────────────────────────
-const PARTICLES = [
-  { x: '5%',  startY: 90, size: 5,   color: TEAL,   dur: 10000, delay: 0,    drift: 25 },
-  { x: '15%', startY: 95, size: 4,   color: MAROON, dur: 12000, delay: 800,  drift: -18 },
-  { x: '25%', startY: 85, size: 6,   color: TEAL,   dur: 11000, delay: 1500, drift: 30 },
-  { x: '35%', startY: 92, size: 3.5, color: MAROON, dur: 14000, delay: 300,  drift: -22 },
-  { x: '45%', startY: 88, size: 5.5, color: TEAL,   dur: 9000,  delay: 2000, drift: 20 },
-  { x: '55%', startY: 96, size: 4.5, color: TEAL,   dur: 13000, delay: 600,  drift: -28 },
-  { x: '65%', startY: 82, size: 6,   color: MAROON, dur: 10000, delay: 1200, drift: 15 },
-  { x: '75%', startY: 90, size: 4,   color: TEAL,   dur: 11000, delay: 2500, drift: -20 },
-  { x: '85%', startY: 94, size: 5,   color: TEAL,   dur: 12000, delay: 400,  drift: 26 },
-  { x: '95%', startY: 86, size: 3.5, color: MAROON, dur: 14000, delay: 1800, drift: -15 },
-  { x: '10%', startY: 98, size: 4,   color: TEAL,   dur: 8000,  delay: 3000, drift: 18 },
-  { x: '30%', startY: 80, size: 5,   color: MAROON, dur: 15000, delay: 500,  drift: -24 },
-  { x: '50%', startY: 93, size: 7,   color: TEAL,   dur: 9500,  delay: 1000, drift: 22 },
-  { x: '70%', startY: 88, size: 4.5, color: TEAL,   dur: 11500, delay: 2200, drift: -16 },
-  { x: '90%', startY: 91, size: 5.5, color: MAROON, dur: 10500, delay: 700,  drift: 20 },
-  { x: '20%', startY: 97, size: 3,   color: TEAL,   dur: 13500, delay: 3500, drift: -12 },
-  { x: '40%', startY: 84, size: 6,   color: MAROON, dur: 8500,  delay: 1600, drift: 28 },
-  { x: '60%', startY: 99, size: 4,   color: TEAL,   dur: 12500, delay: 900,  drift: -20 },
-  { x: '80%', startY: 87, size: 5,   color: TEAL,   dur: 9000,  delay: 2800, drift: 18 },
-  { x: '48%', startY: 76, size: 4.5, color: MAROON, dur: 16000, delay: 200,  drift: -25 },
-] as const;
+const PARTICLE_TRAVEL = 1180;
+const PARTICLE_COUNT = 48;
 
-function FloatingParticle({ x, startY, size, color, dur, delay, drift }: typeof PARTICLES[number]) {
-  const translateY = useSharedValue(0);
-  const translateX = useSharedValue(0);
-  const opacity = useSharedValue(0);
+type FloatingParticleConfig = {
+  x: `${number}%`;
+  startY: number;
+  size: number;
+  color: string;
+  dur: number;
+  phase: number;
+  drift: number;
+};
 
-  const runCycle = useCallback(() => {
-    'worklet';
-    // Reset position invisibly (particle is already at opacity 0)
-    translateY.value = 0;
-    translateX.value = 0;
-    opacity.value = 0;
-    // Float upward — travel far enough that it crosses entire screen
-    translateY.value = withTiming(-1200, { duration: dur, easing: Easing.linear });
-    // Drift sideways
-    translateX.value = withRepeat(
-      withTiming(drift, { duration: dur * 0.4, easing: Easing.inOut(Easing.ease) }), -1, true
-    );
-    // Fade: invisible → bright → hold → invisible
-    // Fade out completes at 85% of travel, giving 15% invisible buffer before reset
-    opacity.value = withSequence(
-      withTiming(1, { duration: dur * 0.10, easing: Easing.out(Easing.ease) }),
-      withTiming(0.6, { duration: dur * 0.55, easing: Easing.inOut(Easing.ease) }),
-      withTiming(0, { duration: dur * 0.20, easing: Easing.in(Easing.ease) }),
-    );
-  }, [dur, drift]);
+const PARTICLES: FloatingParticleConfig[] = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
+  const row = Math.floor(i / 14);
+  const lane = i % 14;
+  const x = Math.min(98, Math.max(2, 3 + lane * 7.25 + ((row * 2.6 + i * 1.1) % 3.8)));
+  const isMaroon = i % 5 === 1 || i % 7 === 4;
+
+  return {
+    x: `${x}%` as `${number}%`,
+    startY: 104 + ((i * 7 + row * 5) % 18),
+    size: 3.2 + ((i * 5 + row) % 8) * 0.48,
+    color: isMaroon ? MAROON : TEAL,
+    dur: 6500 + ((i * 389) % 2600),
+    phase: (i * 0.61803398875 + row * 0.11) % 1,
+    drift: (i % 2 === 0 ? 1 : -1) * (14 + ((i * 11) % 22)),
+  };
+});
+
+function FloatingParticle({ x, startY, size, color, dur, phase, drift }: FloatingParticleConfig) {
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    // Initial delay then start seamless loop
-    let interval: ReturnType<typeof setInterval> | null = null;
-    const timer = setTimeout(() => {
-      runCycle();
-      interval = setInterval(runCycle, dur);
-    }, delay);
+    progress.value = withRepeat(withTiming(1, { duration: dur, easing: Easing.linear }), -1, false);
     return () => {
-      clearTimeout(timer);
-      if (interval) clearInterval(interval);
-      cancelAnimation(translateY);
-      cancelAnimation(translateX);
-      cancelAnimation(opacity);
+      cancelAnimation(progress);
     };
-  }, [delay, dur, runCycle]);
+  }, [dur]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }, { translateX: translateX.value }],
-    opacity: opacity.value,
+    transform: [
+      { translateY: -PARTICLE_TRAVEL * ((progress.value + phase) % 1) },
+      { translateX: Math.sin(((progress.value + phase) % 1) * Math.PI * 2) * drift },
+    ],
+    opacity: 1,
   }));
 
   return (
@@ -148,7 +126,7 @@ function FloatingParticle({ x, startY, size, color, dur, delay, drift }: typeof 
       position: 'absolute', left: x, top: `${startY}%`,
       width: size, height: size, borderRadius: size / 2,
       backgroundColor: color,
-      shadowColor: color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: size * 5,
+      shadowColor: color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.75, shadowRadius: size * 4,
     }, style]} pointerEvents="none" />
   );
 }
@@ -375,8 +353,8 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
   }, []);
   const rotatingStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value % 360}deg` }] }));
   const glowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.25, 0.5]),
-    shadowRadius: interpolate(glowPulse.value, [0, 1], [10, 22]),
+    shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.34, 0.62]),
+    shadowRadius: interpolate(glowPulse.value, [0, 1], [24, 38]),
   }));
 
   return (
@@ -399,18 +377,95 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
           Reveal confidence, matchup context, and the full model read
         </Animated.Text>
 
-        {/* Clutch Pick card — with rotating shimmer border */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={{ width: '100%' }}>
-          <Animated.View style={[{ borderRadius: 22, shadowColor: '#C0C8D0', shadowOffset: { width: 0, height: 0 } }, glowStyle]}>
-            <View style={{ borderRadius: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 20 }}>
-              <View style={{ borderRadius: 22, overflow: 'hidden' }}>
-                <LinearGradient colors={['#C0C8D0', '#8A929A', '#D4D8DC', '#8A929A', '#C0C8D0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+        {/* Clutch Pick card — raised premium preview */}
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={{ width: '106%', marginHorizontal: '-3%', marginTop: 4, marginBottom: 8 }}>
+          <View style={{ position: 'absolute', left: 12, right: 12, bottom: -16, height: 44, borderRadius: 28, backgroundColor: 'rgba(0,0,0,0.72)', shadowColor: '#000', shadowOffset: { width: 0, height: 18 }, shadowOpacity: 0.95, shadowRadius: 24 }} />
+          <View style={{ position: 'absolute', left: 10, right: 28, top: 22, bottom: -10, borderRadius: 28, backgroundColor: 'rgba(122,157,184,0.12)', shadowColor: TEAL, shadowOffset: { width: -10, height: 12 }, shadowOpacity: 0.35, shadowRadius: 32 }} />
+          <View style={{ position: 'absolute', left: 28, right: 10, top: 32, bottom: -14, borderRadius: 28, backgroundColor: 'rgba(139,10,31,0.16)', shadowColor: MAROON, shadowOffset: { width: 10, height: 14 }, shadowOpacity: 0.42, shadowRadius: 34 }} />
+          <Animated.View style={[{ borderRadius: 28, shadowColor: '#B9D5E7', shadowOffset: { width: 0, height: 12 } }, glowStyle]}>
+            <View style={{ borderRadius: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 18 }, shadowOpacity: 0.78, shadowRadius: 30 }}>
+              <View style={{ borderRadius: 28, overflow: 'hidden' }}>
+                <LinearGradient colors={['#E7EFF5', '#98B0BD', '#536C7A', '#8B0A1F']} locations={[0, 0.32, 0.72, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
                 <Animated.View style={[{ position: 'absolute', top: -100, left: -100, right: -100, bottom: -100 }, rotatingStyle]}>
                   <LinearGradient colors={['transparent', 'transparent', 'rgba(122,157,184,0.7)', '#7A9DB8', 'rgba(122,157,184,0.7)', 'transparent', 'transparent']} locations={[0, 0.35, 0.42, 0.5, 0.58, 0.65, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: '50%' }} />
                   <LinearGradient colors={['transparent', 'transparent', 'rgba(90,6,20,0.7)', '#8B0A1F', 'rgba(90,6,20,0.7)', 'transparent', 'transparent']} locations={[0, 0.35, 0.42, 0.5, 0.58, 0.65, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', top: '50%', left: 0, right: 0, bottom: 0 }} />
                 </Animated.View>
-                <View style={{ margin: 3, borderRadius: 18, overflow: 'hidden', backgroundColor: '#182028' }}>
-                  <View style={{ padding: 18 }}>
+                <View style={{ margin: 4, borderRadius: 23, overflow: 'hidden', backgroundColor: '#010101' }}>
+                  <LinearGradient
+                    colors={['#010101', '#061119', '#07070B', '#010101']}
+                    locations={[0, 0.30, 0.68, 1]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0.85, y: 1 }}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <LinearGradient
+                    colors={['rgba(122,157,184,0.28)', 'rgba(122,157,184,0.07)', 'rgba(122,157,184,0)']}
+                    locations={[0, 0.42, 1]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ position: 'absolute', left: -72, top: -52, width: 240, height: 250, borderRadius: 120 }}
+                  />
+                  <LinearGradient
+                    colors={['rgba(139,10,31,0)', 'rgba(139,10,31,0.12)', 'rgba(139,10,31,0.28)']}
+                    locations={[0, 0.48, 1]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ position: 'absolute', right: -70, bottom: -70, width: 260, height: 250, borderRadius: 130 }}
+                  />
+                  <Svg width={W * 1.06} height={260} style={StyleSheet.absoluteFillObject}>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <Line
+                        key={`premium-card-rail-${i}`}
+                        x1={-60 + i * 54}
+                        y1={-18}
+                        x2={40 + i * 54}
+                        y2={278}
+                        stroke={i % 2 === 0 ? TEAL : '#C0C8D0'}
+                        strokeOpacity={i % 2 === 0 ? 0.075 : 0.042}
+                        strokeWidth={1}
+                      />
+                    ))}
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <Line
+                        key={`premium-card-hash-${i}`}
+                        x1={i % 2 === 0 ? 0 : W * 0.82}
+                        y1={38 + i * 30}
+                        x2={i % 2 === 0 ? 32 : W * 1.06}
+                        y2={38 + i * 30}
+                        stroke={i % 3 === 0 ? MAROON : TEAL}
+                        strokeOpacity={0.12}
+                        strokeWidth={1.1}
+                      />
+                    ))}
+                    <Path
+                      d={`M${(-W * 0.04).toFixed(1)} 208 C${(W * 0.26).toFixed(1)} 142 ${(W * 0.54).toFixed(1)} 236 ${(W * 1.08).toFixed(1)} 152`}
+                      stroke="#8B0A1F"
+                      strokeOpacity={0.12}
+                      strokeWidth={1.5}
+                      strokeDasharray="7 15"
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                    <Path
+                      d={`M${(W * 0.08).toFixed(1)} 28 C${(W * 0.30).toFixed(1)} 78 ${(W * 0.58).toFixed(1)} -6 ${(W * 1.08).toFixed(1)} 76`}
+                      stroke="#7A9DB8"
+                      strokeOpacity={0.10}
+                      strokeWidth={1.4}
+                      strokeDasharray="5 13"
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </Svg>
+                  <LinearGradient
+                    colors={['rgba(1,1,1,0.20)', 'rgba(1,1,1,0)', 'rgba(1,1,1,0.34)']}
+                    locations={[0, 0.42, 1]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <LinearGradient colors={['rgba(255,255,255,0.075)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', left: 12, right: 12, top: 8, height: 44, borderRadius: 999 }} />
+                  <LinearGradient colors={['rgba(122,157,184,0.18)', 'rgba(139,10,31,0.16)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 5 }} />
+                  <View style={{ padding: 20 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                       <View style={{ backgroundColor: MAROON, width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: 12, fontWeight: '900', color: WHITE }}>#1</Text>
@@ -626,8 +681,8 @@ function ArenaGameDay() {
     <Animated.View entering={FadeIn.duration(400)} style={{ gap: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 2 }}>
         <View>
-          <Text style={{ fontSize: 9, fontWeight: '900', color: RED, letterSpacing: 2, marginBottom: 4 }}>LIVE FEED</Text>
-          <Text style={{ fontSize: 20, lineHeight: 24, fontWeight: '900', color: WHITE }}>Live board</Text>
+          <Text style={{ fontSize: 9, fontWeight: '900', color: RED, letterSpacing: 2, marginBottom: 4 }}>LIVE</Text>
+          <Text style={{ fontSize: 20, lineHeight: 24, fontWeight: '900', color: WHITE }}>Live intelligence</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: 'rgba(239,68,68,0.10)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.20)' }}>
           <PulsingDot size={6} />
@@ -809,19 +864,19 @@ function ArenaPrepMode() {
 
 function ArenaReview() {
   return (
-    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 14 }}>
+    <Animated.View entering={FadeIn.duration(400)} style={{ gap: 11 }}>
       <View>
         <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: TEAL, letterSpacing: 2.1 }}>POSTGAME AUDIT</Text>
-        <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: '900', color: WHITE, marginTop: 5 }}>Close the night with a clean recap</Text>
+        <Text style={{ fontSize: 19, lineHeight: 23, fontWeight: '900', color: WHITE, marginTop: 4 }}>Close the night with a clean recap</Text>
       </View>
 
       <LinearGradient
         colors={['rgba(122,157,184,0.28)', 'rgba(255,255,255,0.08)', 'rgba(139,10,31,0.14)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 24, padding: 1 }}
+        style={{ borderRadius: 22, padding: 1 }}
       >
-        <View style={{ borderRadius: 23, overflow: 'hidden', backgroundColor: 'rgba(8,10,15,0.96)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+        <View style={{ borderRadius: 21, overflow: 'hidden', backgroundColor: 'rgba(8,10,15,0.96)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
           <LinearGradient
             pointerEvents="none"
             colors={['rgba(122,157,184,0.15)', 'rgba(5,8,13,0)', 'rgba(139,10,31,0.12)']}
@@ -829,26 +884,26 @@ function ArenaReview() {
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <View style={{ padding: 18 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-              <View>
-                <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: 'rgba(180,211,235,0.72)', letterSpacing: 2.2 }}>REVIEW</Text>
-                <Text style={{ fontSize: 25, lineHeight: 30, fontWeight: '900', color: WHITE, marginTop: 5 }}>Your night, organized</Text>
+          <View style={{ padding: 14 }}>
+            <View style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontSize: 8, lineHeight: 11, fontWeight: '900', color: 'rgba(180,211,235,0.72)', letterSpacing: 2 }}>REVIEW</Text>
+                <ProFeaturePill accent={TEAL} />
               </View>
-              <ProFeaturePill accent={TEAL} />
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86} style={{ fontSize: 23, lineHeight: 27, fontWeight: '900', color: WHITE }}>Your night, organized</Text>
             </View>
-            <Text style={{ fontSize: 12, lineHeight: 18, fontWeight: '700', color: TEXT_SEC, marginTop: 10, marginBottom: 14 }}>
+            <Text style={{ fontSize: 11, lineHeight: 16, fontWeight: '700', color: TEXT_SEC, marginBottom: 12 }}>
               Results, accuracy, misses, and model notes stay together after final scores settle.
             </Text>
-            <View style={{ borderRadius: 16, padding: 14, backgroundColor: 'rgba(2,5,12,0.52)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', marginBottom: 10 }}>
-              <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: 'rgba(180,211,235,0.60)', letterSpacing: 1.8 }}>YOUR NIGHT</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 8 }}>
-                <Text style={{ fontSize: 44, lineHeight: 46, fontWeight: '900', color: WHITE }}>4-1</Text>
-                <View style={{ alignItems: 'flex-end', paddingBottom: 5 }}>
-                  <Text style={{ fontSize: 10, lineHeight: 13, fontWeight: '900', color: TEAL, letterSpacing: 1.1 }}>80% ACCURACY</Text>
-                  <View style={{ flexDirection: 'row', marginTop: 7 }}>
+            <View style={{ borderRadius: 15, padding: 12, backgroundColor: 'rgba(2,5,12,0.52)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', marginBottom: 8 }}>
+              <Text style={{ fontSize: 8, lineHeight: 11, fontWeight: '900', color: 'rgba(180,211,235,0.60)', letterSpacing: 1.7 }}>YOUR NIGHT</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 6 }}>
+                <Text style={{ fontSize: 38, lineHeight: 40, fontWeight: '900', color: WHITE }}>4-1</Text>
+                <View style={{ alignItems: 'flex-end', paddingBottom: 4, flexShrink: 1 }}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86} style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: TEAL, letterSpacing: 1 }}>80% ACCURACY</Text>
+                  <View style={{ flexDirection: 'row', marginTop: 6 }}>
                     {['W', 'W', 'W', 'L', 'W'].map((result, index) => (
-                      <View key={`${result}-${index}`} style={{ width: 18, height: 5, borderRadius: 3, backgroundColor: result === 'W' ? TEAL : ERROR, opacity: result === 'W' ? 0.9 : 0.5, marginLeft: index === 0 ? 0 : 3 }} />
+                      <View key={`${result}-${index}`} style={{ width: 16, height: 5, borderRadius: 3, backgroundColor: result === 'W' ? TEAL : ERROR, opacity: result === 'W' ? 0.9 : 0.5, marginLeft: index === 0 ? 0 : 3 }} />
                     ))}
                   </View>
                 </View>
@@ -859,10 +914,10 @@ function ArenaReview() {
               { label: 'Model notes after finals', fill: 58, color: MAROON },
               { label: 'Season-level trends', fill: 64, color: '#9AB8CC' },
             ].map((item, index) => (
-              <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 32, borderRadius: 11, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 10, marginBottom: index === 2 ? 0 : 8 }}>
+              <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30, borderRadius: 10, backgroundColor: 'rgba(122,157,184,0.055)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.10)', paddingHorizontal: 9, marginBottom: index === 2 ? 0 : 7 }}>
                 <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: item.color, marginRight: 9 }} />
-                <Text style={{ flex: 1, fontSize: 11, lineHeight: 14, fontWeight: '900', color: 'rgba(224,234,240,0.74)' }}>{item.label}</Text>
-                <View style={{ width: 64, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 10, lineHeight: 13, fontWeight: '900', color: 'rgba(224,234,240,0.74)' }}>{item.label}</Text>
+                <View style={{ width: 56, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden', marginLeft: 8 }}>
                   <View style={{ width: `${item.fill}%` as `${number}%`, height: '100%', borderRadius: 3, backgroundColor: item.color }} />
                 </View>
               </View>
@@ -1064,6 +1119,7 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
 // ─── MAIN ─────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { replay } = useLocalSearchParams<{ replay?: string | string[] }>();
   const [step, setStep] = useState(0);
   const [arenaSubPage, setArenaSubPage] = useState(0);
   const [picked, setPicked] = useState<'home' | 'away' | null>(null);
@@ -1075,16 +1131,23 @@ export default function OnboardingScreen() {
   const [tutorialReplay, setTutorialReplay] = useState(false);
   const queryClient = useQueryClient();
   const invalidateSession = useInvalidateSession();
+  const replayRequested = replay === 'settings' || replay === 'true' || (Array.isArray(replay) && replay.some(value => value === 'settings' || value === 'true'));
 
   // Settings replay is a help tour only. It should not show profile setup or paywall.
   useEffect(() => {
+    if (replayRequested) {
+      setTutorialReplay(true);
+      AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
+      return;
+    }
+
     AsyncStorage.getItem('clutch_onboarding_skip_profile').then(val => {
       if (val === 'true') {
         setTutorialReplay(true);
         AsyncStorage.removeItem('clutch_onboarding_skip_profile');
       }
     });
-  }, []);
+  }, [replayRequested]);
 
   const goNext = useCallback(async () => {
     if (step === 3 && arenaSubPage < 2) {
@@ -1093,7 +1156,6 @@ export default function OnboardingScreen() {
     }
     if (step === 5) return;
     if (step === 3 && tutorialReplay) {
-      setArenaSubPage(0);
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
       router.replace('/(tabs)');
     } else {
@@ -1127,7 +1189,7 @@ export default function OnboardingScreen() {
       if (displayName.trim().length > 0) {
         const name = displayName.trim();
         await api.put('/api/profile', { name });
-        await setRevenueCatDisplayName(name);
+        await syncSubscriberInfo({ displayName: name });
       }
       // Invalidate caches so profile page picks up changes immediately
       queryClient.invalidateQueries({ queryKey: ['profile'] });

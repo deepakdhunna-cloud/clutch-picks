@@ -205,7 +205,7 @@ const TappableJersey = memo(function TappableJersey({
       <Animated.View style={[containerStyle, styles.jerseyAnimatedContainer]}>
         <View style={{ position: 'relative', alignItems: 'center' }}>
           {/* Jersey — smoothly lifts when selected */}
-          <Animated.View style={[shadowStyle, isLoser ? { opacity: 0.35 } : undefined, isWinner ? { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 14 } : undefined, jerseyLiftStyle]}>
+          <Animated.View style={[shadowStyle, isLoser ? { opacity: 0.46 } : undefined, isWinner ? { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 14 } : undefined, jerseyLiftStyle]}>
             <JerseyIcon
               teamCode={team.abbreviation}
               teamName={team.name}
@@ -215,11 +215,6 @@ const TappableJersey = memo(function TappableJersey({
               sport={sportEnumToJersey(sport)}
             />
           </Animated.View>
-
-          {/* Grayscale overlay for loser */}
-          {isLoser ? (
-            <View pointerEvents="none" style={styles.loserOverlay} />
-          ) : null}
 
           {/* "YOUR PICK" label — fades in smoothly */}
           <Animated.View style={[{
@@ -233,7 +228,7 @@ const TappableJersey = memo(function TappableJersey({
           {/* Winner badge */}
           {isWinner ? (
             <View style={styles.winnerBadge}>
-              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '900' }}>W</Text>
+              <Text style={styles.winnerBadgeText}>W</Text>
             </View>
           ) : null}
         </View>
@@ -1446,15 +1441,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loserOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(30,30,30,0.6)',
-    borderRadius: 8,
-  },
   checkmarkBadge: {
     position: 'absolute',
     bottom: -2,
@@ -1470,20 +1456,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -6,
     left: '50%' as unknown as number,
-    marginLeft: -12,
-    width: 24,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#22C55E',
+    marginLeft: -13,
+    width: 26,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#052E1A',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#040608',
-    shadowColor: '#22C55E',
+    borderColor: '#31F58A',
+    shadowColor: '#35FF8E',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.72,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 10,
+  },
+  winnerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   // LiveGameLayout
   liveGlowShadowLayer: {

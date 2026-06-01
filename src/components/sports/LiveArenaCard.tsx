@@ -14,6 +14,7 @@ import { GameWithPrediction, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { TeamJersey } from './TeamJersey';
 import { ArenaScoreboard as SharedArenaScoreboard } from './ArenaScoreboard';
+import { TennisScoreGrid } from './TennisScoreGrid';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import {
   isSuspendedGame,
@@ -43,6 +44,18 @@ function hexWithAlpha(hex: string | undefined, alpha: number): string {
     return `${expanded}${aHex}`;
   }
   return hex;
+}
+
+function compactRailTeamName(name: string, sport: Sport): string {
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  if (sport !== Sport.TENNIS) return trimmed;
+
+  const parts = trimmed.split(' ').filter(Boolean);
+  if (parts.length < 2) return trimmed;
+
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  return `${first.charAt(0)}. ${last}`;
 }
 
 // Pulsing red dot — mirrors the LIVE badge dot used on the My Arena game-day cards.
@@ -241,6 +254,7 @@ export const LiveArenaCard = memo(function LiveArenaCard({
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
+  const isTennis = game.sport === Sport.TENNIS;
   const isCricket = game.sport === Sport.IPL;
   const cricketCaption = !suspended ? cricketOversText(game) : null;
   const cricketChaseLine = !suspended ? cricketRequiredText(game) : null;
@@ -297,6 +311,9 @@ export const LiveArenaCard = memo(function LiveArenaCard({
 
   const renderTeam = (side: 'home' | 'away') => {
     const team = side === 'home' ? game.homeTeam : game.awayTeam;
+    const teamName = variant === 'rail'
+      ? compactRailTeamName(team.name, game.sport as Sport)
+      : team.name;
     const colors = side === 'home' ? homeColors : awayColors;
     const leading = side === 'home' ? homeLeading : awayLeading;
     const otherLeading = side === 'home' ? awayLeading : homeLeading;
@@ -327,7 +344,9 @@ export const LiveArenaCard = memo(function LiveArenaCard({
           />
         </View>
         <Text
-          numberOfLines={cfg.nameLines}
+          numberOfLines={variant === 'rail' ? 1 : cfg.nameLines}
+          adjustsFontSizeToFit={variant === 'rail'}
+          minimumFontScale={0.8}
           style={{
             color: '#f8fafc',
             fontSize: cfg.nameSize,
@@ -338,7 +357,7 @@ export const LiveArenaCard = memo(function LiveArenaCard({
             minHeight: cfg.nameMinHeight,
           }}
         >
-          {team.name}
+          {teamName}
         </Text>
         {isCricket ? (
           renderCricketTeamMeta(scoreLabel, role, colors)
@@ -515,7 +534,16 @@ export const LiveArenaCard = memo(function LiveArenaCard({
                     detailLabel={suspended ? suspensionTime : undefined}
                   />
                 </View>
-                {!suspended && matchTime ? (
+                {isTennis && !suspended ? (
+                  <TennisScoreGrid
+                    game={game}
+                    variant="compact"
+                    homeColor={homeAccent}
+                    awayColor={awayAccent}
+                    showTeams={false}
+                  />
+                ) : null}
+                {!isTennis && !suspended && matchTime ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
                     <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIVE_RED, marginRight: 5 }} />
                     <Text style={{ color: '#b8c3d1', fontSize: cfg.timeFont, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' }}>

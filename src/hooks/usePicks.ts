@@ -40,6 +40,10 @@ export interface GamePickStats {
 }
 
 type AllPickStatsMap = Record<string, GamePickStats>;
+type QueryActivityOptions = {
+  enabled?: boolean;
+  subscribed?: boolean;
+};
 
 const DEFAULT_STATS: GamePickStats = {
   gameId: '',
@@ -79,7 +83,10 @@ function makeOptimisticPick(data: { gameId: string; pickedTeam: 'home' | 'away';
 }
 
 // Hook to fetch all user picks with real-time updates
-export function useUserPicks(enabled = true) {
+export function useUserPicks(options: boolean | QueryActivityOptions = true) {
+  const enabled = typeof options === 'boolean' ? options : options.enabled ?? true;
+  const subscribed = typeof options === 'boolean' ? undefined : options.subscribed;
+
   return useQuery({
     queryKey: ['picks'],
     queryFn: async () => {
@@ -87,6 +94,7 @@ export function useUserPicks(enabled = true) {
       return result ?? [];
     },
     enabled,
+    subscribed,
     staleTime: 30000,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,
@@ -94,7 +102,10 @@ export function useUserPicks(enabled = true) {
 }
 
 // Hook to fetch user stats with real-time updates
-export function useUserStats(enabled = true) {
+export function useUserStats(options: boolean | QueryActivityOptions = true) {
+  const enabled = typeof options === 'boolean' ? options : options.enabled ?? true;
+  const subscribed = typeof options === 'boolean' ? undefined : options.subscribed;
+
   return useQuery({
     queryKey: ['stats'],
     queryFn: async () => {
@@ -108,6 +119,7 @@ export function useUserStats(enabled = true) {
       };
     },
     enabled,
+    subscribed,
     staleTime: 30000,
     refetchInterval: 60000,
     refetchIntervalInBackground: false,

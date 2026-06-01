@@ -1329,9 +1329,9 @@ export const SportCard = memo(function SportCard({
     // equally smooth and satisfying.
     const chosen = hasActiveFilter && isSelected;
     const dimmed = hasActiveFilter && !isSelected;
-    const focusSpring = { damping: 13, stiffness: 200, mass: 0.7 };
-    tileFocusScale.value = withSpring(chosen ? 1.05 : dimmed ? 0.86 : 1, focusSpring);
-    dimProgress.value = withTiming(dimmed ? 1 : 0, { duration: 260, easing: Easing.inOut(Easing.ease) });
+    const focusSpring = { damping: 18, stiffness: 360, mass: 0.55 };
+    tileFocusScale.value = withSpring(chosen ? 1.025 : dimmed ? 0.94 : 1, focusSpring);
+    dimProgress.value = withTiming(dimmed ? 1 : 0, { duration: 150, easing: Easing.out(Easing.cubic) });
   }, [isSelected, hasActiveFilter, selectionScale, tileFocusScale, dimProgress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -1344,7 +1344,7 @@ export const SportCard = memo(function SportCard({
   }));
   // Unselected tiles fade and recede (cheap + smooth — no real-time blur).
   const dimContainerStyle = useAnimatedStyle(() => ({
-    opacity: 1 - dimProgress.value * 0.58,
+    opacity: 1 - dimProgress.value * 0.32,
   }));
 
   // ═══════════════════════════════════════════════
@@ -1360,10 +1360,10 @@ export const SportCard = memo(function SportCard({
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          scale.value = withSpring(0.9, { damping: 16, stiffness: 420 });
+          scale.value = withTiming(0.94, { duration: 70, easing: Easing.out(Easing.cubic) });
         }}
         onPressOut={() => {
-          scale.value = withSpring(1, { damping: 11, stiffness: 320, mass: 0.6 });
+          scale.value = withSpring(1, { damping: 16, stiffness: 420, mass: 0.55 });
         }}
         style={[tileScaleStyle, { position: 'relative' }]}
       >

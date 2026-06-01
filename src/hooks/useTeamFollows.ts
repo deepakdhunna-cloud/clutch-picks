@@ -11,12 +11,21 @@ export interface TeamFollow {
   createdAt: string;
 }
 
+type QueryActivityOptions = {
+  enabled?: boolean;
+  subscribed?: boolean;
+};
+
 /** Fetch all teams the current user follows */
-export function useTeamFollows(enabled = true) {
+export function useTeamFollows(options: boolean | QueryActivityOptions = true) {
+  const enabled = typeof options === 'boolean' ? options : options.enabled ?? true;
+  const subscribed = typeof options === 'boolean' ? undefined : options.subscribed;
+
   return useQuery({
     queryKey: ['teamFollows'],
     queryFn: () => api.get<TeamFollow[]>('/api/team-follows'),
     enabled,
+    subscribed,
     staleTime: 60_000,
   });
 }

@@ -1,6 +1,7 @@
 import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import Animated, {
   FadeInDown,
   FadeOut,
@@ -9,7 +10,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import React, { useState, useCallback, useEffect, useMemo, useDeferredValue, memo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, memo, useRef } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, X, Search } from 'lucide-react-native';
 import { TopInsetView } from '@/components/TopInsetView';
 import { SportCard, GameCard, LedBarPanel, LedMiniPanel } from '@/components/sports';
@@ -817,6 +818,7 @@ const SearchGameCard = memo(function SearchGameCard({
 
 export default function HomeScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const tabBarVisible = useTabBarVisible();
   const responsive = useResponsive();
   const { isTablet, contentPadding: horizontalPadding, headerSize: headerFontSize, numColumns } = responsive;
@@ -838,9 +840,9 @@ export default function HomeScreen() {
   const [selectedLiveSportFilter, setSelectedLiveSportFilter] = useState<Sport | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'upcoming' | 'final'>('all');
   const [visibleSportGameCounts, setVisibleSportGameCounts] = useState<Record<string, number>>({});
-  const deferredSelectedSportFilter = useDeferredValue(selectedSportFilter);
-  const deferredSelectedLiveSportFilter = useDeferredValue(selectedLiveSportFilter);
-  const deferredStatusFilter = useDeferredValue(statusFilter);
+  const deferredSelectedSportFilter = selectedSportFilter;
+  const deferredSelectedLiveSportFilter = selectedLiveSportFilter;
+  const deferredStatusFilter = statusFilter;
 
   const scrollToHomeBoard = useCallback(() => {
     requestAnimationFrame(() => {
@@ -927,7 +929,10 @@ export default function HomeScreen() {
   }, [scrollToHomeBoard, statusFilter]);
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
-  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames();
+  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames({
+    enabled: isFocused,
+    subscribed: isFocused,
+  });
   const hasHomeGameData = (todaysGames?.length ?? 0) > 0;
   const isInitialHomeLoading = isLoadingGames && !hasHomeGameData;
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });

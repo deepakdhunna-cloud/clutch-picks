@@ -38,6 +38,7 @@ import { AnalysisIcon } from '@/components/icons/AnalysisIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { MLBLiveCenterStack } from '@/components/sports/MLBLiveState';
 import { ArenaScoreboard } from '@/components/sports/ArenaScoreboard';
+import { TennisHeroSetScores, TennisScoreGrid } from '@/components/sports/TennisScoreGrid';
 import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal';
 import { getGameStartLabel } from '@/lib/game-start-label';
 import { useSubscription } from '@/lib/subscription-context';
@@ -260,6 +261,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   jerseyType,
   sport,
   showSelectionLabel = true,
+  size = 72,
 }: {
   team: GameTeam;
   isSelected: boolean;
@@ -268,6 +270,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   jerseyType: ReturnType<typeof sportEnumToJersey>;
   sport: string;
   showSelectionLabel?: boolean;
+  size?: number;
 }) {
   const scale = useSharedValue(1);
   const selectionProgress = useSharedValue(isSelected ? 1 : 0);
@@ -322,7 +325,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
               teamName={team.name}
               primaryColor={teamColors.primary}
               secondaryColor={teamColors.secondary}
-              size={72}
+              size={size}
               sport={jerseyType}
             />
           </Animated.View>
@@ -604,6 +607,17 @@ function QuarterTable({ game }: { game: Game }) {
 
   const homeColors = getTeamColors(homeTeam.abbreviation, game.sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, game.sport as Sport, awayTeam.color);
+
+  if (game.sport === 'TENNIS') {
+    return (
+      <TennisScoreGrid
+        game={game}
+        variant="detail"
+        homeColor={homeColors.accent}
+        awayColor={awayColors.accent}
+      />
+    );
+  }
 
   const homeWinning = (game.homeScore ?? 0) > (game.awayScore ?? 0);
   const awayWinning = (game.awayScore ?? 0) > (game.homeScore ?? 0);
@@ -1720,6 +1734,7 @@ function GameDetailContent() {
   const cricketRequired = !suspended ? cricketRequiredText(game) : null;
   const isLiveMLB = isLive && game.sport === 'MLB' && !!game.liveState;
   const isLiveCricket = isLive && game.sport === 'IPL';
+  const isTennis = game.sport === 'TENNIS';
   const cricketLedScore = !suspended && isLiveCricket ? cricketLedScoreText(game) : null;
   const cricketContext = !suspended && isLiveCricket ? cricketInningsContext(game) : null;
   const cricketClockText = cricketOvers;
@@ -1735,6 +1750,7 @@ function GameDetailContent() {
   const awayAccent = awayColors.accent;
   const scoreTextLength = `${game.homeScore ?? 0}-${game.awayScore ?? 0}`.length;
   const detailScoreboardScale = suspended ? 0.7 : isLiveCricket ? 1.22 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
+  const tennisHeroScoreboardScale = Math.min(detailScoreboardScale, 1.32);
   const detailTopInset = Math.max(insets.top, 58);
   const detailHeaderTopSpacer = 12;
   const showDetailRefreshPill = refreshing ? hasGameData : false;
@@ -1827,6 +1843,49 @@ function GameDetailContent() {
                 statusReason={suspended ? suspensionReason : undefined}
                 statusDetail={suspended ? suspensionTime : undefined}
               />
+            ) : isTennis && (game.status === 'LIVE' || game.status === 'FINAL') && !isCountingDown && !suspended ? (
+              <View style={styles.tennisHeroRow}>
+                <View style={styles.tennisHeroSide}>
+                  <TappableJerseyHero
+                    team={homeTeam}
+                    isSelected={userPick?.pickedTeam === 'home'}
+                    onSelect={() => openPickAction('home')}
+                    isDisabled={gameStarted}
+                    jerseyType={jerseyType}
+                    sport={game.sport}
+                    showSelectionLabel={false}
+                    size={62}
+                  />
+                  <TennisHeroSetScores game={game} side="home" />
+                </View>
+
+                <View style={styles.tennisHeroCenter}>
+                  <ArenaScoreboard
+                    homeScore={game.homeScore ?? 0}
+                    awayScore={game.awayScore ?? 0}
+                    homeColor={homeAccent}
+                    awayColor={awayAccent}
+                    scale={tennisHeroScoreboardScale}
+                  />
+                  <Text style={[styles.scoreClock, styles.tennisHeroClock]}>
+                    {isLive ? formatGameTime(game.sport, game.quarter, game.clock) : 'FINAL'}
+                  </Text>
+                </View>
+
+                <View style={styles.tennisHeroSide}>
+                  <TappableJerseyHero
+                    team={awayTeam}
+                    isSelected={userPick?.pickedTeam === 'away'}
+                    onSelect={() => openPickAction('away')}
+                    isDisabled={gameStarted}
+                    jerseyType={jerseyType}
+                    sport={game.sport}
+                    showSelectionLabel={false}
+                    size={62}
+                  />
+                  <TennisHeroSetScores game={game} side="away" />
+                </View>
+              </View>
             ) : (
             <View style={[styles.jerseyRow, { zIndex: 1 }]}>
               {isLiveCricket ? (
@@ -1869,17 +1928,28 @@ function GameDetailContent() {
                   {isCountingDown ? (
                     <PreGameCountdown secondsLeft={secondsUntilStart} sport={game.sport} />
                   ) : (game.status === 'LIVE' || game.status === 'FINAL') ? (
-                    <ArenaScoreboard
-                      homeScore={game.homeScore ?? 0}
-                      awayScore={game.awayScore ?? 0}
-                      homeColor={homeAccent}
-                      awayColor={awayAccent}
-                      scale={detailScoreboardScale}
-                      label={suspended ? suspensionStatus : undefined}
-                      displayText={cricketLedScore ?? undefined}
-                      subLabel={suspended ? suspensionReason : undefined}
-                      detailLabel={suspended ? suspensionTime : undefined}
-                    />
+                    <>
+                      <ArenaScoreboard
+                        homeScore={game.homeScore ?? 0}
+                        awayScore={game.awayScore ?? 0}
+                        homeColor={homeAccent}
+                        awayColor={awayAccent}
+                        scale={detailScoreboardScale}
+                        label={suspended ? suspensionStatus : undefined}
+                        displayText={cricketLedScore ?? undefined}
+                        subLabel={suspended ? suspensionReason : undefined}
+                        detailLabel={suspended ? suspensionTime : undefined}
+                      />
+                      {game.sport === 'TENNIS' && !suspended ? (
+                        <TennisScoreGrid
+                          game={game}
+                          variant="compact"
+                          homeColor={homeAccent}
+                          awayColor={awayAccent}
+                          showTeams={false}
+                        />
+                      ) : null}
+                    </>
                   ) : null}
                   {(() => {
                     const timeStr = isLive && !suspended
@@ -1902,7 +1972,9 @@ function GameDetailContent() {
                       const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                       return (
                         <>
-                          <Text style={styles.scoreClock}>{game.status}</Text>
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.scoreClockStatus}>
+                            Scheduled
+                          </Text>
                           <Text style={styles.scoreClockSub}>{`${dateLabel} · ${timeLabel}`}</Text>
                         </>
                       );
@@ -2081,6 +2153,9 @@ const styles = StyleSheet.create({
   teamName: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: 0, lineHeight: 23 },
   teamRecord: { fontSize: 12, color: '#ffffff', marginTop: 3 },
   jerseyRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 16 },
+  tennisHeroRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 24, marginTop: 4, marginBottom: 20, zIndex: 1 },
+  tennisHeroSide: { width: 80, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 9 },
+  tennisHeroCenter: { width: 112, alignItems: 'center', justifyContent: 'flex-start' },
   cricketHeroTeamColumn: { width: 110, alignItems: 'center' },
   cricketHeroScore: { fontSize: 30, lineHeight: 34, fontFamily: 'VT323_400Regular', letterSpacing: 1, marginBottom: 1 },
   cricketHeroPlayerBlock: { width: 124, minHeight: 52, marginTop: 3, alignItems: 'center', justifyContent: 'flex-start' },
@@ -2110,6 +2185,8 @@ const styles = StyleSheet.create({
   scoreSep: { fontSize: 28, color: 'rgba(255,255,255,0.25)', fontWeight: '300', lineHeight: 78 },
   scoreSepShrunk: { fontSize: 22, lineHeight: 60 },
   scoreClock: { fontSize: 22, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 2, textTransform: 'uppercase' },
+  tennisHeroClock: { marginTop: 12, fontSize: 21, lineHeight: 24, textAlign: 'center' },
+  scoreClockStatus: { minWidth: 116, fontSize: 20, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 1.2, textAlign: 'center', textTransform: 'uppercase' },
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
   cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLineAbove: { maxWidth: 220, color: '#FFFFFF', fontSize: 11.5, lineHeight: 14, fontWeight: '900', letterSpacing: 1.4, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
@@ -2321,42 +2398,42 @@ const styles = StyleSheet.create({
   venueText: { fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: '500' },
   watchStrip: {
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 24,
+    marginBottom: 26,
     position: 'relative',
     zIndex: 40,
     elevation: 40,
   },
   watchHubBorder: {
-    borderRadius: 17,
+    borderRadius: 15,
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },
   watchHubCard: {
-    minHeight: 66,
-    borderRadius: 17,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    minHeight: 56,
+    borderRadius: 15,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: 'rgba(218,238,251,0.24)',
     backgroundColor: 'rgba(122,157,184,0.08)',
     overflow: 'hidden',
   },
   watchHubHeader: {
-    minHeight: 46,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
   },
   watchHubHeaderIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(122,157,184,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(218,238,251,0.20)',
-    marginRight: 12,
+    marginRight: 10,
     flexShrink: 0,
   },
   watchHubHeaderCopy: {
@@ -2365,8 +2442,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   watchHubEyebrow: {
-    fontSize: 7.5,
-    lineHeight: 9,
+    fontSize: 7,
+    lineHeight: 8,
     fontWeight: '900',
     color: 'rgba(180,211,235,0.62)',
     letterSpacing: 1,
@@ -2375,16 +2452,16 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   watchHubTitle: {
-    fontSize: 17,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 18,
     color: 'rgba(255,255,255,0.92)',
     fontWeight: '900',
     letterSpacing: 0,
     includeFontPadding: false,
   },
   watchHubSourceMeta: {
-    fontSize: 8,
-    lineHeight: 10,
+    fontSize: 7.5,
+    lineHeight: 9,
     color: 'rgba(226,240,249,0.32)',
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -2393,9 +2470,9 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   watchHubSourcesPill: {
-    height: 34,
-    borderRadius: 17,
-    paddingHorizontal: 11,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2403,13 +2480,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(122,157,184,0.07)',
     borderWidth: 1,
     borderColor: 'rgba(218,238,251,0.28)',
-    marginLeft: 12,
+    marginLeft: 10,
     flexShrink: 0,
   },
   watchHubSourcesPillText: {
     color: 'rgba(218,238,251,0.76)',
-    fontSize: 9.5,
-    lineHeight: 12,
+    fontSize: 8.5,
+    lineHeight: 11,
     fontWeight: '900',
     letterSpacing: 0.75,
     textTransform: 'uppercase',

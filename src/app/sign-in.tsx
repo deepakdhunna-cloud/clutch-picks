@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, StatusBar,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -9,8 +9,6 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { AuthBackground } from '@/components/AuthBackground';
-
-const { width: W } = Dimensions.get('window');
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
@@ -101,6 +99,7 @@ export default function SignInScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="email"
+              textContentType="emailAddress"
               keyboardType="email-address"
               style={s.input}
               editable={!isLoading}

@@ -7,9 +7,9 @@ import { Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
+import { clearAuthStorage } from '@/lib/auth/auth-storage';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { useSubscription } from '@/lib/subscription-context';
 import { isRevenueCatEnabled, logoutUser, restorePurchases, getRevenueCatAppUserId, invalidateCustomerInfoCache } from '@/lib/revenuecatClient';
@@ -103,19 +103,6 @@ function SettingSection({ title, children }: { title: string; children: React.Re
     </View>
   );
 }
-
-const AUTH_STORAGE_KEYS = [
-  'vibecode_cookie',
-  'vibecode_session_data',
-  'vibecode_session_token',
-  'vibecode_refresh_token',
-  'vibecode_bearer_token',
-  'clutchpicks_cookie',
-  'clutchpicks_session_data',
-  'clutchpicks_session_token',
-  'clutchpicks_refresh_token',
-  'clutchpicks_bearer_token',
-] as const;
 
 type FeedbackState = {
   title: string;
@@ -252,15 +239,8 @@ export default function SettingsScreen() {
         }
       }
 
-      // Clear auth cookies from SecureStore
-      for (const key of AUTH_STORAGE_KEYS) {
-        try {
-          await SecureStore.deleteItemAsync(key);
-        } catch (e) {
-          // ignore
-        }
-      }
-      if (__DEV__) console.log('[Settings] SecureStore cleared');
+      await clearAuthStorage();
+      if (__DEV__) console.log('[Settings] Auth storage cleared');
 
       // Invalidate session cache
       if (__DEV__) console.log('[Settings] Invalidating session cache...');
@@ -293,9 +273,7 @@ export default function SettingsScreen() {
       if (isRevenueCatEnabled()) {
         await logoutUser();
       }
-      for (const key of AUTH_STORAGE_KEYS) {
-        await SecureStore.deleteItemAsync(key).catch(() => {});
-      }
+      await clearAuthStorage();
       // Clear ALL stale local state so re-signin shows onboarding fresh.
       await AsyncStorage.removeItem('clutch_onboarding_complete').catch(() => {});
       await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
@@ -476,9 +454,8 @@ export default function SettingsScreen() {
                 subtitle="Walk through the app intro again"
                 onPress={async () => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  await AsyncStorage.setItem('clutch_onboarding_complete', 'false');
-                  await AsyncStorage.setItem('clutch_onboarding_skip_profile', 'true');
-                  router.replace('/onboarding');
+                  await AsyncStorage.removeItem('clutch_onboarding_skip_profile');
+                  router.replace('/onboarding?replay=settings');
                 }}
               />
             </SettingSection>

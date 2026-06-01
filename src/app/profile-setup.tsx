@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { pickImage, takePhoto } from '@/lib/file-picker';
 import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
-import { setDisplayName as setRevenueCatDisplayName } from '@/lib/revenuecatClient';
+import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 
@@ -113,7 +113,7 @@ export default function ProfileSetupScreen() {
       if (hasDisplayName) {
         const name = displayName.trim();
         await api.put<UserProfile>('/api/profile', { name });
-        await setRevenueCatDisplayName(name);
+        await syncSubscriberInfo({ displayName: name });
       }
 
       // Save selected leagues to AsyncStorage

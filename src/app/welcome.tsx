@@ -1,35 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, StatusBar, Pressable, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Haptics from 'expo-haptics';
-import Svg, { Path } from 'react-native-svg';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
+import {
+  appleSignInFallbackMessage,
+  WELCOME_LEAGUE_PILLS,
+} from '@/lib/auth/auth-presentation';
+import { authUserIdentityFromPayload, sessionTokenFromAuthPayload } from '@/lib/auth/auth-user';
 import { useInvalidateSession } from '@/lib/auth/use-session';
-import { setUserId, setEmail as rcSetEmail, setDisplayName } from '@/lib/revenuecatClient';
+import { api } from '@/lib/api/api';
+import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
 
 const { width: W } = Dimensions.get('window');
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
-const TEAL_DARK = '#5A7A8A';
 const BG = '#040608';
-
-function AppleLogo({ size = 18, color = '#000' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-    </Svg>
-  );
-}
 
 export default function WelcomeScreen() {
   const invalidateSession = useInvalidateSession();
   const [isLoading, setIsLoading] = useState(false);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => {
+        if (mounted) setIsAppleAvailable(available);
+      })
+      .catch(() => {
+        if (mounted) setIsAppleAvailable(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const onGetStarted = () => {
     if (isLoading) return;
@@ -43,62 +54,110 @@ export default function WelcomeScreen() {
     router.push('/sign-in' as any);
   };
 
+  const finishAuthenticatedSession = async (authData: unknown) => {
+    const payload = authData as Record<string, unknown> | null;
+    const sessionToken = sessionTokenFromAuthPayload(authData);
+    if (__DEV__) {
+      console.log('[auth] Apple sign-in payload keys:', Object.keys(payload || {}), 'token?', !!sessionToken);
+    }
+    if (sessionToken) setBearerToken(sessionToken);
+
+    try {
+      await syncSubscriberInfo(authUserIdentityFromPayload(authData));
+    } catch (identityError) {
+      if (__DEV__) console.log('[auth] RevenueCat Apple identity sync failed:', identityError);
+    }
+    try {
+      await invalidateSession();
+    } catch (sessionError) {
+      if (__DEV__) console.log('[auth] Session cache invalidation failed:', sessionError);
+    }
+    const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
+    router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
+  };
+
+  const appleFullName = (fullName: AppleAuthentication.AppleAuthenticationFullName | null): string | null => {
+    if (!fullName) return null;
+    const formatted = AppleAuthentication.formatFullName(fullName, 'default').trim();
+    return formatted.length > 0 ? formatted : null;
+  };
+
+  const storeNativeAppleTokens = async (identityToken: string, authorizationCode: string | null) => {
+    if (!authorizationCode) {
+      throw new Error('Apple sign in did not return an authorization code');
+    }
+    await api.post('/api/apple-auth/native-token', { identityToken, authorizationCode });
+  };
+
+  const signInWithNativeApple = async () => {
+    const isAvailable = await AppleAuthentication.isAvailableAsync();
+    if (!isAvailable) {
+      throw Object.assign(new Error('Apple native sign in is unavailable'), {
+        code: 'APPLE_NATIVE_UNAVAILABLE',
+      });
+    }
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+    if (!credential.identityToken) {
+      throw new Error('Apple sign in did not return an identity token');
+    }
+    const result = await authClient.signIn.social({
+      provider: 'apple',
+      callbackURL: '/(tabs)',
+      idToken: {
+        token: credential.identityToken,
+      },
+    });
+    if (result.error) {
+      if (__DEV__) console.log('[auth] Apple backend sign-in failed:', result.error);
+      throw result.error;
+    }
+
+    const sessionToken = sessionTokenFromAuthPayload(result.data);
+    if (sessionToken) setBearerToken(sessionToken);
+
+    const existingIdentity = authUserIdentityFromPayload(result.data);
+    const name = appleFullName(credential.fullName);
+    if (name && (result.data as any)?.user) {
+      (result.data as any).user.name = existingIdentity.displayName ?? name;
+    }
+
+    try {
+      await storeNativeAppleTokens(credential.identityToken, credential.authorizationCode);
+    } catch (tokenError) {
+      if (__DEV__) console.log('[auth] Apple token persistence failed:', tokenError);
+    }
+
+    if (name) {
+      if (!existingIdentity.displayName) {
+        try {
+          await api.put('/api/profile', { name });
+          if ((result.data as any)?.user) (result.data as any).user.name = name;
+        } catch (profileError) {
+          if (__DEV__) console.log('[auth] Apple profile name persistence failed:', profileError);
+        }
+      }
+    }
+
+    return result.data;
+  };
+
   const onApple = async () => {
     if (isLoading) return;
     try {
       setIsLoading(true);
       setError(null);
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-      if (!credential.identityToken) {
-        setIsLoading(false);
-        setError('Apple sign in did not complete');
-        return;
-      }
-      const result = await authClient.signIn.social({
-        provider: 'apple',
-        callbackURL: '/(tabs)',
-        idToken: {
-          token: credential.identityToken,
-          accessToken: credential.authorizationCode || undefined,
-        },
-      });
-      if (result.error) {
-        setIsLoading(false);
-        setError(result.error.message || 'Apple sign in failed');
-        return;
-      }
-      // Persist the bearer token from the response body as a fallback —
-      // the auth-client also captures `set-auth-token` from the response
-      // headers, but storing this directly removes any chance of a missed
-      // header on iOS native fetch.
-      const sessionToken = (result.data as any)?.token;
-      if (__DEV__) console.log('[auth] apple sign-in result.data keys:', Object.keys(result.data || {}), 'token?', !!sessionToken);
-      if (sessionToken) setBearerToken(sessionToken);
-      const userId = (result.data as any)?.user?.id;
-      const userEmail = (result.data as any)?.user?.email;
-      const userName = (result.data as any)?.user?.name;
-      try {
-        if (userId) await setUserId(userId);
-        if (userEmail) await rcSetEmail(userEmail);
-        if (userName) await setDisplayName(userName);
-      } catch (identityError) {
-        if (__DEV__) console.log('[auth] RevenueCat Apple identity sync failed:', identityError);
-      }
-      try {
-        await invalidateSession();
-      } catch (sessionError) {
-        if (__DEV__) console.log('[auth] Session cache invalidation failed:', sessionError);
-      }
-      const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
-      router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
+      const authData = await signInWithNativeApple();
+      await finishAuthenticatedSession(authData);
     } catch (e: any) {
-      if (e.code !== 'ERR_REQUEST_CANCELED') {
-        setError('Apple sign in failed. Please try again.');
+      if (__DEV__) console.log('[auth] Apple sign-in failed:', e);
+      const message = appleSignInFallbackMessage(e);
+      if (message) {
+        setError(message);
       }
     } finally {
       setIsLoading(false);
@@ -119,7 +178,7 @@ export default function WelcomeScreen() {
           />
           <Text style={s.tagline}>AI-powered predictions{'\n'}across 11 leagues</Text>
           <View style={s.leagueStrip}>
-            {['NBA', 'NFL', 'MLB', 'NHL', 'IPL', 'Tennis', 'EPL'].map((l) => (
+            {WELCOME_LEAGUE_PILLS.map((l) => (
               <View key={l} style={s.leaguePill}>
                 <Text style={s.leaguePillText}>{l}</Text>
               </View>
@@ -137,30 +196,45 @@ export default function WelcomeScreen() {
             </View>
           ) : null}
 
-          <Pressable
-            onPress={onGetStarted}
-            disabled={isLoading}
-            style={s.getStartedBtn}
-          >
-            <Text style={s.getStartedText}>Get Started</Text>
-          </Pressable>
+          <View style={s.emailActions}>
+            <Pressable
+              onPress={onGetStarted}
+              disabled={isLoading}
+              style={s.signUpBtn}
+            >
+              <Text style={s.signUpText}>Sign Up</Text>
+            </Pressable>
 
-          <Pressable
-            onPress={onSignIn}
-            disabled={isLoading}
-            style={s.signInBtn}
-          >
-            <Text style={s.signInText}>Sign In</Text>
-          </Pressable>
+            <Pressable
+              onPress={onSignIn}
+              disabled={isLoading}
+              style={s.signInBtn}
+            >
+              <Text style={s.signInText}>Sign In</Text>
+            </Pressable>
+          </View>
 
-          <Pressable
-            onPress={onApple}
-            disabled={isLoading}
-            style={s.appleBtn}
-          >
-            <AppleLogo size={20} color={TEAL_DARK} />
-            <Text style={s.appleText}>Continue with Apple</Text>
-          </Pressable>
+          <View style={s.dividerRow}>
+            <View style={s.dividerLine} />
+            <Text style={s.dividerText}>or</Text>
+            <View style={s.dividerLine} />
+          </View>
+
+          <View style={[s.appleBtnWrap, isLoading && s.disabledControl]} pointerEvents={isLoading ? 'none' : 'auto'}>
+            {isAppleAvailable ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                cornerRadius={14}
+                style={s.appleNativeBtn}
+                onPress={onApple}
+              />
+            ) : (
+              <Pressable onPress={onApple} disabled={isLoading} style={s.appleFallbackBtn}>
+                <Text style={s.appleFallbackText}>Continue with Apple</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Terms */}
@@ -195,7 +269,7 @@ const s = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '500',
     textAlign: 'center',
-    marginTop: 80,
+    marginTop: 70,
     lineHeight: 24,
     letterSpacing: 0.3,
   },
@@ -241,7 +315,12 @@ const s = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  getStartedBtn: {
+  emailActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  signUpBtn: {
+    flex: 1,
     height: 56,
     borderRadius: 14,
     backgroundColor: MAROON,
@@ -254,13 +333,14 @@ const s = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  getStartedText: {
+  signUpText: {
     fontSize: 17,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   signInBtn: {
+    flex: 1,
     height: 56,
     borderRadius: 14,
     backgroundColor: 'transparent',
@@ -268,7 +348,6 @@ const s = StyleSheet.create({
     borderColor: TEAL,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
   },
   signInText: {
     fontSize: 17,
@@ -276,20 +355,46 @@ const s = StyleSheet.create({
     color: TEAL,
     letterSpacing: 0.3,
   },
-  appleBtn: {
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  dividerText: {
+    paddingHorizontal: 12,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  appleBtnWrap: {
+    height: 54,
+    marginBottom: 8,
+  },
+  appleNativeBtn: {
+    width: '100%',
+    height: 54,
+  },
+  appleFallbackBtn: {
     height: 54,
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  appleText: {
+  appleFallbackText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: TEAL_DARK,
-    marginLeft: 10,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  disabledControl: {
+    opacity: 0.5,
   },
 
   termsWrap: {

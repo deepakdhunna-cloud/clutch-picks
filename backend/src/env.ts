@@ -74,6 +74,7 @@ const envSchema = z.object({
   APPLE_KEY_ID: z.string().optional(),
   APPLE_PRIVATE_KEY: z.string().optional(),
   APPLE_CLIENT_ID: z.string().optional(),
+  APPLE_APP_BUNDLE_IDENTIFIER: z.string().optional(),
 
   // ─── RevenueCat webhook — inbound subscription events ────────────────
   // Shared secret RevenueCat sends in the Authorization header on every

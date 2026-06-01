@@ -673,6 +673,7 @@ const TopPickCard = memo(function TopPickCard({
 
 export default function ClutchPicksScreen() {
   const router = useRouter();
+  const screenFocused = useIsFocused();
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
   const { isPremium } = useSubscription();
@@ -681,7 +682,10 @@ export default function ClutchPicksScreen() {
   const prefetchGame = usePrefetchGame();
 
   // Get top picks with guaranteed predictions from dedicated endpoint
-  const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks();
+  const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks({
+    enabled: screenFocused,
+    subscribed: screenFocused,
+  });
   const { refreshing, onRefresh } = useSmoothRefresh(refetchPicks);
   const hasTopPicksData = (topPicks?.length ?? 0) > 0;
   const isInitialPicksLoading = isLoadingPicks && !hasTopPicksData;
