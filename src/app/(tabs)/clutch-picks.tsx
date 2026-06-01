@@ -1,4 +1,4 @@
-import { View, Text, RefreshControl, Pressable, ScrollView, StyleSheet, InteractionManager } from 'react-native';
+import { View, Text, RefreshControl, Pressable, ScrollView, StyleSheet, InteractionManager, type GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, { FadeInDown, FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
@@ -6,6 +6,7 @@ import React, { useState, useCallback, memo, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
@@ -73,13 +74,26 @@ const ExpandableText = memo(function ExpandableText({ text }: { text: string }) 
       return next;
     });
   }, [progress]);
+  const handlePress = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+    toggle();
+  }, [toggle]);
 
   const textStyle = { fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: ANALYSIS_LINE_HEIGHT };
 
   return (
-    <Pressable onPress={canExpand ? toggle : undefined} hitSlop={6}>
+    <Pressable
+      accessibilityRole={canExpand ? 'button' : undefined}
+      accessibilityLabel={canExpand ? (expanded ? 'Collapse pick analysis' : 'Read full pick analysis') : undefined}
+      accessibilityHint={canExpand ? 'Expands or collapses the pick explanation' : undefined}
+      onPress={canExpand ? handlePress : undefined}
+      hitSlop={6}
+    >
       {/* Off-layout measurers — never painted, never shift the card */}
       <Text
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         style={[textStyle, MEASURE_STYLE]}
         numberOfLines={3}
         onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0 && Math.abs(h - collapsedH) > 0.5) setCollapsedH(h); }}
@@ -87,6 +101,9 @@ const ExpandableText = memo(function ExpandableText({ text }: { text: string }) 
         {text}
       </Text>
       <Text
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         style={[textStyle, MEASURE_STYLE]}
         onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0 && Math.abs(h - fullH) > 0.5) setFullH(h); }}
       >
@@ -95,7 +112,7 @@ const ExpandableText = memo(function ExpandableText({ text }: { text: string }) 
 
       {/* Visible clip — height animates between the two measured heights */}
       <Animated.View style={[{ overflow: 'hidden' }, clipStyle]}>
-        <Text style={textStyle} numberOfLines={measured ? undefined : 3}>
+        <Text style={textStyle} numberOfLines={expanded ? undefined : 3} ellipsizeMode="tail">
           {text}
         </Text>
       </Animated.View>
@@ -401,6 +418,7 @@ const TopPickCard = memo(function TopPickCard({
       style={{ paddingBottom: 44 }}
     >
       <AnimatedPressable
+        accessible={false}
         onPress={() => onPress(game)}
         onPressIn={() => {
           onPressIn?.(game);
@@ -586,6 +604,9 @@ const TopPickCard = memo(function TopPickCard({
                       e.stopPropagation();
                       router.push({ pathname: '/confidence-explained', params: confidenceParams });
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Explain pick strength: ${tier.label}`}
+                    accessibilityHint="Opens the confidence explanation"
                     hitSlop={8}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 }}
                   >
@@ -649,12 +670,36 @@ const TopPickCard = memo(function TopPickCard({
 
                 {/* View details CTA */}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(122,157,184,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(122,157,184,0.25)' }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open full breakdown: ${game.awayTeam.name} at ${game.homeTeam.name}`}
+                    accessibilityHint="Opens game details with the full prediction breakdown"
+                    hitSlop={8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onPress(game);
+                    }}
+                    onPressIn={(e) => {
+                      e.stopPropagation();
+                      onPressIn?.(game);
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: pressed ? 'rgba(122,157,184,0.16)' : 'rgba(122,157,184,0.08)',
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: 'rgba(122,157,184,0.25)',
+                    })}
+                  >
                     <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Full breakdown</Text>
                     <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
                       <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" />
                     </Svg>
-                  </View>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -676,7 +721,7 @@ export default function ClutchPicksScreen() {
   const screenFocused = useIsFocused();
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
-  const { isPremium } = useSubscription();
+  const { isPremium, isLoading: isSubscriptionLoading } = useSubscription();
   const insets = useSafeAreaInsets();
   const bottomPadding = getClutchPicksBottomPadding(insets.bottom);
   const prefetchGame = usePrefetchGame();
@@ -689,18 +734,19 @@ export default function ClutchPicksScreen() {
   const { refreshing, onRefresh } = useSmoothRefresh(refetchPicks);
   const hasTopPicksData = (topPicks?.length ?? 0) > 0;
   const isInitialPicksLoading = isLoadingPicks && !hasTopPicksData;
+  const shouldShowPicksSkeleton = isSubscriptionLoading || (isPremium && isInitialPicksLoading);
 
   // Single UI-thread shimmer driver shared by all skeleton bars while loading.
   const skeletonPulse = useSharedValue(0);
   React.useEffect(() => {
-    if (!isInitialPicksLoading) {
+    if (!shouldShowPicksSkeleton) {
       cancelAnimation(skeletonPulse);
       skeletonPulse.value = 0;
       return;
     }
     skeletonPulse.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true);
     return () => { cancelAnimation(skeletonPulse); };
-  }, [isInitialPicksLoading, skeletonPulse]);
+  }, [shouldShowPicksSkeleton, skeletonPulse]);
 
   // Filter out games with missing/TBD team names — these have no valid prediction
   const validPicks = useMemo(() => {
@@ -723,6 +769,11 @@ export default function ClutchPicksScreen() {
     handleGameWarm(game);
     router.push(`/game/${game.id}` as any);
   }, [handleGameWarm, router]);
+
+  const openPaywall = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/paywall');
+  }, [router]);
 
   const headerComponent = useMemo(() => (
     <View style={{ paddingTop: 16, paddingBottom: 28 }}>
@@ -782,7 +833,7 @@ export default function ClutchPicksScreen() {
         <ErrorBoundary onGoBack={() => router.back()}>
 
         {/* Content */}
-        {isInitialPicksLoading ? (
+        {shouldShowPicksSkeleton ? (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPadding }} showsVerticalScrollIndicator={false}>
             {headerComponent}
             <Animated.View entering={FadeIn.duration(220)}>
@@ -797,17 +848,22 @@ export default function ClutchPicksScreen() {
 
             {/* Ghost pick cards — premium locked model board */}
             {[1, 2, 3].map((rank) => (
-              <View
+              <Pressable
                 key={rank}
-                style={{
+                accessibilityRole="button"
+                accessibilityLabel={`Unlock Pro pick #${rank}`}
+                accessibilityHint="Opens Clutch Picks Pro"
+                onPress={openPaywall}
+                style={({ pressed }) => ({
                   marginBottom: 14,
                   borderRadius: 20,
                   overflow: 'hidden',
                   borderWidth: 1,
                   borderColor: rank === 1 ? 'rgba(122,157,184,0.26)' : 'rgba(122,157,184,0.12)',
                   backgroundColor: 'rgba(4,7,10,0.72)',
-                  opacity: rank === 1 ? 1 : rank === 2 ? 0.78 : 0.56,
-                }}
+                  opacity: (rank === 1 ? 1 : rank === 2 ? 0.78 : 0.56) * (pressed ? 0.86 : 1),
+                  transform: [{ scale: pressed ? 0.99 : 1 }],
+                })}
               >
                 <BlurView intensity={rank === 1 ? 36 : 28} tint="dark" style={StyleSheet.absoluteFillObject} />
                 <LinearGradient
@@ -872,7 +928,7 @@ export default function ClutchPicksScreen() {
                     </View>
                   ) : null}
                 </View>
-              </View>
+              </Pressable>
             ))}
 
             {/* Unified Pro introduction */}
@@ -924,7 +980,13 @@ export default function ClutchPicksScreen() {
                   ))}
                 </View>
 
-                <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Explore Pro"
+                  accessibilityHint="Opens Clutch Picks Pro"
+                  onPress={openPaywall}
+                  style={{ width: '100%' }}
+                >
                   <LinearGradient
                     colors={['rgba(122,157,184,0.24)', 'rgba(139,10,31,0.18)']}
                     start={{ x: 0, y: 0 }}

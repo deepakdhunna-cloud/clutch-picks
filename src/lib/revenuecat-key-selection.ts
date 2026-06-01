@@ -5,6 +5,7 @@ type RevenueCatKeyConfig = {
   appleKey?: string;
   googleKey?: string;
   testKey?: string;
+  preferTestKey?: boolean;
 };
 
 export function selectRevenueCatApiKey({
@@ -12,8 +13,10 @@ export function selectRevenueCatApiKey({
   appleKey,
   googleKey,
   testKey,
+  preferTestKey = false,
 }: RevenueCatKeyConfig): string | undefined {
   if (platform === 'web') return undefined;
+  if (preferTestKey && testKey) return testKey;
   if (platform === 'ios') return appleKey ?? testKey;
   if (platform === 'android') return googleKey ?? testKey;
 

@@ -179,6 +179,54 @@ describe("buildDeterministicNarrative", () => {
     expect(sentenceCount(text)).toBeLessThanOrEqual(10);
   });
 
+  it("uses singular player phrasing for tennis narratives", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "tennis_ranking_edge",
+        label: "ATP/WTA ranking edge",
+        homeDelta: 70,
+        weight: 0.35,
+        available: true,
+        hasSignal: true,
+        evidence: "ATP ranking: GANN #1130 (11 pts) vs COCO #1314 (6 pts)",
+      },
+      {
+        key: "recent_form",
+        label: "Recent form (L10)",
+        homeDelta: 20,
+        weight: 0.10,
+        available: true,
+        hasSignal: true,
+        evidence: "Home L10: 5-5 (50%), Away L10: 4-6 (40%)",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors,
+      "clear edge",
+      60.0,
+      "GANN",
+      "COCO",
+      "GANN",
+      "TENNIS",
+      [],
+      {
+        phase: "regular_season",
+        label: "Tennis tournament setting",
+        detail: "Tournament draw context.",
+        source: "date",
+      },
+      "Conor Gannon",
+      "Sebastiano Cocola",
+    );
+
+    const text = buildDeterministicNarrative(input);
+
+    expect(text).toContain("Conor Gannon");
+    expect(text).not.toContain("Conor Gannon have");
+    expect(text).not.toContain("hotter team");
+    expect(text).not.toContain("Sebastiano Cocola sit at");
+  });
+
   it("adds a fan-interest angle without inventing facts", () => {
     const input = buildNarrativeInput(
       makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",

@@ -48,6 +48,7 @@ yarn-error.*
 # Expo log
 expo.log
 backend/.env
+tmp/
 
 # Environment files — never commit
 .env

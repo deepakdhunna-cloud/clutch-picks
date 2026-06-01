@@ -28,6 +28,12 @@ import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { ArenaScoreboard } from '@/components/sports/ArenaScoreboard';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
+import {
+  REPLAY_BLACK_SCREEN_MS,
+  REPLAY_INTRO_MOTION_SCALE,
+  shouldUseReplayIntroGate,
+} from '@/lib/onboarding-replay-intro';
+import { arenaStepButtonLabel } from '@/lib/onboarding-presentation';
 
 const { width: W } = Dimensions.get('window');
 
@@ -42,6 +48,8 @@ const TEXT_SEC = '#A1B3C9';
 const TEXT_MUT = '#6B7C94';
 const GLASS = 'rgba(255,255,255,0.02)';
 const BORDER = 'rgba(255,255,255,0.06)';
+const iconButtonStyle = { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' } as const;
+const skipButtonStyle = { minWidth: 48, minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' } as const;
 
 // ─── PROGRESS BAR ─────────────────────────────────────────────
 function ProgressBar({ step }: { step: number }) {
@@ -132,12 +140,14 @@ function FloatingParticle({ x, startY, size, color, dur, phase, drift }: Floatin
 }
 
 // ─── STEP 0: WELCOME ─────────────────────────────────────────
-function WelcomeStep({ onContinue }: { onContinue: () => void }) {
+function WelcomeStep({ onContinue, motionScale = 1 }: { onContinue: () => void; motionScale?: number }) {
   // Two ambient gradients that slowly cross-fade
   const glow1Op = useSharedValue(0.08);
   const glow2Op = useSharedValue(0.03);
   // Grid lines that pulse subtly
   const gridOp = useSharedValue(0.3);
+  const introDelay = useCallback((ms: number) => Math.round(ms * motionScale), [motionScale]);
+  const introDuration = useCallback((ms: number) => Math.round(ms * motionScale), [motionScale]);
 
   useEffect(() => {
     // Cross-fading glows
@@ -183,23 +193,29 @@ function WelcomeStep({ onContinue }: { onContinue: () => void }) {
 
       {/* Logo — upper portion */}
       <View style={{ paddingTop: '35%', alignItems: 'center' }}>
-        <Animated.View entering={FadeIn.delay(300).duration(800)}>
+        <Animated.View entering={FadeIn.delay(introDelay(300)).duration(introDuration(800))}>
           <Image source={require('@/assets/clutch-logo-horizontal.png')} style={{ width: 300, height: 300 * (523 / 3352) }} resizeMode="contain" />
         </Animated.View>
       </View>
 
       {/* Welcome text — lower */}
       <View style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 32, paddingBottom: 24 }}>
-        <Animated.View entering={FadeIn.delay(600).duration(600)} style={{ width: 50, height: 1.5, borderRadius: 1, backgroundColor: TEAL, opacity: 0.4, marginBottom: 20 }} />
+        <Animated.View entering={FadeIn.delay(introDelay(600)).duration(introDuration(600))} style={{ width: 50, height: 1.5, borderRadius: 1, backgroundColor: TEAL, opacity: 0.4, marginBottom: 20 }} />
 
-        <Animated.Text entering={FadeInDown.delay(700).duration(500)} style={{ fontSize: 26, fontWeight: '800', color: WHITE, textAlign: 'center', letterSpacing: -0.3, lineHeight: 32 }}>
+        <Animated.Text entering={FadeInDown.delay(introDelay(700)).duration(introDuration(500))} style={{ fontSize: 26, fontWeight: '800', color: WHITE, textAlign: 'center', letterSpacing: -0.3, lineHeight: 32 }}>
           Welcome to Your{'\n'}Game Day Engagement Center
         </Animated.Text>
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40, paddingTop: 28 }}>
-        <Animated.View entering={FadeInDown.delay(1000).duration(500)}>
-          <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <Animated.View entering={FadeInDown.delay(introDelay(1000)).duration(introDuration(500))}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Start onboarding"
+            accessibilityHint="Moves to the first onboarding step"
+            onPress={onContinue}
+            style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}
+          >
             <LinearGradient colors={[TEAL, '#5A7A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: TEAL, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Let's Get Started</Text>
             </LinearGradient>
@@ -236,10 +252,21 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
     <View style={{ flex: 1 }}>
       <ProgressBar step={1} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={iconButtonStyle}
+        >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
-        <Pressable onPress={onSkip} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+          accessibilityHint="Skips onboarding and opens the app"
+          onPress={onSkip}
+          style={skipButtonStyle}
+        >
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
         </Pressable>
       </View>
@@ -262,7 +289,13 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 }}>
-            <Pressable onPress={() => doPick('home')}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Pick Chicago Bulls"
+              accessibilityHint="Selects the Bulls for the sample pick"
+              accessibilityState={{ selected: picked === 'home' }}
+              onPress={() => doPick('home')}
+            >
               <Animated.View style={[homeStyle, { alignItems: 'center', opacity: picked === 'away' ? 0.35 : 1 }]}>
                 <View style={picked === 'home' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
                   <JerseyIcon teamCode="CHI" teamName="Chicago Bulls" primaryColor={homeColors.primary} secondaryColor={homeColors.secondary} size={86} sport={jerseyType} />
@@ -286,7 +319,13 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
               <Text style={{ fontSize: 11, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.30)', letterSpacing: 3, marginTop: 4 }}>SCHEDULED</Text>
             </View>
 
-            <Pressable onPress={() => doPick('away')}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Pick Minnesota Timberwolves"
+              accessibilityHint="Selects the Timberwolves for the sample pick"
+              accessibilityState={{ selected: picked === 'away' }}
+              onPress={() => doPick('away')}
+            >
               <Animated.View style={[awayStyle, { alignItems: 'center', opacity: picked === 'home' ? 0.35 : 1 }]}>
                 <View style={picked === 'away' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
                   <JerseyIcon teamCode="MIN" teamName="Minnesota Timberwolves" primaryColor={awayColors.primary} secondaryColor={awayColors.secondary} size={86} sport={jerseyType} />
@@ -321,7 +360,14 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} disabled={!picked} style={({ pressed }) => ({ opacity: !picked ? 0.3 : pressed ? 0.9 : 1, transform: [{ scale: pressed && picked ? 0.98 : 1 }] })}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Continue onboarding"
+          accessibilityState={{ disabled: !picked }}
+          onPress={onContinue}
+          disabled={!picked}
+          style={({ pressed }) => ({ opacity: !picked ? 0.3 : pressed ? 0.9 : 1, transform: [{ scale: pressed && picked ? 0.98 : 1 }] })}
+        >
           <LinearGradient
             colors={picked ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']}
             style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
@@ -361,10 +407,21 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
     <View style={{ flex: 1 }}>
       <ProgressBar step={2} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={iconButtonStyle}
+        >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
-        <Pressable onPress={onSkip} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+          accessibilityHint="Skips onboarding and opens the app"
+          onPress={onSkip}
+          style={skipButtonStyle}
+        >
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
         </Pressable>
       </View>
@@ -585,7 +642,12 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
       </Animated.ScrollView>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Continue onboarding"
+          onPress={onContinue}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}
+        >
           <LinearGradient colors={[MAROON, '#6A0818']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
           </LinearGradient>
@@ -611,10 +673,21 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
     <View style={{ flex: 1 }}>
       <ProgressBar step={3} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={iconButtonStyle}
+        >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
-        <Pressable onPress={onSkip} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+          accessibilityHint="Skips onboarding and opens the app"
+          onPress={onSkip}
+          style={skipButtonStyle}
+        >
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
         </Pressable>
       </View>
@@ -656,13 +729,18 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Continue onboarding"
+          onPress={onContinue}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}
+        >
           <LinearGradient
             colors={subPage === 2 ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.06)']}
             style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: subPage < 2 ? 1 : 0, borderColor: BORDER }}
           >
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>
-              {subPage < 2 ? 'Swipe to see more →' : 'Continue'}
+              {arenaStepButtonLabel(subPage)}
             </Text>
           </LinearGradient>
         </Pressable>
@@ -930,14 +1008,21 @@ function ArenaReview() {
 }
 
 // ─── STEP 4: BUILD YOUR CARD ──────────────────────────────────
-function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, onPhotoPress, onContinue, onBack }: {
-  displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; onPhotoPress: () => void; onContinue: () => void; onBack: () => void;
+function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, isSavingProfile, onPhotoPress, onContinue, onBack }: {
+  displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; isSavingProfile: boolean; onPhotoPress: () => void; onContinue: () => void; onBack: () => void;
 }) {
+  const canContinue = Boolean(displayName.trim()) && !isSavingProfile;
+
   return (
     <View style={{ flex: 1 }}>
       <ProgressBar step={4} />
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={iconButtonStyle}
+        >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
       </View>
@@ -960,7 +1045,13 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
             <View style={{ padding: 22, paddingTop: 16 }}>
               {/* Avatar + Name row */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                <Pressable onPress={onPhotoPress}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={profileImage ? "Change profile photo" : "Add profile photo"}
+                  accessibilityHint="Opens photo options"
+                  accessibilityState={{ busy: isUploading }}
+                  onPress={onPhotoPress}
+                >
                   <View style={{ width: 72, height: 72, borderRadius: 36, padding: 3, overflow: 'hidden' }}>
                     <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                     <View style={{ flex: 1, borderRadius: 33, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -976,6 +1067,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
                 </Pressable>
                 <View style={{ flex: 1 }}>
                   <TextInput
+                    accessibilityLabel="Display name"
                     value={displayName}
                     onChangeText={setDisplayName}
                     placeholder="Your name..."
@@ -1037,9 +1129,20 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} disabled={!displayName.trim()} style={({ pressed }) => ({ opacity: !displayName.trim() ? 0.35 : pressed ? 0.9 : 1, transform: [{ scale: pressed && displayName.trim() ? 0.98 : 1 }] })}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Continue onboarding"
+          accessibilityState={{ disabled: !canContinue, busy: isSavingProfile }}
+          onPress={onContinue}
+          disabled={!canContinue}
+          style={({ pressed }) => ({ opacity: !canContinue ? 0.35 : pressed ? 0.9 : 1, transform: [{ scale: pressed && canContinue ? 0.98 : 1 }] })}
+        >
           <LinearGradient colors={displayName.trim() ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: displayName.trim() ? 0 : 1, borderColor: BORDER }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
+            {isSavingProfile ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
+            )}
           </LinearGradient>
         </Pressable>
       </View>
@@ -1058,7 +1161,12 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 16 }}>
-        <Pressable onPress={onBack} hitSlop={8} style={{ padding: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={iconButtonStyle}
+        >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
         </Pressable>
       </View>
@@ -1102,13 +1210,25 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
 
       {/* CTA — matches paywall shimmer button style */}
       <View style={{ paddingHorizontal: 28, paddingBottom: 20 }}>
-        <Pressable onPress={onSubscribe} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start Pro"
+          accessibilityHint="Opens Clutch Picks Pro"
+          onPress={onSubscribe}
+          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}
+        >
           <LinearGradient colors={[MAROON, '#6A0818', '#5A0614']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: MAROON, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Pro</Text>
           </LinearGradient>
         </Pressable>
         <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>3-day free trial for eligible users. Price shown before purchase.</Text>
-        <Pressable onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 14 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Continue free"
+          accessibilityHint="Skips Pro and opens the free app"
+          onPress={onSkip}
+          style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
           <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Continue free</Text>
         </Pressable>
       </View>
@@ -1126,12 +1246,14 @@ export default function OnboardingScreen() {
   const [displayName, setDisplayName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
   const [tutorialReplay, setTutorialReplay] = useState(false);
   const queryClient = useQueryClient();
   const invalidateSession = useInvalidateSession();
-  const replayRequested = replay === 'settings' || replay === 'true' || (Array.isArray(replay) && replay.some(value => value === 'settings' || value === 'true'));
+  const replayRequested = shouldUseReplayIntroGate(replay);
+  const [replayIntroGateVisible, setReplayIntroGateVisible] = useState<boolean>(replayRequested);
 
   // Settings replay is a help tour only. It should not show profile setup or paywall.
   useEffect(() => {
@@ -1147,6 +1269,17 @@ export default function OnboardingScreen() {
         AsyncStorage.removeItem('clutch_onboarding_skip_profile');
       }
     });
+  }, [replayRequested]);
+
+  useEffect(() => {
+    if (!replayRequested) {
+      setReplayIntroGateVisible(false);
+      return;
+    }
+
+    setReplayIntroGateVisible(true);
+    const timer = setTimeout(() => setReplayIntroGateVisible(false), REPLAY_BLACK_SCREEN_MS);
+    return () => clearTimeout(timer);
   }, [replayRequested]);
 
   const goNext = useCallback(async () => {
@@ -1185,20 +1318,26 @@ export default function OnboardingScreen() {
   }, []);
 
   const saveProfile = async () => {
+    if (isSavingProfile) return;
+
+    setIsSavingProfile(true);
     try {
-      if (displayName.trim().length > 0) {
-        const name = displayName.trim();
-        await api.put('/api/profile', { name });
-        await syncSubscriberInfo({ displayName: name });
-      }
+      const name = displayName.trim();
+      await api.put('/api/profile', { name });
+      await syncSubscriberInfo({ displayName: name });
       // Invalidate caches so profile page picks up changes immediately
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      invalidateSession();
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
+      await invalidateSession();
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
       setStep(5);
     } catch {
-      await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-      setStep(5);
+      setFeedback({
+        title: 'Profile Not Saved',
+        message: 'Please check your connection and try again before continuing.',
+        variant: 'error',
+      });
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -1246,6 +1385,10 @@ export default function OnboardingScreen() {
     await handleImageUpload(await pickImage());
   };
 
+  if (replayIntroGateVisible) {
+    return <View testID="replay-intro-black-screen" style={{ flex: 1, backgroundColor: '#000000' }} />;
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -1263,11 +1406,11 @@ export default function OnboardingScreen() {
           variant={feedback?.variant}
           onDismiss={() => setFeedback(null)}
         />
-        {step === 0 ? <WelcomeStep onContinue={() => setStep(1)} /> : null}
+        {step === 0 ? <WelcomeStep onContinue={() => setStep(1)} motionScale={replayRequested ? REPLAY_INTRO_MOTION_SCALE : 1} /> : null}
         {step === 1 ? <PickStep picked={picked} setPicked={setPicked} onContinue={() => setStep(2)} onSkip={skip} onBack={goBack} /> : null}
         {step === 2 ? <AIPredictionsStep onContinue={() => setStep(3)} onSkip={skip} onBack={goBack} picked={picked} /> : null}
         {step === 3 ? <ArenaStep subPage={arenaSubPage} onContinue={goNext} onSkip={skip} onBack={goBack} /> : null}
-        {step === 4 ? <ProfileStep displayName={displayName} setDisplayName={setDisplayName} profileImage={profileImage} isUploading={isUploading} onPhotoPress={handlePhotoPress} onContinue={saveProfile} onBack={goBack} /> : null}
+        {step === 4 ? <ProfileStep displayName={displayName} setDisplayName={setDisplayName} profileImage={profileImage} isUploading={isUploading} isSavingProfile={isSavingProfile} onPhotoPress={handlePhotoPress} onContinue={saveProfile} onBack={goBack} /> : null}
         {step === 5 ? <PaywallStep onSubscribe={goToPaywall} onSkip={skipPaywall} onBack={goBack} /> : null}
       </SafeAreaView>
     </View>

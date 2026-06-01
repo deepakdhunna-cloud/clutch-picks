@@ -106,7 +106,13 @@ const SportCard = memo(function SportCard({ sport, count, onSelect }: { sport: s
   const badgeLabel = SPORT_BADGE_LABELS[sport] ?? displaySport(sport);
   const handlePress = useCallback(() => onSelect(sport), [onSelect, sport]);
   return (
-    <Pressable onPress={handlePress} style={{ width: SPORT_CARD_W }}>
+    <Pressable
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Browse ${displaySport(sport)}, ${count} game${count !== 1 ? 's' : ''}`}
+      accessibilityHint="Shows games for this sport"
+      style={{ width: SPORT_CARD_W }}
+    >
       <LinearGradient
         colors={[hexWithAlpha(color, 0.36), 'rgba(180,211,235,0.10)', 'rgba(255,255,255,0.04)']}
         start={{ x: 0, y: 0 }}
@@ -158,7 +164,12 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
   const badgeLabelText = showBadge ? `${predictionDisplay!.badgeLabel} ${confidence}%` : null;
 
   return (
-    <Pressable onPress={onPress}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+      accessibilityHint="Opens game details"
+    >
       <LinearGradient
         colors={[hexWithAlpha(sportColor, 0.32), 'rgba(180,211,235,0.08)', live ? 'rgba(239,68,68,0.22)' : 'rgba(139,10,31,0.10)']}
         start={{ x: 0, y: 0 }}
@@ -252,6 +263,9 @@ const ResultGameRow = memo(function ResultGameRow({
   return (
     <Pressable
       onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+      accessibilityHint="Opens game details"
       style={{
         height: RESULT_ROW_HEIGHT,
         borderRadius: 16,
@@ -362,11 +376,18 @@ const RecentSearchRow = memo(function RecentSearchRow({
   return (
     <Pressable
       onPress={handleSelect}
+      accessibilityRole="button"
+      accessibilityLabel={`Search recent term ${term}`}
       style={{ flexDirection: 'row', alignItems: 'center', minHeight: 46, borderRadius: 14, paddingHorizontal: 13, backgroundColor: 'rgba(255,255,255,0.035)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' }}
     >
       <Clock size={14} color={TEXT_MUTED} />
       <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', color: TEXT_SECONDARY, marginLeft: 10 }} numberOfLines={1}>{term}</Text>
-      <Pressable onPress={handleRemove} hitSlop={8} style={{ width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
+      <Pressable
+        onPress={handleRemove}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove recent search ${term}`}
+        style={{ width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: -9 }}
+      >
         <X size={14} color={TEXT_MUTED} />
       </Pressable>
     </Pressable>
@@ -387,6 +408,9 @@ const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress
   return (
     <Pressable
       onPress={() => { if (!shouldHandlePress()) return; onPress(); }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+      accessibilityHint="Opens game details"
       pressRetentionOffset={6}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -688,7 +712,12 @@ export default function SearchExploreScreen() {
               </Text>
             </View>
             {sportFilter ? (
-              <Pressable onPress={clearSportFilter} hitSlop={8}>
+              <Pressable
+                onPress={clearSportFilter}
+                accessibilityRole="button"
+                accessibilityLabel="Clear sport filter"
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
                 <Text style={{ fontSize: 12, fontWeight: '900', color: TEAL }}>CLEAR</Text>
               </Pressable>
             ) : null}
@@ -704,13 +733,16 @@ export default function SearchExploreScreen() {
             return (
               <View key={key} style={{ marginRight: i === STATUS_OPTIONS.length - 1 ? 0 : 10, marginBottom: 8 }}>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} games filter`}
+                  accessibilityState={{ selected: active }}
                   onPress={() => {
                     if (active) return;
                     setStatusFilter(key);
                     afterFrame(fireSelectionHaptic);
                   }}
                   style={{
-                    minHeight: 36,
+                    minHeight: 44,
                     borderRadius: 999,
                     paddingHorizontal: 16,
                     paddingVertical: 8,
@@ -785,8 +817,10 @@ export default function SearchExploreScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
           <Pressable
             onPress={goBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to My Arena"
             hitSlop={12}
-            style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}
+            style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}
           >
             <ArrowLeft size={20} color={WHITE} strokeWidth={2.4} />
           </Pressable>
@@ -808,6 +842,7 @@ export default function SearchExploreScreen() {
             </View>
             <TextInput
               ref={inputRef}
+              accessibilityLabel="Search teams, sports, venues"
               autoFocus
               style={{ flex: 1, fontSize: 15, fontWeight: '700', color: WHITE, paddingVertical: 0 }}
               placeholder="Search teams, sports, venues"
@@ -821,7 +856,12 @@ export default function SearchExploreScreen() {
               onSubmitEditing={() => Keyboard.dismiss()}
             />
             {query.length > 0 || sportFilter ? (
-              <Pressable onPress={clearSearch} hitSlop={8} style={{ width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)' }}>
+              <Pressable
+                onPress={clearSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Clear arena search"
+                style={{ width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)', marginRight: -7 }}
+              >
                 <X size={16} color={TEXT_MUTED} />
               </Pressable>
             ) : null}
@@ -858,7 +898,14 @@ export default function SearchExploreScreen() {
                     <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: TEAL, marginRight: 11 }} />
                     <Text style={{ fontSize: 11, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 2 }}>RECENT SEARCHES</Text>
                   </View>
-                  <Pressable onPress={clearRecents} hitSlop={8}><Text style={{ fontSize: 11, fontWeight: '900', color: MAROON }}>CLEAR</Text></Pressable>
+                  <Pressable
+                    onPress={clearRecents}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear recent searches"
+                    style={{ minHeight: 44, justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: MAROON }}>CLEAR</Text>
+                  </Pressable>
                 </View>
                 <View style={{ paddingHorizontal: 20, gap: 8 }}>
                   {recentSearches.map(term => (

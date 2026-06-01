@@ -15,7 +15,7 @@ describe('GameCard raised border treatment', () => {
     const source = readFileSync(path.join(process.cwd(), 'src/components/sports/GameCard.tsx'), 'utf8');
 
     expect(source).toContain(
-      '{game.awayTeam.abbreviation} {projectionDisplay?.awayScore ?? Math.round(game.prediction.projection.projectedAwayScore)} · {game.homeTeam.abbreviation} {projectionDisplay?.homeScore ?? Math.round(game.prediction.projection.projectedHomeScore)}',
+      '{game.awayTeam.abbreviation} {projectionDisplay?.awayScore ?? Math.round(displayProjection.projectedAwayScore)} · {game.homeTeam.abbreviation} {projectionDisplay?.homeScore ?? Math.round(displayProjection.projectedHomeScore)}',
     );
   });
 

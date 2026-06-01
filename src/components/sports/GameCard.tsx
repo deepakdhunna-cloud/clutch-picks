@@ -195,6 +195,9 @@ const TappableJersey = memo(function TappableJersey({
 
   return (
     <Pressable
+      accessibilityRole={isDisabled ? 'image' : 'button'}
+      accessibilityLabel={isDisabled ? `${team.name} jersey` : isSelected ? `Remove pick for ${team.name}` : `Pick ${team.name}`}
+      accessibilityState={{ disabled: isDisabled, selected: isSelected }}
       onPress={handlePress}
       disabled={isDisabled}
       pressRetentionOffset={4}
@@ -298,6 +301,9 @@ const LiveGameLayout = memo(function LiveGameLayout({
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+        accessibilityHint="Opens game details"
         onPress={handlePress}
         onPressIn={warmGame}
         className="active:opacity-85"
@@ -431,6 +437,8 @@ const LiveGameLayout = memo(function LiveGameLayout({
 
               {watchOption ? (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${watchOption.name}`}
                   onPress={(e) => {
                     e.stopPropagation();
                     handleWatchSourcePress(watchOption.name);
@@ -439,6 +447,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
+                    minHeight: 44,
                     backgroundColor: 'rgba(122,157,184,0.15)',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
@@ -855,6 +864,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
       )}
 
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+        accessibilityHint="Opens game details"
         onPress={handlePress}
         onPressIn={warmGame}
         style={{ flex: 1 }}
@@ -1256,12 +1268,13 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     {watchOption ? (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${watchOption.name}`}
                         onPress={(e) => {
                           e.stopPropagation();
                           handleWatchSourcePress(watchOption.name);
                         }}
-
-                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}
+                        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, backgroundColor: 'rgba(122,157,184,0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.3)' }}
                       >
                         <Tv size={10} color="#FFFFFF" />
                         <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600', marginLeft: 4, maxWidth: 112 }}>{watchOption.name}</Text>
@@ -1324,6 +1337,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
             ) : (
               /* Locked prediction bar for free users */
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Preview Pro: ${game.awayTeam.name} at ${game.homeTeam.name}`}
+                accessibilityHint="Opens Clutch Picks Pro"
                 onPress={() => router.push('/paywall')}
                 style={{
                   position: 'relative',

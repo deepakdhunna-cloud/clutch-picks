@@ -256,8 +256,9 @@ const SearchBar = memo(function SearchBar() {
           fireLightHaptic();
           router.push('/search-explore');
         }}
-        accessibilityRole="search"
-        accessibilityLabel="Search games, teams, sports, and live matchups"
+        accessibilityRole="button"
+        accessibilityLabel="Open arena search"
+        accessibilityHint="Opens the full arena search screen"
         style={({ pressed }) => ({
           opacity: pressed ? 0.86 : 1,
           transform: [{ scale: pressed ? 0.995 : 1 }],
@@ -351,10 +352,12 @@ const SportPills = memo(function SportPills({
           <Pressable
             key={s}
             onPress={() => { if (!on) fireSelectionHaptic(); onSelect(s); }}
-            accessibilityRole="tab"
+            accessibilityRole="button"
             accessibilityState={{ selected: on }}
             accessibilityLabel={`${SPORT_DISPLAY[s] ?? s}${count !== undefined && counts ? `, ${count} games` : ''} filter`}
             style={{
+              minHeight: 44,
+              justifyContent: 'center',
               marginRight: index === visible.length - 1 ? 0 : 12,
             }}
           >
@@ -430,11 +433,13 @@ const SegPill = memo(function SegPill({ active, onChange }: { active: number; on
               <Pressable
                 key={l}
                 onPress={() => onChange(i)}
-                accessibilityRole="tab"
+                accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
                 accessibilityLabel={`${l} view`}
                 style={{
                   flex: 1,
+                  minHeight: 44,
+                  justifyContent: 'center',
                   marginRight: i === MODES.length - 1 ? 0 : MODE_SEGMENT_GAP,
                   minWidth: 0,
                 }}
@@ -732,6 +737,9 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
     <Pressable
       onPressIn={() => warmGame(game)}
       onPress={() => { if (!shouldHandlePress()) return; openGame(game); }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+      accessibilityHint="Opens game details"
       pressRetentionOffset={6}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -830,6 +838,9 @@ const YourGames = memo(function YourGames({
       </View>
       <Pressable
         onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
+        accessibilityRole="button"
+        accessibilityLabel="Track games"
+        accessibilityHint="Opens the main slate to add games to your arena"
         style={{
           borderRadius: 30,
           overflow: 'hidden',
@@ -875,6 +886,9 @@ const YourGames = memo(function YourGames({
         </View>
         <Pressable
           onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
+          accessibilityRole="button"
+          accessibilityLabel="Browse games"
+          accessibilityHint="Opens the main slate to add games to your arena"
           hitSlop={8}
           style={{
             flexDirection: 'row',
@@ -1406,6 +1420,9 @@ const LiveCard = memo(function LiveCard({
     <Pressable
       onPressIn={() => warmGame(game)}
       onPress={() => { if (!shouldHandlePress()) return; openGame(game); }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+      accessibilityHint="Opens game details"
       pressRetentionOffset={6}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -2063,7 +2080,12 @@ const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress 
   // game card already opens this section; the locked card flows under it as one unit.
   return (
     <View style={{ paddingHorizontal: ARENA_SIDE_PADDING, marginTop: 6, marginBottom: ARENA_SECTION_GAP }}>
-      <Pressable onPress={onPress}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Preview Live Intelligence Pro"
+        accessibilityHint="Opens Clutch Picks Pro"
+      >
         <LinearGradient
           colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
           locations={[0, 0.44, 0.58, 1]}
@@ -3058,7 +3080,13 @@ const ProFeatureGate = memo(function ProFeatureGate({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={{ marginHorizontal: ARENA_SIDE_PADDING, marginBottom: ARENA_CARD_GAP }}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Preview Pro: ${title}`}
+      accessibilityHint="Opens Clutch Picks Pro"
+      style={{ marginHorizontal: ARENA_SIDE_PADDING, marginBottom: ARENA_CARD_GAP }}
+    >
       <LinearGradient
         colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
         locations={[0, 0.44, 0.58, 1]}

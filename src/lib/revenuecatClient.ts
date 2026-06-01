@@ -5,15 +5,16 @@
  * missing configuration. The app will work fine whether or not RevenueCat is configured.
  *
  * Environment Variables:
- * - EXPO_PUBLIC_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
- * - EXPO_PUBLIC_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
- * - EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
+ * - EXPO_PUBLIC_REVENUECAT_APPLE_KEY: Used for iOS App Store products
+ * - EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY: Used for Android Play Store products
+ * - EXPO_PUBLIC_REVENUECAT_TEST_KEY: Used only when EXPO_PUBLIC_REVENUECAT_USE_TEST_STORE is true
  *
  * Platform Support:
  * - iOS/Android: Fully supported via app stores
  * - Web: Disabled (RevenueCat only supports native app stores)
  *
- * The module automatically selects the correct key based on __DEV__ mode.
+ * The module defaults to store-product keys so local builds show production-parity
+ * price and trial terms. The RevenueCat test store is opt-in only.
  * 
  * This module is used to get the current customer info, offerings, and purchase packages.
  * These exported functions are found at the bottom of the file.
@@ -27,6 +28,12 @@ import Purchases, {
   type CustomerInfoUpdateListener,
 } from "react-native-purchases";
 import { selectRevenueCatApiKey } from "./revenuecat-key-selection";
+import {
+  customerInfoHasPremiumAccess,
+  REVENUECAT_ENTITLEMENT_ID,
+} from "./revenuecat-premium";
+
+export { REVENUECAT_ENTITLEMENT_ID } from "./revenuecat-premium";
 
 // Check if running on web
 const isWeb = Platform.OS === "web";
@@ -35,19 +42,21 @@ const devFallbackAppleKey = "appl_ttiiqmHPmKTuvfALCxMccyWRjcE";
 const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY;
 const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
 const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY;
+const useRevenueCatTestStore =
+  process.env.EXPO_PUBLIC_REVENUECAT_USE_TEST_STORE === 'true';
 
 const apiKey = selectRevenueCatApiKey({
   platform: Platform.OS,
   appleKey: appleKey ?? devFallbackAppleKey,
   googleKey,
   testKey,
+  preferTestKey: useRevenueCatTestStore,
 });
 
 // Track if RevenueCat is enabled
 const isEnabled = !!apiKey && !isWeb;
 
 const LOG_PREFIX = "[RevenueCat]";
-export const REVENUECAT_ENTITLEMENT_ID = "Clutch Picks Pro";
 export const REVENUECAT_MONTHLY_PACKAGE_ID = "$rc_monthly";
 
 export type RevenueCatGuardReason =
@@ -189,7 +198,7 @@ export const invalidateCustomerInfoCache = (): Promise<
 };
 
 export const customerInfoHasPremium = (customerInfo: CustomerInfo): boolean => {
-  return Boolean(customerInfo.entitlements.active?.[REVENUECAT_ENTITLEMENT_ID]);
+  return customerInfoHasPremiumAccess(customerInfo);
 };
 
 export const addCustomerInfoListener = (
@@ -334,9 +343,9 @@ export const hasEntitlement = async (
     };
   }
 
-  const isActive = Boolean(
-    customerInfoResult.data.entitlements.active?.[entitlementId],
-  );
+  const isActive = entitlementId === REVENUECAT_ENTITLEMENT_ID
+    ? customerInfoHasPremium(customerInfoResult.data)
+    : Boolean(customerInfoResult.data.entitlements.active?.[entitlementId]);
   return { ok: true, data: isActive };
 };
 
@@ -364,8 +373,7 @@ export const hasActiveSubscription = async (): Promise<
     };
   }
 
-  const hasSubscription =
-    Object.keys(customerInfoResult.data.entitlements.active || {}).length > 0;
+  const hasSubscription = customerInfoHasPremium(customerInfoResult.data);
   return { ok: true, data: hasSubscription };
 };
 

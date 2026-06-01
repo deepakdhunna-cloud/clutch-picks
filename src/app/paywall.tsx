@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
 } from 'react-native';
@@ -19,12 +19,17 @@ import {
   getRevenueCatAppUserId,
   invalidateCustomerInfoCache,
   REVENUECAT_MONTHLY_PACKAGE_ID,
+  customerInfoHasPremium,
 } from '@/lib/revenuecatClient';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGames } from '@/hooks/useGames';
 import { GameStatus } from '@/types/sports';
 import type { PurchasesPackage } from 'react-native-purchases';
-import { PRO_MONTHLY_PRICE_FALLBACK } from '@/lib/subscription-pricing';
+import {
+  PRO_MONTHLY_HAS_THREE_DAY_TRIAL,
+  PRO_MONTHLY_PRICE_FALLBACK,
+  resolvePaywallPriceString,
+} from '@/lib/subscription-pricing';
 import { FeedbackModal } from '@/components/FeedbackModal';
 
 import { BG, MAROON, MAROON_GLOW, TEAL } from '@/lib/theme';
@@ -38,10 +43,15 @@ type FeedbackState = {
   message: string;
   variant?: 'success' | 'error' | 'info';
   actionLabel?: string;
+  secondaryActionLabel?: string;
+  onActionPress?: () => void;
+  onSecondaryPress?: () => void;
   onDismiss?: () => void;
 };
 
 const PRICE_PERIOD_PATTERN = /(?:\/\s*(?:mo|month|monthly|mth|wk|week|yr|year|annual))|\b(?:per|a)\s+(?:mo|month|week|year)\b/i;
+const PURCHASE_CANCEL_MESSAGE = 'No charge was made. Sign in to your Apple Account and try again when you are ready.';
+const SANDBOX_PURCHASE_CANCEL_MESSAGE = `${PURCHASE_CANCEL_MESSAGE} Development builds need a Sandbox Apple Account from App Store Connect, not your Clutch login.`;
 
 function priceIncludesBillingPeriod(price: string): boolean {
   return PRICE_PERIOD_PATTERN.test(price);
@@ -86,31 +96,42 @@ function IconWatch({ color }: { color: string }) {
 }
 
 // ─── Shimmer CTA button ─────────────────────────────────────────
-function ShimmerButton({ onPress, loading, label }: {
-  onPress: () => void; loading: boolean; label: string;
+function ShimmerButton({ onPress, loading, label, loadingLabel = 'Opening App Store...' }: {
+  onPress: () => void; loading: boolean; label: string; loadingLabel?: string;
 }) {
-  const shimmerX = useSharedValue(-60);
+  const shimmerX = useSharedValue(-80);
   useEffect(() => {
+    if (loading) {
+      cancelAnimation(shimmerX);
+      shimmerX.value = -80;
+      return;
+    }
+
+    shimmerX.value = -80;
     shimmerX.value = withRepeat(
-      withTiming(SCREEN_W + 60, { duration: 2400, easing: Easing.linear }), -1, false
+      withTiming(SCREEN_W + 80, { duration: 3600, easing: Easing.inOut(Easing.ease) }), -1, false
     );
     return () => cancelAnimation(shimmerX);
-  }, []);
+  }, [loading, shimmerX]);
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shimmerX.value }, { rotate: '20deg' }],
   }));
+  const visibleLabel = loading ? loadingLabel : label;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={loading}
+      accessibilityRole="button"
+      accessibilityLabel={visibleLabel}
+      accessibilityState={{ disabled: loading, busy: loading }}
       style={({ pressed }) => ({
-        opacity: loading ? 0.6 : pressed ? 0.9 : 1,
-        transform: [{ scale: pressed ? 0.98 : 1 }],
+        opacity: pressed && !loading ? 0.92 : 1,
+        transform: [{ scale: pressed && !loading ? 0.985 : 1 }],
       })}
     >
       <LinearGradient
-        colors={[MAROON, '#6A0818', '#5A0614']}
+        colors={loading ? ['#050505', '#0B0B0D'] : [MAROON, '#6A0818', '#5A0614']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
@@ -119,16 +140,21 @@ function ShimmerButton({ onPress, loading, label }: {
           overflow: 'hidden',
           shadowColor: MAROON,
           shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 16,
-          elevation: 8,
+          shadowOpacity: loading ? 0.12 : 0.3,
+          shadowRadius: loading ? 8 : 16,
+          elevation: loading ? 3 : 8,
         }}
       >
-        <Animated.View style={[{ position: 'absolute', width: 50, height: 120, backgroundColor: 'rgba(255,255,255,0.10)' }, shimmerStyle]} />
+        {!loading ? (
+          <Animated.View style={[{ position: 'absolute', width: 56, height: 120, backgroundColor: 'rgba(255,255,255,0.08)' }, shimmerStyle]} />
+        ) : null}
         {loading ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <ActivityIndicator color="#FFFFFF" size="small" />
+            <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFF', letterSpacing: 0.2 }}>{visibleLabel}</Text>
+          </View>
         ) : (
-          <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 }}>{label}</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 }}>{visibleLabel}</Text>
         )}
       </LinearGradient>
     </Pressable>
@@ -148,6 +174,26 @@ const hasThreeDayFreeTrial = (pkg: PurchasesPackage) => {
     (periodUnit === 'DAY' && intro.periodNumberOfUnits === 3);
 };
 
+const packageMetadataWarnings = (pkg: PurchasesPackage) => {
+  const warnings: string[] = [];
+
+  if (!isMonthlySubscription(pkg)) {
+    warnings.push(`${REVENUECAT_MONTHLY_PACKAGE_ID} metadata expected monthly subscription; found period ${pkg.product.subscriptionPeriod || 'none'}.`);
+  }
+
+  if (!hasThreeDayFreeTrial(pkg)) {
+    warnings.push(`${REVENUECAT_MONTHLY_PACKAGE_ID} metadata did not include the configured 3-day trial.`);
+  }
+
+  return warnings;
+};
+
+const shouldAdvertiseThreeDayTrial = (pkg: PurchasesPackage | null) => {
+  if (pkg && hasThreeDayFreeTrial(pkg)) return true;
+
+  return PRO_MONTHLY_HAS_THREE_DAY_TRIAL;
+};
+
 // ═════════════════════════════════════════════════════════════════
 // MAIN
 // ═════════════════════════════════════════════════════════════════
@@ -162,13 +208,27 @@ export default function PaywallScreen() {
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoLoading, setPromoLoading] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
-  const { checkSubscription } = useSubscription();
+  const { checkSubscription, isPremium } = useSubscription();
+  const didRedirectForPremiumRef = useRef(false);
   const { data: allGames } = useGames();
 
   const dismissFeedback = () => {
     const onDismiss = feedback?.onDismiss;
     setFeedback(null);
     onDismiss?.();
+  };
+
+  const openSupportEmail = async () => {
+    const supportUrl = 'mailto:support@clutchpicksapp.com?subject=Restore%20Pro%20Access';
+    try {
+      await Linking.openURL(supportUrl);
+    } catch {
+      setFeedback({
+        title: 'Email Support',
+        message: 'Email us at support@clutchpicksapp.com and we will help recover your Pro access.',
+        variant: 'info',
+      });
+    }
   };
 
   const previewPicks = useMemo(() => {
@@ -204,6 +264,17 @@ export default function PaywallScreen() {
   }));
 
   useEffect(() => { loadOfferings(); }, []);
+
+  useEffect(() => {
+    if (!isPremium || didRedirectForPremiumRef.current) return;
+    didRedirectForPremiumRef.current = true;
+    if (isPurchasing || isRestoring || promoLoading) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    // RevenueCat can deliver entitlement updates through its listener before
+    // the purchase promise resolves, especially on the simulator App Store sheet.
+    router.replace('/(tabs)');
+  }, [isPremium, isPurchasing, isRestoring, promoLoading]);
 
   const loadOfferings = async (): Promise<PurchasesPackage | null> => {
     setLoadError(false);
@@ -256,18 +327,9 @@ export default function PaywallScreen() {
         return null;
       }
 
-      if (!isMonthlySubscription(monthly)) {
-        setLoadError(true);
-        setErrorDetail(`${REVENUECAT_MONTHLY_PACKAGE_ID} must be a monthly subscription. Found period: ${monthly.product.subscriptionPeriod || 'none'}`);
-        setIsLoading(false);
-        return null;
-      }
-
-      if (!hasThreeDayFreeTrial(monthly)) {
-        setLoadError(true);
-        setErrorDetail(`${REVENUECAT_MONTHLY_PACKAGE_ID} must include a 3-day free trial introductory price.`);
-        setIsLoading(false);
-        return null;
+      const metadataWarnings = packageMetadataWarnings(monthly);
+      if (__DEV__ && metadataWarnings.length > 0) {
+        metadataWarnings.forEach((warning) => console.warn(`[Paywall] ${warning}`));
       }
 
       setMonthlyPackage(monthly);
@@ -302,14 +364,28 @@ export default function PaywallScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const result = await purchasePackage(packageToPurchase);
     if (result.ok) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await checkSubscription();
-      // router.replace (not router.back) — onboarding+paywall users would
-      // otherwise pop back to onboarding and re-trigger the paywall, looping.
-      router.replace('/(tabs)');
+      if (customerInfoHasPremium(result.data)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // router.replace (not router.back) — onboarding+paywall users would
+        // otherwise pop back to onboarding and re-trigger the paywall, looping.
+        router.replace('/(tabs)');
+      } else {
+        setFeedback({
+          title: 'Purchase Pending',
+          message: 'Your purchase is still being confirmed. If Pro does not unlock, tap Restore Purchases.',
+          variant: 'info',
+        });
+      }
     } else if (result.reason === 'sdk_error') {
       const error = result.error as any;
-      if (!error?.userCancelled) {
+      if (error?.userCancelled) {
+        setFeedback({
+          title: 'Purchase Not Completed',
+          message: __DEV__ ? SANDBOX_PURCHASE_CANCEL_MESSAGE : PURCHASE_CANCEL_MESSAGE,
+          variant: 'info',
+        });
+      } else {
         setFeedback({
           title: 'Purchase Failed',
           message: 'Please try again later.',
@@ -326,7 +402,7 @@ export default function PaywallScreen() {
     const result = await restorePurchases();
     if (result.ok) {
       await checkSubscription();
-      const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;
+      const hasActive = customerInfoHasPremium(result.data);
       if (hasActive) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setFeedback({
@@ -338,8 +414,11 @@ export default function PaywallScreen() {
       } else {
         setFeedback({
           title: 'No Subscription Found',
-          message: 'No previous subscription was found for this account.',
+          message: 'No App Store subscription was found for this account. If you already had Pro, contact support and we will help recover access.',
           variant: 'info',
+          actionLabel: 'Contact Support',
+          secondaryActionLabel: 'OK',
+          onActionPress: () => { void openSupportEmail(); },
         });
       }
     } else {
@@ -353,7 +432,8 @@ export default function PaywallScreen() {
   };
 
   const storePriceString = monthlyPackage?.product?.priceString?.trim();
-  const priceString = storePriceString || PRO_MONTHLY_PRICE_FALLBACK;
+  const useRevenueCatTestStore = process.env.EXPO_PUBLIC_REVENUECAT_USE_TEST_STORE === 'true';
+  const priceString = resolvePaywallPriceString(storePriceString, { useRevenueCatTestStore });
   const priceHasBillingPeriod = priceIncludesBillingPeriod(priceString);
   const priceWithMonthlyPeriod = priceHasBillingPeriod ? priceString : `${priceString}/month`;
   const priceWithShortPeriod = priceHasBillingPeriod ? priceString : `${priceString}/mo`;
@@ -362,13 +442,20 @@ export default function PaywallScreen() {
     if (__DEV__ && monthlyPackage && !storePriceString) {
       console.warn(`[Paywall] RevenueCat/App Store did not return a price string. Using fallback ${PRO_MONTHLY_PRICE_FALLBACK}.`);
     }
-  }, [monthlyPackage, storePriceString]);
-  const trialDisclosure = monthlyPackage
+    if (__DEV__ && useRevenueCatTestStore && storePriceString && storePriceString !== PRO_MONTHLY_PRICE_FALLBACK) {
+      console.warn(`[Paywall] RevenueCat Test Store returned ${storePriceString}; displaying canonical app price ${PRO_MONTHLY_PRICE_FALLBACK}.`);
+    }
+  }, [monthlyPackage, storePriceString, useRevenueCatTestStore]);
+  const monthlyPackageHasTrial = shouldAdvertiseThreeDayTrial(monthlyPackage);
+  const trialDisclosure = monthlyPackageHasTrial
     ? `Eligible users receive a 3-day free trial, then ${priceWithMonthlyPeriod}. App Store confirms final terms before purchase.`
-    : 'Subscription renews monthly. Cancel anytime.';
-  const purchaseCtaLabel = monthlyPackage && hasThreeDayFreeTrial(monthlyPackage)
+    : `Subscription renews monthly at ${priceWithMonthlyPeriod}. App Store confirms final terms before purchase.`;
+  const purchaseCtaLabel = monthlyPackageHasTrial
     ? 'Start 3-Day Free Trial'
     : `Start Pro for ${priceWithShortPeriod}`;
+  const sandboxPurchaseHint = __DEV__
+    ? 'Development builds use Apple Sandbox, not your Clutch login. Use a Sandbox Apple Account from App Store Connect to test purchases.'
+    : null;
 
   const features = [
     { IconComponent: IconPredictions, label: 'AI Predictions', desc: 'Multi-factor analysis per game', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
@@ -384,7 +471,10 @@ export default function PaywallScreen() {
         title={feedback?.title ?? ''}
         message={feedback?.message ?? ''}
         actionLabel={feedback?.actionLabel}
+        secondaryActionLabel={feedback?.secondaryActionLabel}
         variant={feedback?.variant}
+        onActionPress={feedback?.onActionPress}
+        onSecondaryPress={feedback?.onSecondaryPress}
         onDismiss={dismissFeedback}
       />
       {/* Background ambience — maroon top, teal mid, maroon bottom */}
@@ -408,8 +498,8 @@ export default function PaywallScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <Pressable onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
-            width: 34, height: 34, borderRadius: 12,
+          <Pressable accessibilityRole="button" accessibilityLabel="Close paywall" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
+            width: 44, height: 44, borderRadius: 14,
             backgroundColor: 'rgba(255,255,255,0.04)',
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
             alignItems: 'center', justifyContent: 'center',
@@ -593,6 +683,7 @@ export default function PaywallScreen() {
                       paddingHorizontal: 12, paddingVertical: 10,
                     }}>
                       <TextInput
+                        accessibilityLabel="Promo code"
                         style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#FFF', padding: 0, letterSpacing: 1 }}
                         placeholder="Enter promo code"
                         placeholderTextColor="rgba(255,255,255,0.15)"
@@ -602,12 +693,20 @@ export default function PaywallScreen() {
                         autoCorrect={false}
                       />
                       {promoCode.length > 0 ? (
-                        <Pressable onPress={() => setPromoCode('')} hitSlop={8}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Clear promo code"
+                          onPress={() => setPromoCode('')}
+                          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -12 }}
+                        >
                           <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>×</Text>
                         </Pressable>
                       ) : null}
                     </View>
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Apply promo code"
+                      accessibilityState={{ disabled: !promoCode.trim() || promoLoading, busy: promoLoading }}
                       onPress={async () => {
                         if (!promoCode.trim() || promoLoading) return;
                         setPromoLoading(true);
@@ -639,7 +738,8 @@ export default function PaywallScreen() {
                       disabled={!promoCode.trim() || promoLoading}
                       style={{
                         backgroundColor: promoCode.trim() ? TEAL : 'rgba(122,157,184,0.2)',
-                        paddingHorizontal: 16, paddingVertical: 11, borderRadius: 10,
+                        minHeight: 44, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 10,
+                        alignItems: 'center', justifyContent: 'center',
                         opacity: promoLoading ? 0.6 : 1,
                       }}
                     >
@@ -652,8 +752,10 @@ export default function PaywallScreen() {
                   </View>
                 ) : (
                   <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Enter promo code"
                     onPress={() => setPromoOpen(true)}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
+                    style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
                   >
                     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
                       <Path d="M12 4v16M4 12h16" stroke={TEAL} strokeWidth={2} strokeLinecap="round" />
@@ -668,12 +770,17 @@ export default function PaywallScreen() {
                 ) : loadError ? (
                   <ShimmerButton onPress={loadOfferings} loading={false} label="Tap to Retry" />
                 ) : (
-                  <ShimmerButton onPress={handlePurchase} loading={isPurchasing} label={purchaseCtaLabel} />
+                  <ShimmerButton onPress={handlePurchase} loading={isPurchasing} label={purchaseCtaLabel} loadingLabel="Opening App Store..." />
                 )}
 
                 <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>
                   {trialDisclosure}
                 </Text>
+                {sandboxPurchaseHint ? (
+                  <Text style={{ fontSize: 10, color: 'rgba(122,157,184,0.65)', textAlign: 'center', marginTop: 8, lineHeight: 15 }}>
+                    {sandboxPurchaseHint}
+                  </Text>
+                ) : null}
                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 6, lineHeight: 15 }}>
                   Subscription provides access to AI-generated predictions for entertainment purposes only.
                 </Text>
@@ -685,24 +792,45 @@ export default function PaywallScreen() {
 
           {/* ═══ RESTORE + LEGAL ═══ */}
           <Animated.View entering={FadeIn.delay(440)} style={{ alignItems: 'center', paddingTop: 20 }}>
-            <Pressable onPress={handleRestore} disabled={isRestoring} style={{ paddingVertical: 12 }}>
+            <Pressable
+              onPress={handleRestore}
+              disabled={isRestoring}
+              accessibilityRole="button"
+              accessibilityLabel="Restore purchases"
+              accessibilityState={{ disabled: isRestoring, busy: isRestoring }}
+              style={{ minHeight: 44, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' }}>
               {isRestoring ? (
-                <ActivityIndicator color={TEAL} size="small" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator color={TEAL} size="small" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Restoring...</Text>
+                </View>
               ) : (
                 <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Restore Purchases</Text>
               )}
             </Pressable>
 
-            <Pressable onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')} style={{ marginTop: 10 }}>
+            <Pressable
+              onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
+              accessibilityRole="button"
+              accessibilityLabel="Manage subscription"
+              style={{ minHeight: 44, marginTop: 6, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: TEAL, textDecorationLine: 'underline' }}>Manage Subscription</Text>
             </Pressable>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
-              <Pressable onPress={() => router.push('/terms' as any)}>
+              <Pressable
+                onPress={() => router.push('/terms' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Terms of service"
+                style={{ minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Terms</Text>
               </Pressable>
               <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>·</Text>
-              <Pressable onPress={() => router.push('/privacy-policy' as any)}>
+              <Pressable
+                onPress={() => router.push('/privacy-policy' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Privacy policy"
+                style={{ minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Privacy</Text>
               </Pressable>
             </View>

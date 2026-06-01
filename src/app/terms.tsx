@@ -30,8 +30,11 @@ export default function TermsScreen() {
           >
             <View className="flex-row items-center">
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
                 onPress={() => router.back()}
                 className="mr-4 p-2 -ml-2 active:opacity-60"
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
               >
                 <ChevronLeft size={28} color="#fff" />
               </Pressable>

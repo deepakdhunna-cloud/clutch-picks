@@ -7,11 +7,14 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Haptics from 'expo-haptics';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
 import {
+  appleSignInIncompleteError,
   appleSignInFallbackMessage,
+  isAppleSignInCancel,
   WELCOME_LEAGUE_PILLS,
 } from '@/lib/auth/auth-presentation';
 import { authUserIdentityFromPayload, sessionTokenFromAuthPayload } from '@/lib/auth/auth-user';
 import { useInvalidateSession } from '@/lib/auth/use-session';
+import { withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
@@ -52,6 +55,13 @@ export default function WelcomeScreen() {
     if (isLoading) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/sign-in' as any);
+  };
+
+  const authPayloadHasSession = (authData: unknown): boolean => {
+    return Boolean(
+      sessionTokenFromAuthPayload(authData) ||
+      authUserIdentityFromPayload(authData).userId
+    );
   };
 
   const finishAuthenticatedSession = async (authData: unknown) => {
@@ -105,13 +115,16 @@ export default function WelcomeScreen() {
     if (!credential.identityToken) {
       throw new Error('Apple sign in did not return an identity token');
     }
-    const result = await authClient.signIn.social({
-      provider: 'apple',
-      callbackURL: '/(tabs)',
-      idToken: {
-        token: credential.identityToken,
-      },
-    });
+    const result = await withAuthRequestTimeout(
+      authClient.signIn.social({
+        provider: 'apple',
+        callbackURL: '/(tabs)',
+        idToken: {
+          token: credential.identityToken,
+        },
+      }),
+      { label: 'Apple backend sign in' },
+    );
     if (result.error) {
       if (__DEV__) console.log('[auth] Apple backend sign-in failed:', result.error);
       throw result.error;
@@ -126,23 +139,38 @@ export default function WelcomeScreen() {
       (result.data as any).user.name = existingIdentity.displayName ?? name;
     }
 
-    try {
-      await storeNativeAppleTokens(credential.identityToken, credential.authorizationCode);
-    } catch (tokenError) {
+    void withAuthRequestTimeout(
+      storeNativeAppleTokens(credential.identityToken, credential.authorizationCode),
+      { timeoutMs: 8_000, label: 'Apple token persistence' },
+    ).catch((tokenError) => {
       if (__DEV__) console.log('[auth] Apple token persistence failed:', tokenError);
-    }
+    });
 
     if (name) {
       if (!existingIdentity.displayName) {
-        try {
-          await api.put('/api/profile', { name });
+        void withAuthRequestTimeout(
+          api.put('/api/profile', { name }),
+          { timeoutMs: 8_000, label: 'Apple profile name persistence' },
+        ).then(() => {
           if ((result.data as any)?.user) (result.data as any).user.name = name;
-        } catch (profileError) {
+        }).catch((profileError) => {
           if (__DEV__) console.log('[auth] Apple profile name persistence failed:', profileError);
-        }
+        });
       }
     }
 
+    return result.data;
+  };
+
+  const signInWithAppleOAuthFallback = async () => {
+    const result = await authClient.signIn.social({
+      provider: 'apple',
+      callbackURL: '/(tabs)',
+    });
+    if (result.error) {
+      if (__DEV__) console.log('[auth] Apple OAuth fallback failed:', result.error);
+      throw result.error;
+    }
     return result.data;
   };
 
@@ -151,12 +179,43 @@ export default function WelcomeScreen() {
     try {
       setIsLoading(true);
       setError(null);
-      const authData = await signInWithNativeApple();
-      await finishAuthenticatedSession(authData);
+      let authData: unknown;
+      try {
+        authData = await signInWithNativeApple();
+      } catch (nativeError) {
+        if (isAppleSignInCancel(nativeError)) return;
+        if (__DEV__) console.log('[auth] Apple native sign-in failed, trying OAuth fallback:', nativeError);
+        authData = await signInWithAppleOAuthFallback();
+      }
+
+      if (authPayloadHasSession(authData)) {
+        await finishAuthenticatedSession(authData);
+        return;
+      }
+
+      const sessionResult = await withAuthRequestTimeout(
+        authClient.getSession(),
+        { label: 'Apple session check' },
+      );
+      if (authPayloadHasSession(sessionResult.data)) {
+        await finishAuthenticatedSession(sessionResult.data);
+        return;
+      }
+
+      if (__DEV__) {
+        const authPayload = authData as Record<string, unknown> | null;
+        const sessionPayload = sessionResult.data as Record<string, unknown> | null;
+        console.log('[auth] Apple sign-in completed without a session', {
+          authKeys: Object.keys(authPayload || {}),
+          sessionKeys: Object.keys(sessionPayload || {}),
+        });
+      }
+      throw appleSignInIncompleteError();
     } catch (e: any) {
       if (__DEV__) console.log('[auth] Apple sign-in failed:', e);
       const message = appleSignInFallbackMessage(e);
       if (message) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setError(message);
       }
     } finally {
@@ -198,6 +257,9 @@ export default function WelcomeScreen() {
 
           <View style={s.emailActions}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Create account"
+              accessibilityState={{ disabled: isLoading }}
               onPress={onGetStarted}
               disabled={isLoading}
               style={s.signUpBtn}
@@ -206,6 +268,9 @@ export default function WelcomeScreen() {
             </Pressable>
 
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign in"
+              accessibilityState={{ disabled: isLoading }}
               onPress={onSignIn}
               disabled={isLoading}
               style={s.signInBtn}
@@ -230,7 +295,14 @@ export default function WelcomeScreen() {
                 onPress={onApple}
               />
             ) : (
-              <Pressable onPress={onApple} disabled={isLoading} style={s.appleFallbackBtn}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Continue with Apple"
+                accessibilityState={{ disabled: isLoading, busy: isLoading }}
+                onPress={onApple}
+                disabled={isLoading}
+                style={s.appleFallbackBtn}
+              >
                 <Text style={s.appleFallbackText}>Continue with Apple</Text>
               </Pressable>
             )}

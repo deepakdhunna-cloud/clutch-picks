@@ -1353,6 +1353,10 @@ export const SportCard = memo(function SportCard({
   if (tile) {
     return (
       <AnimatedPressable
+        accessibilityRole="button"
+        accessibilityLabel={`${displaySport(sport)}, ${gameCount} game${gameCount === 1 ? '' : 's'}`}
+        accessibilityHint={`Filters the home board by ${displaySport(sport)}`}
+        accessibilityState={{ selected: isSelected }}
         onPress={handlePress}
         pressRetentionOffset={6}
         onTouchStart={onTouchStart}
@@ -1399,6 +1403,10 @@ export const SportCard = memo(function SportCard({
 
     return (
       <AnimatedPressable
+        accessibilityRole="button"
+        accessibilityLabel={`${displaySport(sport)}, ${gameCount} game${gameCount === 1 ? '' : 's'}`}
+        accessibilityHint={`Filters the home board by ${displaySport(sport)}`}
+        accessibilityState={{ selected: isSelected }}
         onPress={handlePress}
         pressRetentionOffset={6}
         onTouchStart={onTouchStart}
@@ -1422,7 +1430,7 @@ export const SportCard = memo(function SportCard({
             gap: 5,
             paddingVertical: 8,
             paddingHorizontal: 10,
-            height: 42,
+            height: 44,
             borderRadius: 3,
             backgroundColor: JB.bg,
             borderWidth: 1,
@@ -1464,6 +1472,10 @@ export const SportCard = memo(function SportCard({
   // ═══════════════════════════════════════════════
   return (
     <AnimatedPressable
+      accessibilityRole="button"
+      accessibilityLabel={`${displaySport(sport)}, ${gameCount} game${gameCount === 1 ? '' : 's'}`}
+      accessibilityHint={`Opens ${displaySport(sport)} games`}
+      accessibilityState={{ selected: isSelected }}
       onPress={handlePress}
       pressRetentionOffset={6}
       onTouchStart={onTouchStart}

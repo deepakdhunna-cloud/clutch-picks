@@ -342,6 +342,9 @@ const StatusFilterRail = memo(function StatusFilterRail({
         return (
           <Pressable
             key={f.key}
+            accessibilityRole="button"
+            accessibilityLabel={`${f.label} games filter`}
+            accessibilityState={{ selected: active }}
             onPress={() => {
               if (!shouldHandlePress()) return;
               setStatusFilter(active ? 'all' : f.key);
@@ -350,19 +353,19 @@ const StatusFilterRail = memo(function StatusFilterRail({
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchCancel={onTouchCancel}
-            style={{ borderRadius: 20, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1 }}
+            style={{ minHeight: 44, borderRadius: 22, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1, justifyContent: 'center' }}
           >
             {active ? (
               <LinearGradient
                 colors={[MAROON, TEAL]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}
+                style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' }}
               >
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
               </LinearGradient>
             ) : (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 7, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', borderRadius: 20 }}>
+              <View style={{ minHeight: 44, paddingHorizontal: 16, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', borderRadius: 22, justifyContent: 'center' }}>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{f.label}</Text>
               </View>
             )}
@@ -392,6 +395,9 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
     <View style={{ paddingTop: 0 }}>
       <View style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, marginTop: 0, marginBottom: 12 }}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={selectedSportFilter ? `Clear ${displaySport(selectedSportFilter)} filter` : 'View game board'}
+          accessibilityHint={selectedSportFilter ? 'Shows all sports on the game board' : 'Scrolls to the game board'}
           onPress={() => {
             if (selectedSportFilter) {
               setSelectedSportFilter(null);
@@ -400,6 +406,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
             }
           }}
           style={({ pressed }) => ({
+            minHeight: 44,
             opacity: pressed ? 0.85 : 1,
             transform: [{ scale: pressed ? 0.98 : 1 }],
           })}
@@ -526,6 +533,9 @@ const HomeHeader = React.memo(function HomeHeader({
             >
               {/* All pill */}
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`All live games filter`}
+                accessibilityState={{ selected: !selectedLiveSportFilter }}
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
                   setSelectedLiveSportFilter(null);
@@ -534,18 +544,19 @@ const HomeHeader = React.memo(function HomeHeader({
                 onTouchStart={onLiveChipTouchStart}
                 onTouchMove={onLiveChipTouchMove}
                 onTouchCancel={onLiveChipTouchCancel}
+                style={{ minHeight: 44, justifyContent: 'center' }}
               >
                 {!selectedLiveSportFilter ? (
                   <LinearGradient
                     colors={[MAROON, TEAL]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}
+                    style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>All ({filteredLiveGames.length})</Text>
                   </LinearGradient>
                 ) : (
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)' }}>
+                  <View style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', justifyContent: 'center' }}>
                     <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>All ({filteredLiveGames.length})</Text>
                   </View>
                 )}
@@ -559,6 +570,9 @@ const HomeHeader = React.memo(function HomeHeader({
                 return (
                   <Pressable
                     key={sport}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${displayName} live games filter`}
+                    accessibilityState={{ selected: isChipSelected }}
                     onPress={() => {
                       if (!shouldHandleLiveChipPress()) return;
                       setSelectedLiveSportFilter(isChipSelected ? null : sport);
@@ -567,18 +581,19 @@ const HomeHeader = React.memo(function HomeHeader({
                     onTouchStart={onLiveChipTouchStart}
                     onTouchMove={onLiveChipTouchMove}
                     onTouchCancel={onLiveChipTouchCancel}
+                    style={{ minHeight: 44, justifyContent: 'center' }}
                   >
                     {isChipSelected ? (
                       <LinearGradient
                         colors={[MAROON, TEAL]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
-                        style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}
+                        style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' }}
                       >
                         <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{displayName} ({count})</Text>
                       </LinearGradient>
                     ) : (
-                      <View style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)' }}>
+                      <View style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', justifyContent: 'center' }}>
                         <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{displayName} ({count})</Text>
                       </View>
                     )}
@@ -605,6 +620,9 @@ const HomeHeader = React.memo(function HomeHeader({
             {/* View All button — only show when there are more than 5 and not yet expanded */}
             {!showAllLive && filteredLiveGames.length > 5 ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View all live games"
+              accessibilityHint="Opens the live games screen"
               onPress={() => {
                 if (!shouldHandleLiveChipPress()) return;
                 router.push('/live-games' as any);
@@ -682,6 +700,9 @@ const SearchGameCard = memo(function SearchGameCard({
   return (
     <View>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+        accessibilityHint="Opens game details"
         onPressIn={onPressIn}
         onPress={onPress}
         className="active:opacity-75"
@@ -1260,6 +1281,8 @@ export default function HomeScreen() {
       return (
         <Animated.View entering={FadeInDown.duration(190)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={hasMore ? `View more ${sportLabel} games` : `Show fewer ${sportLabel} games`}
             onPress={() => {
               if (hasMore) {
                 showMoreSportGames(item.sport, item.total);
@@ -1428,13 +1451,17 @@ export default function HomeScreen() {
             />
             {/* Clear button — separate jumbotron tile */}
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear sport filter"
+              accessibilityHint="Shows every sport on the game board"
               onPress={() => applySportFilter(null)}
               style={({ pressed }) => ({
+                minHeight: 44,
                 opacity: pressed ? 0.84 : 1,
                 transform: [{ scale: pressed ? 0.97 : 1 }],
               })}
             >
-              <LedMiniPanel label="CLEAR" />
+              <LedMiniPanel label="CLEAR" height={44} />
             </Pressable>
           </View>
         );
@@ -1586,6 +1613,7 @@ export default function HomeScreen() {
               <Search size={16} color="rgba(255,255,255,0.4)" style={{ marginRight: 8 }} />
               <TextInput
                 autoFocus
+                accessibilityLabel="Search teams and sports"
                 placeholder="Search teams, sports..."
                 placeholderTextColor="rgba(255,255,255,0.3)"
                 value={searchQuery}
@@ -1601,7 +1629,7 @@ export default function HomeScreen() {
                 autoCorrect={false}
               />
               {searchQuery.length > 0 ? (
-                <Pressable onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }} hitSlop={12}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                   <X size={14} color="rgba(255,255,255,0.4)" />
                 </Pressable>
               ) : null}
@@ -1609,9 +1637,11 @@ export default function HomeScreen() {
 
             {/* Cancel button */}
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel search"
               onPress={handleCloseSearchModal}
               className="active:opacity-60"
-              hitSlop={12}
+              style={{ minHeight: 44, justifyContent: 'center' }}
             >
               <Text style={{ color: '#5A7A8A', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
             </Pressable>

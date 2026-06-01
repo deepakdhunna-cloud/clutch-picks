@@ -400,6 +400,9 @@ export const LiveArenaCard = memo(function LiveArenaCard({
       }
     >
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
+        accessibilityHint="Opens game details"
         onPressIn={onPressIn ? () => onPressIn(game) : undefined}
         onPress={() => {
           if (!shouldHandlePress()) return;

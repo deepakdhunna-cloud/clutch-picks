@@ -21,9 +21,11 @@ export default function PrivacyPolicyScreen() {
           borderBottomColor: 'rgba(255,255,255,0.06)',
         }}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
             onPress={() => router.back()}
             hitSlop={8}
-            style={{ marginRight: 16, padding: 4 }}
+            style={{ marginRight: 16, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <ChevronLeft size={28} color="#fff" />
           </Pressable>
@@ -33,8 +35,7 @@ export default function PrivacyPolicyScreen() {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-          <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 22 }}>
-{`Privacy Policy
+          {`Privacy Policy
 Effective Date: March 1, 2026  ·  Last Updated: May 14, 2026
 
 This Privacy Policy explains how Clutch Picks ("Clutch Picks," "we," "us," or "our") collects, uses, discloses, and protects information when you use the Clutch Picks mobile application and any related services (collectively, the "App").
@@ -155,8 +156,27 @@ We may update this Privacy Policy from time to time. If we make material changes
 
 If you have questions, requests, or complaints about this Privacy Policy, contact us at:
 
-Email: support@clutchpicksapp.com`}
-          </Text>
+Email: support@clutchpicksapp.com`
+            .trim()
+            .split('\n\n')
+            .map((paragraph, index) => {
+              const isHeading = index === 0 || /^\d+\./.test(paragraph);
+              return (
+                <Text
+                  key={`${index}-${paragraph.slice(0, 18)}`}
+                  accessibilityRole={isHeading ? "header" : undefined}
+                  style={{
+                    color: isHeading ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+                    fontSize: isHeading ? 15 : 14,
+                    fontWeight: isHeading ? '800' : '400',
+                    lineHeight: 22,
+                    marginBottom: isHeading ? 12 : 16,
+                  }}
+                >
+                  {paragraph}
+                </Text>
+              );
+            })}
         </ScrollView>
       </SafeAreaView>
     </>

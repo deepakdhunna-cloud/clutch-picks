@@ -316,7 +316,15 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   }), []);
 
   return (
-    <Pressable onPress={handlePress} disabled={isDisabled}>
+    <Pressable
+      onPress={handlePress}
+      disabled={isDisabled}
+      accessibilityRole={isDisabled ? 'image' : 'button'}
+      accessibilityLabel={isDisabled ? `${team.name} jersey` : isSelected ? `Remove pick for ${team.name}` : `Pick ${team.name}`}
+      accessibilityState={{ selected: isSelected, disabled: isDisabled }}
+      accessibilityHint={isDisabled ? undefined : 'Opens pick confirmation'}
+      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+    >
       <Animated.View style={[containerStyle, { alignItems: 'center', justifyContent: 'center' }]}>
         <View style={{ position: 'relative', alignItems: 'center' }}>
           <Animated.View style={[shadowStyle, jerseyLiftStyle]}>
@@ -837,7 +845,12 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
   homeTeam: GameTeam; awayTeam: GameTeam; prediction: GamePrediction; onUnlock: () => void;
 }) {
   return (
-    <Pressable onPress={onUnlock}>
+    <Pressable
+      onPress={onUnlock}
+      accessibilityRole="button"
+      accessibilityLabel={`Preview Pro pick for ${awayTeam.name} at ${homeTeam.name}`}
+      accessibilityHint="Opens Clutch Picks Pro"
+    >
       <View style={{
         borderRadius: 22,
         padding: 1.2,
@@ -946,7 +959,12 @@ function RedactedSection({ title, height, onUnlock }: {
   return (
     <View style={{ marginBottom: 22 }}>
       <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>{title}</Text>
-      <Pressable onPress={onUnlock}>
+      <Pressable
+        onPress={onUnlock}
+        accessibilityRole="button"
+        accessibilityLabel={`Preview Pro: ${title}`}
+        accessibilityHint="Opens Clutch Picks Pro"
+      >
         <View style={{
           height,
           borderRadius: 18,
@@ -1236,6 +1254,9 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
 
           {/* Pick Strength */}
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Explain pick strength"
+            accessibilityHint="Opens confidence explanation"
             onPress={(e) => {
               e.stopPropagation();
               router.push({
@@ -1256,7 +1277,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
             hitSlop={8}
-            style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
+            style={{ minHeight: 44, flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
           >
             <Text style={{ fontSize: 9, fontWeight: '700', color: '#6B7C94', letterSpacing: 1.5, textTransform: 'uppercase' as const }}>
               PICK STRENGTH
@@ -1719,7 +1740,7 @@ function GameDetailContent() {
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
-      <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={{ marginTop: 16, minHeight: 44, justifyContent: 'center' }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
@@ -1739,6 +1760,11 @@ function GameDetailContent() {
   const cricketContext = !suspended && isLiveCricket ? cricketInningsContext(game) : null;
   const cricketClockText = cricketOvers;
   const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
+  const hasLinescore = (game.homeLinescores?.length ?? 0) > 0 || (game.awayLinescores?.length ?? 0) > 0;
+  const hasCricketLinescore =
+    game.sport === 'IPL' &&
+    ((cricketInningsRuns(game, 'home')?.length ?? 0) > 0 || (cricketInningsRuns(game, 'away')?.length ?? 0) > 0);
+  const hasBoxScore = gameStarted || hasLinescore || hasCricketLinescore;
   // Pre-game countdown state — true while the game is SCHEDULED and tip-off
   // is within the COUNTDOWN_WINDOW_SEC window (1 hour). Drives both the LED
   // countdown visibility and the shrunk-score / dim-overlay treatment.
@@ -1752,7 +1778,8 @@ function GameDetailContent() {
   const detailScoreboardScale = suspended ? 0.7 : isLiveCricket ? 1.22 : scoreTextLength >= 7 ? 1.18 : scoreTextLength >= 6 ? 1.3 : 1.45;
   const tennisHeroScoreboardScale = Math.min(detailScoreboardScale, 1.32);
   const detailTopInset = Math.max(insets.top, 58);
-  const detailHeaderTopSpacer = 12;
+  const detailFloatingTop = insets.top + 12;
+  const detailHeaderTopSpacer = 66;
   const showDetailRefreshPill = refreshing ? hasGameData : false;
   const showBlockingRefresh = refreshing ? !hasGameData : false;
   return (
@@ -1763,34 +1790,54 @@ function GameDetailContent() {
         <LinearGradient colors={['transparent', hexToRgba(awayAccent, 0.22), hexToRgba(awayAccent, 0.42)]} start={{ x: 0.45, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
       </View>
-      <DetailRefreshPill visible={showDetailRefreshPill} top={detailTopInset + 10} />
+      <View pointerEvents="box-none" style={[styles.floatingDetailControls, { top: detailFloatingTop }]}>
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          hitSlop={12}
+          style={[styles.backBtn, styles.floatingBackBtn]}
+        >
+          <Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text>
+        </Pressable>
+        <View style={styles.floatingDetailPill}>
+          {isLive ? (
+            <>
+              <LivePulseDot />
+              <Text style={{ fontSize: suspended ? 10 : 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>
+                {suspended ? suspensionStatus.toUpperCase() : 'LIVE'}
+              </Text>
+              <View style={styles.floatingDetailDivider} />
+            </>
+          ) : null}
+          <View style={styles.floatingSportBadge}>
+            <Text style={styles.floatingSportText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+              {displaySport(game.sport)}
+            </Text>
+          </View>
+          <View style={styles.floatingDetailDivider} />
+          <Pressable
+            onPress={toggleFollow}
+            accessibilityRole="button"
+            accessibilityLabel={followed ? 'Unfollow game' : 'Follow game'}
+            accessibilityState={{ selected: followed }}
+            hitSlop={8}
+            style={styles.floatingFollowButton}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ alignItems: 'center', marginRight: 6 }}>
+                <Text style={[styles.floatingFollowText, followed ? styles.floatingFollowTextActive : null]}>{followed ? 'FOLLOWING' : 'FOLLOW'}</Text>
+                <Text style={[styles.floatingFollowText, followed ? styles.floatingFollowTextActive : null]}>GAME</Text>
+              </View>
+              <Text style={[styles.floatingFollowIcon, followed ? styles.floatingFollowTextActive : null]}>{followed ? '✓' : '+'}</Text>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+      <DetailRefreshPill visible={showDetailRefreshPill} top={detailFloatingTop + 54} />
       <ScrollView style={{ flex: 1, marginTop: detailTopInset }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} scrollEventThrottle={16} bounces={true} overScrollMode="never" decelerationRate="normal" refreshControl={<RefreshControl refreshing={showBlockingRefresh} onRefresh={onRefresh} tintColor="#7A9DB8" colors={['#7A9DB8']} progressBackgroundColor="#080C10" progressViewOffset={40} />}>
         <View style={{ overflow: 'visible', zIndex: 10 }}>
           <View style={{ height: detailHeaderTopSpacer }} />
-          {/* Top bar — back (absolute left) + centered combined pill */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginBottom: 10, position: 'relative' }}>
-            <Pressable onPress={() => router.back()} hitSlop={8} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
-            {/* Combined pill: LIVE indicator (if live) | sport badge | follow toggle */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
-              {isLive ? (<><LivePulseDot /><Text style={{ fontSize: suspended ? 10 : 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>{suspended ? suspensionStatus.toUpperCase() : 'LIVE'}</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
-              <View style={{ backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
-              </View>
-              <View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
-              <Pressable
-                onPress={toggleFollow}
-                hitSlop={8}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ alignItems: 'center', marginRight: 6 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF', letterSpacing: 0.3, lineHeight: 10 }}>{followed ? 'FOLLOWING' : 'FOLLOW'}</Text>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: followed ? '#7A9DB8' : '#FFFFFF', letterSpacing: 0.3, lineHeight: 10 }}>GAME</Text>
-                  </View>
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: followed ? '#7A9DB8' : '#FFFFFF', lineHeight: 18 }}>{followed ? '✓' : '+'}</Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
           {/* Pre-game wrapper — when the game is in the 10-min countdown
               window OR delayed past tip-off, a subtle dim overlay covers the
               team headers + jersey/score area (but stops above the win-prob
@@ -2029,10 +2076,12 @@ function GameDetailContent() {
           />
         </View>
         <View style={styles.content}>
-          <View style={{ marginBottom: 40 }}>
-            <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
-            <QuarterTable game={game} />
-          </View>
+          {hasBoxScore ? (
+            <View style={{ marginBottom: 40 }}>
+              <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Box Score</Text>
+              <QuarterTable game={game} />
+            </View>
+          ) : null}
           {prediction && isPremium ? (
             <>
               {getDisplayProjection(game as any) ? (
@@ -2040,7 +2089,12 @@ function GameDetailContent() {
               ) : null}
               <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
-              <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
+              <Pressable
+                onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })}
+                accessibilityRole="button"
+                accessibilityLabel="Open full pick analysis"
+                style={styles.analysisLink}
+              >
                 <View style={styles.analysisLinkIcon}>
                   <AnalysisIcon size={20} color="#FFFFFF" />
                 </View>
@@ -2065,6 +2119,9 @@ function GameDetailContent() {
               {/* ═══ WHY WE MADE THIS PICK ═══ */}
               <Pressable
                 onPress={() => router.push('/paywall')}
+                accessibilityRole="button"
+                accessibilityLabel="Preview Pro: Why We Made This Pick"
+                accessibilityHint="Opens Clutch Picks Pro"
                 style={styles.analysisLink}
               >
                 <View style={styles.analysisLinkIcon}>
@@ -2087,6 +2144,13 @@ function GameDetailContent() {
           </View>
         </View>
       </ScrollView>
+      <View pointerEvents="none" style={[styles.detailHeaderScrim, { height: detailFloatingTop + 70 }]}>
+        <LinearGradient
+          colors={['#040608', '#040608', 'rgba(4,6,8,0.00)']}
+          locations={[0, 0.76, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
       <PickConfirmationModal
         visible={pendingPick !== null}
         team={pendingPick === 'home' ? homeTeam : pendingPick === 'away' ? awayTeam : null}
@@ -2138,7 +2202,18 @@ export default function GameDetailScreen() {
 
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
-  backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  detailHeaderScrim: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 90, elevation: 90 },
+  floatingDetailControls: { position: 'absolute', left: 0, right: 0, zIndex: 110, elevation: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  floatingBackBtn: { position: 'absolute', left: 16 },
+  floatingDetailPill: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.66)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14 },
+  floatingDetailDivider: { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 },
+  floatingSportBadge: { maxWidth: 88, backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' },
+  floatingSportText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
+  floatingFollowButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4, marginRight: -4 },
+  floatingFollowText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3, lineHeight: 10 },
+  floatingFollowTextActive: { color: '#7A9DB8' },
+  floatingFollowIcon: { fontSize: 16, fontWeight: '900', color: '#FFFFFF', lineHeight: 18 },
   livePill: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(0,0,0,0.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
   liveText: { fontSize: 10, fontWeight: '800', color: '#FF3B30', letterSpacing: 0.8 },
   pillDivider: { width: 1, height: 10, backgroundColor: 'rgba(255,255,255,0.3)' },
@@ -2410,7 +2485,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   watchHubCard: {
-    minHeight: 56,
+    height: 56,
     borderRadius: 15,
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -2420,7 +2495,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   watchHubHeader: {
-    minHeight: 40,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
   },

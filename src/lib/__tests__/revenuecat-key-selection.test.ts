@@ -12,6 +12,18 @@ describe('RevenueCat key selection', () => {
     expect(selectRevenueCatApiKey({ platform: 'android', ...config })).toBe('google-production-key');
   });
 
+  it('uses the shared test key only when the test store is explicitly requested', () => {
+    const config = {
+      appleKey: 'apple-production-key',
+      googleKey: 'google-production-key',
+      testKey: 'shared-test-key',
+      preferTestKey: true,
+    };
+
+    expect(selectRevenueCatApiKey({ platform: 'ios', ...config })).toBe('shared-test-key');
+    expect(selectRevenueCatApiKey({ platform: 'android', ...config })).toBe('shared-test-key');
+  });
+
   it('falls back to the shared test key when a platform key is missing', () => {
     expect(selectRevenueCatApiKey({ platform: 'ios', testKey: 'shared-test-key' })).toBe('shared-test-key');
     expect(selectRevenueCatApiKey({ platform: 'android', testKey: 'shared-test-key' })).toBe('shared-test-key');

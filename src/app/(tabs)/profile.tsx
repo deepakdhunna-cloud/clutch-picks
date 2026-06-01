@@ -30,6 +30,7 @@ import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifica
 import { getAppVersionLabel } from '@/lib/app-version';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
+import { profileDisplayName } from '@/lib/profile-presentation';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import type { GameWithPrediction } from '@/types/sports';
 
@@ -557,7 +558,10 @@ export default function ProfileScreen() {
   }, [hasUser, refetchStats]));
 
   // Derived
-  const userName = session?.user?.name ?? 'Player';
+  const userName = profileDisplayName({
+    profileName: profile?.name,
+    sessionName: session?.user?.name,
+  });
   const userImage = profile?.image ?? session?.user?.image ?? null;
   const initial = userName.charAt(0).toUpperCase();
   const userEmail = (profile?.email ?? session?.user?.email ?? null) as string | null;
@@ -826,9 +830,12 @@ export default function ProfileScreen() {
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
-          <Pressable onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-            hitSlop={4}
-            style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+            onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            hitSlop={10}
+            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
           </Pressable>
         </View>
@@ -934,11 +941,19 @@ export default function ProfileScreen() {
 
         {/* ── 2. EDIT PROFILE + SHARE BUTTONS ── */}
         <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 20 }}>
-          <Pressable onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-            style={{ flex: 1, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+            hitSlop={6}
+            onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            style={{ flex: 1, minHeight: 44, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
           </Pressable>
-          <Pressable onPress={async () => {
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share analyst card"
+            hitSlop={6}
+            onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               try {
                 await Share.share({
@@ -946,7 +961,7 @@ export default function ProfileScreen() {
                 });
               } catch {}
             }}
-            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            style={{ flex: 1, minHeight: 44, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <ShareIcon size={14} color={C.TEXT_SECONDARY} />
             <Text style={{ fontSize: 13, fontWeight: '600', color: C.TEXT_SECONDARY }}>Share Card</Text>
           </Pressable>
@@ -1063,7 +1078,13 @@ export default function ProfileScreen() {
 
         {/* ── 7. SIGN OUT + VERSION ── */}
         <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 28 }}>
-          <Pressable onPress={handleSignOut} hitSlop={{ top: 14, bottom: 14, left: 24, right: 24 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            accessibilityHint="Signs you out of Clutch Picks"
+            onPress={handleSignOut}
+            hitSlop={{ top: 14, bottom: 14, left: 24, right: 24 }}
+            style={{ minHeight: 44, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
           </Pressable>
           <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>{appVersionLabel}</Text>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { Camera, Image as ImageIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -26,6 +26,7 @@ export function PhotoSourceModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable
+        accessible={false}
         onPress={onCancel}
         style={{
           flex: 1,
@@ -36,6 +37,8 @@ export function PhotoSourceModal({
         }}
       >
         <Pressable
+          accessible={false}
+          accessibilityViewIsModal
           onPress={() => {}}
           style={{
             width: '100%',
@@ -48,63 +51,81 @@ export function PhotoSourceModal({
             paddingBottom: 12,
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: 4 }}>
+          <Text
+            accessibilityRole="header"
+            style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: 4 }}
+          >
             {title}
           </Text>
           <Text style={{ color: '#6B7C94', fontSize: 13, lineHeight: 18, marginBottom: 14 }}>
             Add a photo from your camera or library.
           </Text>
-          <Pressable
+          <TouchableOpacity
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Take Photo"
+            accessibilityHint="Opens the camera"
+            activeOpacity={0.78}
             onPress={() => press(onTakePhoto)}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              minHeight: 54,
-              borderRadius: 15,
-              backgroundColor: 'rgba(122,157,184,0.11)',
-              borderWidth: 1,
-              borderColor: 'rgba(122,157,184,0.16)',
-              paddingHorizontal: 14,
-              marginBottom: 9,
-              opacity: pressed ? 0.78 : 1,
-            })}
+            style={[styles.actionButton, styles.cameraButton]}
           >
             <Camera size={19} color="#7A9DB8" />
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginLeft: 12 }}>Take Photo</Text>
-          </Pressable>
-          <Pressable
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Choose from Library"
+            accessibilityHint="Opens your photo library"
+            activeOpacity={0.78}
             onPress={() => press(onChooseLibrary)}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              minHeight: 54,
-              borderRadius: 15,
-              backgroundColor: 'rgba(139,10,31,0.12)',
-              borderWidth: 1,
-              borderColor: 'rgba(139,10,31,0.18)',
-              paddingHorizontal: 14,
-              marginBottom: 12,
-              opacity: pressed ? 0.78 : 1,
-            })}
+            style={[styles.actionButton, styles.libraryButton]}
           >
             <ImageIcon size={19} color="#8B0A1F" />
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginLeft: 12 }}>Choose from Library</Text>
-          </Pressable>
-          <Pressable
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            accessibilityHint="Closes photo options"
+            activeOpacity={0.72}
             onPress={onCancel}
-            style={({ pressed }) => ({
-              height: 46,
-              borderRadius: 14,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              opacity: pressed ? 0.72 : 1,
-            })}
+            style={styles.cancelButton}
           >
             <Text style={{ color: '#A1B3C9', fontSize: 14, fontWeight: '700' }}>Cancel</Text>
-          </Pressable>
+          </TouchableOpacity>
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 54,
+    width: '100%',
+    borderRadius: 15,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    marginBottom: 9,
+  },
+  cameraButton: {
+    backgroundColor: 'rgba(122,157,184,0.11)',
+    borderColor: 'rgba(122,157,184,0.16)',
+  },
+  libraryButton: {
+    backgroundColor: 'rgba(139,10,31,0.12)',
+    borderColor: 'rgba(139,10,31,0.18)',
+    marginBottom: 12,
+  },
+  cancelButton: {
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+});

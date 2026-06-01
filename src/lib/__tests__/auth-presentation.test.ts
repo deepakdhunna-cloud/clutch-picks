@@ -38,4 +38,9 @@ describe('auth presentation', () => {
     expect(appleSignInFallbackMessage({ code: 'ERR_APPLE_AUTHENTICATION_FAILED' }))
       .toBe('Apple sign in could not complete. Please try again or use email.');
   });
+
+  it('shows an error when Apple auth returns without an app session', () => {
+    expect(appleSignInFallbackMessage({ code: 'APPLE_SIGN_IN_INCOMPLETE' }))
+      .toBe('Apple sign in did not finish. Please try again or use email.');
+  });
 });

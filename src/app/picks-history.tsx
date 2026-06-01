@@ -104,6 +104,9 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(Math.min(index * 40, 200))}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${item.teamName} versus ${item.opponentName}`}
+        accessibilityHint="Opens game details"
         onPressIn={() => prefetchGame(item.gameId)}
         onPress={() => {
           if (!claimGameNavigation(item.gameId)) return;
@@ -296,6 +299,8 @@ export default function PicksHistoryScreen() {
         {/* ── HEADER ── */}
         <View style={s.header}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
             onPress={() => router.back()}
             style={s.backBtn}
           >
@@ -345,6 +350,9 @@ export default function PicksHistoryScreen() {
             return (
               <Pressable
                 key={f.key}
+                accessibilityRole="button"
+                accessibilityLabel={`${f.label} picks filter`}
+                accessibilityState={{ selected: active }}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter(f.key); }}
                 style={[s.filterPill, active && { borderColor: f.color, backgroundColor: `${f.color}10` }]}
               >
@@ -420,8 +428,8 @@ const s = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderWidth: 1,
@@ -482,6 +490,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
+    minHeight: 44,
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,

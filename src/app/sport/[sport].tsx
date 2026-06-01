@@ -81,6 +81,11 @@ const FilterButton = memo(function FilterButton({
     >
       <Pressable
         onPress={handlePress}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={`${filter.label}, ${count} ${count === 1 ? 'game' : 'games'}`}
+        accessibilityHint="Filters this sport screen"
+        accessibilityState={{ selected: isSelected }}
         style={({ pressed }) => [
           styles.filterButton,
           { opacity: pressed ? 0.8 : 1 },
@@ -243,6 +248,8 @@ export default function SportDetailScreen() {
         >
           <View style={styles.headerRow}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
               onPress={() => router.back()}
               style={styles.backButton}
             >
@@ -369,8 +376,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginRight: 16,
-    padding: 8,
     marginLeft: -8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sportIcon: {
     width: 48,

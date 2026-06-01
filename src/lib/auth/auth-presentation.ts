@@ -12,6 +12,8 @@ export const WELCOME_LEAGUE_PILLS = [
   'Tennis',
 ] as const;
 
+export const APPLE_SIGN_IN_INCOMPLETE_CODE = 'APPLE_SIGN_IN_INCOMPLETE';
+
 function appleErrorCode(error: unknown): string {
   return typeof error === 'object' && error !== null && 'code' in error
     ? String((error as { code?: unknown }).code ?? '')
@@ -38,5 +40,15 @@ export function isAppleSignInCancel(error: unknown): boolean {
 export function appleSignInFallbackMessage(error: unknown): string | null {
   if (isAppleSignInCancel(error)) return null;
 
+  if (appleErrorCode(error) === APPLE_SIGN_IN_INCOMPLETE_CODE) {
+    return 'Apple sign in did not finish. Please try again or use email.';
+  }
+
   return 'Apple sign in could not complete. Please try again or use email.';
+}
+
+export function appleSignInIncompleteError(): Error & { code: string } {
+  return Object.assign(new Error('Apple sign-in completed without a session'), {
+    code: APPLE_SIGN_IN_INCOMPLETE_CODE,
+  });
 }

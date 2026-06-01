@@ -263,12 +263,21 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
   // Total & spread are always derived from the displayed home/away so the three
   // numbers reconcile exactly.
   const lowScoring = isLowScoringSport(input.sport);
-  let homeNum = lowScoring ? roundTenth(input.projection.projectedHomeScore) : Math.round(input.projection.projectedHomeScore);
-  let awayNum = lowScoring ? roundTenth(input.projection.projectedAwayScore) : Math.round(input.projection.projectedAwayScore);
+  const tennisLine = tennis ? tennisProjectionScores(input, side) : null;
+  let homeNum = tennisLine
+    ? tennisLine.home
+    : lowScoring
+      ? roundTenth(input.projection.projectedHomeScore)
+      : Math.round(input.projection.projectedHomeScore);
+  let awayNum = tennisLine
+    ? tennisLine.away
+    : lowScoring
+      ? roundTenth(input.projection.projectedAwayScore)
+      : Math.round(input.projection.projectedAwayScore);
   // Defensive: the authoritative pick (side) must lead the displayed line. The
   // backend now reconciles this, but guard old/unreconciled stored predictions so
   // the score line can never lead the team the badge did NOT pick.
-  if ((side === 'home' || side === 'away') && homeNum !== awayNum) {
+  if (!tennisLine && (side === 'home' || side === 'away') && homeNum !== awayNum) {
     const leaderIsHome = homeNum > awayNum;
     if ((side === 'home') !== leaderIsHome) {
       const swap = homeNum;
@@ -276,20 +285,30 @@ export function getProjectionDisplay(input: ProjectionDisplayInput) {
       awayNum = swap;
     }
   }
-  const totalNum = lowScoring ? roundTenth(homeNum + awayNum) : homeNum + awayNum;
-  const spreadNum = lowScoring ? roundTenth(homeNum - awayNum) : homeNum - awayNum;
-  const fmtScore = (v: number) => (lowScoring ? formatDecimal(v) : formatInteger(v));
+  const totalNum = tennisLine
+    ? tennisLine.total
+    : cricket && Number.isFinite(input.projection.projectedTotal)
+      ? Math.round(input.projection.projectedTotal)
+      : lowScoring
+        ? roundTenth(homeNum + awayNum)
+        : homeNum + awayNum;
+  const spreadNum = tennisLine
+    ? tennisLine.spread
+    : lowScoring
+      ? roundTenth(homeNum - awayNum)
+      : homeNum - awayNum;
+  const fmtScore = (v: number) => (lowScoring || tennis ? formatDecimal(v) : formatInteger(v));
 
   return {
-    label: tennis ? 'Projected Sets' : cricket ? 'Projected Runs' : 'Projected Score',
+    label: tennis ? 'Projected Games' : cricket ? 'Projected Runs' : 'Projected Score',
     homeScore: fmtScore(homeNum),
     awayScore: fmtScore(awayNum),
-    total: tennis ? `${formatInteger(totalNum)} sets` : cricket ? `${formatInteger(totalNum)} runs` : fmtScore(totalNum),
+    total: tennis ? `${formatDecimal(totalNum)} games` : cricket ? `${formatInteger(totalNum)} runs` : fmtScore(totalNum),
     spread: fmtScore(spreadNum),
     spreadValue: spreadNum,
     leanText: side === 'draw' || side === 'toss_up' ? `${leanAbbr}${confidenceText}` : `Lean ${leanAbbr}${confidenceText}`,
     contextText: tennis
-      ? 'Projected set score for the final pick'
+      ? 'Projected match-game line for the final pick'
       : cricket
         ? 'Projected run score for the final pick'
         : 'Projected score and margin for the final pick',

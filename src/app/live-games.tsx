@@ -131,7 +131,13 @@ export default function LiveGamesScreen() {
         <SafeAreaView style={styles.safe} edges={['top']}>
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
-            <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={10}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={() => router.back()}
+              style={styles.backButton}
+              hitSlop={10}
+            >
               <View style={styles.backCircle}>
                 <ChevronLeft size={24} color="#fff" />
               </View>
@@ -248,12 +254,16 @@ function ChipButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label} live games filter`}
+      accessibilityHint="Filters live games by sport"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       pressRetentionOffset={6}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchCancel={onTouchCancel}
-      style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+      style={({ pressed }) => [styles.chipButton, { opacity: pressed ? 0.85 : 1 }]}
     >
       {active ? (
         <LinearGradient
@@ -292,14 +302,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 28,
     paddingBottom: 18,
   },
-  backButton: { marginRight: 14 },
+  backButton: { width: 44, height: 44, marginRight: 14 },
   backCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -352,6 +362,7 @@ const styles = StyleSheet.create({
   // Chips
   chipScroll: { marginBottom: 16, flexGrow: 0 },
   chipScrollContent: { paddingHorizontal: 20, gap: 8 },
+  chipButton: { minHeight: 44, justifyContent: 'center' },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 9,

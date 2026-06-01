@@ -23,6 +23,33 @@ function possessive(name: string): string {
   return name.endsWith('s') ? `${name}'` : `${name}'s`;
 }
 
+function replaceAllLiteral(value: string, from: string, to: string): string {
+  return value.split(from).join(to);
+}
+
+function polishIndividualCompetitorCopy(game: NarrativeGame, analysis: string): string {
+  if (String(game.sport) !== 'TENNIS') return analysis;
+
+  let polished = analysis;
+  for (const team of [game.homeTeam, game.awayTeam]) {
+    const name = team.name;
+    polished = replaceAllLiteral(polished, `${name} have the better case`, `${name} has the better case`);
+    polished = replaceAllLiteral(polished, `${name} have been the hotter team`, `${name} has been in better form`);
+    polished = replaceAllLiteral(polished, `${name} have the momentum`, `${name} has the momentum`);
+    polished = replaceAllLiteral(polished, `${name} are the pick`, `${name} is the pick`);
+    polished = replaceAllLiteral(polished, `${name} are the side`, `${name} is the side`);
+    polished = replaceAllLiteral(polished, `${name} are the play`, `${name} is the play`);
+    polished = replaceAllLiteral(polished, `${name} are the clear side`, `${name} is the clear side`);
+    polished = replaceAllLiteral(polished, `${name} are the strong read`, `${name} is the strong read`);
+    polished = replaceAllLiteral(polished, `${name} just grade`, `${name} just grades`);
+    polished = replaceAllLiteral(polished, `${name} rate ahead`, `${name} rates ahead`);
+    polished = replaceAllLiteral(polished, `${name} carry the stronger profile`, `${name} carries the stronger profile`);
+    polished = replaceAllLiteral(polished, `${name} sit at`, `${name} sits at`);
+  }
+
+  return polished;
+}
+
 function parseEloDifferential(description: string): number | null {
   const match = description.match(/=\s*(-?\d+(?:\.\d+)?)\s*pt/i);
   if (!match) return null;
@@ -94,13 +121,13 @@ export function displayPredictionAnalysis(game: NarrativeGame): string {
   if (!analysis) return analysis;
   if (prediction && isStoredPregamePrediction(prediction) && LOCKED_PREGAME_FALLBACK.test(analysis)) {
     const storedNarrative = buildStoredPregameNarrative({ ...game, prediction } as GameWithPrediction);
-    if (storedNarrative) return cleanProjectionCopy(storedNarrative);
+    if (storedNarrative) return polishIndividualCompetitorCopy(game, cleanProjectionCopy(storedNarrative));
   }
 
   if (!STALE_RAW_NARRATIVE.test(analysis)) {
-    return cleanProjectionCopy(analysis);
+    return polishIndividualCompetitorCopy(game, cleanProjectionCopy(analysis));
   }
 
   const rebuilt = prediction ? rebuildStaleNarrative(game, prediction) ?? analysis : analysis;
-  return cleanProjectionCopy(rebuilt);
+  return polishIndividualCompetitorCopy(game, cleanProjectionCopy(rebuilt));
 }

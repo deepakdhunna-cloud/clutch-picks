@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
+import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { AuthBackground } from '@/components/AuthBackground';
 
 const MAROON = '#8B0A1F';
@@ -44,10 +45,13 @@ export default function SignInScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const result = await authClient.emailOtp.sendVerificationOtp({
-        email: trimmed,
-        type: 'sign-in',
-      });
+      const result = await withAuthRequestTimeout(
+        authClient.emailOtp.sendVerificationOtp({
+          email: trimmed,
+          type: 'sign-in',
+        }),
+        { label: 'Send sign-in code' },
+      );
 
       if (result.error) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -59,9 +63,12 @@ export default function SignInScreen() {
         pathname: '/verify-otp' as any,
         params: { email: trimmed, mode: 'signin' },
       });
-    } catch {
+    } catch (requestError) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Could not send a code. Check your connection and try again.');
+      setError(authRequestErrorMessage(
+        requestError,
+        'Could not send a code. Check your connection and try again.',
+      ));
     } finally {
       setIsLoading(false);
     }
@@ -77,6 +84,8 @@ export default function SignInScreen() {
           style={{ flex: 1 }}
         >
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
             onPress={() => router.back()}
             hitSlop={16}
             style={s.backBtn}
@@ -92,6 +101,7 @@ export default function SignInScreen() {
           <View style={s.form}>
             <Text style={s.label}>Email</Text>
             <TextInput
+              accessibilityLabel="Email address"
               value={email}
               onChangeText={(v) => { setEmailInput(v); setError(null); }}
               placeholder="you@email.com"
@@ -111,12 +121,18 @@ export default function SignInScreen() {
 
           <View style={s.buttonWrap}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Continue"
+              accessibilityState={{ disabled: isLoading || !email.trim(), busy: isLoading }}
               onPress={handleContinue}
               disabled={isLoading || !email.trim()}
               style={[s.continueBtn, (isLoading || !email.trim()) && { opacity: 0.4 }]}
             >
               {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <View style={s.loadingContent}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text style={s.continueText}>Sending code...</Text>
+                </View>
               ) : (
                 <Text style={s.continueText}>Continue</Text>
               )}
@@ -124,6 +140,8 @@ export default function SignInScreen() {
             <Text style={s.disclaimer}>
               Don't have an account?{' '}
               <Text
+                accessibilityRole="button"
+                accessibilityLabel="Create an account"
                 style={s.disclaimerLink}
                 onPress={() => router.replace('/sign-up' as any)}
               >
@@ -214,6 +232,12 @@ const s = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.3,
+  },
+  loadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   disclaimer: {
     fontSize: 13,

@@ -9,7 +9,10 @@ interface FeedbackModalProps {
   title: string;
   message: string;
   actionLabel?: string;
+  secondaryActionLabel?: string;
   variant?: FeedbackVariant;
+  onActionPress?: () => void;
+  onSecondaryPress?: () => void;
   onDismiss: () => void;
 }
 
@@ -24,14 +27,30 @@ export function FeedbackModal({
   title,
   message,
   actionLabel = 'OK',
+  secondaryActionLabel,
   variant = 'info',
+  onActionPress,
+  onSecondaryPress,
   onDismiss,
 }: FeedbackModalProps) {
   const accent = VARIANT_ACCENT[variant];
 
+  const handleActionPress = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onActionPress?.();
+    onDismiss();
+  };
+
+  const handleSecondaryPress = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onSecondaryPress?.();
+    onDismiss();
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <View
+        accessible={false}
         style={{
           flex: 1,
           backgroundColor: 'rgba(0,0,0,0.72)',
@@ -41,6 +60,7 @@ export function FeedbackModal({
         }}
       >
         <View
+          accessibilityViewIsModal
           style={{
             width: '100%',
             maxWidth: 340,
@@ -63,28 +83,54 @@ export function FeedbackModal({
               backgroundColor: accent,
             }}
           />
-          <Text style={{ color: '#FFFFFF', fontSize: 18, lineHeight: 23, fontWeight: '800', textAlign: 'center', marginBottom: 8 }}>
+          <Text
+            accessibilityRole="header"
+            style={{ color: '#FFFFFF', fontSize: 18, lineHeight: 23, fontWeight: '800', textAlign: 'center', marginBottom: 8 }}
+          >
             {title}
           </Text>
           <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 22 }}>
             {message}
           </Text>
           <Pressable
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              onDismiss();
-            }}
-            style={({ pressed }) => ({
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={actionLabel}
+            onPress={handleActionPress}
+            style={{
+              width: '100%',
               height: 46,
               borderRadius: 12,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: accent,
-              opacity: pressed ? 0.82 : 1,
-            })}
+            }}
           >
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>{actionLabel}</Text>
           </Pressable>
+          {secondaryActionLabel ? (
+            <Pressable
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={secondaryActionLabel}
+              onPress={handleSecondaryPress}
+              style={{
+                width: '100%',
+                height: 44,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 10,
+                backgroundColor: 'rgba(255,255,255,0.04)',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.08)',
+              }}
+            >
+              <Text style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14, fontWeight: '700' }}>
+                {secondaryActionLabel}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </Modal>

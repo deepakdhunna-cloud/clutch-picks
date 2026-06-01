@@ -160,14 +160,16 @@ export default function EditProfileScreen() {
       />
       {/* Header */}
       <Animated.View
-        entering={FadeInDown.duration(400)}
+        entering={FadeInDown.duration(180)}
         style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
           onPress={() => router.back()}
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             borderRadius: 20,
             backgroundColor: 'rgba(255,255,255,0.05)',
             borderWidth: 1,
@@ -180,11 +182,14 @@ export default function EditProfileScreen() {
         </Pressable>
         <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>Edit Profile</Text>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save profile"
+          accessibilityState={{ disabled: updateProfileMutation.isPending, busy: updateProfileMutation.isPending }}
           onPress={handleSave}
           disabled={updateProfileMutation.isPending}
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             borderRadius: 20,
             backgroundColor: updateProfileMutation.isPending ? MAROON_DIM : MAROON,
             alignItems: 'center',
@@ -202,10 +207,17 @@ export default function EditProfileScreen() {
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Profile Photo Section */}
         <Animated.View
-          entering={FadeInDown.delay(100).duration(500)}
+          entering={FadeInDown.duration(220)}
           style={{ alignItems: 'center', paddingVertical: 32 }}
         >
-          <Pressable onPress={handleAvatarPress} disabled={isUploading}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={displayImage ? "Change profile photo" : "Add profile photo"}
+            accessibilityHint="Opens photo options"
+            accessibilityState={{ disabled: isUploading, busy: isUploading }}
+            onPress={handleAvatarPress}
+            disabled={isUploading}
+          >
             <View
               style={{
                 width: 120,
@@ -255,7 +267,14 @@ export default function EditProfileScreen() {
               <Camera size={18} color="#FFFFFF" />
             </View>
           </Pressable>
-          <Pressable onPress={handleAvatarPress} hitSlop={10} style={{ marginTop: 12 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+            accessibilityHint="Opens photo options"
+            onPress={handleAvatarPress}
+            hitSlop={10}
+            style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}
+          >
             <Text style={{ color: TEAL, fontWeight: '600', fontSize: 14 }}>
               Change Photo
             </Text>
@@ -263,7 +282,7 @@ export default function EditProfileScreen() {
         </Animated.View>
 
         {/* Form Section */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500)}>
+        <Animated.View entering={FadeInDown.duration(220)}>
           <View
             style={{
               borderRadius: 16,
@@ -283,6 +302,7 @@ export default function EditProfileScreen() {
             >
               <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Name</Text>
               <TextInput
+                accessibilityLabel="Name"
                 value={name}
                 onChangeText={setName}
                 placeholder="Enter your name"

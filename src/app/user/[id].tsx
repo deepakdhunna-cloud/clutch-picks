@@ -200,9 +200,11 @@ export default function UserProfileScreen() {
         <SafeAreaView edges={['top']}>
           <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
               onPress={() => router.back()}
               hitSlop={8}
-              style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER }}
+              style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER }}
             >
               <ArrowLeft size={20} color="#FFFFFF" />
             </Pressable>
@@ -243,9 +245,11 @@ export default function UserProfileScreen() {
         <Animated.View entering={FadeInDown.duration(350)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 }}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
               onPress={() => router.back()}
               hitSlop={8}
-              style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER, marginRight: 12 }}
+              style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER, marginRight: 12 }}
             >
               <ArrowLeft size={18} color="rgba(255,255,255,0.7)" />
             </Pressable>
@@ -328,12 +332,24 @@ export default function UserProfileScreen() {
 
               {/* Follower stats */}
               <View style={{ flexDirection: 'row', marginTop: 18, alignItems: 'center' }}>
-                <Pressable onPress={handleNavigateToFollowers} style={{ alignItems: 'center', paddingRight: 24 }}>
+                <Pressable
+                  onPress={handleNavigateToFollowers}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${profile.followersCount ?? 0} followers`}
+                  accessibilityHint="Opens this user's followers"
+                  style={{ alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingRight: 24 }}
+                >
                   <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{profile.followersCount ?? 0}</Text>
                   <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, marginTop: 1, fontWeight: '500' }}>Followers</Text>
                 </Pressable>
                 <View style={{ width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.09)' }} />
-                <Pressable onPress={handleNavigateToFollowing} style={{ alignItems: 'center', paddingHorizontal: 24 }}>
+                <Pressable
+                  onPress={handleNavigateToFollowing}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${profile.followingCount ?? 0} following`}
+                  accessibilityHint="Opens who this user is following"
+                  style={{ alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: 24 }}
+                >
                   <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{profile.followingCount ?? 0}</Text>
                   <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, marginTop: 1, fontWeight: '500' }}>Following</Text>
                 </Pressable>
@@ -345,12 +361,16 @@ export default function UserProfileScreen() {
                   <Pressable
                     onPress={handleFollowToggle}
                     disabled={isFollowLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFollowing ? 'Unfollow user' : 'Follow user'}
+                    accessibilityState={{ disabled: isFollowLoading, busy: isFollowLoading }}
                     style={{
                       flex: 1,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
                       paddingVertical: 10,
+                      minHeight: 44,
                       borderRadius: 11,
                       backgroundColor: isFollowing ? 'rgba(255,255,255,0.06)' : MAROON,
                       borderWidth: 1,
@@ -373,13 +393,16 @@ export default function UserProfileScreen() {
                   <Pressable
                     onPress={handleReportUser}
                     disabled={reportMutation.isPending}
+                    accessibilityRole="button"
                     accessibilityLabel="Report user"
+                    accessibilityState={{ disabled: reportMutation.isPending, busy: reportMutation.isPending }}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
                       paddingHorizontal: 10,
                       paddingVertical: 10,
+                      minHeight: 44,
                       borderRadius: 11,
                       backgroundColor: 'rgba(255,255,255,0.06)',
                       borderWidth: 1,
@@ -394,13 +417,16 @@ export default function UserProfileScreen() {
                   <Pressable
                     onPress={handleBlockUser}
                     disabled={blockMutation.isPending}
+                    accessibilityRole="button"
                     accessibilityLabel="Block user"
+                    accessibilityState={{ disabled: blockMutation.isPending, busy: blockMutation.isPending }}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
                       paddingHorizontal: 10,
                       paddingVertical: 10,
+                      minHeight: 44,
                       borderRadius: 11,
                       backgroundColor: 'rgba(139,10,31,0.12)',
                       borderWidth: 1,

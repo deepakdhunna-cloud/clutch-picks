@@ -8,6 +8,8 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
+import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
+import { verificationCodeErrorMessage } from '@/lib/auth/auth-errors';
 import { authUserIdentityFromPayload } from '@/lib/auth/auth-user';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
@@ -83,9 +85,12 @@ export default function VerifyOTP() {
     setError(null);
 
     try {
-      const result = await authClient.signIn.emailOtp({ email: email.trim(), otp: otpCode });
+      const result = await withAuthRequestTimeout(
+        authClient.signIn.emailOtp({ email: email.trim(), otp: otpCode }),
+        { label: 'Verify sign-in code' },
+      );
       if (result.error) {
-        setError(result.error.message ?? 'Invalid verification code');
+        setError(verificationCodeErrorMessage(result.error.message));
         setCode('');
         setTimeout(() => inputRef.current?.focus(), 100);
         return;
@@ -125,8 +130,11 @@ export default function VerifyOTP() {
       } else {
         router.replace('/onboarding');
       }
-    } catch {
-      setError('Could not verify this code. Check your connection and try again.');
+    } catch (requestError) {
+      setError(authRequestErrorMessage(
+        requestError,
+        'Could not verify this code. Check your connection and try again.',
+      ));
       setCode('');
       setTimeout(() => inputRef.current?.focus(), 100);
     } finally {
@@ -141,7 +149,10 @@ export default function VerifyOTP() {
     setIsResending(true);
     setError(null);
     try {
-      const result = await authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: 'sign-in' });
+      const result = await withAuthRequestTimeout(
+        authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: 'sign-in' }),
+        { label: 'Resend sign-in code' },
+      );
       if (result.error) {
         setError(result.error.message ?? 'Failed to resend code');
       } else {
@@ -149,8 +160,11 @@ export default function VerifyOTP() {
         setSeconds(300);
         inputRef.current?.focus();
       }
-    } catch {
-      setError('Could not resend the code. Check your connection and try again.');
+    } catch (requestError) {
+      setError(authRequestErrorMessage(
+        requestError,
+        'Could not resend the code. Check your connection and try again.',
+      ));
     } finally {
       setIsResending(false);
     }
@@ -169,7 +183,7 @@ export default function VerifyOTP() {
         <View style={s.content}>
           {/* Back button */}
           <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32, alignSelf: 'flex-start' }}>
-            <Pressable onPress={() => router.back()} hitSlop={16} style={s.backBtn}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={16} style={s.backBtn}>
               <BackArrow />
             </Pressable>
           </Animated.View>
@@ -195,6 +209,7 @@ export default function VerifyOTP() {
           <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ position: 'relative', width: '100%', alignItems: 'center' }}>
             <TextInput
               ref={inputRef}
+              accessibilityLabel="Verification code"
               value={code}
               onChangeText={(text) => {
                 const cleaned = text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH);
@@ -250,7 +265,14 @@ export default function VerifyOTP() {
 
           {/* Resend */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.resendRow}>
-            <Pressable onPress={handleResend} disabled={isResending} hitSlop={12}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Resend code"
+              accessibilityState={{ disabled: isResending, busy: isResending }}
+              onPress={handleResend}
+              disabled={isResending}
+              style={{ minHeight: 44, justifyContent: 'center' }}
+            >
               <Text style={[s.resendText, isResending && { color: 'rgba(255,255,255,0.25)' }]}>
                 {isResending ? 'Sending...' : 'Resend Code'}
               </Text>
@@ -263,13 +285,19 @@ export default function VerifyOTP() {
           {/* Verify button */}
           <Animated.View entering={FadeInDown.delay(400).duration(400)} style={{ width: '100%' }}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Verify my account"
+              accessibilityState={{ disabled: !isComplete || isLoading, busy: isLoading }}
               onPress={handleVerify}
               disabled={!isComplete || isLoading}
               style={({ pressed }) => ({ opacity: pressed ? 0.85 : !isComplete ? 0.4 : 1 })}
             >
               <View style={s.submitBtn}>
                 {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <View style={s.loadingContent}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={s.submitBtnText}>Checking code...</Text>
+                  </View>
                 ) : (
                   <Text style={s.submitBtnText}>Verify My Account</Text>
                 )}
@@ -288,7 +316,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
   content: { flex: 1, paddingHorizontal: 24, alignItems: 'center' },
   backBtn: {
-    width: 40, height: 40, borderRadius: 12,
+    width: 44, height: 44, borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -326,4 +354,10 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: `${TEAL}AA`,
   },
   submitBtnText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  loadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
 });

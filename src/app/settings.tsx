@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Linking, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -6,13 +6,21 @@ import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Tra
 import { Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { clearAuthStorage } from '@/lib/auth/auth-storage';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { useSubscription } from '@/lib/subscription-context';
-import { isRevenueCatEnabled, logoutUser, restorePurchases, getRevenueCatAppUserId, invalidateCustomerInfoCache } from '@/lib/revenuecatClient';
+import {
+  isRevenueCatEnabled,
+  logoutUser,
+  restorePurchases,
+  getRevenueCatAppUserId,
+  invalidateCustomerInfoCache,
+  customerInfoHasPremium,
+} from '@/lib/revenuecatClient';
 import { api } from '@/lib/api/api';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';
@@ -31,50 +39,76 @@ interface SettingItemProps {
 }
 
 function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, rightElement, isDestructive, disabled }: SettingItemProps) {
+  const isActionable = typeof onPress === 'function';
+  const accessibilityLabel = subtitle ? `${title}. ${subtitle}` : title;
+  const baseContainerStyle = {
+    opacity: disabled ? 0.5 : 1,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  };
+  const rowContent = (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    }}>
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          backgroundColor: isDestructive ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.06)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: 14,
+        }}
+      >
+        <Icon size={18} color={isDestructive ? '#EF4444' : 'rgba(255,255,255,0.5)'} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: isDestructive ? '#EF4444' : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2 }}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {rightElement ?? (showArrow ? <ChevronRight size={16} color="rgba(255,255,255,0.2)" /> : null)}
+    </View>
+  );
+
+  if (!isActionable) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={accessibilityLabel}
+        style={baseContainerStyle}
+      >
+        {rowContent}
+      </View>
+    );
+  }
+
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={subtitle}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
       onPress={() => {
-        if (disabled) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress?.();
       }}
       style={({ pressed }) => ({
-        opacity: pressed ? 0.7 : (disabled ? 0.5 : 1),
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.04)',
+        ...baseContainerStyle,
+        opacity: pressed ? 0.7 : baseContainerStyle.opacity,
       })}
     >
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-      }}>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            backgroundColor: isDestructive ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.06)',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: 14,
-          }}
-        >
-          <Icon size={18} color={isDestructive ? '#EF4444' : 'rgba(255,255,255,0.5)'} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: isDestructive ? '#EF4444' : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2 }}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
-        {rightElement ?? (showArrow ? <ChevronRight size={16} color="rgba(255,255,255,0.2)" /> : null)}
-      </View>
+      {rowContent}
     </Pressable>
   );
 }
@@ -108,6 +142,10 @@ type FeedbackState = {
   title: string;
   message: string;
   variant?: 'success' | 'error' | 'info';
+  actionLabel?: string;
+  secondaryActionLabel?: string;
+  onActionPress?: () => void;
+  onSecondaryPress?: () => void;
 };
 
 export default function SettingsScreen() {
@@ -156,39 +194,67 @@ export default function SettingsScreen() {
     setPromoModalVisible(true);
   };
 
-  const handleRestorePurchases = async () => {
+  const openSupportEmail = async () => {
+    const supportUrl = 'mailto:support@clutchpicksapp.com?subject=Restore%20Pro%20Access';
     try {
+      const canOpenSupport = await Linking.canOpenURL(supportUrl);
+      if (canOpenSupport) {
+        await Linking.openURL(supportUrl);
+        return;
+      }
+    } catch {
+      // Fall through to an in-app fallback so the tap never feels dead.
+    }
+
+    setFeedback({
+      title: 'Email Support',
+      message: 'Email us at support@clutchpicksapp.com and we will help you out.',
+      variant: 'info',
+    });
+  };
+
+  const restorePurchasesMutation = useMutation({
+    mutationFn: async () => {
       const result = await restorePurchases();
       if (result.ok) {
         await checkSubscription();
-        const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;
-        if (hasActive) {
-          setFeedback({
-            title: 'Restored',
-            message: 'Your subscription has been restored.',
-            variant: 'success',
-          });
-        } else {
-          setFeedback({
-            title: 'No Subscription Found',
-            message: 'No previous subscription was found for this account.',
-            variant: 'info',
-          });
-        }
-      } else {
-        setFeedback({
-          title: 'No Subscription Found',
-          message: 'No previous subscription was found for this account.',
-          variant: 'info',
-        });
+        return { hasActive: customerInfoHasPremium(result.data) };
       }
-    } catch {
+
+      return { hasActive: false };
+    },
+    onSuccess: ({ hasActive }) => {
+      if (hasActive) {
+        setFeedback({
+          title: 'Restored',
+          message: 'Your subscription has been restored.',
+          variant: 'success',
+        });
+        return;
+      }
+
+      setFeedback({
+        title: 'No Subscription Found',
+        message: 'No App Store subscription was found for this account. If you already had Pro, contact support and we will help recover access.',
+        variant: 'info',
+        actionLabel: 'Contact Support',
+        secondaryActionLabel: 'OK',
+        onActionPress: () => { void openSupportEmail(); },
+      });
+    },
+    onError: () => {
       setFeedback({
         title: 'Restore Failed',
         message: 'Please try again later.',
         variant: 'error',
       });
-    }
+    },
+  });
+
+  const isRestoringPurchases = restorePurchasesMutation.isPending;
+
+  const handleRestorePurchases = () => {
+    restorePurchasesMutation.mutate();
   };
 
   const handleTermsPress = () => {
@@ -198,6 +264,8 @@ export default function SettingsScreen() {
   const handlePrivacyPress = () => {
     router.push('/privacy-policy');
   };
+
+  const handleSupportPress = openSupportEmail;
 
   const handleManageSubscription = () => {
     if (isPremium) {
@@ -295,7 +363,11 @@ export default function SettingsScreen() {
           visible={!!feedback}
           title={feedback?.title ?? ''}
           message={feedback?.message ?? ''}
+          actionLabel={feedback?.actionLabel}
+          secondaryActionLabel={feedback?.secondaryActionLabel}
           variant={feedback?.variant}
+          onActionPress={feedback?.onActionPress}
+          onSecondaryPress={feedback?.onSecondaryPress}
           onDismiss={() => setFeedback(null)}
         />
         {/* Header */}
@@ -308,13 +380,16 @@ export default function SettingsScreen() {
           }}
         >
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            hitSlop={4}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             }}
             style={{
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               borderRadius: 12,
               backgroundColor: 'rgba(255,255,255,0.06)',
               alignItems: 'center',
@@ -347,9 +422,11 @@ export default function SettingsScreen() {
                 />
                 <SettingItem
                   icon={RefreshCw}
-                  title="Restore Purchases"
-                  subtitle="Restore a previous subscription"
+                  title={isRestoringPurchases ? "Restoring..." : "Restore Purchases"}
+                  subtitle={isRestoringPurchases ? "Checking your App Store purchases" : "Restore a previous subscription"}
                   onPress={handleRestorePurchases}
+                  disabled={isRestoringPurchases}
+                  rightElement={isRestoringPurchases ? <ActivityIndicator size="small" color="#7A9DB8" /> : undefined}
                 />
                 <SettingItem
                   icon={Gift}
@@ -446,7 +523,7 @@ export default function SettingsScreen() {
                 icon={HelpCircle}
                 title="Help & Support"
                 subtitle="Get help or send feedback"
-                onPress={() => Linking.openURL('mailto:support@clutchpicksapp.com')}
+                onPress={handleSupportPress}
               />
               <SettingItem
                 icon={RefreshCw}
@@ -495,11 +572,12 @@ export default function SettingsScreen() {
         </ScrollView>
 
         <Modal visible={promoModalVisible} transparent animationType="fade" onRequestClose={() => setPromoModalVisible(false)}>
-          <Pressable onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
-            <Pressable onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+          <Pressable accessible={false} onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessible={false} onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>Promo Code</Text>
               <Text style={{ fontSize: 13, color: '#6B7C94', marginBottom: 16 }}>Enter your code</Text>
               <TextInput
+                accessibilityLabel="Promo code"
                 value={promoInput}
                 onChangeText={(t) => setPromoInput(t.toUpperCase())}
                 placeholder="CODE"
@@ -510,10 +588,10 @@ export default function SettingsScreen() {
                 keyboardAppearance="dark"
               />
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Pressable onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Cancel promo code" onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#6B7C94' }}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Redeem promo code" accessibilityState={{ disabled: !promoInput.trim() || promoLoading }} onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{promoLoading ? 'Redeeming...' : 'Redeem'}</Text>
                 </Pressable>
               </View>

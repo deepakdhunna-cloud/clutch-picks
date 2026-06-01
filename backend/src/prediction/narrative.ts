@@ -269,6 +269,35 @@ function teamPossessive(input: NarrativeInput, abbr: string): string {
   return possessive(teamName(input, abbr));
 }
 
+function replaceAllLiteral(value: string, from: string, to: string): string {
+  return value.split(from).join(to);
+}
+
+function polishIndividualCompetitorCopy(input: NarrativeInput, text: string): string {
+  if (input.sport !== "TENNIS") return text;
+
+  let polished = text;
+  for (const abbr of [input.homeTeamAbbr, input.awayTeamAbbr]) {
+    const name = teamName(input, abbr);
+    polished = replaceAllLiteral(polished, `${name} have the better case`, `${name} has the better case`);
+    polished = replaceAllLiteral(polished, `${name} have been the hotter team`, `${name} has been in better form`);
+    polished = replaceAllLiteral(polished, `${name} have the momentum`, `${name} has the momentum`);
+    polished = replaceAllLiteral(polished, `${name} are the pick`, `${name} is the pick`);
+    polished = replaceAllLiteral(polished, `${name} are the side`, `${name} is the side`);
+    polished = replaceAllLiteral(polished, `${name} are the play`, `${name} is the play`);
+    polished = replaceAllLiteral(polished, `${name} are the clear side`, `${name} is the clear side`);
+    polished = replaceAllLiteral(polished, `${name} are the strong read`, `${name} is the strong read`);
+    polished = replaceAllLiteral(polished, `${name} are cooking`, `${name} is in a good spot`);
+    polished = replaceAllLiteral(polished, `${name} look built different`, `${name} looks built different`);
+    polished = replaceAllLiteral(polished, `${name} just grade`, `${name} just grades`);
+    polished = replaceAllLiteral(polished, `${name} rate ahead`, `${name} rates ahead`);
+    polished = replaceAllLiteral(polished, `${name} carry the stronger profile`, `${name} carries the stronger profile`);
+    polished = replaceAllLiteral(polished, `${name} sit at`, `${name} sits at`);
+  }
+
+  return polished;
+}
+
 function winnerName(input: NarrativeInput): string | null {
   return input.winnerAbbr ? teamName(input, input.winnerAbbr) : null;
 }
@@ -523,7 +552,7 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     if (unavailableKeyFactors.length > 0) {
       parts.push(`One thing to flag: ${unavailableKeyFactors[0]}.`);
     }
-    return parts.join(" ");
+    return polishIndividualCompetitorCopy(input, parts.join(" "));
   }
 
   // ── Band-appropriate opening ──
@@ -686,7 +715,7 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     text = parts.slice(0, 10).join(" ");
   }
 
-  return text;
+  return polishIndividualCompetitorCopy(input, text);
 }
 
 function formatInjuryNotes(injuries: NarrativeInjury[]): string[] {

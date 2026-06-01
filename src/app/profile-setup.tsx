@@ -162,7 +162,7 @@ export default function ProfileSetupScreen() {
           {/* Header */}
           <Animated.View
             entering={FadeInDown.delay(0).duration(500)}
-            style={{ alignItems: 'center', paddingTop: 60, marginBottom: 40 }}
+            style={{ alignItems: 'center', paddingTop: 36, marginBottom: 30 }}
           >
             <Text
               style={{
@@ -187,9 +187,16 @@ export default function ProfileSetupScreen() {
           {/* Profile Photo */}
           <Animated.View
             entering={FadeInDown.delay(100).duration(500)}
-            style={{ alignItems: 'center', marginBottom: 40 }}
+            style={{ alignItems: 'center', marginBottom: 28 }}
           >
-            <Pressable onPress={handlePhotoPress} disabled={isUploading}>
+            <Pressable
+              onPress={handlePhotoPress}
+              disabled={isUploading}
+              accessibilityRole="button"
+              accessibilityLabel={profileImage ? "Change profile photo" : "Add profile photo"}
+              accessibilityState={{ disabled: isUploading, busy: isUploading }}
+              hitSlop={8}
+            >
               <View
                 style={{
                   width: 100,
@@ -236,7 +243,14 @@ export default function ProfileSetupScreen() {
               </View>
             </Pressable>
             {!profileImage && (
-              <Pressable onPress={handlePhotoPress} disabled={isUploading}>
+              <Pressable
+                onPress={handlePhotoPress}
+                disabled={isUploading}
+                accessibilityRole="button"
+                accessibilityLabel="Add profile photo"
+                accessibilityState={{ disabled: isUploading, busy: isUploading }}
+                style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+              >
                 <Text
                   style={{
                     color: TEAL,
@@ -254,7 +268,7 @@ export default function ProfileSetupScreen() {
           {/* Display Name */}
           <Animated.View
             entering={FadeInDown.delay(200).duration(500)}
-            style={{ marginBottom: 32 }}
+            style={{ marginBottom: 28 }}
           >
             <Text
               style={{
@@ -282,6 +296,7 @@ export default function ProfileSetupScreen() {
               <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
+                accessibilityLabel="Display name"
                 placeholder="Enter your name"
                 placeholderTextColor="rgba(255,255,255,0.25)"
                 maxLength={20}
@@ -335,6 +350,9 @@ export default function ProfileSetupScreen() {
                   <Pressable
                     key={league.id}
                     onPress={() => toggleLeague(league.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Toggle ${league.name}`}
+                    accessibilityState={{ selected: isSelected }}
                     style={{
                       width: '30.6%',
                       minHeight: 48,
@@ -388,6 +406,9 @@ export default function ProfileSetupScreen() {
             <Pressable
               onPress={handleContinue}
               disabled={isSaving}
+              accessibilityRole="button"
+              accessibilityLabel={hasDisplayName ? "Let's Go" : "Skip for Now"}
+              accessibilityState={{ disabled: isSaving, busy: isSaving }}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.9 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],

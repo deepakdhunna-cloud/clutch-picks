@@ -47,9 +47,7 @@ const UserItem = React.memo(function UserItem({ user, currentUserId, onNavigateT
   };
 
   return (
-    <Pressable
-      onPress={() => onNavigateToProfile(user.id)}
-      className="active:opacity-80"
+    <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -58,51 +56,69 @@ const UserItem = React.memo(function UserItem({ user, currentUserId, onNavigateT
         borderBottomColor: 'rgba(255, 255, 255, 0.05)',
       }}
     >
-      {/* Avatar */}
-      <View
+      <Pressable
+        onPress={() => onNavigateToProfile(user.id)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${user.name || 'User'} profile`}
+        accessibilityHint="Opens this user's public profile"
+        className="active:opacity-80"
         style={{
-          width: 50,
-          height: 50,
-          borderRadius: 25,
-          overflow: 'hidden',
-          borderWidth: 2,
-          borderColor: theme.colors.primary,
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          flex: 1,
+          minHeight: 50,
+          flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
+          marginRight: isOwnProfile ? 0 : 12,
         }}
       >
-        {user.image ? (
-          <Image
-            source={{ uri: user.image }}
-            style={{ width: '100%', height: '100%' }}
-            cachePolicy="memory-disk"
-            contentFit="cover"
-            recyclingKey={user.id}
-            transition={150}
-          />
-        ) : (
-          <User size={24} color="#FFFFFF" />
-        )}
-      </View>
+        {/* Avatar */}
+        <View
+          style={{
+            width: 50,
+            height: 50,
+            borderRadius: 25,
+            overflow: 'hidden',
+            borderWidth: 2,
+            borderColor: theme.colors.primary,
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {user.image ? (
+            <Image
+              source={{ uri: user.image }}
+              style={{ width: '100%', height: '100%' }}
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              recyclingKey={user.id}
+              transition={150}
+            />
+          ) : (
+            <User size={24} color="#FFFFFF" />
+          )}
+        </View>
 
-      {/* User Info */}
-      <View className="flex-1 ml-3">
-        <Text className="text-white font-semibold text-base">
-          {user.name || 'User'}
-        </Text>
-        {user.bio ? (
-          <Text className="text-zinc-500 text-sm mt-0.5" numberOfLines={1}>
-            {user.bio}
+        {/* User Info */}
+        <View className="flex-1 ml-3">
+          <Text className="text-white font-semibold text-base">
+            {user.name || 'User'}
           </Text>
-        ) : null}
-      </View>
+          {user.bio ? (
+            <Text className="text-zinc-500 text-sm mt-0.5" numberOfLines={1}>
+              {user.bio}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
 
       {/* Follow Button */}
       {!isOwnProfile ? (
         <Pressable
           onPress={handleFollowToggle}
           disabled={isFollowLoading}
+          accessibilityRole="button"
+          accessibilityLabel={isFollowing ? `Unfollow ${user.name || 'User'}` : `Follow ${user.name || 'User'}`}
+          accessibilityState={{ disabled: isFollowLoading, busy: isFollowLoading }}
           hitSlop={8}
           className="active:opacity-80"
           style={{
@@ -112,6 +128,7 @@ const UserItem = React.memo(function UserItem({ user, currentUserId, onNavigateT
             paddingHorizontal: 16,
             paddingVertical: 8,
             borderRadius: 20,
+            minHeight: 44,
             backgroundColor: isFollowing
               ? 'rgba(255, 255, 255, 0.1)'
               : theme.colors.primary,
@@ -136,7 +153,7 @@ const UserItem = React.memo(function UserItem({ user, currentUserId, onNavigateT
           )}
         </Pressable>
       ) : null}
-    </Pressable>
+    </View>
   );
 });
 
@@ -224,13 +241,15 @@ export default function FollowersScreen() {
         className="px-5 pt-4 pb-3 flex-row items-center"
       >
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
           onPress={() => router.back()}
           hitSlop={8}
           className="active:opacity-70"
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
             backgroundColor: 'rgba(255, 255, 255, 0.1)',
             alignItems: 'center',
             justifyContent: 'center',
@@ -258,9 +277,13 @@ export default function FollowersScreen() {
         >
           <Pressable
             onPress={() => setActiveTab('followers')}
+            accessibilityRole="tab"
+            accessibilityLabel="Followers tab"
+            accessibilityState={{ selected: activeTab === 'followers' }}
             className="flex-1"
             style={{
               paddingVertical: 12,
+              minHeight: 44,
               borderRadius: 10,
               backgroundColor:
                 activeTab === 'followers' ? theme.colors.primary : 'transparent',
@@ -278,9 +301,13 @@ export default function FollowersScreen() {
           </Pressable>
           <Pressable
             onPress={() => setActiveTab('following')}
+            accessibilityRole="tab"
+            accessibilityLabel="Following tab"
+            accessibilityState={{ selected: activeTab === 'following' }}
             className="flex-1"
             style={{
               paddingVertical: 12,
+              minHeight: 44,
               borderRadius: 10,
               backgroundColor:
                 activeTab === 'following' ? theme.colors.primary : 'transparent',

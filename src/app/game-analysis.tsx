@@ -272,7 +272,7 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
@@ -290,7 +290,7 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
@@ -309,7 +309,7 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
@@ -341,7 +341,7 @@ export default function GameAnalysisScreen() {
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: TEAL, letterSpacing: 2, marginBottom: 5 }}>FULL BREAKDOWN</Text>
-                    <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0 }}>AI analysis is queued</Text>
+                    <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0 }}>AI analysis is ready</Text>
                   </View>
                   <View style={{ borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: 'rgba(139,10,31,0.14)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.30)' }}>
                     <Text style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: 'rgba(255,255,255,0.82)', letterSpacing: 1.3 }}>PRO</Text>
@@ -359,7 +359,13 @@ export default function GameAnalysisScreen() {
                     </View>
                   ))}
                 </View>
-                <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                <Pressable
+                  onPress={() => router.push('/paywall')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Preview Pro analysis"
+                  accessibilityHint="Opens Clutch Picks Pro"
+                  style={{ width: '100%' }}
+                >
                   <LinearGradient colors={['rgba(122,157,184,0.24)', 'rgba(139,10,31,0.18)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 15, padding: 1 }}>
                     <View style={{ flex: 1, borderRadius: 14, backgroundColor: 'rgba(5,8,13,0.78)', alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF' }}>Preview Pro</Text>
@@ -421,7 +427,7 @@ export default function GameAnalysisScreen() {
       {/* Header */}
       <View style={[s.headerWrap, { paddingTop: insets.top }]}>
         <View style={s.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
             <Text style={{ fontSize: 22, color: '#FFF', lineHeight: 24 }}>‹</Text>
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -611,8 +617,8 @@ const s = StyleSheet.create({
     paddingVertical: 16,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
