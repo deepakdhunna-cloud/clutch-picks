@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from 'react';
 import {
-  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, Platform, InteractionManager,
+  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, InteractionManager, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import PagerView from 'react-native-pager-view';
-import Svg, { Circle, Defs, Ellipse, G, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { Search, ChevronRight, Plus, Zap, Lock, WifiOff, RefreshCw } from 'lucide-react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSubscription } from '@/lib/subscription-context';
@@ -37,6 +37,7 @@ import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { pruneFollowedGamesForReset, readFollowedGameIds } from '@/lib/followed-games';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import {
   GLASS_BOTTOM_NAV_FADE_HEIGHT,
   GLASS_BOTTOM_NAV_HEIGHT,
@@ -50,6 +51,7 @@ import {
 } from '@/lib/theme';
 import { TeamJersey } from '@/components/sports/TeamJersey';
 import { ArenaScoreboard as SharedArenaScoreboard } from '@/components/sports/ArenaScoreboard';
+import { TennisScoreGrid } from '@/components/sports/TennisScoreGrid';
 
 // ─── COLORS ───
 const ERROR_DIM = 'rgba(239,68,68,0.10)';
@@ -63,7 +65,6 @@ const ARENA_SECTION_GAP = 28;
 const ARENA_CARD_GAP = 18;
 const MODE_SEGMENT_GAP = 8;
 const MODES = ['Game Day', 'Prep Mode', 'Review'] as const;
-const TC = [TEAL, LIVE_RED, MAROON] as const;
 type LiveIntelType = 'alert' | 'shift' | 'trend' | 'pulse';
 type LiveIntelItem = { type: LiveIntelType; title: string; body: string };
 type ArenaHorizontalGestureGuard = {
@@ -633,6 +634,7 @@ const ArenaScrollView = memo(function ArenaScrollView({
 
 type FinalTeamResult = 'winner' | 'loser' | 'neutral';
 const FOLLOWED_CARD_W = Math.min(344, Math.max(298, SW - 50));
+const FOLLOWED_CARD_SIDE_PADDING = Math.max(ARENA_SIDE_PADDING, (SW - FOLLOWED_CARD_W) / 2);
 
 const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPrediction }) {
   const { openGame, warmGame } = useGameDetailActions();
@@ -914,12 +916,13 @@ const YourGames = memo(function YourGames({
         decelerationRate="fast"
         snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}
         snapToAlignment="start"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
+        disableIntervalMomentum
+        contentContainerStyle={{ paddingHorizontal: FOLLOWED_CARD_SIDE_PADDING, paddingBottom: 4 }}
         ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
-        removeClippedSubviews
+        removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <FollowedCard game={item} />}
         getItemLayout={(_, index) => ({ length: FOLLOWED_CARD_W + ARENA_CARD_GAP, offset: (FOLLOWED_CARD_W + ARENA_CARD_GAP) * index, index })}
@@ -1036,271 +1039,12 @@ function matchupTitle(awayName: string, homeName: string): string {
   return `${protectName(awayName)} vs ${protectName(homeName)}`;
 }
 
-const SCORE_FACE_MATRIX: Record<string, number[][]> = {
-  '0': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 1, 1], [1, 0, 1, 0, 1], [1, 1, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-  '1': [[0, 0, 1, 0, 0], [0, 1, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 1, 1, 1, 0]],
-  '2': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [1, 1, 1, 1, 1]],
-  '3': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 0, 1, 1, 0], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-  '4': [[0, 0, 0, 1, 0], [0, 0, 1, 1, 0], [0, 1, 0, 1, 0], [1, 0, 0, 1, 0], [1, 1, 1, 1, 1], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0]],
-  '5': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-  '6': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-  '7': [[1, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0]],
-  '8': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-  '9': [[0, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 1], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-  '-': [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
-  '/': [[0, 0, 0, 0, 1], [0, 0, 0, 1, 0], [0, 0, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]],
-  ' ': [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
-  'D': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
-  'E': [[1, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 1, 1, 1]],
-  'I': [[1, 1, 1], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [1, 1, 1]],
-  'N': [[1, 0, 0, 0, 1], [1, 1, 0, 0, 1], [1, 0, 1, 0, 1], [1, 0, 0, 1, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1]],
-  'P': [[1, 1, 1, 1, 0], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 1, 1, 1, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0]],
-  'S': [[0, 1, 1, 1, 1], [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 1, 1, 1, 0]],
-  'U': [[1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [1, 0, 0, 0, 1], [0, 1, 1, 1, 0]],
-};
-
-const SCORE_FACE_SCALE = 2;
-const SCORE_FACE_PITCH = 1.62;
-const SCORE_FACE_PAD_X = 6;
-const SCORE_FACE_PAD_Y = 5;
-const SCORE_FACE_GAP = 2;
-
-function scoreFaceTextWidth(text: string, glyphScale = SCORE_FACE_SCALE): number {
-  let cols = 0;
-  for (let i = 0; i < text.length; i++) {
-    const matrix = SCORE_FACE_MATRIX[text[i]];
-    if (!matrix) continue;
-    if (cols > 0) cols += SCORE_FACE_GAP;
-    cols += matrix[0].length * glyphScale;
-  }
-  return cols;
+function compactTennisPlayerName(name: string): string {
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  const parts = trimmed.split(' ').filter(Boolean);
+  if (parts.length < 2) return trimmed;
+  return `${parts[0].charAt(0)}. ${parts[parts.length - 1]}`;
 }
-
-const ArenaScoreFace = memo(function ArenaScoreFace({ homeScore, awayScore, label }: { homeScore: number; awayScore: number; label?: string }) {
-  const text = label ? label.toUpperCase() : `${homeScore}-${awayScore}`;
-  const glyphScale = label ? (text.length <= 3 ? SCORE_FACE_SCALE : 1) : SCORE_FACE_SCALE;
-  const textCols = scoreFaceTextWidth(text, glyphScale);
-  const cols = textCols + 4;
-  const rows = 7 * glyphScale + 4;
-  const width = cols * SCORE_FACE_PITCH + SCORE_FACE_PAD_X * 2;
-  const height = rows * SCORE_FACE_PITCH + SCORE_FACE_PAD_Y * 2;
-
-  const lit = new Set<string>();
-  let cursor = 2;
-  for (let i = 0; i < text.length; i++) {
-    const matrix = SCORE_FACE_MATRIX[text[i]];
-    if (!matrix) continue;
-    if (i > 0) cursor += SCORE_FACE_GAP;
-    for (let row = 0; row < matrix.length; row++) {
-      for (let col = 0; col < matrix[row].length; col++) {
-        if (matrix[row][col] !== 1) continue;
-        for (let sy = 0; sy < glyphScale; sy++) {
-          for (let sx = 0; sx < glyphScale; sx++) {
-            lit.add(`${cursor + col * glyphScale + sx},${row * glyphScale + sy + 2}`);
-          }
-        }
-      }
-    }
-    cursor += matrix[0].length * glyphScale;
-  }
-
-  const litCells = Array.from(lit).map((coord) => {
-    const [col, row] = coord.split(',').map(Number);
-    return {
-      x: SCORE_FACE_PAD_X + col * SCORE_FACE_PITCH + SCORE_FACE_PITCH / 2,
-      y: SCORE_FACE_PAD_Y + row * SCORE_FACE_PITCH + SCORE_FACE_PITCH / 2,
-    };
-  });
-
-  return (
-    <View style={{ borderRadius: 10, overflow: 'hidden', backgroundColor: '#020303' }}>
-      <Svg width={width} height={height}>
-        <Defs>
-          <RadialGradient id="scoreFaceLit" cx="50%" cy="42%" r="62%">
-            <Stop offset="0%" stopColor="#ffffff" stopOpacity={1} />
-            <Stop offset="46%" stopColor="#f7fbfc" stopOpacity={1} />
-            <Stop offset="100%" stopColor="#aeb8bd" stopOpacity={1} />
-          </RadialGradient>
-          <RadialGradient id="scoreFaceOff" cx="45%" cy="38%" r="64%">
-            <Stop offset="0%" stopColor="#323738" stopOpacity={1} />
-            <Stop offset="56%" stopColor="#131718" stopOpacity={1} />
-            <Stop offset="100%" stopColor="#050606" stopOpacity={1} />
-          </RadialGradient>
-          <Pattern id="scoreFaceOffPattern" width={SCORE_FACE_PITCH} height={SCORE_FACE_PITCH} patternUnits="userSpaceOnUse">
-            <Circle cx={SCORE_FACE_PITCH / 2} cy={SCORE_FACE_PITCH / 2} r={0.82} fill="#010202" opacity={0.96} />
-            <Circle cx={SCORE_FACE_PITCH / 2} cy={SCORE_FACE_PITCH / 2} r={0.58} fill="url(#scoreFaceOff)" opacity={0.9} />
-            <Circle cx={SCORE_FACE_PITCH / 2 - 0.16} cy={SCORE_FACE_PITCH / 2 - 0.18} r={0.13} fill="#475052" opacity={0.18} />
-          </Pattern>
-        </Defs>
-        <Rect x={0} y={0} width={width} height={height} fill="#020303" />
-        <Rect x={1} y={1} width={width - 2} height={height - 2} rx={7} fill="#070909" />
-        <Rect
-          x={SCORE_FACE_PAD_X}
-          y={SCORE_FACE_PAD_Y}
-          width={cols * SCORE_FACE_PITCH}
-          height={rows * SCORE_FACE_PITCH}
-          fill="url(#scoreFaceOffPattern)"
-        />
-        {litCells.map((cell, index) => (
-          <G key={`lit-${index}`}>
-            <Circle cx={cell.x} cy={cell.y} r={1.52} fill="#eaf7ff" opacity={0.13} />
-            <Circle cx={cell.x} cy={cell.y} r={0.82} fill="#010202" opacity={0.96} />
-            <Circle cx={cell.x} cy={cell.y} r={0.58} fill="url(#scoreFaceLit)" />
-            <Circle cx={cell.x - 0.18} cy={cell.y - 0.2} r={0.16} fill="#ffffff" opacity={0.72} />
-          </G>
-        ))}
-        {Array.from({ length: rows + 1 }).map((_, row) => (
-          <Rect key={`scan-${row}`} x={0} y={SCORE_FACE_PAD_Y + row * SCORE_FACE_PITCH - 0.18} width={width} height={0.2} fill="#ffffff" opacity={0.025} />
-        ))}
-        {Array.from({ length: Math.floor(cols / 5) + 1 }).map((_, col) => (
-          <Rect key={`panel-col-${col}`} x={SCORE_FACE_PAD_X + col * SCORE_FACE_PITCH * 5 - 0.1} y={2} width={0.2} height={height - 4} fill="#000000" opacity={0.28} />
-        ))}
-        <Rect x={0} y={0} width={width} height={height * 0.28} fill="#ffffff" opacity={0.052} />
-        <Rect x={0} y={height * 0.7} width={width} height={height * 0.3} fill="#000000" opacity={0.3} />
-        <Rect x={0} y={0} width={width} height={height} fill="#000000" opacity={0.06} />
-      </Svg>
-    </View>
-  );
-});
-
-const ArenaScoreboard = memo(function ArenaScoreboard({
-  awayScore,
-  homeScore,
-  awayColor,
-  homeColor,
-  label,
-  subLabel,
-  detailLabel,
-}: {
-  awayScore: number;
-  homeScore: number;
-  awayColor: string;
-  homeColor: string;
-  label?: string;
-  subLabel?: string;
-  detailLabel?: string;
-}) {
-  const hasStatusDetail = Boolean(label && (subLabel || detailLabel));
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: 8,
-          right: 8,
-          bottom: -5,
-          height: 12,
-          borderRadius: 8,
-          backgroundColor: 'rgba(0,0,0,0.56)',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 5 },
-          shadowOpacity: 0.7,
-          shadowRadius: 8,
-        }}
-      />
-      <LinearGradient
-        colors={['#46515d', '#111318', '#050505', '#2b323a']}
-        locations={[0, 0.2, 0.62, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={{
-          borderRadius: 18,
-          padding: 3,
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.18)',
-          shadowColor: '#ffffff',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.14,
-          shadowRadius: 14,
-        }}
-      >
-        <View style={{ borderRadius: 15, padding: 5, backgroundColor: '#030303', overflow: 'hidden' }}>
-          <LinearGradient
-            colors={[hexWithAlpha(homeColor, 0.62), 'rgba(255,255,255,0.34)', hexWithAlpha(awayColor, 0.62)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ position: 'absolute', top: 0, left: 8, right: 8, height: 2 }}
-          />
-          <LinearGradient
-            colors={[hexWithAlpha(homeColor, 0.26), 'rgba(255,255,255,0.04)', hexWithAlpha(awayColor, 0.26)]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, backgroundColor: hexWithAlpha(homeColor, 0.75), borderTopRightRadius: 3, borderBottomRightRadius: 3 }} />
-          <View style={{ position: 'absolute', right: 0, top: 10, bottom: 10, width: 3, backgroundColor: hexWithAlpha(awayColor, 0.75), borderTopLeftRadius: 3, borderBottomLeftRadius: 3 }} />
-          {[
-            { top: 4, left: 4 },
-            { top: 4, right: 4 },
-            { bottom: 4, left: 4 },
-            { bottom: 4, right: 4 },
-          ].map((pos, i) => (
-            <View
-              key={i}
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                ...pos,
-                width: 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: '#050505',
-                borderWidth: 0.7,
-                borderColor: 'rgba(255,255,255,0.28)',
-              }}
-            />
-          ))}
-          <View style={{ borderRadius: 12, padding: 2, backgroundColor: 'rgba(255,255,255,0.04)' }}>
-            <ArenaScoreFace awayScore={awayScore} homeScore={homeScore} label={label} />
-          </View>
-          {hasStatusDetail ? (
-            <View style={{ alignItems: 'center', paddingTop: 5, paddingHorizontal: 5, minWidth: 98, maxWidth: 150 }}>
-              {subLabel ? (
-                <Text
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.72}
-                  numberOfLines={1}
-                  style={{
-                    color: '#f8fafc',
-                    fontSize: 10,
-                    fontWeight: '900',
-                    textAlign: 'center',
-                  }}
-                >
-                  {subLabel}
-                </Text>
-              ) : null}
-              {detailLabel ? (
-                <Text
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.72}
-                  numberOfLines={1}
-                  style={{
-                    color: 'rgba(248,250,252,0.66)',
-                    fontSize: 8.5,
-                    fontWeight: '800',
-                    marginTop: 1,
-                    textAlign: 'center',
-                  }}
-                >
-                  {detailLabel}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-          <LinearGradient
-            colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.08)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-            pointerEvents="none"
-          />
-        </View>
-      </LinearGradient>
-    </View>
-  );
-});
 
 const LiveCard = memo(function LiveCard({
   game,
@@ -1334,6 +1078,7 @@ const LiveCard = memo(function LiveCard({
   const suspended = isSuspendedGame(game);
   const suspensionTime = suspendedResumeText(game);
   const suspensionReason = suspendedReasonText(game);
+  const isTennis = game.sport === Sport.TENNIS;
   const isCricket = game.sport === Sport.IPL;
   const cricketOvers = !suspended ? cricketOversText(game) : null;
   const cricketRequired = !suspended ? cricketRequiredText(game) : null;
@@ -1415,6 +1160,109 @@ const LiveCard = memo(function LiveCard({
       </View>
     );
   };
+
+  const tennisScoreScale = 0.82;
+  const tennisScoreWidth = scoreColumnWidth;
+
+  const renderTennisTeam = (
+    side: 'home' | 'away',
+    colors: { primary: string; secondary: string; accent?: string },
+    leading: boolean,
+    otherLeading: boolean,
+  ) => {
+    const team = side === 'home' ? game.homeTeam : game.awayTeam;
+    const record = team.record?.trim();
+
+    return (
+      <View style={{ width: teamColumnWidth, alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
+        <View style={{ height: 78, alignItems: 'center', justifyContent: 'center', opacity: leading || !otherLeading ? 1 : 0.66, transform: [{ scale: leading ? 1.04 : 1 }] }}>
+          <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <SoftGlow width={62 * 1.72} height={62 * 1.72} intensity={0.72} />
+          </View>
+          <TeamJersey
+            teamAbbreviation={team.abbreviation}
+            teamName={team.name}
+            primaryColor={colors.primary}
+            secondaryColor={colors.secondary}
+            size={62}
+            sport={game.sport as Sport}
+          />
+        </View>
+        {record ? (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            style={{
+              alignSelf: 'stretch',
+              color: leading ? '#d1d5db' : '#8b95a5',
+              fontSize: 9.5,
+              fontWeight: '800',
+              lineHeight: 12,
+              marginTop: 4,
+              textAlign: 'center',
+            }}
+          >
+            {record}
+          </Text>
+        ) : null}
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+          style={{
+            alignSelf: 'stretch',
+            color: '#f8fafc',
+            fontSize: 12.4,
+            fontWeight: '900',
+            lineHeight: 15,
+            marginTop: record ? 2 : 5,
+            minHeight: 15,
+            textAlign: 'center',
+          }}
+        >
+          {compactTennisPlayerName(team.name)}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderTennisBody = () => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 1, paddingBottom: 16, minHeight: 148 }}>
+      {renderTennisTeam('home', homeColors, homeLeading, awayLeading)}
+
+      <View style={{ width: tennisScoreWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
+        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <SoftGlow width={tennisScoreWidth * 1.08} height={(59.16 * tennisScoreScale + 2) * 1.62} intensity={0.6} />
+          </View>
+          <SharedArenaScoreboard
+            awayScore={as2}
+            homeScore={hs}
+            awayColor={awayAccent}
+            homeColor={homeAccent}
+            scale={tennisScoreScale}
+            label={suspended ? 'SUSPENDED' : undefined}
+            subLabel={suspended ? suspensionReason : undefined}
+            detailLabel={suspended ? suspensionTime : undefined}
+          />
+        </View>
+        {!suspended ? (
+          <View style={{ marginTop: 8, alignItems: 'center', justifyContent: 'center' }}>
+            <TennisScoreGrid
+              game={game}
+              variant="rail"
+              homeColor={homeAccent}
+              awayColor={awayAccent}
+              showTeams={false}
+            />
+          </View>
+        ) : null}
+      </View>
+
+      {renderTennisTeam('away', awayColors, awayLeading, homeLeading)}
+    </View>
+  );
 
   return (
     <Pressable
@@ -1559,111 +1407,113 @@ const LiveCard = memo(function LiveCard({
           </View>
         </View>
 
-        {/* C) Match body — home left, score middle, away right */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 1, paddingBottom: 16 }}>
-          {/* Home block (left) */}
-          <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
-            <View style={{ height: 78, alignItems: 'center', justifyContent: 'center', opacity: homeLeading || !awayLeading ? 1 : 0.66, transform: [{ scale: homeLeading ? 1.04 : 1 }] }}>
-              {/* Soft black shadow grounds the jersey against the team color. */}
-              <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                <SoftGlow width={62 * 1.72} height={62 * 1.72} intensity={0.72} />
+        {/* C) Match body — tennis uses player metadata + set scores; other sports keep the team-versus-team layout. */}
+        {isTennis ? renderTennisBody() : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 1, paddingBottom: 16 }}>
+            {/* Home block (left) */}
+            <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
+              <View style={{ height: 78, alignItems: 'center', justifyContent: 'center', opacity: homeLeading || !awayLeading ? 1 : 0.66, transform: [{ scale: homeLeading ? 1.04 : 1 }] }}>
+                {/* Soft black shadow grounds the jersey against the team color. */}
+                <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  <SoftGlow width={62 * 1.72} height={62 * 1.72} intensity={0.72} />
+                </View>
+                <TeamJersey
+                  teamAbbreviation={game.homeTeam.abbreviation}
+                  teamName={game.homeTeam.name}
+                  primaryColor={homeColors.primary}
+                  secondaryColor={homeColors.secondary}
+                  size={62}
+                  sport={game.sport as Sport}
+                />
               </View>
-              <TeamJersey
-                teamAbbreviation={game.homeTeam.abbreviation}
-                teamName={game.homeTeam.name}
-                primaryColor={homeColors.primary}
-                secondaryColor={homeColors.secondary}
-                size={62}
-                sport={game.sport as Sport}
-              />
+              <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '900', lineHeight: 15.5, textAlign: 'center', marginTop: 5, minHeight: 32 }} numberOfLines={2}>
+                {game.homeTeam.name}
+              </Text>
+              {isCricket ? (
+                renderCricketTeamMeta(homeScoreLabel, homeCricketRole, homeColors)
+              ) : (
+                <Text style={{ color: homeLeading ? '#d1d5db' : '#8b95a5', fontSize: 11, fontWeight: '700', marginTop: 3 }}>{game.homeTeam.record}</Text>
+              )}
             </View>
-            <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '900', lineHeight: 15.5, textAlign: 'center', marginTop: 5, minHeight: 32 }} numberOfLines={2}>
-              {game.homeTeam.name}
-            </Text>
-            {isCricket ? (
-              renderCricketTeamMeta(homeScoreLabel, homeCricketRole, homeColors)
-            ) : (
-              <Text style={{ color: homeLeading ? '#d1d5db' : '#8b95a5', fontSize: 11, fontWeight: '700', marginTop: 3 }}>{game.homeTeam.record}</Text>
-            )}
-          </View>
 
-          {/* D) LED score panel — same primitives + soft grounding glow as the "Live Now" card. */}
-          <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
-            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-              {/* Soft black shadow grounds the LED panel against the team color. */}
-              <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                <SoftGlow width={scoreColumnWidth * 1.14} height={(59.16 + 2) * 1.72} intensity={0.62} />
+            {/* D) LED score panel — same primitives + soft grounding glow as the "Live Now" card. */}
+            <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {/* Soft black shadow grounds the LED panel against the team color. */}
+                <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  <SoftGlow width={scoreColumnWidth * 1.14} height={(59.16 + 2) * 1.72} intensity={0.62} />
+                </View>
+                <SharedArenaScoreboard
+                  awayScore={as2}
+                  homeScore={hs}
+                  awayColor={awayAccent}
+                  homeColor={homeAccent}
+                  label={suspended ? 'SUSPENDED' : undefined}
+                  displayText={cricketLedScore ?? undefined}
+                  subLabel={suspended ? suspensionReason : undefined}
+                  detailLabel={suspended ? suspensionTime : undefined}
+                />
               </View>
-              <SharedArenaScoreboard
-                awayScore={as2}
-                homeScore={hs}
-                awayColor={awayAccent}
-                homeColor={homeAccent}
-                label={suspended ? 'SUSPENDED' : undefined}
-                displayText={cricketLedScore ?? undefined}
-                subLabel={suspended ? suspensionReason : undefined}
-                detailLabel={suspended ? suspensionTime : undefined}
-              />
-            </View>
-            {!suspended && matchTime ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIVE_RED, marginRight: 5 }} />
-                <Text
-                  style={{
-                    color: '#b8c3d1',
-                    fontSize: 9,
-                    fontWeight: '900',
-                    letterSpacing: 1.1,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {matchTime}
+              {!suspended && matchTime ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIVE_RED, marginRight: 5 }} />
+                  <Text
+                    style={{
+                      color: '#b8c3d1',
+                      fontSize: 9,
+                      fontWeight: '900',
+                      letterSpacing: 1.1,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {matchTime}
+                  </Text>
+                </View>
+              ) : null}
+              {!suspended && cricketCaption ? (
+                <Text style={{ color: 'rgba(248,250,252,0.66)', fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginTop: 6, textTransform: 'uppercase' }}>
+                  {cricketCaption}
                 </Text>
-              </View>
-            ) : null}
-            {!suspended && cricketCaption ? (
-              <Text style={{ color: 'rgba(248,250,252,0.66)', fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginTop: 6, textTransform: 'uppercase' }}>
-                {cricketCaption}
-              </Text>
-            ) : null}
-            {!suspended && cricketChaseLine ? (
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: scoreColumnWidth + 18, color: 'rgba(248,250,252,0.76)', fontSize: 8.8, fontWeight: '900', lineHeight: 11, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' }}>
-                {cricketChaseLine}
-              </Text>
-            ) : null}
-            {!suspended && cricketPlayerLine ? (
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: scoreColumnWidth + 18, color: 'rgba(248,250,252,0.56)', fontSize: 8.5, fontWeight: '800', lineHeight: 11, marginTop: 3, textAlign: 'center' }}>
-                {cricketPlayerLine}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Away block (right) */}
-          <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
-            <View style={{ height: 78, alignItems: 'center', justifyContent: 'center', opacity: awayLeading || !homeLeading ? 1 : 0.66, transform: [{ scale: awayLeading ? 1.04 : 1 }] }}>
-              {/* Soft black shadow grounds the jersey against the team color. */}
-              <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                <SoftGlow width={62 * 1.72} height={62 * 1.72} intensity={0.72} />
-              </View>
-              <TeamJersey
-                teamAbbreviation={game.awayTeam.abbreviation}
-                teamName={game.awayTeam.name}
-                primaryColor={awayColors.primary}
-                secondaryColor={awayColors.secondary}
-                size={62}
-                sport={game.sport as Sport}
-              />
+              ) : null}
+              {!suspended && cricketChaseLine ? (
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: scoreColumnWidth + 18, color: 'rgba(248,250,252,0.76)', fontSize: 8.8, fontWeight: '900', lineHeight: 11, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' }}>
+                  {cricketChaseLine}
+                </Text>
+              ) : null}
+              {!suspended && cricketPlayerLine ? (
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: scoreColumnWidth + 18, color: 'rgba(248,250,252,0.56)', fontSize: 8.5, fontWeight: '800', lineHeight: 11, marginTop: 3, textAlign: 'center' }}>
+                  {cricketPlayerLine}
+                </Text>
+              ) : null}
             </View>
-            <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '900', lineHeight: 15.5, textAlign: 'center', marginTop: 5, minHeight: 32 }} numberOfLines={2}>
-              {game.awayTeam.name}
-            </Text>
-            {isCricket ? (
-              renderCricketTeamMeta(awayScoreLabel, awayCricketRole, awayColors)
-            ) : (
-              <Text style={{ color: awayLeading ? '#d1d5db' : '#8b95a5', fontSize: 11, fontWeight: '700', marginTop: 3 }}>{game.awayTeam.record}</Text>
-            )}
+
+            {/* Away block (right) */}
+            <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
+              <View style={{ height: 78, alignItems: 'center', justifyContent: 'center', opacity: awayLeading || !homeLeading ? 1 : 0.66, transform: [{ scale: awayLeading ? 1.04 : 1 }] }}>
+                {/* Soft black shadow grounds the jersey against the team color. */}
+                <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  <SoftGlow width={62 * 1.72} height={62 * 1.72} intensity={0.72} />
+                </View>
+                <TeamJersey
+                  teamAbbreviation={game.awayTeam.abbreviation}
+                  teamName={game.awayTeam.name}
+                  primaryColor={awayColors.primary}
+                  secondaryColor={awayColors.secondary}
+                  size={62}
+                  sport={game.sport as Sport}
+                />
+              </View>
+              <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '900', lineHeight: 15.5, textAlign: 'center', marginTop: 5, minHeight: 32 }} numberOfLines={2}>
+                {game.awayTeam.name}
+              </Text>
+              {isCricket ? (
+                renderCricketTeamMeta(awayScoreLabel, awayCricketRole, awayColors)
+              ) : (
+                <Text style={{ color: awayLeading ? '#d1d5db' : '#8b95a5', fontSize: 11, fontWeight: '700', marginTop: 3 }}>{game.awayTeam.record}</Text>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* E) Hairline divider */}
         <LinearGradient
@@ -2000,10 +1850,16 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
   return (
     <Pressable
       onPress={() => { if (isLong) { fireSelectionHaptic(); setExpanded(!expanded); } }}
-      style={{
+      disabled={!isLong}
+      accessibilityRole={isLong ? 'button' : undefined}
+      accessibilityLabel={isLong ? (expanded ? `Collapse ${title} live intel` : `Read full ${title} live intel`) : undefined}
+      accessibilityState={isLong ? { expanded } : undefined}
+      style={({ pressed }) => ({
         marginBottom: ARENA_CARD_GAP,
         borderRadius: 16,
-      }}
+        opacity: pressed && isLong ? 0.9 : 1,
+        transform: [{ scale: pressed && isLong ? 0.992 : 1 }],
+      })}
     >
       <LinearGradient
         colors={[hexWithAlpha(bc, 0.56), 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.03)']}
@@ -2159,58 +2015,6 @@ const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress 
           </View>
         </LinearGradient>
       </Pressable>
-    </View>
-  );
-});
-
-// ─── PREDICTIONS STRIP ───
-const PredStrip = memo(function PredStrip({ picks }: { picks: UserPick[] }) {
-  // Sort by date descending, take last 10 resolved picks for the chart
-  const sorted = [...picks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const resolved = sorted.filter(p => p.result === 'win' || p.result === 'loss');
-  const pending = sorted.filter(p => p.result !== 'win' && p.result !== 'loss');
-  const l10 = resolved.slice(0, 10);
-  const pendingCount = pending.length;
-  const c = l10.filter(p => p.result === 'win').length;
-  const t = l10.length;
-  const a = t > 0 ? Math.round((c / t) * 100) : 0;
-  // Show oldest first in the chart (left = oldest, right = newest)
-  const chartPicks = [...l10].reverse();
-  // No pick has settled yet. A "0%" header and an empty bar row would read as a
-  // 0% win rate (and paint a misleading red), so show an explicit pending state.
-  const hasResolved = t > 0;
-  return (
-    <View style={{ backgroundColor: PANEL_DARK, borderWidth: 2, borderColor: 'rgba(139,10,31,0.14)', borderRadius: 18, padding: 18, marginHorizontal: 20, marginBottom: 24, shadowColor: '#000000', shadowOffset: { width: 0, height: 11 }, shadowOpacity: 0.28, shadowRadius: 20, elevation: 10 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Text style={{ fontSize: 12, fontWeight: '700', color: WHITE }}>Prediction Form</Text>
-        <Text style={{ fontSize: 12, fontWeight: '700', color: hasResolved ? (a >= 50 ? TEAL : MAROON) : TEXT_MUTED }}>{hasResolved ? `${a}%` : '—'}</Text>
-      </View>
-      {hasResolved ? (
-        <>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 24, marginBottom: 8 }}>
-            {chartPicks.map((p, i) => (
-              <View key={p.id || String(i)} style={{
-                flex: 1,
-                height: p.result === 'win' ? 24 : 8,
-                borderRadius: 2,
-                backgroundColor: p.result === 'win' ? TEAL : LOSS,
-                opacity: p.result === 'win' ? 0.9 : 0.5,
-                marginRight: i === chartPicks.length - 1 ? 0 : 4,
-              }} />
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 10, color: TEXT_MUTED }}>
-              Last {t} resolved{pendingCount > 0 ? ` · ${pendingCount} pending` : null}
-            </Text>
-            <Text style={{ fontSize: 10, color: TEAL }}>{c} wins</Text>
-          </View>
-        </>
-      ) : (
-        <Text style={{ fontSize: 11, lineHeight: 16, color: TEXT_MUTED }}>
-          {pendingCount === 1 ? '1 pick awaiting its final score.' : `${pendingCount} picks awaiting their final scores.`} Form fills in as games close.
-        </Text>
-      )}
     </View>
   );
 });
@@ -2418,10 +2222,14 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
       <LinearGradient pointerEvents="none" colors={[isFirst ? hexWithAlpha(MAROON, 0.13) : hexWithAlpha(TEAL, 0.08), 'rgba(5,8,13,0)', 'rgba(255,255,255,0.025)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
       <Pressable
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
-        style={{
+        accessibilityRole="button"
+        accessibilityLabel={expanded ? `Collapse matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}` : `Expand matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}
+        accessibilityState={{ expanded }}
+        style={({ pressed }) => ({
           padding: 16,
           paddingBottom: expanded ? 8 : 16,
-        }}
+          opacity: pressed ? 0.92 : 1,
+        })}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
           <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: isFirst ? hexWithAlpha(MAROON, 0.16) : hexWithAlpha(TEAL, 0.13), borderWidth: 1, borderColor: isFirst ? hexWithAlpha(MAROON, 0.26) : hexWithAlpha(TEAL, 0.22), alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
@@ -2446,9 +2254,14 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
           <Pressable
             onPressIn={() => warmGame(game)}
             onPress={() => openGame(game)}
-            style={{
+            accessibilityRole="button"
+            accessibilityLabel={`Open game details for ${game.awayTeam.name} at ${game.homeTeam.name}`}
+            accessibilityHint="Opens game details"
+            style={({ pressed }) => ({
               marginTop: 12,
-            }}
+              opacity: pressed ? 0.88 : 1,
+              transform: [{ scale: pressed ? 0.992 : 1 }],
+            })}
           >
             <View
               style={{
@@ -2513,8 +2326,12 @@ const ResultCard = memo(function ResultCard({ game, pick }: { game: GameWithPred
 });
 
 // ─── GAME DAY ───
-const CARD_W = SW - ARENA_SIDE_PADDING * 2;
-const LIVE_CARD_SNAP_INTERVAL = CARD_W + ARENA_CARD_GAP;
+const LIVE_CARD_SIDE_PEEK = 28;
+const LIVE_CARD_SIDE_SPACE = ARENA_CARD_GAP + LIVE_CARD_SIDE_PEEK;
+const LIVE_CARD_MIN_W = 260;
+// PagerView reports a slightly wider horizontal rail than the visible iPhone viewport.
+// Keep this correction isolated to the My Arena carousel spacer so the card size stays stable.
+const LIVE_RAIL_PAGER_GUTTER_CORRECTION = 11;
 
 const GameDay = memo(function GameDay({
   live,
@@ -2546,9 +2363,11 @@ const GameDay = memo(function GameDay({
   horizontalGestureGuard?: ArenaHorizontalGestureGuard;
 }) {
   const pm = useMemo(() => { const m = new Map<string, UserPick>(); picks.forEach(p => m.set(p.gameId, p)); return m; }, [picks]);
+  const liveRailRef = useRef<FlatList<GameWithPrediction> | null>(null);
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [liveSearch, setLiveSearch] = useState('');
   const [liveSportFilter, setLiveSportFilter] = useState('All');
+  const [liveRailWidth, setLiveRailWidth] = useState(SW);
   const liveSports = useMemo<Set<string>>(() => new Set(live.map(g => g.sport)), [live]);
   const liveSportCounts = useMemo(() => {
     const counts = new Map<string, number>([['All', live.length]]);
@@ -2569,30 +2388,56 @@ const GameDay = memo(function GameDay({
   }, [live, liveSearch, liveSportFilter]);
   const focusedGame = filteredLive[focusedIdx] ?? filteredLive[0] ?? null;
   const focusedIntel = useMemo(() => liveIntelLocked ? [] : generateLiveIntel(focusedGame), [focusedGame, liveIntelLocked]);
-  const liveCardSnapOffsets = useMemo<number[]>(
-    () => filteredLive.map((_, index) => index * LIVE_CARD_SNAP_INTERVAL),
-    [filteredLive.length],
-  );
   const liveInitialRenderCount = Math.min(filteredLive.length, 3);
-
+  const liveVisibleRailWidth = Math.min(liveRailWidth, SW);
+  const liveCardWidth = Math.max(LIVE_CARD_MIN_W, liveRailWidth - LIVE_CARD_SIDE_SPACE * 2);
+  const liveCardSidePadding = Math.max(0, (liveVisibleRailWidth - liveCardWidth) / 2);
+  const liveRailEdgeSpacer = Math.max(0, liveCardSidePadding - LIVE_RAIL_PAGER_GUTTER_CORRECTION);
+  const liveCardSnapInterval = liveCardWidth + ARENA_CARD_GAP;
+  const liveSnapOffsets = useMemo(
+    () => filteredLive.map((_, index) => index * liveCardSnapInterval),
+    [filteredLive, liveCardSnapInterval],
+  );
+  const onLiveRailLayout = useCallback((event: any) => {
+    const width = Math.round(event?.nativeEvent?.layout?.width ?? 0);
+    if (width <= 0) return;
+    setLiveRailWidth((current) => current === width ? current : width);
+  }, []);
   useEffect(() => {
     if (liveSportFilter !== 'All' && !liveSports.has(liveSportFilter)) setLiveSportFilter('All');
   }, [liveSportFilter, liveSports]);
 
   useEffect(() => {
     setFocusedIdx(0);
+    requestAnimationFrame(() => {
+      liveRailRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+    });
   }, [liveSearch, liveSportFilter]);
 
   useEffect(() => {
     if (focusedIdx >= filteredLive.length) setFocusedIdx(0);
   }, [focusedIdx, filteredLive.length]);
 
-  const onLiveScroll = useCallback((e: any) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / LIVE_CARD_SNAP_INTERVAL);
-    if (idx >= 0 && idx < filteredLive.length) {
-      setFocusedIdx((current) => idx === current ? current : idx);
+  useEffect(() => {
+    if (!filteredLive.length) return;
+    const idx = Math.max(0, Math.min(filteredLive.length - 1, focusedIdx));
+    requestAnimationFrame(() => {
+      liveRailRef.current?.scrollToOffset?.({ offset: idx * liveCardSnapInterval, animated: false });
+    });
+  }, [filteredLive.length, focusedIdx, liveCardSnapInterval]);
+
+  const snapLiveRail = useCallback((e: any, animated = true) => {
+    if (!filteredLive.length) return;
+    const rawOffset = Number(e?.nativeEvent?.contentOffset?.x ?? 0);
+    const idx = Math.max(0, Math.min(filteredLive.length - 1, Math.round(rawOffset / liveCardSnapInterval)));
+    const exactOffset = idx * liveCardSnapInterval;
+    setFocusedIdx((current) => idx === current ? current : idx);
+    if (Math.abs(rawOffset - exactOffset) > 0.5) {
+      requestAnimationFrame(() => {
+        liveRailRef.current?.scrollToOffset?.({ offset: exactOffset, animated });
+      });
     }
-  }, [filteredLive.length]);
+  }, [filteredLive.length, liveCardSnapInterval]);
 
   // No live games
   if (!live.length) return (
@@ -2713,54 +2558,62 @@ const GameDay = memo(function GameDay({
           <Text style={{fontSize:13, color:TEXT_MUTED}}>{liveSearch.trim() ? `No live games match "${liveSearch}"` : 'No live games match this sport'}</Text>
         </View>
       ) : filteredLive.length === 1 ? (
-        <View style={{paddingHorizontal:20, marginBottom:ARENA_CARD_GAP}}>
+        <View onLayout={onLiveRailLayout} style={{paddingHorizontal:liveCardSidePadding, marginBottom:ARENA_CARD_GAP}}>
           <LiveCard
             game={filteredLive[0]}
             pick={pm.get(filteredLive[0].id)}
-            cardWidth={CARD_W}
+            cardWidth={liveCardWidth}
             showModelEdge={!liveIntelLocked}
             showMomentum={!liveIntelLocked}
           />
         </View>
       ) : (
-        <Animated.FlatList
-          data={filteredLive}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToOffsets={liveCardSnapOffsets}
-          snapToAlignment="start"
-          disableIntervalMomentum
-          decelerationRate="fast"
-          contentContainerStyle={{paddingHorizontal:ARENA_SIDE_PADDING}}
-          ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
-          initialNumToRender={liveInitialRenderCount}
-          maxToRenderPerBatch={3}
-          updateCellsBatchingPeriod={16}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS === 'android'}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <LiveCard
-              game={item}
-              pick={pm.get(item.id)}
-              cardWidth={CARD_W}
-              showModelEdge={!liveIntelLocked}
-              showMomentum={!liveIntelLocked}
-            />
-          )}
-          getItemLayout={(_, index) => ({ length: LIVE_CARD_SNAP_INTERVAL, offset: LIVE_CARD_SNAP_INTERVAL * index, index })}
-          style={{flexGrow:0}}
-          onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
-          onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
-          onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
-          onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
-          onScrollEndDrag={horizontalGestureGuard?.onHorizontalGestureEnd}
-          onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
-          onMomentumScrollEnd={(event) => {
-            onLiveScroll(event);
-            horizontalGestureGuard?.onHorizontalGestureEnd?.();
-          }}
-        />
+        <View onLayout={onLiveRailLayout} style={{ width: '100%', overflow: 'visible' }}>
+          <FlatList
+            key={`live-rail-${Math.round(liveCardWidth)}-${liveSportFilter}-${liveSearch.trim()}`}
+            ref={liveRailRef}
+            data={filteredLive}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToOffsets={liveSnapOffsets}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            decelerationRate="fast"
+            ListHeaderComponent={<View style={{ width: liveRailEdgeSpacer }} />}
+            ListFooterComponent={<View style={{ width: liveRailEdgeSpacer }} />}
+            ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
+            initialNumToRender={liveInitialRenderCount}
+            maxToRenderPerBatch={3}
+            updateCellsBatchingPeriod={16}
+            windowSize={5}
+            removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <LiveCard
+                game={item}
+                pick={pm.get(item.id)}
+                cardWidth={liveCardWidth}
+                showModelEdge={!liveIntelLocked}
+                showMomentum={!liveIntelLocked}
+              />
+            )}
+            getItemLayout={(_, index) => ({ length: liveCardSnapInterval, offset: liveCardSnapInterval * index, index })}
+            style={{flexGrow:0}}
+            onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
+            onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
+            onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
+            onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
+            onScrollEndDrag={(event) => {
+              snapLiveRail(event, true);
+              horizontalGestureGuard?.onHorizontalGestureEnd?.();
+            }}
+            onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
+            onMomentumScrollEnd={(event) => {
+              snapLiveRail(event, true);
+              horizontalGestureGuard?.onHorizontalGestureEnd?.();
+            }}
+          />
+        </View>
       )}
 
       {/* 5. Page dots */}
@@ -2793,6 +2646,10 @@ const PREP_MATCHUP_LIMIT = 16;
 // useTapGestureGuard — these sit in a horizontal ScrollView, so a single
 // shared guard across the .map() siblings would race and a swipe could open
 // the wrong matchup.
+const TOP_GRADE_CARD_W = 156;
+const TOP_GRADE_CARD_SNAP_INTERVAL = TOP_GRADE_CARD_W + ARENA_CARD_GAP;
+const TOP_GRADE_CARD_SIDE_PADDING = Math.max(ARENA_SIDE_PADDING, (SW - TOP_GRADE_CARD_W) / 2);
+
 const Top3Card = memo(function Top3Card({
   game,
   isFirst,
@@ -2810,15 +2667,23 @@ const Top3Card = memo(function Top3Card({
     <Pressable
       onPressIn={() => warmGame(game)}
       onPress={() => { if (!shouldHandlePress()) return; openGame(game); }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open model grade for ${game.awayTeam.name} at ${game.homeTeam.name}`}
+      accessibilityHint="Opens game details"
       pressRetentionOffset={6}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchCancel={onTouchCancel}
-      style={{ marginRight: isLast ? 0 : ARENA_CARD_GAP }}
+      style={({ pressed }) => ({
+        width: TOP_GRADE_CARD_W,
+        marginRight: isLast ? 0 : ARENA_CARD_GAP,
+        opacity: pressed ? 0.9 : 1,
+        transform: [{ scale: pressed ? 0.992 : 1 }],
+      })}
     >
       <View
         style={{
-          width: 156,
+          width: TOP_GRADE_CARD_W,
           minHeight: 104,
           backgroundColor: PANEL_DARK,
           borderRadius: 14,
@@ -2936,8 +2801,12 @@ const Prep = memo(function Prep({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{paddingLeft:ARENA_SIDE_PADDING, paddingRight:ARENA_SIDE_PADDING, paddingBottom:2, flexDirection:'row'}}
+            contentContainerStyle={{paddingLeft:TOP_GRADE_CARD_SIDE_PADDING, paddingRight:TOP_GRADE_CARD_SIDE_PADDING, paddingBottom:2, flexDirection:'row'}}
             style={{flexGrow:0}}
+            snapToInterval={TOP_GRADE_CARD_SNAP_INTERVAL}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            decelerationRate="fast"
             onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
             onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
             onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
@@ -2964,7 +2833,19 @@ const Prep = memo(function Prep({
           const active = prepTab === idx;
           const count = idx === 0 ? ranked.length : upsetPlays.length;
           return (
-            <Pressable key={label} onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }} style={{flex:1, minWidth:0, marginRight: idx === PREP_TABS.length - 1 ? 0 : 6}}>
+            <Pressable
+              key={label}
+              onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} prep tab, ${count} matchup${count === 1 ? '': 's'}`}
+              accessibilityState={{ selected: active }}
+              style={({ pressed }) => ({
+                flex: 1,
+                minWidth: 0,
+                marginRight: idx === PREP_TABS.length - 1 ? 0 : 6,
+                opacity: pressed && !active ? 0.9 : 1,
+              })}
+            >
               <LinearGradient
                 colors={active
                   ? [hexWithAlpha(MAROON, 0.48), 'rgba(180,211,235,0.12)', 'rgba(180,211,235,0.12)', hexWithAlpha(MAROON, 0.26)]
@@ -3424,7 +3305,7 @@ export default function MyArenaScreen() {
           offscreenPageLimit={1}
           onPageSelected={onArenaPageSelected}
         >
-          <View key="arena-game-day" style={{ width: SW, flex: 1 }}>
+          <View key="arena-game-day" style={{ width: '100%', flex: 1 }}>
             <GameDay
               live={live}
               sched={sched}
@@ -3437,7 +3318,7 @@ export default function MyArenaScreen() {
               horizontalGestureGuard={horizontalGestureGuard}
             />
           </View>
-          <View key="arena-prep" style={{ width: SW, flex: 1 }}>
+          <View key="arena-prep" style={{ width: '100%', flex: 1 }}>
             <Prep
               sched={sched}
               picks={userPicks??[]}
@@ -3449,7 +3330,7 @@ export default function MyArenaScreen() {
               horizontalGestureGuard={horizontalGestureGuard}
             />
           </View>
-          <View key="arena-review" style={{ width: SW, flex: 1 }}>
+          <View key="arena-review" style={{ width: '100%', flex: 1 }}>
             <Review
               final={final}
               picks={userPicks??[]}

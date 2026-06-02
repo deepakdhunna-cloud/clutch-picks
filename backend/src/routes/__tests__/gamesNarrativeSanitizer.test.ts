@@ -808,6 +808,27 @@ describe("shouldPromotePredictionUpdate", () => {
     expect(shouldPromotePredictionUpdate(makeGame(), previous, clearFlip)).toBe(true);
   });
 
+  test("holds a committed pick against a near-coin-flip flip (betting-stability lock)", () => {
+    // A user who acted on the home pick must not come back to a silent switch
+    // because the model wiggled to a 6pp lead the other way. Only a decisively
+    // favored new side (>= 7pp) flips a shown pick; this borderline flip is held.
+    const previous: GamePrediction = {
+      ...makePrediction("Pregame read favors the home side."),
+      confidence: 52,
+      homeWinProbability: 52,
+      awayWinProbability: 48,
+    };
+    const borderlineFlip: GamePrediction = {
+      ...previous,
+      predictedWinner: "away",
+      predictedOutcome: "away",
+      confidence: 53,
+      homeWinProbability: 47,
+      awayWinProbability: 53, // 6pp lead — below the 7pp commit threshold
+    };
+    expect(shouldPromotePredictionUpdate(makeGame(), previous, borderlineFlip)).toBe(false);
+  });
+
   test("never promotes prediction changes after the game starts", () => {
     const previous = makePrediction("Pregame read favors the home side.");
     const liveCandidate: GamePrediction = {

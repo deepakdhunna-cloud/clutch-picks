@@ -42,6 +42,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
           )}
           <View style={styles.buttonRow}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
               style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
               onPress={this.reset}
             >
@@ -49,6 +51,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </Pressable>
             {onGoBack ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
                 style={({ pressed }) => [styles.button, styles.buttonSecondary, pressed && styles.buttonPressed]}
                 onPress={onGoBack}
               >

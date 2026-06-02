@@ -13,4 +13,13 @@ describe('RevenueCat client configuration', () => {
     expect(revenueCatClientSource).toContain('preferTestKey: useRevenueCatTestStore');
     expect(revenueCatClientSource).not.toContain('preferTestKey: __DEV__');
   });
+
+  it('syncs available app identity into RevenueCat subscriber attributes', () => {
+    expect(revenueCatClientSource).toContain('Purchases.setAttributes');
+    expect(revenueCatClientSource).toContain('REVENUECAT_CUSTOM_ATTRIBUTES.clutchUserId');
+    expect(revenueCatClientSource).toContain('REVENUECAT_CUSTOM_ATTRIBUTES.clutchEmail');
+    expect(revenueCatClientSource).toContain('REVENUECAT_CUSTOM_ATTRIBUTES.clutchDisplayName');
+    expect(revenueCatClientSource).toContain('Purchases.setEmail(input.email)');
+    expect(revenueCatClientSource).toContain('Purchases.setDisplayName(input.displayName)');
+  });
 });

@@ -16,10 +16,10 @@ describe('game detail accessibility', () => {
 
   it('keeps detail navigation fixed above long Pro breakdowns', () => {
     expect(gameDetailSource).toContain('const detailFloatingTop = insets.top + 12;');
-    expect(gameDetailSource).toContain('styles.detailHeaderScrim');
     expect(gameDetailSource).toContain('pointerEvents="box-none" style={[styles.floatingDetailControls');
-    expect(gameDetailSource).toContain("detailHeaderScrim: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 90");
     expect(gameDetailSource).toContain("floatingDetailControls: { position: 'absolute', left: 0, right: 0, zIndex: 110");
+    expect(gameDetailSource).not.toContain('styles.detailHeaderScrim');
+    expect(gameDetailSource).not.toContain("colors={['#040608', '#040608', 'rgba(4,6,8,0.00)']}");
   });
 
   it('exposes pick jerseys and locked pro previews with useful action labels', () => {
@@ -37,6 +37,11 @@ describe('game detail accessibility', () => {
 
   it('keeps the watch source action at the recommended 44 point target', () => {
     expect(gameDetailSource).toContain('watchHubHeader: {\n    minHeight: 44');
+    expect(gameDetailSource).toContain('accessibilityState={{ disabled: !watchOption }}');
+    expect(gameDetailSource).toContain('accessible={false}');
+    expect(gameDetailSource).toContain('accessibilityViewIsModal');
+    expect(gameDetailSource).toContain('accessibilityRole="header"');
+    expect(gameDetailSource).toContain('How would you like to watch?');
   });
 
   it('does not render an empty box score section before a game starts', () => {

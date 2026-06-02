@@ -194,7 +194,7 @@ export default function NotificationsSettingsScreen() {
         thumbColor={notifPrefs[key] ? '#7A9DB8' : 'rgba(255,255,255,0.3)'}
       />
     </View>
-  ), [notifPrefs, savingKey, toggleNotif]);
+  ), [notifPrefs, savingKey]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>

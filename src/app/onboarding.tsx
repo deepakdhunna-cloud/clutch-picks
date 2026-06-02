@@ -6,15 +6,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, {
-  FadeIn, FadeInDown, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft,
+  FadeIn, FadeInDown,
   useSharedValue, useAnimatedStyle,
   withSpring, withTiming, withSequence, withRepeat,
   interpolate, Easing, cancelAnimation,
 } from 'react-native-reanimated';
-import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
+import Svg, { Path, Line } from 'react-native-svg';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
@@ -28,12 +27,14 @@ import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { ArenaScoreboard } from '@/components/sports/ArenaScoreboard';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
+import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 import {
   REPLAY_BLACK_SCREEN_MS,
   REPLAY_INTRO_MOTION_SCALE,
   shouldUseReplayIntroGate,
 } from '@/lib/onboarding-replay-intro';
 import { arenaStepButtonLabel } from '@/lib/onboarding-presentation';
+import { PAYWALL_COPY } from '@/lib/subscription-config';
 
 const { width: W } = Dimensions.get('window');
 
@@ -75,7 +76,7 @@ function PulsingDot({ color = RED, size = 6 }: { color?: string; size?: number }
   useEffect(() => {
     op.value = withRepeat(withTiming(0.3, { duration: 1000, easing: Easing.inOut(Easing.ease) }), -1, true);
     return () => cancelAnimation(op);
-  }, []);
+  }, [op]);
   const s = useAnimatedStyle(() => ({ opacity: op.value }));
   return <Animated.View style={[s, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]} />;
 }
@@ -119,7 +120,7 @@ function FloatingParticle({ x, startY, size, color, dur, phase, drift }: Floatin
     return () => {
       cancelAnimation(progress);
     };
-  }, [dur]);
+  }, [dur, progress]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
@@ -160,7 +161,7 @@ function WelcomeStep({ onContinue, motionScale = 1 }: { onContinue: () => void; 
       cancelAnimation(glow2Op);
       cancelAnimation(gridOp);
     };
-  }, []);
+  }, [glow1Op, glow2Op, gridOp]);
 
   const glow1Style = useAnimatedStyle(() => ({ opacity: glow1Op.value }));
   const glow2Style = useAnimatedStyle(() => ({ opacity: glow2Op.value }));
@@ -243,7 +244,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
     const other = team === 'home' ? awayScale : homeScale;
     target.value = withSequence(withSpring(0.88, { damping: 15 }), withSpring(1.05, { damping: 12 }), withSpring(1, { damping: 10 }));
     other.value = withSpring(0.85, { damping: 12 });
-  }, []);
+  }, [awayScale, homeScale, setPicked]);
 
   const homeStyle = useAnimatedStyle(() => ({ transform: [{ scale: homeScale.value }] }));
   const awayStyle = useAnimatedStyle(() => ({ transform: [{ scale: awayScale.value }] }));
@@ -396,7 +397,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
     rotation.value = withTiming(360000, { duration: 360000 / 360 * 4500, easing: Easing.linear });
     glowPulse.value = withRepeat(withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }), -1, true);
     return () => { cancelAnimation(glowPulse); };
-  }, []);
+  }, [glowPulse, rotation]);
   const rotatingStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value % 360}deg` }] }));
   const glowStyle = useAnimatedStyle(() => ({
     shadowOpacity: interpolate(glowPulse.value, [0, 1], [0.34, 0.62]),
@@ -1011,7 +1012,7 @@ function ArenaReview() {
 function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, isSavingProfile, onPhotoPress, onContinue, onBack }: {
   displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; isSavingProfile: boolean; onPhotoPress: () => void; onContinue: () => void; onBack: () => void;
 }) {
-  const canContinue = Boolean(displayName.trim()) && !isSavingProfile;
+  const canContinue = Boolean(displayName.trim()) && !isSavingProfile && !isUploading;
 
   return (
     <View style={{ flex: 1 }}>
@@ -1049,18 +1050,19 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, i
                   accessibilityRole="button"
                   accessibilityLabel={profileImage ? "Change profile photo" : "Add profile photo"}
                   accessibilityHint="Opens photo options"
-                  accessibilityState={{ busy: isUploading }}
+                  accessibilityState={{ disabled: isUploading, busy: isUploading }}
                   onPress={onPhotoPress}
+                  disabled={isUploading}
                 >
                   <View style={{ width: 72, height: 72, borderRadius: 36, padding: 3, overflow: 'hidden' }}>
                     <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                     <View style={{ flex: 1, borderRadius: 33, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       {isUploading ? (
                         <ActivityIndicator color={TEAL} />
-                      ) : profileImage ? (
-                        <ExpoImage source={{ uri: profileImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
                       ) : (
-                        <Text style={{ fontSize: 24, fontWeight: '800', color: WHITE }}>?</Text>
+                        <ProfileAvatarImage uri={profileImage} style={{ width: '100%', height: '100%' }}>
+                          <Text style={{ fontSize: 24, fontWeight: '800', color: WHITE }}>?</Text>
+                        </ProfileAvatarImage>
                       )}
                     </View>
                   </View>
@@ -1075,6 +1077,9 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, i
                     style={{ fontSize: 20, fontWeight: '800', color: WHITE, letterSpacing: -0.3, padding: 0 }}
                     keyboardAppearance="dark"
                     returnKeyType="done"
+                    onSubmitEditing={() => {
+                      if (canContinue) onContinue();
+                    }}
                   />
                   <Text style={{ fontSize: 12, color: TEXT_MUT, marginTop: 2 }}>Tap photo to add yours</Text>
                 </View>
@@ -1221,7 +1226,7 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Pro</Text>
           </LinearGradient>
         </Pressable>
-        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>3-day free trial for eligible users. Price shown before purchase.</Text>
+        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>{PAYWALL_COPY.onboardingDisclosure}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Continue free"
@@ -1315,7 +1320,7 @@ export default function OnboardingScreen() {
   const skip = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
     router.replace('/(tabs)');
-  }, []);
+  }, [router]);
 
   const saveProfile = async () => {
     if (isSavingProfile) return;
@@ -1344,15 +1349,15 @@ export default function OnboardingScreen() {
   const goToPaywall = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
     router.replace('/paywall');
-  }, []);
+  }, [router]);
 
   const skipPaywall = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
     router.replace('/(tabs)');
-  }, []);
+  }, [router]);
 
   const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
-    if (!pickedFile) return;
+    if (!pickedFile || isUploading) return;
     setIsUploading(true);
     try {
       const uploadResult = await uploadFile(pickedFile.uri, pickedFile.filename, pickedFile.mimeType);
@@ -1371,16 +1376,19 @@ export default function OnboardingScreen() {
   };
 
   const handlePhotoPress = () => {
+    if (isUploading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPhotoSourceVisible(true);
   };
 
   const handleTakePhoto = async () => {
+    if (isUploading) return;
     setPhotoSourceVisible(false);
     await handleImageUpload(await takePhoto());
   };
 
   const handleChooseLibrary = async () => {
+    if (isUploading) return;
     setPhotoSourceVisible(false);
     await handleImageUpload(await pickImage());
   };

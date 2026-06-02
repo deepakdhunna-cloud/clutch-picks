@@ -41,4 +41,12 @@ describe('home accessibility', () => {
     expect(gameCardSource).toContain('accessibilityLabel={`Preview Pro: ${game.awayTeam.name} at ${game.homeTeam.name}`}');
     expect(gameCardSource).toContain('accessibilityHint="Opens Clutch Picks Pro"');
   });
+
+  it('shows a real settling state while home search debounce catches up', () => {
+    expect(homeSource).toContain("const isHomeSearchSettling = normalizedSearchQuery !== '' && normalizedDebouncedSearchQuery !== normalizedSearchQuery;");
+    expect(homeSource).toContain("isHomeSearchSettling ? 'Updating results'");
+    expect(homeSource).toContain(') : isHomeSearchSettling ? (');
+    expect(homeSource).toContain('Searching games');
+    expect(homeSource).toContain('searchData = useMemo<GameWithPrediction[]>');
+  });
 });

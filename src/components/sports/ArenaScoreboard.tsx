@@ -110,7 +110,7 @@ const ArenaScoreFace = memo(function ArenaScoreFace({
       }
     }
     return built;
-  }, [text, glyphScale, scale]);
+  }, [cols, glyphScale, padX, padY, pitch, rows, text]);
 
   return (
     <View style={{ borderRadius: 10 * scale, overflow: 'hidden', backgroundColor: '#020303' }}>

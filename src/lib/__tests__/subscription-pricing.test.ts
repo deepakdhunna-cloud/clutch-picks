@@ -10,10 +10,10 @@ describe('subscription pricing display', () => {
     ).toBe(PRO_MONTHLY_PRICE_FALLBACK);
   });
 
-  it('uses the store price outside RevenueCat test-store mode for regional pricing', () => {
+  it('uses the canonical launch price even when store metadata disagrees', () => {
     expect(
       resolvePaywallPriceString('$7.49', { useRevenueCatTestStore: false }),
-    ).toBe('$7.49');
+    ).toBe(PRO_MONTHLY_PRICE_FALLBACK);
   });
 
   it('falls back to the canonical monthly price when the store omits a price string', () => {

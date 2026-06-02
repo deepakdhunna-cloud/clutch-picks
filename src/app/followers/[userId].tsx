@@ -1,5 +1,4 @@
 import { View, Text, Pressable, FlatList, ActivityIndicator } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -17,8 +16,10 @@ import {
   SocialUser,
 } from '@/hooks/useSocial';
 import { theme } from '@/lib/theme';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
+import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 
 type TabType = 'followers' | 'following';
 
@@ -84,18 +85,14 @@ const UserItem = React.memo(function UserItem({ user, currentUserId, onNavigateT
             justifyContent: 'center',
           }}
         >
-          {user.image ? (
-            <Image
-              source={{ uri: user.image }}
+          <ProfileAvatarImage
+            uri={user.image}
               style={{ width: '100%', height: '100%' }}
-              cachePolicy="memory-disk"
-              contentFit="cover"
-              recyclingKey={user.id}
-              transition={150}
-            />
-          ) : (
+            recyclingKey={user.id}
+            transition={150}
+          >
             <User size={24} color="#FFFFFF" />
-          )}
+          </ProfileAvatarImage>
         </View>
 
         {/* User Info */}
@@ -364,7 +361,7 @@ export default function FollowersScreen() {
                 flexGrow: 1,
               }}
               showsVerticalScrollIndicator={false}
-              removeClippedSubviews
+              removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
               windowSize={7}
               maxToRenderPerBatch={8}
               initialNumToRender={10}

@@ -48,6 +48,7 @@ export function ConfirmModal({
         }}
       >
         <View
+          accessibilityViewIsModal
           style={{
             backgroundColor: '#1A1A1A',
             borderRadius: 14,
@@ -60,6 +61,8 @@ export function ConfirmModal({
           }}
         >
           <Text
+            accessibilityRole="header"
+            accessibilityLabel={title}
             style={{
               color: '#FFFFFF',
               fontSize: 18,
@@ -83,12 +86,15 @@ export function ConfirmModal({
           </Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={cancelLabel}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 onCancel();
               }}
               style={({ pressed }) => ({
                 flex: 1,
+                minHeight: 44,
                 marginRight: 5,
                 backgroundColor: 'rgba(255,255,255,0.08)',
                 paddingVertical: 12,
@@ -108,16 +114,19 @@ export function ConfirmModal({
               </Text>
             </Pressable>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={confirmLabel}
               onPress={() => {
-                Haptics.notificationAsync(
+                void Haptics.notificationAsync(
                   destructive
                     ? Haptics.NotificationFeedbackType.Warning
                     : Haptics.NotificationFeedbackType.Success
-                );
+                ).catch(() => {});
                 onConfirm();
               }}
               style={({ pressed }) => ({
                 flex: 1,
+                minHeight: 44,
                 marginLeft: 5,
                 backgroundColor: destructive ? '#8B0A1F' : '#2563EB',
                 paddingVertical: 12,

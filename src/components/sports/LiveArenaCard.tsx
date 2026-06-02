@@ -382,6 +382,125 @@ export const LiveArenaCard = memo(function LiveArenaCard({
     );
   };
 
+  const tennisScoreScale = variant === 'rail' ? 0.76 : 0.9;
+  const tennisScoreWidth = Math.min(scoreColumnWidth, variant === 'rail' ? 108 : 130);
+
+  const renderTennisTeam = (side: 'home' | 'away') => {
+    const team = side === 'home' ? game.homeTeam : game.awayTeam;
+    const colors = side === 'home' ? homeColors : awayColors;
+    const leading = side === 'home' ? homeLeading : awayLeading;
+    const otherLeading = side === 'home' ? awayLeading : homeLeading;
+    const teamName = variant === 'rail'
+      ? compactRailTeamName(team.name, game.sport as Sport)
+      : team.name;
+    const record = team.record?.trim();
+
+    return (
+      <View
+        style={{
+          width: teamColumnWidth,
+          minWidth: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <View
+          style={{
+            height: cfg.jerseyBox,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: leading || !otherLeading ? 1 : 0.66,
+            transform: [{ scale: leading ? 1.04 : 1 }],
+          }}
+        >
+          <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <SoftGlow width={cfg.jersey * 1.72} height={cfg.jersey * 1.72} intensity={0.72} />
+          </View>
+          <TeamJersey
+            teamAbbreviation={team.abbreviation}
+            teamName={team.name}
+            primaryColor={colors.primary}
+            secondaryColor={colors.secondary}
+            size={cfg.jersey}
+            sport={game.sport as Sport}
+          />
+        </View>
+        {record ? (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            style={{
+              alignSelf: 'stretch',
+              color: leading ? '#d1d5db' : '#8b95a5',
+              fontSize: variant === 'rail' ? 8.6 : cfg.recordSize,
+              fontWeight: '800',
+              lineHeight: variant === 'rail' ? 11 : 13,
+              marginTop: variant === 'rail' ? 4 : 5,
+              textAlign: 'center',
+            }}
+          >
+            {record}
+          </Text>
+        ) : null}
+        <Text
+          numberOfLines={variant === 'rail' ? 1 : 2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+          style={{
+            alignSelf: 'stretch',
+            color: '#f8fafc',
+            fontSize: variant === 'rail' ? 10.8 : cfg.nameSize,
+            fontWeight: '900',
+            lineHeight: variant === 'rail' ? 13 : cfg.nameLineHeight,
+            marginTop: record ? 2 : (variant === 'rail' ? 5 : 6),
+            minHeight: variant === 'rail' ? 13 : cfg.nameMinHeight,
+            textAlign: 'center',
+          }}
+        >
+          {teamName}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderTennisBody = () => (
+    <View style={{ flex: cfg.innerHeight ? 1 : undefined, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      {renderTennisTeam('home')}
+
+      <View style={{ width: tennisScoreWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
+        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <SoftGlow width={tennisScoreWidth * 1.08} height={(59.16 * tennisScoreScale + 2) * 1.62} intensity={0.6} />
+          </View>
+          <SharedArenaScoreboard
+            awayScore={as2}
+            homeScore={hs}
+            awayColor={awayAccent}
+            homeColor={homeAccent}
+            scale={tennisScoreScale}
+            label={suspended ? 'SUSPENDED' : undefined}
+            subLabel={suspended ? suspensionReason : undefined}
+            detailLabel={suspended ? suspensionTime : undefined}
+          />
+        </View>
+        {!suspended ? (
+          <View style={{ marginTop: variant === 'rail' ? 5 : 8, alignItems: 'center', justifyContent: 'center' }}>
+            <TennisScoreGrid
+              game={game}
+              variant="rail"
+              homeColor={homeAccent}
+              awayColor={awayAccent}
+              showTeams={false}
+            />
+          </View>
+        ) : null}
+      </View>
+
+      {renderTennisTeam('away')}
+    </View>
+  );
+
   return (
     <View
       style={
@@ -515,59 +634,52 @@ export const LiveArenaCard = memo(function LiveArenaCard({
               </View>
             </View>
 
-            {/* Match body — home left, LED scoreboard middle, away right. */}
-            <View style={{ flex: cfg.innerHeight ? 1 : undefined, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              {renderTeam('home')}
+            {/* Match body — tennis gets player metadata + set scores; other sports keep the team-versus-team layout. */}
+            {isTennis ? renderTennisBody() : (
+              <View style={{ flex: cfg.innerHeight ? 1 : undefined, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                {renderTeam('home')}
 
-              <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
-                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                  {/* Soft black shadow grounds the LED panel against the team color. */}
-                  <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-                    <SoftGlow width={scoreColumnWidth * 1.14} height={(59.16 * cfg.scoreScale + 2) * 1.72} intensity={0.62} />
+                <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    {/* Soft black shadow grounds the LED panel against the team color. */}
+                    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                      <SoftGlow width={scoreColumnWidth * 1.14} height={(59.16 * cfg.scoreScale + 2) * 1.72} intensity={0.62} />
+                    </View>
+                    <SharedArenaScoreboard
+                      awayScore={as2}
+                      homeScore={hs}
+                      awayColor={awayAccent}
+                      homeColor={homeAccent}
+                      scale={cfg.scoreScale}
+                      label={suspended ? 'SUSPENDED' : undefined}
+                      displayText={cricketLedScore ?? undefined}
+                      subLabel={suspended ? suspensionReason : undefined}
+                      detailLabel={suspended ? suspensionTime : undefined}
+                    />
                   </View>
-                  <SharedArenaScoreboard
-                    awayScore={as2}
-                    homeScore={hs}
-                    awayColor={awayAccent}
-                    homeColor={homeAccent}
-                    scale={cfg.scoreScale}
-                    label={suspended ? 'SUSPENDED' : undefined}
-                    displayText={cricketLedScore ?? undefined}
-                    subLabel={suspended ? suspensionReason : undefined}
-                    detailLabel={suspended ? suspensionTime : undefined}
-                  />
-                </View>
-                {isTennis && !suspended ? (
-                  <TennisScoreGrid
-                    game={game}
-                    variant="compact"
-                    homeColor={homeAccent}
-                    awayColor={awayAccent}
-                    showTeams={false}
-                  />
-                ) : null}
-                {!isTennis && !suspended && matchTime ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIVE_RED, marginRight: 5 }} />
-                    <Text style={{ color: '#b8c3d1', fontSize: cfg.timeFont, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' }}>
-                      {matchTime}
+                  {!suspended && matchTime ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIVE_RED, marginRight: 5 }} />
+                      <Text style={{ color: '#b8c3d1', fontSize: cfg.timeFont, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' }}>
+                        {matchTime}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {cfg.showCaptions && !suspended && cricketCaption ? (
+                    <Text style={{ color: 'rgba(248,250,252,0.66)', fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginTop: 6, textTransform: 'uppercase' }}>
+                      {cricketCaption}
                     </Text>
-                  </View>
-                ) : null}
-                {cfg.showCaptions && !suspended && cricketCaption ? (
-                  <Text style={{ color: 'rgba(248,250,252,0.66)', fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginTop: 6, textTransform: 'uppercase' }}>
-                    {cricketCaption}
-                  </Text>
-                ) : null}
-                {cfg.showCaptions && !suspended && cricketChaseLine ? (
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: scoreColumnWidth + 18, color: 'rgba(248,250,252,0.76)', fontSize: 8.8, fontWeight: '900', lineHeight: 11, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' }}>
-                    {cricketChaseLine}
-                  </Text>
-                ) : null}
-              </View>
+                  ) : null}
+                  {cfg.showCaptions && !suspended && cricketChaseLine ? (
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={{ maxWidth: scoreColumnWidth + 18, color: 'rgba(248,250,252,0.76)', fontSize: 8.8, fontWeight: '900', lineHeight: 11, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' }}>
+                      {cricketChaseLine}
+                    </Text>
+                  ) : null}
+                </View>
 
-              {renderTeam('away')}
-            </View>
+                {renderTeam('away')}
+              </View>
+            )}
           </View>
         </LinearGradient>
       </Pressable>

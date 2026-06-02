@@ -1,5 +1,4 @@
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from 'react-native';
-import { Image } from 'expo-image';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -14,6 +13,7 @@ import { uploadFile } from '@/lib/upload';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
+import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 
 // Match profile card palette
 import {
@@ -95,7 +95,7 @@ export default function EditProfileScreen() {
   };
 
   const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
-    if (!pickedFile) return;
+    if (!pickedFile || isUploading) return;
 
     setIsUploading(true);
     try {
@@ -117,15 +117,18 @@ export default function EditProfileScreen() {
   };
 
   const handleAvatarPress = () => {
+    if (isUploading) return;
     setPhotoSourceVisible(true);
   };
 
   const handleTakePhoto = async () => {
+    if (isUploading) return;
     setPhotoSourceVisible(false);
     await handleImageUpload(await takePhoto());
   };
 
   const handleChooseLibrary = async () => {
+    if (isUploading) return;
     setPhotoSourceVisible(false);
     await handleImageUpload(await pickImage());
   };
@@ -204,7 +207,13 @@ export default function EditProfileScreen() {
         </Pressable>
       </Animated.View>
 
-      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: 20 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {/* Profile Photo Section */}
         <Animated.View
           entering={FadeInDown.duration(220)}
@@ -236,15 +245,13 @@ export default function EditProfileScreen() {
               <View style={{ flex: 1, borderRadius: 57, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {isUploading ? (
                   <ActivityIndicator size="large" color="#FFFFFF" />
-                ) : displayImage ? (
-                  <Image
-                    source={{ uri: displayImage }}
-                    style={{ width: 114, height: 114, borderRadius: 57 }}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
                 ) : (
-                  <User size={56} color={TEXT_MUTED} />
+                  <ProfileAvatarImage
+                    uri={displayImage}
+                    style={{ width: 114, height: 114, borderRadius: 57 }}
+                  >
+                    <User size={56} color={TEXT_MUTED} />
+                  </ProfileAvatarImage>
                 )}
               </View>
             </View>
@@ -271,9 +278,11 @@ export default function EditProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Change profile photo"
             accessibilityHint="Opens photo options"
+            accessibilityState={{ disabled: isUploading, busy: isUploading }}
             onPress={handleAvatarPress}
+            disabled={isUploading}
             hitSlop={10}
-            style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}
+            style={{ marginTop: 12, minHeight: 44, justifyContent: 'center', opacity: isUploading ? 0.55 : 1 }}
           >
             <Text style={{ color: TEAL, fontWeight: '600', fontSize: 14 }}>
               Change Photo
@@ -333,6 +342,7 @@ export default function EditProfileScreen() {
         </Animated.View>
 
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

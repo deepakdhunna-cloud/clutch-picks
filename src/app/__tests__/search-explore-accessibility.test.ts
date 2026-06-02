@@ -28,4 +28,12 @@ describe('search explore accessibility', () => {
     expect(searchExploreSource).toContain('accessibilityLabel={`Search recent term ${term}`}');
     expect(searchExploreSource).toContain('accessibilityLabel={`Remove recent search ${term}`}');
   });
+
+  it('keeps existing search results mounted while debounced filtering settles', () => {
+    expect(searchExploreSource).toContain("isSearchSettling ? 'UPDATING RESULTS'");
+    expect(searchExploreSource).toContain('const displayedFilteredGames = filteredGames;');
+    expect(searchExploreSource).toContain('ListHeaderComponent={resultsHeader}');
+    expect(searchExploreSource).not.toContain('const displayedFilteredGames = isSearchSettling ? [] : filteredGames;');
+    expect(searchExploreSource).not.toContain('ListHeaderComponent={isSearchSettling ? null : resultsHeader}');
+  });
 });

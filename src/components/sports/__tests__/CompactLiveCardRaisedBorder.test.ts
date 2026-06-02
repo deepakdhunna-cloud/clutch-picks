@@ -18,4 +18,15 @@ describe('CompactLiveCard shares the My Arena live-card design', () => {
     expect(source).toContain('TeamJersey');
     expect(source).toContain('padding: cfg.border');
   });
+
+  it('keeps tennis live cards on the compact player-score layout', () => {
+    const liveCardSource = readFileSync(path.join(process.cwd(), 'src/components/sports/LiveArenaCard.tsx'), 'utf8');
+    const tennisGridSource = readFileSync(path.join(process.cwd(), 'src/components/sports/TennisScoreGrid.tsx'), 'utf8');
+
+    expect(liveCardSource).toContain('renderTennisBody');
+    expect(liveCardSource).toContain('variant="rail"');
+    expect(liveCardSource).toContain('tennisScoreScale = variant === \'rail\' ? 0.76 : 0.9');
+    expect(tennisGridSource).toContain("type Variant = 'rail' | 'compact' | 'detail'");
+    expect(tennisGridSource).toContain('railScoreText');
+  });
 });

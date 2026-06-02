@@ -9,6 +9,8 @@
     "ios": "expo run:ios",
     "web": "DARK_MODE=class expo start --web",
     "lint": "expo lint",
+    "test": "bun test",
+    "verify:paywall": "bun scripts/verify-paywall-config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && (cd backend && bun run typecheck)"
   },
   "dependencies": {

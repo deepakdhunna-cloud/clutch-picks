@@ -104,7 +104,10 @@ function projectedTotalBounds(sportKey: string): { min: number; max: number } {
     EPL: { min: 1.4, max: 4.5 },
     UCL: { min: 1.5, max: 4.8 },
     IPL: { min: 245, max: 430 },
-    TENNIS: { min: 16.0, max: 38.0 },
+    // Raw backend tennis projections are set scores (2-0, 2-1, 3-1, etc.).
+    // The mobile display layer converts weak/stale raw tennis projections into
+    // match-game lines before showing them in cards/detail views.
+    TENNIS: { min: 2.0, max: 5.0 },
   };
   return bounds[sportKey] ?? { min: 0, max: Number.POSITIVE_INFINITY };
 }

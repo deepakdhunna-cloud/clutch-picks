@@ -7,6 +7,14 @@ const paywallSource = fs.readFileSync(
 );
 
 describe('paywall purchase flow', () => {
+  it('uses centralized release-critical paywall config for identifiers and copy', () => {
+    expect(paywallSource).toContain("from '@/lib/subscription-config'");
+    expect(paywallSource).toContain('PAYWALL_COPY.primaryTrialCta');
+    expect(paywallSource).toContain('PAYWALL_COPY.trialDisclosure');
+    expect(paywallSource).toContain('REVENUECAT_PACKAGE_IDS.monthly');
+    expect(paywallSource).not.toContain("const purchaseCtaLabel = monthlyPackageHasTrial\n    ? 'Start 3-Day Free Trial'");
+  });
+
   it('leaves the paywall when RevenueCat reports premium access', () => {
     expect(paywallSource).toContain('const { checkSubscription, isPremium } = useSubscription();');
     expect(paywallSource).toContain('const didRedirectForPremiumRef = useRef(false);');
@@ -17,16 +25,21 @@ describe('paywall purchase flow', () => {
   it('unlocks only after RevenueCat reports active premium access from purchase or restore', () => {
     expect(paywallSource).toContain('customerInfoHasPremium,');
     expect(paywallSource).toContain('if (customerInfoHasPremium(result.data)) {');
+    expect(paywallSource).toContain('await checkSubscription({ restored: true });');
     expect(paywallSource).toContain('const hasActive = customerInfoHasPremium(result.data);');
     expect(paywallSource).not.toContain("const hasActive = Object.keys(result.data.entitlements.active || {}).length > 0;");
   });
 
   it('keeps the purchase button calm and explicit during the App Store handoff', () => {
     expect(paywallSource).toContain('loadingLabel?: string;');
+    expect(paywallSource).toContain('onPress?: () => void;');
+    expect(paywallSource).toContain('const disabled = loading || !onPress;');
     expect(paywallSource).toContain("if (loading) {");
     expect(paywallSource).toContain('cancelAnimation(shimmerX);');
     expect(paywallSource).toContain("colors={loading ? ['#050505', '#0B0B0D'] : [MAROON, '#6A0818', '#5A0614']}");
     expect(paywallSource).toContain("loadingLabel=\"Opening App Store...\"");
+    expect(paywallSource).toContain('<ShimmerButton loading={true} label="Loading..." />');
+    expect(paywallSource).not.toContain('onPress={() => {}}');
   });
 
   it('does not leave failed restore as a dead end', () => {
@@ -63,6 +76,6 @@ describe('paywall purchase flow', () => {
     expect(paywallSource).toContain('const shouldAdvertiseThreeDayTrial = (pkg: PurchasesPackage | null) => {');
     expect(paywallSource).toContain('return PRO_MONTHLY_HAS_THREE_DAY_TRIAL;');
     expect(paywallSource).toContain('const monthlyPackageHasTrial = shouldAdvertiseThreeDayTrial(monthlyPackage);');
-    expect(paywallSource).toContain("Start 3-Day Free Trial");
+    expect(paywallSource).toContain('PAYWALL_COPY.primaryTrialCta');
   });
 });

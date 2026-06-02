@@ -25,7 +25,7 @@ function NeonStreak({ x, y, length, angle, color, delay, duration, maxOpacity }:
       withTiming(1, { duration, easing: Easing.inOut(Easing.ease) }), -1, false
     ));
     return () => cancelAnimation(progress);
-  }, []);
+  }, [delay, duration, progress]);
 
   // Only animate opacity and translate — position/size/rotation are static
   const animStyle = useAnimatedStyle(() => ({
@@ -77,7 +77,7 @@ function StarGrain({ x, y, size, delay, duration, maxOpacity }: {
       ), -1, false
     ));
     return () => cancelAnimation(twinkle);
-  }, []);
+  }, [delay, duration, twinkle]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: interpolate(twinkle.value, [0, 1], [0.03, maxOp.value]),

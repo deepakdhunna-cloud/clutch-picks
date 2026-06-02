@@ -20,7 +20,7 @@ describe("sumRatingDelta (#2 full-scale rating)", () => {
   ];
 
   test("legacy (flag off): weighted average shrinks the Elo edge to 40% of itself", () => {
-    delete process.env[FLAG];
+    process.env[FLAG] = "false"; // full-scale is now ON by default; force legacy
     // 100*0.4 + 40*0.1 + 20*0.05 = 40 + 4 + 1 = 45
     expect(sumRatingDelta(factors)).toBeCloseTo(45, 6);
   });
@@ -32,7 +32,7 @@ describe("sumRatingDelta (#2 full-scale rating)", () => {
   });
 
   test("full-scale preserves earned confidence vs legacy (delta is larger, not shrunk)", () => {
-    delete process.env[FLAG];
+    process.env[FLAG] = "false"; // force legacy for the comparison baseline
     const legacy = sumRatingDelta(factors);
     process.env[FLAG] = "true";
     const fullScale = sumRatingDelta(factors);
@@ -48,7 +48,7 @@ describe("sumRatingDelta (#2 full-scale rating)", () => {
 
   test("skips unavailable non-rating factors in both modes", () => {
     const f = [factor("rating_diff", 80, 0.4), factor("rest_diff", 30, 0.05, false)];
-    delete process.env[FLAG];
+    process.env[FLAG] = "false"; // force legacy
     expect(sumRatingDelta(f)).toBeCloseTo(32, 6); // 80*0.4
     process.env[FLAG] = "true";
     expect(sumRatingDelta(f)).toBeCloseTo(80, 6); // eloBase only

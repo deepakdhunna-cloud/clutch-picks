@@ -116,7 +116,7 @@ function resolveSportHint(
   const cachedGame = findCachedGame(queryClient, gameId);
   if (cachedGame?.sport) return cachedGame.sport;
 
-  const picks = queryClient.getQueryData<Array<{ gameId: string; sport?: string | null }>>(['picks']);
+  const picks = queryClient.getQueryData<{ gameId: string; sport?: string | null }[]>(['picks']);
   const pick = picks?.find((p) => p.gameId === gameId);
   return pick?.sport ?? undefined;
 }
@@ -354,7 +354,7 @@ function liveAwareInterval(games: GameWithPrediction[] | undefined): number {
 }
 
 function liveAwareBucketInterval(
-  buckets: Array<{ games: GameWithPrediction[] }> | undefined,
+  buckets: { games: GameWithPrediction[] }[] | undefined,
 ): number {
   return liveAwareInterval(buckets?.flatMap((bucket) => bucket.games ?? []));
 }
@@ -555,7 +555,7 @@ export function useWeekGamesBySport(sport: string) {
             `/api/games/${sport.toLowerCase()}?date=${date}`
           );
           const enriched = filterVerifiedGames(await enrichCricketLiveGames(games ?? []));
-          const previousBuckets = queryClient.getQueryData<Array<{ date: string; games: GameWithPrediction[] }>>([
+          const previousBuckets = queryClient.getQueryData<{ date: string; games: GameWithPrediction[] }[]>([
             'games',
             'week',
             sport,

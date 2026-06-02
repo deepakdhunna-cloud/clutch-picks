@@ -7,7 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -21,6 +20,7 @@ import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
+import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 
 const BG = '#040608';
 const CORAL = '#8B0A1F';
@@ -61,7 +61,7 @@ export default function ProfileSetupScreen() {
   const hasDisplayName = displayName.trim().length > 0;
 
   const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
-    if (!pickedFile) return;
+    if (!pickedFile || isUploading) return;
 
     setIsUploading(true);
     try {
@@ -81,16 +81,19 @@ export default function ProfileSetupScreen() {
   };
 
   const handlePhotoPress = () => {
+    if (isUploading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPhotoSourceVisible(true);
   };
 
   const handleTakePhoto = async () => {
+    if (isUploading) return;
     setPhotoSourceVisible(false);
     await handleImageUpload(await takePhoto());
   };
 
   const handleChooseLibrary = async () => {
+    if (isUploading) return;
     setPhotoSourceVisible(false);
     await handleImageUpload(await pickImage());
   };
@@ -158,6 +161,7 @@ export default function ProfileSetupScreen() {
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* Header */}
           <Animated.View
@@ -210,35 +214,35 @@ export default function ProfileSetupScreen() {
               >
                 {isUploading ? (
                   <ActivityIndicator size="large" color={TEAL} />
-                ) : profileImage ? (
-                  <>
-                    <Image
-                      source={{ uri: profileImage }}
-                      style={{ width: 100, height: 100, borderRadius: 50 }}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                    {/* Edit pencil overlay */}
-                    <View
-                      style={{
-                        position: 'absolute',
-                        bottom: 4,
-                        right: 4,
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: CORAL,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 2,
-                        borderColor: BG,
-                      }}
-                    >
-                      <Pencil size={14} color="#FFFFFF" />
-                    </View>
-                  </>
                 ) : (
-                  <Camera size={32} color={TEAL} />
+                  <>
+                    <ProfileAvatarImage
+                      uri={profileImage}
+                      style={{ width: 100, height: 100, borderRadius: 50 }}
+                    >
+                      <Camera size={32} color={TEAL} />
+                    </ProfileAvatarImage>
+                    {/* Edit pencil overlay */}
+                    {profileImage ? (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          bottom: 4,
+                          right: 4,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: CORAL,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderWidth: 2,
+                          borderColor: BG,
+                        }}
+                      >
+                        <Pencil size={14} color="#FFFFFF" />
+                      </View>
+                    ) : null}
+                  </>
                 )}
               </View>
             </Pressable>
@@ -306,6 +310,7 @@ export default function ProfileSetupScreen() {
                   fontSize: 16,
                 }}
                 autoCapitalize="words"
+                returnKeyType="done"
               />
               <Text
                 style={{

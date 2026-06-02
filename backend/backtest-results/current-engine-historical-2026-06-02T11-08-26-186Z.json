@@ -1,0 +1,5560 @@
+{
+  "runAt": "2026-06-02T11:08:26.186Z",
+  "mode": "current-engine-historical-replay",
+  "sportsRequested": [
+    "NBA",
+    "MLB",
+    "NHL",
+    "MLS",
+    "EPL",
+    "UCL",
+    "IPL",
+    "NFL",
+    "NCAAF",
+    "NCAAB"
+  ],
+  "daysScanned": 45,
+  "warmupGamesPerTeam": 5,
+  "maxGamesPerSport": 40,
+  "totalHistoricalGamesFound": 993,
+  "totalGamesScored": 183,
+  "overall": {
+    "sport": "OVERALL",
+    "scoredGames": 183,
+    "correct": 98,
+    "accuracy": 53.6,
+    "avgConfidence": 54.342,
+    "avgActualProbability": 48.209,
+    "logLoss": 0.763,
+    "brier": 0.515,
+    "homeScoreMae": 8.031,
+    "awayScoreMae": 8.102,
+    "totalMae": 13.505,
+    "marginMae": 8.417
+  },
+  "perSport": [
+    {
+      "sport": "NBA",
+      "scoredGames": 40,
+      "correct": 27,
+      "accuracy": 67.5,
+      "avgConfidence": 61.977,
+      "avgActualProbability": 54.675,
+      "logLoss": 0.636,
+      "brier": 0.446,
+      "homeScoreMae": 9.225,
+      "awayScoreMae": 10.2,
+      "totalMae": 12.775,
+      "marginMae": 15.275
+    },
+    {
+      "sport": "MLB",
+      "scoredGames": 40,
+      "correct": 23,
+      "accuracy": 57.5,
+      "avgConfidence": 57.12,
+      "avgActualProbability": 51.126,
+      "logLoss": 0.684,
+      "brier": 0.491,
+      "homeScoreMae": 2.773,
+      "awayScoreMae": 3.075,
+      "totalMae": 4.142,
+      "marginMae": 4.173
+    },
+    {
+      "sport": "NHL",
+      "scoredGames": 36,
+      "correct": 17,
+      "accuracy": 47.2,
+      "avgConfidence": 55.331,
+      "avgActualProbability": 50.81,
+      "logLoss": 0.684,
+      "brier": 0.491,
+      "homeScoreMae": 1.642,
+      "awayScoreMae": 1.419,
+      "totalMae": 1.761,
+      "marginMae": 2.428
+    },
+    {
+      "sport": "MLS",
+      "scoredGames": 35,
+      "correct": 16,
+      "accuracy": 45.7,
+      "avgConfidence": 45.111,
+      "avgActualProbability": 37.265,
+      "logLoss": 1.031,
+      "brier": 0.619,
+      "homeScoreMae": 1.149,
+      "awayScoreMae": 1.023,
+      "totalMae": 1.697,
+      "marginMae": 1.309
+    },
+    {
+      "sport": "EPL",
+      "scoredGames": 10,
+      "correct": 4,
+      "accuracy": 40,
+      "avgConfidence": 44.54,
+      "avgActualProbability": 35.091,
+      "logLoss": 1.09,
+      "brier": 0.658,
+      "homeScoreMae": 0.84,
+      "awayScoreMae": 0.77,
+      "totalMae": 0.69,
+      "marginMae": 1.23
+    },
+    {
+      "sport": "IPL",
+      "scoredGames": 22,
+      "correct": 11,
+      "accuracy": 50,
+      "avgConfidence": 52.932,
+      "avgActualProbability": 50.265,
+      "logLoss": 0.69,
+      "brier": 0.497,
+      "homeScoreMae": 40.091,
+      "awayScoreMae": 38.955,
+      "totalMae": 75.682,
+      "marginMae": 28.045
+    }
+  ],
+  "calibration": [
+    {
+      "label": "0-39",
+      "min": 0,
+      "max": 39,
+      "total": 2,
+      "correct": 1,
+      "accuracy": 50
+    },
+    {
+      "label": "40-44",
+      "min": 40,
+      "max": 44,
+      "total": 16,
+      "correct": 6,
+      "accuracy": 37.5
+    },
+    {
+      "label": "45-49",
+      "min": 45,
+      "max": 49,
+      "total": 15,
+      "correct": 8,
+      "accuracy": 53.3
+    },
+    {
+      "label": "50-54",
+      "min": 50,
+      "max": 54,
+      "total": 53,
+      "correct": 23,
+      "accuracy": 43.4
+    },
+    {
+      "label": "55-59",
+      "min": 55,
+      "max": 59,
+      "total": 42,
+      "correct": 29,
+      "accuracy": 69
+    },
+    {
+      "label": "60-64",
+      "min": 60,
+      "max": 64,
+      "total": 17,
+      "correct": 8,
+      "accuracy": 47.1
+    },
+    {
+      "label": "65-69",
+      "min": 65,
+      "max": 69,
+      "total": 12,
+      "correct": 8,
+      "accuracy": 66.7
+    },
+    {
+      "label": "70-74",
+      "min": 70,
+      "max": 74,
+      "total": 1,
+      "correct": 1,
+      "accuracy": 100
+    },
+    {
+      "label": "75-79",
+      "min": 75,
+      "max": 79,
+      "total": 1,
+      "correct": 1,
+      "accuracy": 100
+    },
+    {
+      "label": "80-100",
+      "min": 80,
+      "max": 100,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    }
+  ],
+  "highConfidenceMisses": [
+    {
+      "gameId": "401871339",
+      "sport": "NBA",
+      "date": "2026-05-18T00:00Z",
+      "matchup": "CLE @ DET",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 68.8,
+      "actualScore": {
+        "home": 94,
+        "away": 125
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 106,
+        "spread": 6,
+        "total": 218
+      },
+      "probabilityAssignedToActual": 0.3116,
+      "brier": 0.94778912,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871152",
+      "sport": "NBA",
+      "date": "2026-05-05T01:30Z",
+      "matchup": "MIN @ SA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 67.5,
+      "actualScore": {
+        "home": 102,
+        "away": 104
+      },
+      "projectedScore": {
+        "home": 114,
+        "away": 108,
+        "spread": 6,
+        "total": 222
+      },
+      "probabilityAssignedToActual": 0.325,
+      "brier": 0.9112500000000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871337",
+      "sport": "NBA",
+      "date": "2026-05-14T00:00Z",
+      "matchup": "CLE @ DET",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 66,
+      "actualScore": {
+        "home": 113,
+        "away": 117
+      },
+      "projectedScore": {
+        "home": 111,
+        "away": 106,
+        "spread": 5,
+        "total": 217
+      },
+      "probabilityAssignedToActual": 0.3398,
+      "brier": 0.87172808,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871338",
+      "sport": "NBA",
+      "date": "2026-05-15T23:00Z",
+      "matchup": "DET @ CLE",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 65.6,
+      "actualScore": {
+        "home": 94,
+        "away": 115
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 107,
+        "spread": 5,
+        "total": 219
+      },
+      "probabilityAssignedToActual": 0.3437,
+      "brier": 0.86145938,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873197",
+      "sport": "NBA",
+      "date": "2026-05-19T00:30Z",
+      "matchup": "SA @ OKC",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 63.5,
+      "actualScore": {
+        "home": 115,
+        "away": 122
+      },
+      "projectedScore": {
+        "home": 116,
+        "away": 112,
+        "spread": 4,
+        "total": 228
+      },
+      "probabilityAssignedToActual": 0.3651,
+      "brier": 0.80619602,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869417",
+      "sport": "NBA",
+      "date": "2026-05-01T23:00Z",
+      "matchup": "DET @ ORL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 63.2,
+      "actualScore": {
+        "home": 79,
+        "away": 93
+      },
+      "projectedScore": {
+        "home": 109,
+        "away": 105,
+        "spread": 4,
+        "total": 214
+      },
+      "probabilityAssignedToActual": 0.3676,
+      "brier": 0.79985952,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873199",
+      "sport": "NBA",
+      "date": "2026-05-23T00:30Z",
+      "matchup": "OKC @ SA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 63.2,
+      "actualScore": {
+        "home": 108,
+        "away": 123
+      },
+      "projectedScore": {
+        "home": 116,
+        "away": 112,
+        "spread": 4,
+        "total": 228
+      },
+      "probabilityAssignedToActual": 0.3679,
+      "brier": 0.7991008199999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401815582",
+      "sport": "MLB",
+      "date": "2026-06-01T22:45Z",
+      "matchup": "MIA @ WSH",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 62.3,
+      "actualScore": {
+        "home": 3,
+        "away": 7
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 3.5,
+        "spread": 1.1,
+        "total": 8.1
+      },
+      "probabilityAssignedToActual": 0.3765,
+      "brier": 0.7775045,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815580",
+      "sport": "MLB",
+      "date": "2026-06-01T22:40Z",
+      "matchup": "DET @ TB",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 62,
+      "actualScore": {
+        "home": 9,
+        "away": 10
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 3.7,
+        "spread": 0.9,
+        "total": 8.3
+      },
+      "probabilityAssignedToActual": 0.3798,
+      "brier": 0.7692960799999999,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815563",
+      "sport": "MLB",
+      "date": "2026-05-31T02:05Z",
+      "matchup": "NYY @ ATH",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 61.6,
+      "actualScore": {
+        "home": 6,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 3.9,
+        "away": 4.9,
+        "spread": -1,
+        "total": 8.8
+      },
+      "probabilityAssignedToActual": 0.3835,
+      "brier": 0.7601445000000001,
+      "availableFactors": 8,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "401815550",
+      "sport": "MLB",
+      "date": "2026-05-30T20:10Z",
+      "matchup": "LAA @ TB",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.5,
+      "actualScore": {
+        "home": 3,
+        "away": 14
+      },
+      "projectedScore": {
+        "home": 5.1,
+        "away": 4.1,
+        "spread": 1,
+        "total": 9.2
+      },
+      "probabilityAssignedToActual": 0.3853,
+      "brier": 0.7557121800000001,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815564",
+      "sport": "MLB",
+      "date": "2026-05-31T02:10Z",
+      "matchup": "PHI @ LAD",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.1,
+      "actualScore": {
+        "home": 3,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 4.4,
+        "away": 3.5,
+        "spread": 0.9,
+        "total": 7.9
+      },
+      "probabilityAssignedToActual": 0.3886,
+      "brier": 0.74761992,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401873203",
+      "sport": "NBA",
+      "date": "2026-05-31T00:00Z",
+      "matchup": "SA @ OKC",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.1,
+      "actualScore": {
+        "home": 103,
+        "away": 111
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 111,
+        "spread": 4,
+        "total": 226
+      },
+      "probabilityAssignedToActual": 0.389,
+      "brier": 0.7466419999999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401815581",
+      "sport": "MLB",
+      "date": "2026-06-01T23:10Z",
+      "matchup": "KC @ CIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 59.7,
+      "actualScore": {
+        "home": 2,
+        "away": 9
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 4.3,
+        "spread": 0.7,
+        "total": 9.3
+      },
+      "probabilityAssignedToActual": 0.4033,
+      "brier": 0.71210178,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401871405",
+      "sport": "NHL",
+      "date": "2026-05-08T23:00Z",
+      "matchup": "MTL @ BUF",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 59.2,
+      "actualScore": {
+        "home": 1,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 2.9,
+        "spread": 0.5,
+        "total": 6.3
+      },
+      "probabilityAssignedToActual": 0.4075,
+      "brier": 0.7021125,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    }
+  ],
+  "rows": [
+    {
+      "gameId": "740966",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "MAN @ BHA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 39.1,
+      "actualScore": {
+        "home": 0,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 1.6,
+        "away": 1.4,
+        "spread": 0.2,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.3661,
+      "brier": 0.6137296300000001,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740967",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "WOL @ BUR",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 40.5,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.5,
+        "away": 1.3,
+        "spread": 0.2,
+        "total": 2.8
+      },
+      "probabilityAssignedToActual": 0.2391,
+      "brier": 0.86955811,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740968",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "ARS @ CRY",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 48.1,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.3,
+        "away": 1.8,
+        "spread": -0.5,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.4809,
+      "brier": 0.40784331,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740969",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "NEW @ FUL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 38.8,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.5,
+        "away": 1.2,
+        "spread": 0.3,
+        "total": 2.7
+      },
+      "probabilityAssignedToActual": 0.3878,
+      "brier": 0.5707375800000001,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "740975",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "BRE @ LIV",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 47.8,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.9,
+        "away": 1.4,
+        "spread": 0.5,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.2176,
+      "brier": 0.93329312,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740970",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "AVL @ MNC",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1.4,
+        "spread": 0.6,
+        "total": 3.4
+      },
+      "probabilityAssignedToActual": 0.2836,
+      "brier": 0.8153850599999999,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740972",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "BOU @ NFO",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 43.1,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.4,
+        "spread": 0.3,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.2306,
+      "brier": 0.89234502,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740973",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "CHE @ SUN",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 47.9,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.2,
+        "spread": 0.5,
+        "total": 2.9
+      },
+      "probabilityAssignedToActual": 0.4794,
+      "brier": 0.41042615999999993,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740974",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "EVE @ TOT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 47.7,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.3,
+        "spread": 0.5,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.4765,
+      "brier": 0.41520978000000003,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "740971",
+      "sport": "EPL",
+      "date": "2026-05-24T15:00Z",
+      "matchup": "LEE @ WHU",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 41.5,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.2,
+        "away": 1.5,
+        "spread": -0.3,
+        "total": 2.7
+      },
+      "probabilityAssignedToActual": 0.3475,
+      "brier": 0.6542458200000002,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529295",
+      "sport": "IPL",
+      "date": "2026-05-09T14:00Z",
+      "matchup": "GT @ RR",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.1,
+      "actualScore": {
+        "home": 152,
+        "away": 229
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4792,
+      "brier": 0.5424652799999999,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529296",
+      "sport": "IPL",
+      "date": "2026-05-10T10:00Z",
+      "matchup": "LSG @ CSK",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.2,
+      "actualScore": {
+        "home": 208,
+        "away": 203
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.552,
+      "brier": 0.401408,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529297",
+      "sport": "IPL",
+      "date": "2026-05-10T14:00Z",
+      "matchup": "MI @ RCB",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 167,
+        "away": 166
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5178,
+      "brier": 0.46503368,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529298",
+      "sport": "IPL",
+      "date": "2026-05-11T14:00Z",
+      "matchup": "DC @ PBKS",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.9,
+      "actualScore": {
+        "home": 210,
+        "away": 216
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4607,
+      "brier": 0.58168898,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529299",
+      "sport": "IPL",
+      "date": "2026-05-12T14:00Z",
+      "matchup": "SRH @ GT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.7,
+      "actualScore": {
+        "home": 168,
+        "away": 86
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5071,
+      "brier": 0.48590082,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529301",
+      "sport": "IPL",
+      "date": "2026-05-14T14:00Z",
+      "matchup": "MI @ PBKS",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.1,
+      "actualScore": {
+        "home": 200,
+        "away": 205
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4893,
+      "brier": 0.52162898,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529302",
+      "sport": "IPL",
+      "date": "2026-05-15T14:00Z",
+      "matchup": "CSK @ LSG",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.3,
+      "actualScore": {
+        "home": 188,
+        "away": 187
+      },
+      "projectedScore": {
+        "home": 159,
+        "away": 162,
+        "spread": -3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.477,
+      "brier": 0.547058,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529303",
+      "sport": "IPL",
+      "date": "2026-05-16T14:00Z",
+      "matchup": "GT @ KKR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.2,
+      "actualScore": {
+        "home": 247,
+        "away": 218
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5124,
+      "brier": 0.47550752,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529304",
+      "sport": "IPL",
+      "date": "2026-05-17T10:00Z",
+      "matchup": "RCB @ PBKS",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 51.1,
+      "actualScore": {
+        "home": 199,
+        "away": 222
+      },
+      "projectedScore": {
+        "home": 159,
+        "away": 162,
+        "spread": -3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5115,
+      "brier": 0.47726450000000004,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529305",
+      "sport": "IPL",
+      "date": "2026-05-17T14:00Z",
+      "matchup": "RR @ DC",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.5,
+      "actualScore": {
+        "home": 197,
+        "away": 193
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5149,
+      "brier": 0.47064401999999994,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529306",
+      "sport": "IPL",
+      "date": "2026-05-18T14:00Z",
+      "matchup": "SRH @ CSK",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.7,
+      "actualScore": {
+        "home": 180,
+        "away": 181
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4935,
+      "brier": 0.5130844999999999,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529307",
+      "sport": "IPL",
+      "date": "2026-05-19T14:00Z",
+      "matchup": "LSG @ RR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.3,
+      "actualScore": {
+        "home": 225,
+        "away": 220
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.533,
+      "brier": 0.436178,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529308",
+      "sport": "IPL",
+      "date": "2026-05-20T14:00Z",
+      "matchup": "MI @ KKR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.4,
+      "actualScore": {
+        "home": 148,
+        "away": 147
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5735,
+      "brier": 0.3638045,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529309",
+      "sport": "IPL",
+      "date": "2026-05-21T14:00Z",
+      "matchup": "CSK @ GT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.5,
+      "actualScore": {
+        "home": 229,
+        "away": 140
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.545,
+      "brier": 0.41405,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529310",
+      "sport": "IPL",
+      "date": "2026-05-22T14:00Z",
+      "matchup": "RCB @ SRH",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.7,
+      "actualScore": {
+        "home": 255,
+        "away": 200
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5565,
+      "brier": 0.3933845,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529311",
+      "sport": "IPL",
+      "date": "2026-05-23T14:00Z",
+      "matchup": "PBKS @ LSG",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 54.8,
+      "actualScore": {
+        "home": 196,
+        "away": 200
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4516,
+      "brier": 0.60148512,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529312",
+      "sport": "IPL",
+      "date": "2026-05-24T10:00Z",
+      "matchup": "RR @ MI",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.3,
+      "actualScore": {
+        "home": 175,
+        "away": 205
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4769,
+      "brier": 0.54726722,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1529313",
+      "sport": "IPL",
+      "date": "2026-05-24T14:00Z",
+      "matchup": "DC @ KKR",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57.9,
+      "actualScore": {
+        "home": 163,
+        "away": 203
+      },
+      "projectedScore": {
+        "home": 163,
+        "away": 159,
+        "spread": 4,
+        "total": 322
+      },
+      "probabilityAssignedToActual": 0.4206,
+      "brier": 0.6714087200000001,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1535462",
+      "sport": "IPL",
+      "date": "2026-05-26T14:00Z",
+      "matchup": "GT @ RCB",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.3,
+      "actualScore": {
+        "home": 254,
+        "away": 162
+      },
+      "projectedScore": {
+        "home": 159,
+        "away": 162,
+        "spread": -3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4771,
+      "brier": 0.5468488199999999,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1535463",
+      "sport": "IPL",
+      "date": "2026-05-27T14:00Z",
+      "matchup": "SRH @ RR",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.5,
+      "actualScore": {
+        "home": 243,
+        "away": 196
+      },
+      "projectedScore": {
+        "home": 159,
+        "away": 162,
+        "spread": -3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4849,
+      "brier": 0.53065602,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1535464",
+      "sport": "IPL",
+      "date": "2026-05-29T14:00Z",
+      "matchup": "RR @ GT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.8,
+      "actualScore": {
+        "home": 219,
+        "away": 214
+      },
+      "projectedScore": {
+        "home": 162,
+        "away": 159,
+        "spread": 3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.5276,
+      "brier": 0.44632352000000003,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "1535465",
+      "sport": "IPL",
+      "date": "2026-05-31T14:00Z",
+      "matchup": "GT @ RCB",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.4,
+      "actualScore": {
+        "home": 161,
+        "away": 155
+      },
+      "projectedScore": {
+        "home": 159,
+        "away": 162,
+        "spread": -3,
+        "total": 321
+      },
+      "probabilityAssignedToActual": 0.4963,
+      "brier": 0.5074273800000001,
+      "availableFactors": 2,
+      "unavailableFactors": 9,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401815549",
+      "sport": "MLB",
+      "date": "2026-05-30T02:15Z",
+      "matchup": "PHI @ LAD",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.7,
+      "actualScore": {
+        "home": 4,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4.3,
+        "away": 3.8,
+        "spread": 0.5,
+        "total": 8.1
+      },
+      "probabilityAssignedToActual": 0.5667,
+      "brier": 0.37549778000000006,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815558",
+      "sport": "MLB",
+      "date": "2026-05-30T18:10Z",
+      "matchup": "DET @ CHW",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 65.4,
+      "actualScore": {
+        "home": 7,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4.9,
+        "away": 3.7,
+        "spread": 1.2,
+        "total": 8.6
+      },
+      "probabilityAssignedToActual": 0.6539,
+      "brier": 0.23957042,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815554",
+      "sport": "MLB",
+      "date": "2026-05-30T20:05Z",
+      "matchup": "MIN @ PIT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.8,
+      "actualScore": {
+        "home": 10,
+        "away": 9
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 4.2,
+        "spread": 0.4,
+        "total": 8.8
+      },
+      "probabilityAssignedToActual": 0.5582,
+      "brier": 0.39037447999999997,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815555",
+      "sport": "MLB",
+      "date": "2026-05-30T20:05Z",
+      "matchup": "SD @ WSH",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.5,
+      "actualScore": {
+        "home": 9,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 4.1,
+        "away": 3.7,
+        "spread": 0.4,
+        "total": 7.8
+      },
+      "probabilityAssignedToActual": 0.5452,
+      "brier": 0.41368607999999996,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815556",
+      "sport": "MLB",
+      "date": "2026-05-30T20:05Z",
+      "matchup": "TOR @ BAL",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.1,
+      "actualScore": {
+        "home": 6,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 4,
+        "spread": -0.2,
+        "total": 7.8
+      },
+      "probabilityAssignedToActual": 0.4791,
+      "brier": 0.54267362,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output.",
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815559",
+      "sport": "MLB",
+      "date": "2026-05-30T20:05Z",
+      "matchup": "KC @ TEX",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.7,
+      "actualScore": {
+        "home": 7,
+        "away": 6
+      },
+      "projectedScore": {
+        "home": 4.5,
+        "away": 4,
+        "spread": 0.5,
+        "total": 8.5
+      },
+      "probabilityAssignedToActual": 0.5675,
+      "brier": 0.3741125,
+      "availableFactors": 8,
+      "unavailableFactors": 3,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815550",
+      "sport": "MLB",
+      "date": "2026-05-30T20:10Z",
+      "matchup": "LAA @ TB",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.5,
+      "actualScore": {
+        "home": 3,
+        "away": 14
+      },
+      "projectedScore": {
+        "home": 5.1,
+        "away": 4.1,
+        "spread": 1,
+        "total": 9.2
+      },
+      "probabilityAssignedToActual": 0.3853,
+      "brier": 0.7557121800000001,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815552",
+      "sport": "MLB",
+      "date": "2026-05-30T20:10Z",
+      "matchup": "BOS @ CLE",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57.6,
+      "actualScore": {
+        "home": 1,
+        "away": 9
+      },
+      "projectedScore": {
+        "home": 4.1,
+        "away": 3.5,
+        "spread": 0.6,
+        "total": 7.6
+      },
+      "probabilityAssignedToActual": 0.4244,
+      "brier": 0.66263072,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output.",
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815553",
+      "sport": "MLB",
+      "date": "2026-05-30T20:10Z",
+      "matchup": "MIA @ NYM",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 6,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4,
+        "away": 3.8,
+        "spread": 0.2,
+        "total": 7.8
+      },
+      "probabilityAssignedToActual": 0.5251,
+      "brier": 0.45106002,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output.",
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815560",
+      "sport": "MLB",
+      "date": "2026-05-30T20:10Z",
+      "matchup": "MIL @ HOU",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.1,
+      "actualScore": {
+        "home": 9,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4.2,
+        "away": 4.5,
+        "spread": -0.3,
+        "total": 8.7
+      },
+      "probabilityAssignedToActual": 0.4588,
+      "brier": 0.58579488,
+      "availableFactors": 8,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401815551",
+      "sport": "MLB",
+      "date": "2026-05-30T23:15Z",
+      "matchup": "ATL @ CIN",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 58.7,
+      "actualScore": {
+        "home": 2,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 4.2,
+        "away": 4.9,
+        "spread": -0.7,
+        "total": 9.1
+      },
+      "probabilityAssignedToActual": 0.5869,
+      "brier": 0.34130322,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815557",
+      "sport": "MLB",
+      "date": "2026-05-30T23:15Z",
+      "matchup": "CHC @ STL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.4,
+      "actualScore": {
+        "home": 1,
+        "away": 6
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 3.6,
+        "spread": 0.2,
+        "total": 7.4
+      },
+      "probabilityAssignedToActual": 0.4756,
+      "brier": 0.5499907199999999,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401815561",
+      "sport": "MLB",
+      "date": "2026-05-31T01:10Z",
+      "matchup": "SF @ COL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.5,
+      "actualScore": {
+        "home": 8,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 4.8,
+        "spread": 0.2,
+        "total": 9.8
+      },
+      "probabilityAssignedToActual": 0.5155,
+      "brier": 0.4694805,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815563",
+      "sport": "MLB",
+      "date": "2026-05-31T02:05Z",
+      "matchup": "NYY @ ATH",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 61.6,
+      "actualScore": {
+        "home": 6,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 3.9,
+        "away": 4.9,
+        "spread": -1,
+        "total": 8.8
+      },
+      "probabilityAssignedToActual": 0.3835,
+      "brier": 0.7601445000000001,
+      "availableFactors": 8,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "401815562",
+      "sport": "MLB",
+      "date": "2026-05-31T02:10Z",
+      "matchup": "ARI @ SEA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.3,
+      "actualScore": {
+        "home": 5,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 4.2,
+        "spread": 0.4,
+        "total": 8.8
+      },
+      "probabilityAssignedToActual": 0.5427,
+      "brier": 0.41824658000000003,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815564",
+      "sport": "MLB",
+      "date": "2026-05-31T02:10Z",
+      "matchup": "PHI @ LAD",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.1,
+      "actualScore": {
+        "home": 3,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 4.4,
+        "away": 3.5,
+        "spread": 0.9,
+        "total": 7.9
+      },
+      "probabilityAssignedToActual": 0.3886,
+      "brier": 0.74761992,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815571",
+      "sport": "MLB",
+      "date": "2026-05-31T16:15Z",
+      "matchup": "TOR @ BAL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.2,
+      "actualScore": {
+        "home": 9,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 4.2,
+        "away": 4,
+        "spread": 0.2,
+        "total": 8.2
+      },
+      "probabilityAssignedToActual": 0.5123,
+      "brier": 0.47570258000000004,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815569",
+      "sport": "MLB",
+      "date": "2026-05-31T17:35Z",
+      "matchup": "MIN @ PIT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.2,
+      "actualScore": {
+        "home": 9,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 4.5,
+        "spread": 0.5,
+        "total": 9.5
+      },
+      "probabilityAssignedToActual": 0.5719,
+      "brier": 0.36653922,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815570",
+      "sport": "MLB",
+      "date": "2026-05-31T17:35Z",
+      "matchup": "SD @ WSH",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.6,
+      "actualScore": {
+        "home": 4,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4.8,
+        "away": 4.2,
+        "spread": 0.6,
+        "total": 9
+      },
+      "probabilityAssignedToActual": 0.5763,
+      "brier": 0.35904338,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815565",
+      "sport": "MLB",
+      "date": "2026-05-31T17:40Z",
+      "matchup": "LAA @ TB",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 60.3,
+      "actualScore": {
+        "home": 5,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 5.1,
+        "away": 4.2,
+        "spread": 0.9,
+        "total": 9.3
+      },
+      "probabilityAssignedToActual": 0.6032,
+      "brier": 0.31490048000000004,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401815566",
+      "sport": "MLB",
+      "date": "2026-05-31T17:40Z",
+      "matchup": "ATL @ CIN",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 58.3,
+      "actualScore": {
+        "home": 6,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 4.2,
+        "away": 4.9,
+        "spread": -0.7,
+        "total": 9.1
+      },
+      "probabilityAssignedToActual": 0.417,
+      "brier": 0.6797779999999999,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815567",
+      "sport": "MLB",
+      "date": "2026-05-31T17:40Z",
+      "matchup": "BOS @ CLE",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.2,
+      "actualScore": {
+        "home": 4,
+        "away": 9
+      },
+      "projectedScore": {
+        "home": 4.3,
+        "away": 4,
+        "spread": 0.3,
+        "total": 8.3
+      },
+      "probabilityAssignedToActual": 0.4684,
+      "brier": 0.56519712,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output.",
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815568",
+      "sport": "MLB",
+      "date": "2026-05-31T17:40Z",
+      "matchup": "MIA @ NYM",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.5,
+      "actualScore": {
+        "home": 10,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4.1,
+        "away": 3.7,
+        "spread": 0.4,
+        "total": 7.8
+      },
+      "probabilityAssignedToActual": 0.5452,
+      "brier": 0.41368607999999996,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815573",
+      "sport": "MLB",
+      "date": "2026-05-31T18:10Z",
+      "matchup": "DET @ CHW",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 66.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 3.6,
+        "spread": 1.4,
+        "total": 8.6
+      },
+      "probabilityAssignedToActual": 0.6622,
+      "brier": 0.22821767999999998,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815575",
+      "sport": "MLB",
+      "date": "2026-05-31T18:10Z",
+      "matchup": "MIL @ HOU",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 54.9,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4,
+        "away": 4.4,
+        "spread": -0.4,
+        "total": 8.4
+      },
+      "probabilityAssignedToActual": 0.5495,
+      "brier": 0.4059005,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "401815574",
+      "sport": "MLB",
+      "date": "2026-05-31T18:35Z",
+      "matchup": "KC @ TEX",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.9,
+      "actualScore": {
+        "home": 6,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 4.8,
+        "away": 4.1,
+        "spread": 0.7,
+        "total": 8.9
+      },
+      "probabilityAssignedToActual": 0.5794,
+      "brier": 0.35380871999999997,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815576",
+      "sport": "MLB",
+      "date": "2026-05-31T19:10Z",
+      "matchup": "SF @ COL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.8,
+      "actualScore": {
+        "home": 6,
+        "away": 19
+      },
+      "projectedScore": {
+        "home": 5.1,
+        "away": 4.8,
+        "spread": 0.3,
+        "total": 9.9
+      },
+      "probabilityAssignedToActual": 0.4623,
+      "brier": 0.5782425800000001,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815578",
+      "sport": "MLB",
+      "date": "2026-05-31T20:05Z",
+      "matchup": "NYY @ ATH",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 60.3,
+      "actualScore": {
+        "home": 8,
+        "away": 13
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 4.7,
+        "spread": -0.9,
+        "total": 8.5
+      },
+      "probabilityAssignedToActual": 0.6027,
+      "brier": 0.31569458,
+      "availableFactors": 8,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "401815577",
+      "sport": "MLB",
+      "date": "2026-05-31T20:10Z",
+      "matchup": "ARI @ SEA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.8,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 4.1,
+        "spread": 0.5,
+        "total": 8.7
+      },
+      "probabilityAssignedToActual": 0.5583,
+      "brier": 0.39019778,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815579",
+      "sport": "MLB",
+      "date": "2026-05-31T20:10Z",
+      "matchup": "PHI @ LAD",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 60.6,
+      "actualScore": {
+        "home": 9,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4.4,
+        "away": 3.6,
+        "spread": 0.8,
+        "total": 8
+      },
+      "probabilityAssignedToActual": 0.6057,
+      "brier": 0.31094498,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815572",
+      "sport": "MLB",
+      "date": "2026-05-31T23:20Z",
+      "matchup": "CHC @ STL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 5,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4.5,
+        "away": 4.3,
+        "spread": 0.2,
+        "total": 8.8
+      },
+      "probabilityAssignedToActual": 0.5092,
+      "brier": 0.48176928,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output.",
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815580",
+      "sport": "MLB",
+      "date": "2026-06-01T22:40Z",
+      "matchup": "DET @ TB",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 62,
+      "actualScore": {
+        "home": 9,
+        "away": 10
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 3.7,
+        "spread": 0.9,
+        "total": 8.3
+      },
+      "probabilityAssignedToActual": 0.3798,
+      "brier": 0.7692960799999999,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815582",
+      "sport": "MLB",
+      "date": "2026-06-01T22:45Z",
+      "matchup": "MIA @ WSH",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 62.3,
+      "actualScore": {
+        "home": 3,
+        "away": 7
+      },
+      "projectedScore": {
+        "home": 4.6,
+        "away": 3.5,
+        "spread": 1.1,
+        "total": 8.1
+      },
+      "probabilityAssignedToActual": 0.3765,
+      "brier": 0.7775045,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815581",
+      "sport": "MLB",
+      "date": "2026-06-01T23:10Z",
+      "matchup": "KC @ CIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 59.7,
+      "actualScore": {
+        "home": 2,
+        "away": 9
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 4.3,
+        "spread": 0.7,
+        "total": 9.3
+      },
+      "probabilityAssignedToActual": 0.4033,
+      "brier": 0.71210178,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815583",
+      "sport": "MLB",
+      "date": "2026-06-01T23:40Z",
+      "matchup": "CHW @ MIN",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 57.4,
+      "actualScore": {
+        "home": 9,
+        "away": 6
+      },
+      "projectedScore": {
+        "home": 4.8,
+        "away": 5.3,
+        "spread": -0.5,
+        "total": 10.1
+      },
+      "probabilityAssignedToActual": 0.4263,
+      "brier": 0.65826338,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "401815584",
+      "sport": "MLB",
+      "date": "2026-06-01T23:40Z",
+      "matchup": "SF @ MIL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 62.6,
+      "actualScore": {
+        "home": 16,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 4,
+        "spread": 1,
+        "total": 9
+      },
+      "probabilityAssignedToActual": 0.6261,
+      "brier": 0.27960242,
+      "availableFactors": 9,
+      "unavailableFactors": 2,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815585",
+      "sport": "MLB",
+      "date": "2026-06-01T23:45Z",
+      "matchup": "TEX @ STL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.2,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4.2,
+        "away": 3.9,
+        "spread": 0.3,
+        "total": 8.1
+      },
+      "probabilityAssignedToActual": 0.4681,
+      "brier": 0.5658352200000001,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output.",
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815586",
+      "sport": "MLB",
+      "date": "2026-06-02T01:38Z",
+      "matchup": "COL @ LAA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 56.9,
+      "actualScore": {
+        "home": 8,
+        "away": 9
+      },
+      "projectedScore": {
+        "home": 5.4,
+        "away": 4.9,
+        "spread": 0.5,
+        "total": 10.3
+      },
+      "probabilityAssignedToActual": 0.4313,
+      "brier": 0.64683938,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "401815587",
+      "sport": "MLB",
+      "date": "2026-06-02T01:40Z",
+      "matchup": "LAD @ ARI",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.8,
+      "actualScore": {
+        "home": 4,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 4.4,
+        "away": 4.7,
+        "spread": -0.3,
+        "total": 9.1
+      },
+      "probabilityAssignedToActual": 0.4716,
+      "brier": 0.55841312,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": []
+    },
+    {
+      "gameId": "401815588",
+      "sport": "MLB",
+      "date": "2026-06-02T01:40Z",
+      "matchup": "NYM @ SEA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 58.7,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4.5,
+        "away": 3.8,
+        "spread": 0.7,
+        "total": 8.3
+      },
+      "probabilityAssignedToActual": 0.5869,
+      "brier": 0.34130322,
+      "availableFactors": 10,
+      "unavailableFactors": 1,
+      "warnings": [
+        "MLB starter matchup is close; avoiding a team-stats overclaim."
+      ]
+    },
+    {
+      "gameId": "761615",
+      "sport": "MLS",
+      "date": "2026-05-13T23:15Z",
+      "matchup": "NYC @ CLT",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 45,
+      "actualScore": {
+        "home": 0,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.5,
+        "spread": 0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.3353,
+      "brier": 0.69019125,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761619",
+      "sport": "MLS",
+      "date": "2026-05-13T23:30Z",
+      "matchup": "MIA @ CIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 41.3,
+      "actualScore": {
+        "home": 3,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1.8,
+        "spread": 0.2,
+        "total": 3.8
+      },
+      "probabilityAssignedToActual": 0.3596,
+      "brier": 0.6323177600000002,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761616",
+      "sport": "MLS",
+      "date": "2026-05-13T23:30Z",
+      "matchup": "PHI @ ORL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 48,
+      "actualScore": {
+        "home": 4,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.3,
+        "spread": 0.5,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.4798,
+      "brier": 0.41109368,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761621",
+      "sport": "MLS",
+      "date": "2026-05-13T23:30Z",
+      "matchup": "CLB @ RBNY",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 42,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.5,
+        "spread": 0.2,
+        "total": 3.2
+      },
+      "probabilityAssignedToActual": 0.4198,
+      "brier": 0.5135734900000001,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761624",
+      "sport": "MLS",
+      "date": "2026-05-14T00:30Z",
+      "matchup": "COL @ MIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 0,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.9,
+        "away": 1.3,
+        "spread": 0.6,
+        "total": 3.2
+      },
+      "probabilityAssignedToActual": 0.2796,
+      "brier": 0.8338421599999999,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761628",
+      "sport": "MLS",
+      "date": "2026-05-14T01:30Z",
+      "matchup": "HOU @ RSL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 41.2,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.5,
+        "spread": 0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.4116,
+      "brier": 0.52787616,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761627",
+      "sport": "MLS",
+      "date": "2026-05-14T01:30Z",
+      "matchup": "ATX @ SD",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 39.2,
+      "actualScore": {
+        "home": 5,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.4,
+        "away": 1.7,
+        "spread": -0.3,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.3739,
+      "brier": 0.60057805,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761632",
+      "sport": "MLS",
+      "date": "2026-05-16T20:30Z",
+      "matchup": "CHI @ MTL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 45.2,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.5,
+        "spread": 0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.3314,
+      "brier": 0.6980575200000002,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761631",
+      "sport": "MLS",
+      "date": "2026-05-16T23:30Z",
+      "matchup": "TOR @ CLT",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 41.5,
+      "actualScore": {
+        "home": 3,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.5,
+        "spread": 0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.4146,
+      "brier": 0.5236447199999998,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761630",
+      "sport": "MLS",
+      "date": "2026-05-16T23:30Z",
+      "matchup": "STL @ DC",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 47.7,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.3,
+        "spread": 0.4,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.2105,
+      "brier": 0.94836422,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761635",
+      "sport": "MLS",
+      "date": "2026-05-16T23:30Z",
+      "matchup": "MIN @ NE",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 48,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.3,
+        "spread": 0.4,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4802,
+      "brier": 0.41069606000000003,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761634",
+      "sport": "MLS",
+      "date": "2026-05-16T23:30Z",
+      "matchup": "ATL @ ORL",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 45.3,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.5,
+        "spread": 0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.2152,
+      "brier": 0.9310241299999998,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761629",
+      "sport": "MLS",
+      "date": "2026-05-16T23:30Z",
+      "matchup": "CLB @ PHI",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 41,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.4,
+        "spread": 0.3,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.2275,
+      "brier": 0.89622841,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761633",
+      "sport": "MLS",
+      "date": "2026-05-16T23:30Z",
+      "matchup": "NYC @ RBNY",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 44.1,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.6,
+        "spread": 0.2,
+        "total": 3.4
+      },
+      "probabilityAssignedToActual": 0.2195,
+      "brier": 0.91877265,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761638",
+      "sport": "MLS",
+      "date": "2026-05-17T01:15Z",
+      "matchup": "LA @ SEA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 47.3,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.3,
+        "spread": 0.4,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.3205,
+      "brier": 0.72810355,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761639",
+      "sport": "MLS",
+      "date": "2026-05-17T01:30Z",
+      "matchup": "COL @ RSL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1.3,
+        "spread": 0.7,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.522,
+      "brier": 0.34635552,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761640",
+      "sport": "MLS",
+      "date": "2026-05-17T01:30Z",
+      "matchup": "CIN @ SD",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 38.5,
+      "actualScore": {
+        "home": 3,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1.8,
+        "spread": 0.2,
+        "total": 3.8
+      },
+      "probabilityAssignedToActual": 0.233,
+      "brier": 0.8824386200000001,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761641",
+      "sport": "MLS",
+      "date": "2026-05-17T02:30Z",
+      "matchup": "DAL @ SJ",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 47.7,
+      "actualScore": {
+        "home": 2,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 1.9,
+        "away": 1.5,
+        "spread": 0.4,
+        "total": 3.4
+      },
+      "probabilityAssignedToActual": 0.3167,
+      "brier": 0.73693346,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761642",
+      "sport": "MLS",
+      "date": "2026-05-17T22:00Z",
+      "matchup": "POR @ MIA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 48.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1.6,
+        "spread": 0.4,
+        "total": 3.6
+      },
+      "probabilityAssignedToActual": 0.4894,
+      "brier": 0.3964143199999999,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761643",
+      "sport": "MLS",
+      "date": "2026-05-18T00:00Z",
+      "matchup": "LAFC @ NSH",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.2,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.9,
+        "away": 1.2,
+        "spread": 0.7,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.5623,
+      "brier": 0.28977317999999996,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761644",
+      "sport": "MLS",
+      "date": "2026-05-23T18:45Z",
+      "matchup": "ATX @ STL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 45.6,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.3,
+        "spread": 0.4,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4561,
+      "brier": 0.4504572200000001,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761650",
+      "sport": "MLS",
+      "date": "2026-05-23T20:30Z",
+      "matchup": "RSL @ MIN",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 41.1,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.4,
+        "spread": 0.3,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.226,
+      "brier": 0.89979498,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761647",
+      "sport": "MLS",
+      "date": "2026-05-23T23:30Z",
+      "matchup": "NE @ CLT",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 41,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.4,
+        "away": 1.7,
+        "spread": -0.3,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.3623,
+      "brier": 0.6265265899999999,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761646",
+      "sport": "MLS",
+      "date": "2026-05-23T23:30Z",
+      "matchup": "MTL @ DC",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 44.2,
+      "actualScore": {
+        "home": 4,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 1.7,
+        "away": 1.4,
+        "spread": 0.3,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.2202,
+      "brier": 0.9174933300000001,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761645",
+      "sport": "MLS",
+      "date": "2026-05-23T23:30Z",
+      "matchup": "ORL @ CIN",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 45.6,
+      "actualScore": {
+        "home": 6,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2.1,
+        "away": 1.8,
+        "spread": 0.3,
+        "total": 3.9
+      },
+      "probabilityAssignedToActual": 0.4557,
+      "brier": 0.45052202999999996,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761648",
+      "sport": "MLS",
+      "date": "2026-05-24T00:30Z",
+      "matchup": "TOR @ CHI",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2.1,
+        "away": 1.4,
+        "spread": 0.7,
+        "total": 3.5
+      },
+      "probabilityAssignedToActual": 0.5302,
+      "brier": 0.33459606,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761649",
+      "sport": "MLS",
+      "date": "2026-05-24T00:30Z",
+      "matchup": "NYC @ NSH",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.4,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.8,
+        "away": 1.3,
+        "spread": 0.5,
+        "total": 3.1
+      },
+      "probabilityAssignedToActual": 0.5144,
+      "brier": 0.35807282,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761651",
+      "sport": "MLS",
+      "date": "2026-05-24T00:30Z",
+      "matchup": "RBNY @ SKC",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 43.7,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.9,
+        "away": 1.6,
+        "spread": 0.3,
+        "total": 3.5
+      },
+      "probabilityAssignedToActual": 0.3471,
+      "brier": 0.6638150900000002,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761654",
+      "sport": "MLS",
+      "date": "2026-05-24T01:30Z",
+      "matchup": "DAL @ COL",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 40.3,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1.5,
+        "away": 1.8,
+        "spread": -0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.4027,
+      "brier": 0.5438233799999999,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761653",
+      "sport": "MLS",
+      "date": "2026-05-24T01:30Z",
+      "matchup": "SJ @ POR",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 39.5,
+      "actualScore": {
+        "home": 1,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 1.9,
+        "away": 1.6,
+        "spread": 0.3,
+        "total": 3.5
+      },
+      "probabilityAssignedToActual": 0.3703,
+      "brier": 0.6076953799999999,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761652",
+      "sport": "MLS",
+      "date": "2026-05-24T01:30Z",
+      "matchup": "VAN @ SD",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 40.2,
+      "actualScore": {
+        "home": 2,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 1.5,
+        "away": 1.8,
+        "spread": -0.3,
+        "total": 3.3
+      },
+      "probabilityAssignedToActual": 0.4019,
+      "brier": 0.54712875,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761655",
+      "sport": "MLS",
+      "date": "2026-05-24T02:30Z",
+      "matchup": "HOU @ LA",
+      "actualPick": "draw",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 41.9,
+      "actualScore": {
+        "home": 1,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1.6,
+        "away": 1.4,
+        "spread": 0.2,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.2264,
+      "brier": 0.8997334400000001,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761656",
+      "sport": "MLS",
+      "date": "2026-05-24T21:00Z",
+      "matchup": "ATL @ CLB",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 41.8,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.6,
+        "away": 1.4,
+        "spread": 0.2,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4176,
+      "brier": 0.51838962,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "761657",
+      "sport": "MLS",
+      "date": "2026-05-24T23:00Z",
+      "matchup": "PHI @ MIA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.1,
+      "actualScore": {
+        "home": 6,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 2.1,
+        "away": 1.3,
+        "spread": 0.8,
+        "total": 3.4
+      },
+      "probabilityAssignedToActual": 0.5508,
+      "brier": 0.30542378000000003,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "761658",
+      "sport": "MLS",
+      "date": "2026-05-25T01:15Z",
+      "matchup": "SEA @ LAFC",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 41.5,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1.4,
+        "away": 1.6,
+        "spread": -0.2,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.3587,
+      "brier": 0.63477794,
+      "availableFactors": 5,
+      "unavailableFactors": 4,
+      "warnings": [
+        "Low factor coverage; missing inputs were redistributed before final aggregation.",
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869393",
+      "sport": "NBA",
+      "date": "2026-04-30T23:00Z",
+      "matchup": "NY @ ATL",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 53.4,
+      "actualScore": {
+        "home": 89,
+        "away": 140
+      },
+      "projectedScore": {
+        "home": 110,
+        "away": 111,
+        "spread": -1,
+        "total": 221
+      },
+      "probabilityAssignedToActual": 0.5335,
+      "brier": 0.43524450000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869410",
+      "sport": "NBA",
+      "date": "2026-05-01T00:00Z",
+      "matchup": "BOS @ PHI",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 61,
+      "actualScore": {
+        "home": 106,
+        "away": 93
+      },
+      "projectedScore": {
+        "home": 111,
+        "away": 107,
+        "spread": 4,
+        "total": 218
+      },
+      "probabilityAssignedToActual": 0.6099,
+      "brier": 0.30435602,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401869402",
+      "sport": "NBA",
+      "date": "2026-05-01T01:30Z",
+      "matchup": "DEN @ MIN",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 68.8,
+      "actualScore": {
+        "home": 110,
+        "away": 98
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 109,
+        "spread": 6,
+        "total": 224
+      },
+      "probabilityAssignedToActual": 0.6882,
+      "brier": 0.19443848,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869417",
+      "sport": "NBA",
+      "date": "2026-05-01T23:00Z",
+      "matchup": "DET @ ORL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 63.2,
+      "actualScore": {
+        "home": 79,
+        "away": 93
+      },
+      "projectedScore": {
+        "home": 109,
+        "away": 105,
+        "spread": 4,
+        "total": 214
+      },
+      "probabilityAssignedToActual": 0.3676,
+      "brier": 0.79985952,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869381",
+      "sport": "NBA",
+      "date": "2026-05-01T23:30Z",
+      "matchup": "CLE @ TOR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.9,
+      "actualScore": {
+        "home": 112,
+        "away": 110
+      },
+      "projectedScore": {
+        "home": 113,
+        "away": 111,
+        "spread": 2,
+        "total": 224
+      },
+      "probabilityAssignedToActual": 0.559,
+      "brier": 0.388962,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401869409",
+      "sport": "NBA",
+      "date": "2026-05-02T01:30Z",
+      "matchup": "LAL @ HOU",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 58.7,
+      "actualScore": {
+        "home": 78,
+        "away": 98
+      },
+      "projectedScore": {
+        "home": 108,
+        "away": 105,
+        "spread": 3,
+        "total": 213
+      },
+      "probabilityAssignedToActual": 0.4134,
+      "brier": 0.68819912,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869412",
+      "sport": "NBA",
+      "date": "2026-05-02T23:30Z",
+      "matchup": "PHI @ BOS",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 59.1,
+      "actualScore": {
+        "home": 100,
+        "away": 109
+      },
+      "projectedScore": {
+        "home": 110,
+        "away": 107,
+        "spread": 3,
+        "total": 217
+      },
+      "probabilityAssignedToActual": 0.4088,
+      "brier": 0.6990348799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869418",
+      "sport": "NBA",
+      "date": "2026-05-03T19:30Z",
+      "matchup": "ORL @ DET",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 68.9,
+      "actualScore": {
+        "home": 116,
+        "away": 94
+      },
+      "projectedScore": {
+        "home": 108,
+        "away": 102,
+        "spread": 6,
+        "total": 210
+      },
+      "probabilityAssignedToActual": 0.6892,
+      "brier": 0.19319328,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869384",
+      "sport": "NBA",
+      "date": "2026-05-03T23:30Z",
+      "matchup": "TOR @ CLE",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 66.5,
+      "actualScore": {
+        "home": 114,
+        "away": 102
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 110,
+        "spread": 5,
+        "total": 225
+      },
+      "probabilityAssignedToActual": 0.6649,
+      "brier": 0.22458402,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871159",
+      "sport": "NBA",
+      "date": "2026-05-05T00:00Z",
+      "matchup": "PHI @ NY",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 68,
+      "actualScore": {
+        "home": 137,
+        "away": 98
+      },
+      "projectedScore": {
+        "home": 113,
+        "away": 107,
+        "spread": 6,
+        "total": 220
+      },
+      "probabilityAssignedToActual": 0.6805,
+      "brier": 0.2041605,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871152",
+      "sport": "NBA",
+      "date": "2026-05-05T01:30Z",
+      "matchup": "MIN @ SA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 67.5,
+      "actualScore": {
+        "home": 102,
+        "away": 104
+      },
+      "projectedScore": {
+        "home": 114,
+        "away": 108,
+        "spread": 6,
+        "total": 222
+      },
+      "probabilityAssignedToActual": 0.325,
+      "brier": 0.9112500000000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871333",
+      "sport": "NBA",
+      "date": "2026-05-05T23:00Z",
+      "matchup": "CLE @ DET",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 65.2,
+      "actualScore": {
+        "home": 111,
+        "away": 101
+      },
+      "projectedScore": {
+        "home": 111,
+        "away": 106,
+        "spread": 5,
+        "total": 217
+      },
+      "probabilityAssignedToActual": 0.6517,
+      "brier": 0.24262578,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871160",
+      "sport": "NBA",
+      "date": "2026-05-06T23:00Z",
+      "matchup": "PHI @ NY",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 71.7,
+      "actualScore": {
+        "home": 108,
+        "away": 102
+      },
+      "projectedScore": {
+        "home": 114,
+        "away": 107,
+        "spread": 7,
+        "total": 221
+      },
+      "probabilityAssignedToActual": 0.717,
+      "brier": 0.160178,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871153",
+      "sport": "NBA",
+      "date": "2026-05-07T01:30Z",
+      "matchup": "MIN @ SA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 63.7,
+      "actualScore": {
+        "home": 133,
+        "away": 95
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 108,
+        "spread": 4,
+        "total": 220
+      },
+      "probabilityAssignedToActual": 0.6372,
+      "brier": 0.26324768000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871334",
+      "sport": "NBA",
+      "date": "2026-05-07T23:00Z",
+      "matchup": "CLE @ DET",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 69.4,
+      "actualScore": {
+        "home": 107,
+        "away": 97
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 106,
+        "spread": 6,
+        "total": 218
+      },
+      "probabilityAssignedToActual": 0.6936,
+      "brier": 0.18776192,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871327",
+      "sport": "NBA",
+      "date": "2026-05-08T01:30Z",
+      "matchup": "LAL @ OKC",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 69.3,
+      "actualScore": {
+        "home": 125,
+        "away": 107
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 106,
+        "spread": 6,
+        "total": 218
+      },
+      "probabilityAssignedToActual": 0.6926,
+      "brier": 0.18898952000000002,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871161",
+      "sport": "NBA",
+      "date": "2026-05-08T23:00Z",
+      "matchup": "NY @ PHI",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.3,
+      "actualScore": {
+        "home": 94,
+        "away": 108
+      },
+      "projectedScore": {
+        "home": 110,
+        "away": 111,
+        "spread": -1,
+        "total": 221
+      },
+      "probabilityAssignedToActual": 0.5027,
+      "brier": 0.49461457999999997,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871154",
+      "sport": "NBA",
+      "date": "2026-05-09T01:30Z",
+      "matchup": "SA @ MIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57.1,
+      "actualScore": {
+        "home": 108,
+        "away": 115
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 110,
+        "spread": 2,
+        "total": 222
+      },
+      "probabilityAssignedToActual": 0.4288,
+      "brier": 0.6525388799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871335",
+      "sport": "NBA",
+      "date": "2026-05-09T19:00Z",
+      "matchup": "DET @ CLE",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 116,
+        "away": 109
+      },
+      "projectedScore": {
+        "home": 109,
+        "away": 108,
+        "spread": 1,
+        "total": 217
+      },
+      "probabilityAssignedToActual": 0.5182,
+      "brier": 0.46426248000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871328",
+      "sport": "NBA",
+      "date": "2026-05-10T00:30Z",
+      "matchup": "OKC @ LAL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.4,
+      "actualScore": {
+        "home": 108,
+        "away": 131
+      },
+      "projectedScore": {
+        "home": 111,
+        "away": 110,
+        "spread": 1,
+        "total": 221
+      },
+      "probabilityAssignedToActual": 0.4962,
+      "brier": 0.5076288800000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871162",
+      "sport": "NBA",
+      "date": "2026-05-10T19:30Z",
+      "matchup": "NY @ PHI",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 55.6,
+      "actualScore": {
+        "home": 114,
+        "away": 144
+      },
+      "projectedScore": {
+        "home": 109,
+        "away": 111,
+        "spread": -2,
+        "total": 220
+      },
+      "probabilityAssignedToActual": 0.5565,
+      "brier": 0.3933845,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871155",
+      "sport": "NBA",
+      "date": "2026-05-10T23:30Z",
+      "matchup": "SA @ MIN",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 114,
+        "away": 109
+      },
+      "projectedScore": {
+        "home": 111,
+        "away": 110,
+        "spread": 1,
+        "total": 221
+      },
+      "probabilityAssignedToActual": 0.5095,
+      "brier": 0.4811805,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871336",
+      "sport": "NBA",
+      "date": "2026-05-12T00:00Z",
+      "matchup": "DET @ CLE",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.5,
+      "actualScore": {
+        "home": 112,
+        "away": 103
+      },
+      "projectedScore": {
+        "home": 110,
+        "away": 108,
+        "spread": 2,
+        "total": 218
+      },
+      "probabilityAssignedToActual": 0.5649,
+      "brier": 0.37862402,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871329",
+      "sport": "NBA",
+      "date": "2026-05-12T02:30Z",
+      "matchup": "OKC @ LAL",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 53.4,
+      "actualScore": {
+        "home": 110,
+        "away": 115
+      },
+      "projectedScore": {
+        "home": 110,
+        "away": 111,
+        "spread": -1,
+        "total": 221
+      },
+      "probabilityAssignedToActual": 0.5338,
+      "brier": 0.43468487999999994,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871156",
+      "sport": "NBA",
+      "date": "2026-05-13T00:00Z",
+      "matchup": "MIN @ SA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 69.6,
+      "actualScore": {
+        "home": 126,
+        "away": 97
+      },
+      "projectedScore": {
+        "home": 114,
+        "away": 108,
+        "spread": 6,
+        "total": 222
+      },
+      "probabilityAssignedToActual": 0.6961,
+      "brier": 0.18471042,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871337",
+      "sport": "NBA",
+      "date": "2026-05-14T00:00Z",
+      "matchup": "CLE @ DET",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 66,
+      "actualScore": {
+        "home": 113,
+        "away": 117
+      },
+      "projectedScore": {
+        "home": 111,
+        "away": 106,
+        "spread": 5,
+        "total": 217
+      },
+      "probabilityAssignedToActual": 0.3398,
+      "brier": 0.87172808,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871338",
+      "sport": "NBA",
+      "date": "2026-05-15T23:00Z",
+      "matchup": "DET @ CLE",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 65.6,
+      "actualScore": {
+        "home": 94,
+        "away": 115
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 107,
+        "spread": 5,
+        "total": 219
+      },
+      "probabilityAssignedToActual": 0.3437,
+      "brier": 0.86145938,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401871157",
+      "sport": "NBA",
+      "date": "2026-05-16T01:30Z",
+      "matchup": "SA @ MIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 109,
+        "away": 139
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 111,
+        "spread": 1,
+        "total": 223
+      },
+      "probabilityAssignedToActual": 0.4816,
+      "brier": 0.5374771199999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871339",
+      "sport": "NBA",
+      "date": "2026-05-18T00:00Z",
+      "matchup": "CLE @ DET",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 68.8,
+      "actualScore": {
+        "home": 94,
+        "away": 125
+      },
+      "projectedScore": {
+        "home": 112,
+        "away": 106,
+        "spread": 6,
+        "total": 218
+      },
+      "probabilityAssignedToActual": 0.3116,
+      "brier": 0.94778912,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873197",
+      "sport": "NBA",
+      "date": "2026-05-19T00:30Z",
+      "matchup": "SA @ OKC",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 63.5,
+      "actualScore": {
+        "home": 115,
+        "away": 122
+      },
+      "projectedScore": {
+        "home": 116,
+        "away": 112,
+        "spread": 4,
+        "total": 228
+      },
+      "probabilityAssignedToActual": 0.3651,
+      "brier": 0.80619602,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873341",
+      "sport": "NBA",
+      "date": "2026-05-20T00:00Z",
+      "matchup": "CLE @ NY",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 77,
+      "actualScore": {
+        "home": 115,
+        "away": 104
+      },
+      "projectedScore": {
+        "home": 117,
+        "away": 108,
+        "spread": 9,
+        "total": 225
+      },
+      "probabilityAssignedToActual": 0.7703,
+      "brier": 0.10552418,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873198",
+      "sport": "NBA",
+      "date": "2026-05-21T00:30Z",
+      "matchup": "SA @ OKC",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.4,
+      "actualScore": {
+        "home": 122,
+        "away": 113
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 113,
+        "spread": 2,
+        "total": 228
+      },
+      "probabilityAssignedToActual": 0.5642,
+      "brier": 0.37984328,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401873342",
+      "sport": "NBA",
+      "date": "2026-05-22T00:00Z",
+      "matchup": "CLE @ NY",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 79.3,
+      "actualScore": {
+        "home": 109,
+        "away": 93
+      },
+      "projectedScore": {
+        "home": 117,
+        "away": 107,
+        "spread": 10,
+        "total": 224
+      },
+      "probabilityAssignedToActual": 0.7933,
+      "brier": 0.08544977999999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873199",
+      "sport": "NBA",
+      "date": "2026-05-23T00:30Z",
+      "matchup": "OKC @ SA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 63.2,
+      "actualScore": {
+        "home": 108,
+        "away": 123
+      },
+      "projectedScore": {
+        "home": 116,
+        "away": 112,
+        "spread": 4,
+        "total": 228
+      },
+      "probabilityAssignedToActual": 0.3679,
+      "brier": 0.7991008199999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873343",
+      "sport": "NBA",
+      "date": "2026-05-24T00:00Z",
+      "matchup": "NY @ CLE",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 59.2,
+      "actualScore": {
+        "home": 108,
+        "away": 121
+      },
+      "projectedScore": {
+        "home": 110,
+        "away": 113,
+        "spread": -3,
+        "total": 223
+      },
+      "probabilityAssignedToActual": 0.5922,
+      "brier": 0.33260168,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873200",
+      "sport": "NBA",
+      "date": "2026-05-25T00:00Z",
+      "matchup": "OKC @ SA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.2,
+      "actualScore": {
+        "home": 103,
+        "away": 82
+      },
+      "projectedScore": {
+        "home": 116,
+        "away": 114,
+        "spread": 2,
+        "total": 230
+      },
+      "probabilityAssignedToActual": 0.5518,
+      "brier": 0.40176648000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401873344",
+      "sport": "NBA",
+      "date": "2026-05-26T00:00Z",
+      "matchup": "NY @ CLE",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 65.7,
+      "actualScore": {
+        "home": 93,
+        "away": 130
+      },
+      "projectedScore": {
+        "home": 109,
+        "away": 114,
+        "spread": -5,
+        "total": 223
+      },
+      "probabilityAssignedToActual": 0.6567,
+      "brier": 0.23570978000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873201",
+      "sport": "NBA",
+      "date": "2026-05-27T00:30Z",
+      "matchup": "SA @ OKC",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 62.6,
+      "actualScore": {
+        "home": 127,
+        "away": 114
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 111,
+        "spread": 4,
+        "total": 226
+      },
+      "probabilityAssignedToActual": 0.6263,
+      "brier": 0.27930338,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873202",
+      "sport": "NBA",
+      "date": "2026-05-29T00:30Z",
+      "matchup": "OKC @ SA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.8,
+      "actualScore": {
+        "home": 118,
+        "away": 91
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 113,
+        "spread": 2,
+        "total": 228
+      },
+      "probabilityAssignedToActual": 0.5776,
+      "brier": 0.35684351999999997,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873203",
+      "sport": "NBA",
+      "date": "2026-05-31T00:00Z",
+      "matchup": "SA @ OKC",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.1,
+      "actualScore": {
+        "home": 103,
+        "away": 111
+      },
+      "projectedScore": {
+        "home": 115,
+        "away": 111,
+        "spread": 4,
+        "total": 226
+      },
+      "probabilityAssignedToActual": 0.389,
+      "brier": 0.7466419999999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401869802",
+      "sport": "NHL",
+      "date": "2026-04-29T23:30Z",
+      "matchup": "PIT @ PHI",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.2,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 3,
+        "spread": 0.4,
+        "total": 6.4
+      },
+      "probabilityAssignedToActual": 0.5619,
+      "brier": 0.38386322000000006,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401869787",
+      "sport": "NHL",
+      "date": "2026-04-30T23:30Z",
+      "matchup": "DAL @ MIN",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 58.4,
+      "actualScore": {
+        "home": 5,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.6,
+        "away": 3.1,
+        "spread": 0.5,
+        "total": 6.7
+      },
+      "probabilityAssignedToActual": 0.584,
+      "brier": 0.34611200000000003,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401869776",
+      "sport": "NHL",
+      "date": "2026-05-01T02:00Z",
+      "matchup": "EDM @ ANA",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.9,
+      "actualScore": {
+        "home": 5,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 4,
+        "away": 3.8,
+        "spread": 0.2,
+        "total": 7.8
+      },
+      "probabilityAssignedToActual": 0.539,
+      "brier": 0.425042,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401869777",
+      "sport": "NHL",
+      "date": "2026-05-01T23:00Z",
+      "matchup": "TB @ MTL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 56.5,
+      "actualScore": {
+        "home": 0,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 3,
+        "spread": 0.4,
+        "total": 6.4
+      },
+      "probabilityAssignedToActual": 0.4346,
+      "brier": 0.63935432,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401869765",
+      "sport": "NHL",
+      "date": "2026-05-01T23:30Z",
+      "matchup": "BUF @ BOS",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51,
+      "actualScore": {
+        "home": 1,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 3.3,
+        "away": 3,
+        "spread": 0.3,
+        "total": 6.3
+      },
+      "probabilityAssignedToActual": 0.4904,
+      "brier": 0.5193843200000001,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401869763",
+      "sport": "NHL",
+      "date": "2026-05-02T02:20Z",
+      "matchup": "VGK @ UTA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 1,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 3.6,
+        "spread": 0.2,
+        "total": 7.4
+      },
+      "probabilityAssignedToActual": 0.4727,
+      "brier": 0.55609058,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401869779",
+      "sport": "NHL",
+      "date": "2026-05-03T22:00Z",
+      "matchup": "MTL @ TB",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.9,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.1,
+        "away": 2.9,
+        "spread": 0.2,
+        "total": 6
+      },
+      "probabilityAssignedToActual": 0.4614,
+      "brier": 0.58017992,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871411",
+      "sport": "NHL",
+      "date": "2026-05-04T23:00Z",
+      "matchup": "PHI @ CAR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 59.7,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.2,
+        "away": 2.7,
+        "spread": 0.5,
+        "total": 5.9
+      },
+      "probabilityAssignedToActual": 0.5975,
+      "brier": 0.3240125,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871423",
+      "sport": "NHL",
+      "date": "2026-05-05T01:50Z",
+      "matchup": "ANA @ VGK",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.3,
+      "actualScore": {
+        "home": 3,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 3.9,
+        "away": 3.6,
+        "spread": 0.3,
+        "total": 7.5
+      },
+      "probabilityAssignedToActual": 0.563,
+      "brier": 0.38193800000000006,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871417",
+      "sport": "NHL",
+      "date": "2026-05-06T00:00Z",
+      "matchup": "MIN @ COL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 58.1,
+      "actualScore": {
+        "home": 5,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 3.3,
+        "spread": 0.5,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.5814,
+      "brier": 0.35045192000000003,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871404",
+      "sport": "NHL",
+      "date": "2026-05-06T23:00Z",
+      "matchup": "MTL @ BUF",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.8,
+      "actualScore": {
+        "home": 4,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.3,
+        "away": 3,
+        "spread": 0.3,
+        "total": 6.3
+      },
+      "probabilityAssignedToActual": 0.5679,
+      "brier": 0.37342082,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871424",
+      "sport": "NHL",
+      "date": "2026-05-07T01:30Z",
+      "matchup": "ANA @ VGK",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 58.8,
+      "actualScore": {
+        "home": 1,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.9,
+        "away": 3.4,
+        "spread": 0.5,
+        "total": 7.3
+      },
+      "probabilityAssignedToActual": 0.4121,
+      "brier": 0.69125282,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871412",
+      "sport": "NHL",
+      "date": "2026-05-08T00:00Z",
+      "matchup": "CAR @ PHI",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 1,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 2.9,
+        "away": 3.1,
+        "spread": -0.2,
+        "total": 6
+      },
+      "probabilityAssignedToActual": 0.5272,
+      "brier": 0.44707968,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871405",
+      "sport": "NHL",
+      "date": "2026-05-08T23:00Z",
+      "matchup": "MTL @ BUF",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 59.2,
+      "actualScore": {
+        "home": 1,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 2.9,
+        "spread": 0.5,
+        "total": 6.3
+      },
+      "probabilityAssignedToActual": 0.4075,
+      "brier": 0.7021125,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871425",
+      "sport": "NHL",
+      "date": "2026-05-09T01:30Z",
+      "matchup": "VGK @ ANA",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52,
+      "actualScore": {
+        "home": 2,
+        "away": 6
+      },
+      "projectedScore": {
+        "home": 3.7,
+        "away": 3.4,
+        "spread": 0.3,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.4802,
+      "brier": 0.54038408,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871413",
+      "sport": "NHL",
+      "date": "2026-05-09T22:00Z",
+      "matchup": "CAR @ PHI",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 55.3,
+      "actualScore": {
+        "home": 2,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 2.9,
+        "away": 3.1,
+        "spread": -0.2,
+        "total": 6
+      },
+      "probabilityAssignedToActual": 0.5526,
+      "brier": 0.40033352000000005,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871418",
+      "sport": "NHL",
+      "date": "2026-05-10T01:00Z",
+      "matchup": "COL @ MIN",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.7,
+      "actualScore": {
+        "home": 5,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 3.7,
+        "spread": -0.3,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.483,
+      "brier": 0.534578,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871406",
+      "sport": "NHL",
+      "date": "2026-05-10T23:00Z",
+      "matchup": "BUF @ MTL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.6,
+      "actualScore": {
+        "home": 6,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.3,
+        "away": 3.1,
+        "spread": 0.2,
+        "total": 6.4
+      },
+      "probabilityAssignedToActual": 0.5361,
+      "brier": 0.43040641999999996,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871426",
+      "sport": "NHL",
+      "date": "2026-05-11T01:30Z",
+      "matchup": "VGK @ ANA",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.5,
+      "actualScore": {
+        "home": 4,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 3.7,
+        "spread": -0.3,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.4847,
+      "brier": 0.53106818,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871419",
+      "sport": "NHL",
+      "date": "2026-05-12T00:00Z",
+      "matchup": "COL @ MIN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.3,
+      "actualScore": {
+        "home": 2,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 3.7,
+        "away": 3.4,
+        "spread": 0.3,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.4874,
+      "brier": 0.5255175199999998,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871407",
+      "sport": "NHL",
+      "date": "2026-05-12T23:00Z",
+      "matchup": "BUF @ MTL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57,
+      "actualScore": {
+        "home": 2,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.4,
+        "away": 3.1,
+        "spread": 0.3,
+        "total": 6.5
+      },
+      "probabilityAssignedToActual": 0.4303,
+      "brier": 0.6491161799999999,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871427",
+      "sport": "NHL",
+      "date": "2026-05-13T01:52Z",
+      "matchup": "ANA @ VGK",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 58.9,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.9,
+        "away": 3.4,
+        "spread": 0.5,
+        "total": 7.3
+      },
+      "probabilityAssignedToActual": 0.5892,
+      "brier": 0.33751328,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871420",
+      "sport": "NHL",
+      "date": "2026-05-14T00:00Z",
+      "matchup": "MIN @ COL",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 60.1,
+      "actualScore": {
+        "home": 4,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 3.3,
+        "spread": 0.5,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.6007,
+      "brier": 0.31888098,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871408",
+      "sport": "NHL",
+      "date": "2026-05-14T23:00Z",
+      "matchup": "MTL @ BUF",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 3,
+        "away": 6
+      },
+      "projectedScore": {
+        "home": 3.3,
+        "away": 3.1,
+        "spread": 0.2,
+        "total": 6.4
+      },
+      "probabilityAssignedToActual": 0.4727,
+      "brier": 0.55609058,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871428",
+      "sport": "NHL",
+      "date": "2026-05-15T01:30Z",
+      "matchup": "VGK @ ANA",
+      "actualPick": "away",
+      "predictedPick": "none",
+      "correct": false,
+      "confidence": 50,
+      "actualScore": {
+        "home": 1,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 3.3,
+        "away": 3.8,
+        "spread": -0.5,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.4999,
+      "brier": 0.50020002,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401871409",
+      "sport": "NHL",
+      "date": "2026-05-17T00:00Z",
+      "matchup": "BUF @ MTL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57.5,
+      "actualScore": {
+        "home": 3,
+        "away": 8
+      },
+      "projectedScore": {
+        "home": 3.6,
+        "away": 3.1,
+        "spread": 0.5,
+        "total": 6.7
+      },
+      "probabilityAssignedToActual": 0.4252,
+      "brier": 0.66079008,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401871410",
+      "sport": "NHL",
+      "date": "2026-05-18T23:30Z",
+      "matchup": "MTL @ BUF",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.9,
+      "actualScore": {
+        "home": 2,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.7,
+        "away": 3.4,
+        "spread": 0.3,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.4814,
+      "brier": 0.5378919199999999,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401872903",
+      "sport": "NHL",
+      "date": "2026-05-21T00:00Z",
+      "matchup": "VGK @ COL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 58.8,
+      "actualScore": {
+        "home": 2,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 3.9,
+        "away": 3.4,
+        "spread": 0.5,
+        "total": 7.3
+      },
+      "probabilityAssignedToActual": 0.4124,
+      "brier": 0.6905475200000001,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401873383",
+      "sport": "NHL",
+      "date": "2026-05-22T00:00Z",
+      "matchup": "MTL @ CAR",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 58.2,
+      "actualScore": {
+        "home": 2,
+        "away": 6
+      },
+      "projectedScore": {
+        "home": 3.5,
+        "away": 3,
+        "spread": 0.5,
+        "total": 6.5
+      },
+      "probabilityAssignedToActual": 0.418,
+      "brier": 0.677448,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401872904",
+      "sport": "NHL",
+      "date": "2026-05-23T00:00Z",
+      "matchup": "VGK @ COL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 54.5,
+      "actualScore": {
+        "home": 1,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 3.5,
+        "spread": 0.3,
+        "total": 7.3
+      },
+      "probabilityAssignedToActual": 0.4549,
+      "brier": 0.5942680199999999,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401873384",
+      "sport": "NHL",
+      "date": "2026-05-23T23:00Z",
+      "matchup": "MTL @ CAR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.5,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 3.5,
+        "away": 3.2,
+        "spread": 0.3,
+        "total": 6.7
+      },
+      "probabilityAssignedToActual": 0.545,
+      "brier": 0.41405,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "401872905",
+      "sport": "NHL",
+      "date": "2026-05-25T00:00Z",
+      "matchup": "COL @ VGK",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.5,
+      "actualScore": {
+        "home": 5,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.7,
+        "away": 3.4,
+        "spread": 0.3,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.5653,
+      "brier": 0.37792817999999995,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401873385",
+      "sport": "NHL",
+      "date": "2026-05-26T00:00Z",
+      "matchup": "CAR @ MTL",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.2,
+      "actualScore": {
+        "home": 2,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 3.5,
+        "away": 3.3,
+        "spread": 0.2,
+        "total": 6.8
+      },
+      "probabilityAssignedToActual": 0.4777,
+      "brier": 0.5455945799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401872906",
+      "sport": "NHL",
+      "date": "2026-05-27T01:00Z",
+      "matchup": "COL @ VGK",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 58.5,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 3.8,
+        "away": 3.3,
+        "spread": 0.5,
+        "total": 7.1
+      },
+      "probabilityAssignedToActual": 0.5851,
+      "brier": 0.34428402,
+      "availableFactors": 8,
+      "unavailableFactors": 0,
+      "warnings": []
+    },
+    {
+      "gameId": "401873386",
+      "sport": "NHL",
+      "date": "2026-05-28T00:00Z",
+      "matchup": "CAR @ MTL",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 51.9,
+      "actualScore": {
+        "home": 0,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 3.3,
+        "away": 3.6,
+        "spread": -0.3,
+        "total": 6.9
+      },
+      "probabilityAssignedToActual": 0.5186,
+      "brier": 0.46349192000000006,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field."
+      ]
+    },
+    {
+      "gameId": "401873387",
+      "sport": "NHL",
+      "date": "2026-05-30T00:00Z",
+      "matchup": "MTL @ CAR",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 59.1,
+      "actualScore": {
+        "home": 6,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 3.7,
+        "away": 3.2,
+        "spread": 0.5,
+        "total": 6.9
+      },
+      "probabilityAssignedToActual": 0.5907,
+      "brier": 0.33505298,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Missing critical league inputs triggered a reliability reserve instead of amplifying rating/home-field.",
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    }
+  ],
+  "warnings": [
+    "EPL sample is 10 games; treat that league's number as directional only.",
+    "IPL sample is 22 games; treat that league's number as directional only."
+  ],
+  "dataQualityNote": "Approximate replay: final scores are real ESPN historical results, Elo is rolled forward chronologically, and ESPN recent-form/stat windows are capped before each event. Rebuilt context such as injuries, standings, weather, and provider enrichment can still reflect current availability instead of the exact pregame snapshot. Exact accuracy requires saved point-in-time GameContext fixtures."
+}

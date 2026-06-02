@@ -16,6 +16,7 @@ import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, type GameWithPrediction } from '@/types/sports';
 import { useWeekGamesBySport } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 
 type FilterStatus = 'live' | 'today' | 'tomorrow' | 'results';
 
@@ -322,7 +323,7 @@ export default function SportDetailScreen() {
             filteredGames.length === 0 ? styles.emptyScrollContent : null,
           ]}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews
+          removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
           initialNumToRender={6}
           maxToRenderPerBatch={6}
           windowSize={7}

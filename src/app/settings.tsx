@@ -1,9 +1,7 @@
-import { View, Text, Pressable, ScrollView, Linking, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking, Platform, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift, Bell } from 'lucide-react-native';
-import { Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -157,7 +155,7 @@ export default function SettingsScreen() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
-  const { isPremium, isLoading: isSubscriptionLoading, checkSubscription } = useSubscription();
+  const { isPremium, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
 
   const handleRedeemPromo = async (code: string) => {
@@ -217,7 +215,7 @@ export default function SettingsScreen() {
     mutationFn: async () => {
       const result = await restorePurchases();
       if (result.ok) {
-        await checkSubscription();
+        await checkSubscription({ restored: true });
         return { hasActive: customerInfoHasPremium(result.data) };
       }
 
@@ -347,7 +345,7 @@ export default function SettingsScreen() {
       await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
       await invalidateSession();
       router.replace('/welcome');
-    } catch (error) {
+    } catch {
       setFeedback({
         title: 'Delete Failed',
         message: 'Failed to delete account. Please try again or contact support.',
@@ -573,7 +571,7 @@ export default function SettingsScreen() {
 
         <Modal visible={promoModalVisible} transparent animationType="fade" onRequestClose={() => setPromoModalVisible(false)}>
           <Pressable accessible={false} onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
-            <Pressable accessible={false} onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+            <View accessible={false} onStartShouldSetResponder={() => true} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>Promo Code</Text>
               <Text style={{ fontSize: 13, color: '#6B7C94', marginBottom: 16 }}>Enter your code</Text>
               <TextInput
@@ -584,6 +582,10 @@ export default function SettingsScreen() {
                 placeholderTextColor="rgba(255,255,255,0.15)"
                 autoCapitalize="characters"
                 autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  if (promoInput.trim() && !promoLoading) handleRedeemPromo(promoInput);
+                }}
                 style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 16, paddingVertical: 14, letterSpacing: 2, marginBottom: 16 }}
                 keyboardAppearance="dark"
               />
@@ -591,11 +593,11 @@ export default function SettingsScreen() {
                 <Pressable accessibilityRole="button" accessibilityLabel="Cancel promo code" onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#6B7C94' }}>Cancel</Text>
                 </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Redeem promo code" accessibilityState={{ disabled: !promoInput.trim() || promoLoading }} onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{promoLoading ? 'Redeeming...' : 'Redeem'}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Redeem promo code" accessibilityState={{ disabled: !promoInput.trim() || promoLoading, busy: promoLoading }} onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
+                  {promoLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Redeem</Text>}
                 </Pressable>
               </View>
-            </Pressable>
+            </View>
           </Pressable>
         </Modal>
 

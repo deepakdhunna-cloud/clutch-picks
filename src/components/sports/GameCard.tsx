@@ -160,7 +160,7 @@ const TappableJersey = memo(function TappableJersey({
     selectionProgress.value = withTiming(isSelected && !isLoser && !isWinner ? 1 : 0, {
       duration: 300, easing: Easing.inOut(Easing.ease),
     });
-  }, [isSelected, isLoser, isWinner]);
+  }, [isSelected, isLoser, isWinner, selectionProgress]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

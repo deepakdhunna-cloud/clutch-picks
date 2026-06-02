@@ -221,9 +221,17 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <Pressable style={StyleSheet.absoluteFill} onPress={isConfirming ? undefined : onCancel} />
+        <Pressable
+          accessible={false}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss pick confirmation"
+          accessibilityState={{ disabled: isConfirming }}
+          disabled={isConfirming}
+          style={StyleSheet.absoluteFill}
+          onPress={onCancel}
+        />
 
-        <Animated.View style={[cardStyle, { width: cardWidth }]}>
+        <Animated.View accessibilityViewIsModal style={[cardStyle, { width: cardWidth }]}>
           <LinearGradient
             colors={[`${resolvedColors.primary}A8`, 'rgba(216,192,140,0.62)', 'rgba(218,238,251,0.18)', `${resolvedColors.secondary}88`]}
             start={{ x: 0, y: 0 }}
@@ -242,7 +250,11 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                   <Text style={styles.eyebrowText}>Pick Moment</Text>
                 </View>
                 <Pressable
-                  onPress={isConfirming ? undefined : onCancel}
+                  onPress={onCancel}
+                  disabled={isConfirming}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close pick confirmation"
+                  accessibilityState={{ disabled: isConfirming }}
                   hitSlop={10}
                   style={({ pressed }) => [styles.closeButton, pressed && !isConfirming ? styles.pressed : null]}
                 >
@@ -298,6 +310,8 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                 <View style={styles.actionsRow}>
                   <Pressable
                     onPress={handleConfirm}
+                    accessibilityRole="button"
+                    accessibilityLabel={primaryLabel}
                     style={({ pressed }) => [styles.lockButtonWrap, pressed ? styles.pressed : null]}
                   >
                     <LinearGradient

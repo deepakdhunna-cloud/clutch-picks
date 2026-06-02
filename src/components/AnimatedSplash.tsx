@@ -113,7 +113,7 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
 
       return () => clearTimeout(hapticTimeout);
     }
-  }, [isLoading, onAnimationComplete]);
+  }, [bgOpacity, contentOpacity, flashOpacity, flashScale, isLoading, logoOpacity, logoScale, onAnimationComplete]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,

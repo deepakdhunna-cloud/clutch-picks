@@ -29,6 +29,7 @@ import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { MAROON, TEAL, TEAL_DARK } from '@/lib/theme';
 import { teamScoreText } from '@/lib/cricket-score';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import * as Haptics from 'expo-haptics';
 
 // Memoize all sports array
@@ -37,6 +38,8 @@ const HOME_SPORT_INITIAL_GAME_COUNT = 10;
 const HOME_SPORT_GAME_BATCH_COUNT = 10;
 const HOME_BOARD_SCROLL_OFFSET = 300;
 const SEARCH_RESULT_ITEM_HEIGHT = 88;
+const HOME_LIVE_CARD_WIDTH = 300;
+const HOME_LIVE_CARD_GAP = 10;
 
 const RefreshPill = memo(function RefreshPill({ visible, label }: { visible: boolean; label: string }) {
   if (!visible) return null;
@@ -147,7 +150,7 @@ const SportTileCarousel = memo(function SportTileCarousel({
         initialNumToRender={1}
         maxToRenderPerBatch={1}
         windowSize={2}
-        removeClippedSubviews
+        removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
         getItemLayout={(_, index) => ({
           length: pageWidth,
           offset: pageWidth * index,
@@ -468,6 +471,20 @@ const HomeHeader = React.memo(function HomeHeader({
     onTouchCancel: onLiveChipTouchCancel,
     shouldHandlePress: shouldHandleLiveChipPress,
   } = useTapGestureGuard();
+  const liveCardSidePadding = Math.max(20, (responsive.width - HOME_LIVE_CARD_WIDTH) / 2);
+  const liveRailGames = useMemo(
+    () => (showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)),
+    [filteredLiveGames, showAllLive],
+  );
+  const showLiveRailViewAll = !showAllLive && filteredLiveGames.length > 5;
+  const renderLiveRailGame = useCallback(({ item }: { item: GameWithPrediction }) => (
+    <CompactLiveCard game={item} onPressIn={onWarmGame} onPress={onOpenGame} />
+  ), [onOpenGame, onWarmGame]);
+  const getLiveRailItemLayout = useCallback((_: ArrayLike<GameWithPrediction> | null | undefined, index: number) => ({
+    length: HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP,
+    offset: (HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP) * index,
+    index,
+  }), []);
 
   return (
     <>
@@ -604,55 +621,59 @@ const HomeHeader = React.memo(function HomeHeader({
           ) : null}
 
           {/* Horizontal scroll of compact live game cards */}
-          <ScrollView
+          <FlatList
+            data={liveRailGames}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingLeft: 20, paddingRight: 8, alignItems: 'center' }}
+            contentContainerStyle={{ paddingLeft: liveCardSidePadding, paddingRight: liveCardSidePadding, alignItems: 'center' }}
             style={{ flexGrow: 0 }}
             scrollEventThrottle={16}
-            removeClippedSubviews={true}
+            removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
+            snapToInterval={HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP}
+            snapToAlignment="start"
+            disableIntervalMomentum
             decelerationRate="fast"
-          >
-            {(showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)).map((game) => (
-              <CompactLiveCard key={game.id} game={game} onPressIn={onWarmGame} onPress={onOpenGame} />
-            ))}
-
-            {/* View All button — only show when there are more than 5 and not yet expanded */}
-            {!showAllLive && filteredLiveGames.length > 5 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View all live games"
-              accessibilityHint="Opens the live games screen"
-              onPress={() => {
-                if (!shouldHandleLiveChipPress()) return;
-                router.push('/live-games' as any);
-              }}
-              pressRetentionOffset={6}
-              onTouchStart={onLiveChipTouchStart}
-              onTouchMove={onLiveChipTouchMove}
-              onTouchCancel={onLiveChipTouchCancel}
-              className="active:opacity-75"
-              style={{
-                height: 56,
-                alignSelf: 'center',
-                marginRight: 20,
-                marginLeft: 4,
-                borderRadius: 10,
-                overflow: 'hidden',
-                borderWidth: 2,
-                borderColor: TEAL,
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 16,
-                gap: 5,
-                backgroundColor: 'rgba(122,157,184,0.15)',
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>View All</Text>
-              <ChevronRight size={14} color="#FFFFFF" />
-            </Pressable>
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            keyExtractor={(item) => item.id}
+            renderItem={renderLiveRailGame}
+            getItemLayout={getLiveRailItemLayout}
+            ListFooterComponent={showLiveRailViewAll ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View all live games"
+                accessibilityHint="Opens the live games screen"
+                onPress={() => {
+                  if (!shouldHandleLiveChipPress()) return;
+                  router.push('/live-games' as any);
+                }}
+                pressRetentionOffset={6}
+                onTouchStart={onLiveChipTouchStart}
+                onTouchMove={onLiveChipTouchMove}
+                onTouchCancel={onLiveChipTouchCancel}
+                className="active:opacity-75"
+                style={{
+                  height: 56,
+                  alignSelf: 'center',
+                  marginRight: 20,
+                  marginLeft: 4,
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  borderWidth: 2,
+                  borderColor: TEAL,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 16,
+                  gap: 5,
+                  backgroundColor: 'rgba(122,157,184,0.15)',
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>View All</Text>
+                <ChevronRight size={14} color="#FFFFFF" />
+              </Pressable>
             ) : null}
-          </ScrollView>
+          />
         </View>
       ) : null}
       </View>
@@ -1381,9 +1402,12 @@ export default function HomeScreen() {
     handleOpenGame(game);
   }, [handleCloseSearchModal, handleOpenGame]);
 
+  const normalizedSearchQuery = searchQuery.trim();
+  const normalizedDebouncedSearchQuery = debouncedQuery.trim();
+  const isHomeSearchSettling = normalizedSearchQuery !== '' && normalizedDebouncedSearchQuery !== normalizedSearchQuery;
   const searchData = useMemo<GameWithPrediction[]>(
-    () => (searchQuery.trim() === '' ? [] : searchResults),
-    [searchQuery, searchResults]
+    () => (normalizedSearchQuery === '' ? [] : searchResults),
+    [normalizedSearchQuery, searchResults]
   );
 
   const renderSearchResult = useCallback(({ item, index }: { item: GameWithPrediction; index: number }) => (
@@ -1547,11 +1571,11 @@ export default function HomeScreen() {
         keyExtractor={getItemKey}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={4}
-        windowSize={5}
-        initialNumToRender={3}
-        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
+        maxToRenderPerBatch={6}
+        windowSize={7}
+        initialNumToRender={5}
+        updateCellsBatchingPeriod={40}
         decelerationRate="normal"
         numColumns={numColumns > 1 ? numColumns : undefined}
         columnWrapperStyle={numColumns > 1 ? { gap: 16, paddingHorizontal: responsive.contentPadding } : undefined}
@@ -1653,13 +1677,14 @@ export default function HomeScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
             data={searchData}
             keyExtractor={(item) => item.id}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={4}
+            removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
+            initialNumToRender={8}
+            maxToRenderPerBatch={6}
             windowSize={5}
             getItemLayout={getSearchItemLayout}
             renderItem={renderSearchResult}
             ListHeaderComponent={
-              searchQuery.trim() !== '' && searchResults.length > 0 ? (
+              normalizedSearchQuery !== '' && searchResults.length > 0 ? (
                 <Text
                   style={{
                     color: 'rgba(255,255,255,0.35)',
@@ -1670,12 +1695,12 @@ export default function HomeScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  {searchResults.length} {searchResults.length === 1 ? 'game' : 'games'}
+                  {isHomeSearchSettling ? 'Updating results' : `${searchResults.length} ${searchResults.length === 1 ? 'game' : 'games'}`}
                 </Text>
               ) : null
             }
             ListEmptyComponent={
-              searchQuery.trim() === '' ? (
+              normalizedSearchQuery === '' ? (
                 /* Empty state - no query */
                 <View style={{ alignItems: 'center', paddingTop: 60 }}>
                   <View
@@ -1696,6 +1721,15 @@ export default function HomeScreen() {
                   </Text>
                   <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13, textAlign: 'center' }}>
                     Search by team name, city, or sport
+                  </Text>
+                </View>
+              ) : isHomeSearchSettling ? (
+                <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 15, fontWeight: '500', marginBottom: 6 }}>
+                    Searching games
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13 }}>
+                    Updating matches for your search.
                   </Text>
                 </View>
               ) : (

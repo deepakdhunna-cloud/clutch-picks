@@ -12,7 +12,7 @@ describe('paywall accessibility', () => {
     expect(paywallSource).toContain('width: 44');
     expect(paywallSource).toContain('height: 44');
     expect(paywallSource).toContain('accessibilityLabel={visibleLabel}');
-    expect(paywallSource).toContain('accessibilityState={{ disabled: loading, busy: loading }}');
+    expect(paywallSource).toContain('accessibilityState={{ disabled, busy: loading }}');
   });
 
   it('names promo code controls and loading states', () => {

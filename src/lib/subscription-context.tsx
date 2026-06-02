@@ -1,50 +1,78 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { AppState, Platform } from 'react-native';
+import type { CustomerInfo } from 'react-native-purchases';
 import {
   addCustomerInfoListener,
-  customerInfoHasPremium,
-  hasEntitlement,
+  getCustomerInfo,
   isRevenueCatEnabled,
-  REVENUECAT_ENTITLEMENT_ID,
 } from './revenuecatClient';
+import {
+  classifyCustomerSubscriptionState,
+  type RevenueCatSubscriptionState,
+  type RevenueCatSubscriptionStatus,
+} from './revenuecat-premium';
+
+type CheckSubscriptionOptions = {
+  restored?: boolean;
+};
 
 interface SubscriptionState {
   isPremium: boolean;
   isLoading: boolean;
-  checkSubscription: () => Promise<void>;
+  status: RevenueCatSubscriptionStatus;
+  customerInfo: CustomerInfo | null;
+  checkSubscription: (options?: CheckSubscriptionOptions) => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionState>({
   isPremium: false,
   isLoading: true,
+  status: 'unsubscribed',
+  customerInfo: null,
   checkSubscription: async () => {},
 });
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<RevenueCatSubscriptionStatus>('unsubscribed');
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
 
-  const checkSubscription = useCallback(async () => {
+  const applyCustomerInfo = useCallback((nextCustomerInfo: CustomerInfo, options?: CheckSubscriptionOptions) => {
+    const subscriptionState: RevenueCatSubscriptionState = classifyCustomerSubscriptionState(nextCustomerInfo, options);
+    setCustomerInfo(nextCustomerInfo);
+    setStatus(subscriptionState.status);
+    setIsPremium(subscriptionState.hasPremiumAccess);
+    setIsLoading(false);
+  }, []);
+
+  const checkSubscription = useCallback(async (options?: CheckSubscriptionOptions) => {
     if (!isRevenueCatEnabled()) {
       setIsPremium(false);
+      setStatus('unsubscribed');
+      setCustomerInfo(null);
       setIsLoading(false);
       return;
     }
 
     try {
-      const result = await hasEntitlement(REVENUECAT_ENTITLEMENT_ID);
+      const result = await getCustomerInfo();
       if (result.ok) {
-        setIsPremium(result.data);
+        applyCustomerInfo(result.data, options);
       } else {
         setIsPremium(false);
+        setStatus('unsubscribed');
+        setCustomerInfo(null);
       }
     } catch (error) {
       if (__DEV__) console.log('[Subscription] Error checking subscription:', error);
       setIsPremium(false);
+      setStatus('unsubscribed');
+      setCustomerInfo(null);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyCustomerInfo]);
 
   useEffect(() => {
     checkSubscription();
@@ -54,12 +82,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     if (!isRevenueCatEnabled()) return;
 
     const removeListener = addCustomerInfoListener((customerInfo) => {
-      setIsPremium(customerInfoHasPremium(customerInfo));
-      setIsLoading(false);
+      applyCustomerInfo(customerInfo);
     });
 
     return removeListener;
-  }, []);
+  }, [applyCustomerInfo]);
 
   useEffect(() => {
     if (!isRevenueCatEnabled() || Platform.OS === 'web') return;
@@ -74,8 +101,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, [checkSubscription]);
 
   const value = useMemo(
-    () => ({ isPremium, isLoading, checkSubscription }),
-    [checkSubscription, isLoading, isPremium],
+    () => ({ isPremium, isLoading, status, customerInfo, checkSubscription }),
+    [checkSubscription, customerInfo, isLoading, isPremium, status],
   );
 
   return (

@@ -1,5 +1,8 @@
 /**
- * RevenueCat Client Module
+ * RevenueCat Client Module — RELEASE-CRITICAL PAYWALL CODE.
+ *
+ * Do not change purchase, restore, identity, or paywall identifier behavior
+ * without running `bun run verify:paywall` and the RevenueCat regression tests.
  *
  * This module provides a centralized RevenueCat SDK wrapper that gracefully handles
  * missing configuration. The app will work fine whether or not RevenueCat is configured.
@@ -29,6 +32,10 @@ import Purchases, {
 } from "react-native-purchases";
 import { selectRevenueCatApiKey } from "./revenuecat-key-selection";
 import {
+  REVENUECAT_CUSTOM_ATTRIBUTES,
+  REVENUECAT_PACKAGE_IDS,
+} from "./subscription-config";
+import {
   customerInfoHasPremiumAccess,
   REVENUECAT_ENTITLEMENT_ID,
 } from "./revenuecat-premium";
@@ -57,7 +64,7 @@ const apiKey = selectRevenueCatApiKey({
 const isEnabled = !!apiKey && !isWeb;
 
 const LOG_PREFIX = "[RevenueCat]";
-export const REVENUECAT_MONTHLY_PACKAGE_ID = "$rc_monthly";
+export const REVENUECAT_MONTHLY_PACKAGE_ID = REVENUECAT_PACKAGE_IDS.monthly;
 
 export type RevenueCatGuardReason =
   | "web_not_supported"
@@ -288,14 +295,22 @@ export const syncSubscriberInfo = async (input: {
   displayName?: string | null;
 }): Promise<RevenueCatResult<void>> => {
   return guardRevenueCatUsage("syncSubscriberInfo", async () => {
+    const attributes: Record<string, string | null> = {};
+
     if (input.userId) {
       await Purchases.logIn(input.userId);
+      attributes[REVENUECAT_CUSTOM_ATTRIBUTES.clutchUserId] = input.userId;
     }
     if (input.email) {
       await Purchases.setEmail(input.email);
+      attributes[REVENUECAT_CUSTOM_ATTRIBUTES.clutchEmail] = input.email;
     }
     if (input.displayName) {
       await Purchases.setDisplayName(input.displayName);
+      attributes[REVENUECAT_CUSTOM_ATTRIBUTES.clutchDisplayName] = input.displayName;
+    }
+    if (Object.keys(attributes).length > 0) {
+      await Purchases.setAttributes(attributes);
     }
     await Purchases.syncAttributesAndOfferingsIfNeeded();
   });

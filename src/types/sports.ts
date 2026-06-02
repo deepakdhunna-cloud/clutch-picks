@@ -254,7 +254,7 @@ export interface CanonicalPredictionResult {
     availableFactorCount: number;
     marketConsensusIncluded: boolean;
   };
-  engineBreakdown?: Array<{
+  engineBreakdown?: {
     engine: string;
     pick: CanonicalFinalPick;
     probability: number;
@@ -263,7 +263,7 @@ export interface CanonicalPredictionResult {
     probabilities?: CanonicalProbabilities;
     inputs?: Record<string, string | number | boolean | null>;
     warnings?: string[];
-  }>;
+  }[];
   reconciliation?: {
     method: string;
     notes: string[];
@@ -313,12 +313,12 @@ export interface Prediction {
     projectedTotal: number;
     volatility: number;
     upsetRisk: number;
-    signals: Array<{
+    signals: {
       key: string;
       label: string;
       value: number;
       evidence: string;
-    }>;
+    }[];
   };
   // Post-hoc comparison to SharpAPI market consensus. Populated only when
   // the backend has SHARPAPI_KEY set. NOT a prediction input.

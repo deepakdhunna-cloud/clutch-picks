@@ -9,8 +9,15 @@ import { enqueueWrite } from "./writeQueue";
 
 export const DEFAULT_RATING = 1500;
 
-// In-memory read cache: key = "{sport}-{teamId}"
-const eloCache = new Map<string, number>();
+// In-memory read cache: key = "{sport}-{teamId}".
+// Entries carry a fetch timestamp and expire after ELO_CACHE_TTL_MS. This is
+// REQUIRED for correctness in production: web and worker run as separate
+// processes, so when the daily Elo-refresh cron (worker) writes fresh ratings to
+// Postgres, the HTTP serving process must re-read them rather than serve a value
+// it cached once at boot. The TTL is shorter than the daily cron interval so a
+// refresh always propagates to the serving process within a few hours.
+const ELO_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+const eloCache = new Map<string, { rating: number; fetchedAt: number }>();
 const warnedEloReadFailures = new Set<string>();
 
 // Sport-specific K-factors (how much each game moves the rating)
@@ -113,12 +120,14 @@ export async function getEloRating(teamId: string, sport: string): Promise<numbe
   const key = eloKey(teamId, sport);
 
   const cached = eloCache.get(key);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined && Date.now() - cached.fetchedAt < ELO_CACHE_TTL_MS) {
+    return cached.rating;
+  }
 
   try {
     const row = await prisma.eloRating.findUnique({ where: { id: key } });
     if (row) {
-      eloCache.set(key, row.rating);
+      eloCache.set(key, { rating: row.rating, fetchedAt: Date.now() });
       return row.rating;
     }
   } catch (err) {
@@ -143,8 +152,8 @@ export async function getEloRating(teamId: string, sport: string): Promise<numbe
 export function setEloRating(teamId: string, sport: string, rating: number): void {
   const key = eloKey(teamId, sport);
   // Update in-memory cache immediately so subsequent reads within the same
-  // prediction see the new rating without waiting for the DB write.
-  eloCache.set(key, rating);
+  // prediction (and process) see the new rating without waiting for the DB write.
+  eloCache.set(key, { rating, fetchedAt: Date.now() });
   enqueueWrite(async () => {
     await prisma.eloRating.upsert({
       where: { id: key },

@@ -227,7 +227,7 @@ export function cricketRoleText(game: CricketGameLike, side: Side): 'BATTING' | 
   return side === battingSide ? 'BATTING' : 'BOWLING';
 }
 
-export function cricketInningsRuns(game: CricketGameLike, side: Side): Array<number | null> | null {
+export function cricketInningsRuns(game: CricketGameLike, side: Side): (number | null)[] | null {
   if (!isCricketGame(game)) return null;
   const battingSide = cricketBattingSide(game);
   const firstInningsSide = cricketFirstInningsSide(game);

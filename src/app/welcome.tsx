@@ -313,9 +313,9 @@ export default function WelcomeScreen() {
         <View style={s.termsWrap}>
           <Text style={s.terms}>
             By continuing, you agree to our{' '}
-            <Text style={s.termsLink} onPress={() => router.push('/terms' as any)}>Terms</Text>
+            <Text accessibilityRole="link" accessibilityLabel="Terms" style={s.termsLink} onPress={() => router.push('/terms' as any)}>Terms</Text>
             {' & '}
-            <Text style={s.termsLink} onPress={() => router.push('/privacy-policy' as any)}>Privacy Policy</Text>
+            <Text accessibilityRole="link" accessibilityLabel="Privacy Policy" style={s.termsLink} onPress={() => router.push('/privacy-policy' as any)}>Privacy Policy</Text>
           </Text>
         </View>
       </SafeAreaView>

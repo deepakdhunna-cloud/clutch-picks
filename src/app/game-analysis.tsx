@@ -13,6 +13,7 @@ import {
   getCanonicalWinProbabilities,
 } from '@/lib/canonical-result';
 import { getDisplayProjection, isStoredPregamePrediction } from '@/lib/stored-pregame-display';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
@@ -455,7 +456,7 @@ export default function GameAnalysisScreen() {
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={7}
-        removeClippedSubviews
+        removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
         ListHeaderComponent={
           <>

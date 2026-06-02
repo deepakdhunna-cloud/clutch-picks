@@ -23,6 +23,7 @@ import { useGames } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { TEAL, MAROON, BG, LIVE_RED } from '@/lib/theme';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 
 // Broadcast-style pulsing live indicator: a solid dot with a ring that
 // expands and fades on a loop. One shared value, UI thread, cleaned up.
@@ -201,7 +202,7 @@ export default function LiveGamesScreen() {
             style={styles.gamesListContainer}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.gamesList}
-            removeClippedSubviews
+            removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
             initialNumToRender={6}
             maxToRenderPerBatch={6}
             windowSize={7}

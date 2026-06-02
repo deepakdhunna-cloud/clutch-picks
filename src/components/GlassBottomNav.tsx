@@ -150,7 +150,7 @@ function TabButton({
 
   React.useEffect(() => {
     focus.value = withSpring(isFocused ? 1 : 0, { damping: 18, stiffness: 280 });
-  }, [isFocused]);
+  }, [focus, isFocused]);
 
   const pressStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

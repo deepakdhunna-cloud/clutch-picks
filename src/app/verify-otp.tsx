@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   StatusBar, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -53,33 +53,12 @@ export default function VerifyOTP() {
   const [error, setError] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(300);
   const inputRef = useRef<TextInput>(null);
+  const initialOtpHandledRef = useRef(false);
+  const lastAutoSubmittedCodeRef = useRef<string | null>(null);
 
   const isComplete = code.length === CODE_LENGTH;
 
-  useEffect(() => {
-    if (initialOtp && initialOtp.length === CODE_LENGTH && email) {
-      handleVerifyCode(initialOtp);
-    } else {
-      inputRef.current?.focus();
-    }
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSeconds((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const timerDisplay = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-
-  useEffect(() => {
-    if (code.length === CODE_LENGTH && !initialOtp) {
-      handleVerifyCode(code);
-    }
-  }, [code]);
-
-  const handleVerifyCode = async (otpCode: string) => {
+  const handleVerifyCode = useCallback(async (otpCode: string) => {
     if (otpCode.length !== CODE_LENGTH || !email || isLoading) return;
     setIsLoading(true);
     setError(null);
@@ -140,7 +119,37 @@ export default function VerifyOTP() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, invalidateSession, isLoading, isSignIn, router]);
+
+  useEffect(() => {
+    if (initialOtpHandledRef.current) return;
+    initialOtpHandledRef.current = true;
+    if (initialOtp && initialOtp.length === CODE_LENGTH && email) {
+      void handleVerifyCode(initialOtp);
+    } else {
+      inputRef.current?.focus();
+    }
+  }, [email, handleVerifyCode, initialOtp]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const timerDisplay = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
+  useEffect(() => {
+    if (initialOtp) return;
+    if (code.length !== CODE_LENGTH) {
+      lastAutoSubmittedCodeRef.current = null;
+      return;
+    }
+    if (lastAutoSubmittedCodeRef.current === code) return;
+    lastAutoSubmittedCodeRef.current = code;
+    void handleVerifyCode(code);
+  }, [code, handleVerifyCode, initialOtp]);
 
   const handleVerify = () => handleVerifyCode(code);
 

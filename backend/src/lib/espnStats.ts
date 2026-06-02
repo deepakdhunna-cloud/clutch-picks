@@ -693,6 +693,37 @@ export async function fetchTeamSeasonResults(
     return [];
   }
 }
+
+/**
+ * Fetch all current team IDs for a league from ESPN's teams list. Used by the
+ * nightly Elo refresh to know which teams to roll ratings forward for. Returns
+ * [] on any failure or for sports without a clean team list (e.g. TENNIS is
+ * per-player); the caller then skips that league and ratings stay as-is.
+ */
+export async function fetchLeagueTeamIds(sport: string): Promise<string[]> {
+  const sportPath = ESPN_SPORT_PATHS[sport];
+  if (!sportPath) return [];
+  try {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams?limit=1000`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      sports?: Array<{ leagues?: Array<{ teams?: Array<{ team?: { id?: string } }> }> }>;
+    };
+    const ids = new Set<string>();
+    for (const s of data.sports ?? []) {
+      for (const lg of s.leagues ?? []) {
+        for (const t of lg.teams ?? []) {
+          const id = t.team?.id;
+          if (id) ids.add(String(id));
+        }
+      }
+    }
+    return Array.from(ids);
+  } catch {
+    return [];
+  }
+}
 // ─── Advanced Metrics ────────────────────────────────────────────────────────
 
 export interface TeamAdvancedMetrics {

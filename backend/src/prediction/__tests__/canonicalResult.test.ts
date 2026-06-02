@@ -144,9 +144,11 @@ describe("canonical prediction result", () => {
 
     const reads = new Map(result.canonicalResult.engineBreakdown.map((read) => [read.engine, read]));
 
-    expect(reads.get("factor-model-v1")?.weight).toBeCloseTo(0.76, 3);
+    // NBA market weight is the league-aware 0.15 (kept light — our NBA model
+    // beats the line; backtest showed NBA accuracy unchanged at this weight).
+    expect(reads.get("factor-model-v1")?.weight).toBeCloseTo(0.71, 3);
     expect(reads.get("game-script-v1")?.weight).toBeCloseTo(0.14, 3);
-    expect(reads.get("market-calibration")?.weight).toBeCloseTo(0.1, 3);
+    expect(reads.get("market-calibration")?.weight).toBeCloseTo(0.15, 3);
     expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
     expect(result.canonicalResult.decisionProfile?.marketPick).toBeDefined();
     expect(result.canonicalResult.decisionProfile?.marketDelta).toBeTypeOf("number");

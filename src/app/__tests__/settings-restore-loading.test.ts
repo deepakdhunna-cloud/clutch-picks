@@ -17,6 +17,7 @@ describe('settings restore purchases row', () => {
 
   it('treats RevenueCat premium access as restored even when active entitlements lag', () => {
     expect(settingsSource).toContain('customerInfoHasPremium,');
+    expect(settingsSource).toContain('await checkSubscription({ restored: true });');
     expect(settingsSource).toContain('return { hasActive: customerInfoHasPremium(result.data) };');
     expect(settingsSource).not.toContain("return { hasActive: Object.keys(result.data.entitlements.active || {}).length > 0 };");
   });

@@ -16,7 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { displayWinProbability, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import Animated, {
   FadeInDown,
   FadeOut,
@@ -135,6 +137,7 @@ function WhereToWatchRow({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={hasWatchInfo ? `Open ${primaryText}` : 'Watch source not listed'}
+          accessibilityState={{ disabled: !watchOption }}
           disabled={!watchOption}
           onPress={handleOpenPress}
           style={({ pressed }) => [
@@ -167,11 +170,13 @@ function WhereToWatchRow({
         statusBarTranslucent
       >
         <Pressable
+          accessible={false}
           onPress={() => setRoutePickerOpen(false)}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' }}
         >
-          <Pressable
-            onPress={() => {}}
+          <View
+            accessibilityViewIsModal
+            onStartShouldSetResponder={() => true}
             style={{
               backgroundColor: '#0B1119',
               borderTopLeftRadius: 24,
@@ -185,7 +190,7 @@ function WhereToWatchRow({
           >
             <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(218,238,251,0.28)', alignSelf: 'center', marginBottom: 14 }} />
             <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(180,211,235,0.62)', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 4 }}>Open {primaryText}</Text>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', marginBottom: 18 }}>How would you like to watch?</Text>
+            <Text accessibilityRole="header" style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', marginBottom: 18 }}>How would you like to watch?</Text>
 
             <Pressable
               accessibilityRole="button"
@@ -245,7 +250,7 @@ function WhereToWatchRow({
             >
               <Text style={{ fontSize: 13, fontWeight: '800', color: 'rgba(218,238,251,0.62)' }}>Cancel</Text>
             </Pressable>
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </View>
@@ -281,7 +286,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
       damping: 16,
       stiffness: 210,
     });
-  }, [isSelected]);
+  }, [isSelected, selectionProgress]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -482,36 +487,36 @@ interface Game {
     innings?: number | null;
     summary?: string;
     target?: number;
-    currentBatters?: Array<{
+    currentBatters?: {
       name: string;
       role: 'striker' | 'non-striker';
       runs?: number;
       balls?: number;
-    }>;
+    }[];
     currentBowler?: {
       name: string;
       overs?: string;
       runsConceded?: number;
       wickets?: number;
     };
-    overTrack?: Array<{
+    overTrack?: {
       over: number;
       runs: number;
       wickets: number;
       complete?: boolean;
-    }>;
+    }[];
     currentOver?: {
       over: number;
       runs: number;
       wickets: number;
       complete?: boolean;
-      balls: Array<{
+      balls: {
         ball: number;
         label: string;
         runs: number;
         wicket?: boolean;
         extra?: 'wide' | 'noball' | 'bye' | 'legbye';
-      }>;
+      }[];
     };
   };
   liveState?: {
@@ -631,7 +636,7 @@ function QuarterTable({ game }: { game: Game }) {
   const awayWinning = (game.awayScore ?? 0) > (game.homeScore ?? 0);
   const tied = (game.homeScore ?? 0) === (game.awayScore ?? 0);
 
-  const cellValue = (line: Array<number | null>, i: number): string => {
+  const cellValue = (line: (number | null)[], i: number): string => {
     if (i >= line.length) return '';
     const v = line[i];
     return typeof v === 'number' ? String(v) : '';
@@ -1487,7 +1492,7 @@ function RecentForm({ game }: { game: Game }) {
                 <Text style={styles.formRecord}>{team.record}</Text>
               </View>
               {formResults.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={true} decelerationRate="fast">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 5 }} scrollEventThrottle={16} removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS} decelerationRate="fast">
                 {formResults.slice(0, 10).map((r: string, i: number) => (
                   <View key={i} style={{
                     width: 28,
@@ -1801,6 +1806,8 @@ function GameDetailContent() {
           <Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text>
         </Pressable>
         <View style={styles.floatingDetailPill}>
+          <BlurView pointerEvents="none" intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.58)' }]} />
           {isLive ? (
             <>
               <LivePulseDot />
@@ -2144,13 +2151,6 @@ function GameDetailContent() {
           </View>
         </View>
       </ScrollView>
-      <View pointerEvents="none" style={[styles.detailHeaderScrim, { height: detailFloatingTop + 70 }]}>
-        <LinearGradient
-          colors={['#040608', '#040608', 'rgba(4,6,8,0.00)']}
-          locations={[0, 0.76, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-      </View>
       <PickConfirmationModal
         visible={pendingPick !== null}
         team={pendingPick === 'home' ? homeTeam : pendingPick === 'away' ? awayTeam : null}
@@ -2203,10 +2203,9 @@ export default function GameDetailScreen() {
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
   backBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  detailHeaderScrim: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 90, elevation: 90 },
   floatingDetailControls: { position: 'absolute', left: 0, right: 0, zIndex: 110, elevation: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   floatingBackBtn: { position: 'absolute', left: 16 },
-  floatingDetailPill: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.66)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14 },
+  floatingDetailPill: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.68)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, overflow: 'hidden' },
   floatingDetailDivider: { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 },
   floatingSportBadge: { maxWidth: 88, backgroundColor: 'rgba(122,157,184,0.2)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(122,157,184,0.35)' },
   floatingSportText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },

@@ -29,6 +29,9 @@ import {
 import cron from "node-cron";
 import { runWeeklyCalibration } from "./scripts/runWeeklyCalibration";
 import { snapshotMarketLines } from "./scripts/snapshotMarketLines";
+import { runEloUpdate } from "./prediction/ratings/updateElo";
+import { fetchLeagueTeamIds } from "./lib/espnStats";
+import { refreshTennisPlayerElo } from "./lib/tennisElo";
 import {
   runIngestionCycle,
   recordCycleResult,
@@ -47,6 +50,7 @@ const cleanupLogger = withContext({ job: "cleanup" });
 const calibrationLogger = withContext({ job: "calibration" });
 const marketLogger = withContext({ job: "market-snapshot" });
 const ingestionLogger = withContext({ job: "ingestion" });
+const eloLogger = withContext({ job: "elo-refresh" });
 
 workerLogger.info("starting background jobs");
 
@@ -343,6 +347,86 @@ const ingestionCron = cron.schedule("*/2 * * * *", ingestionGuarded, {
   timezone: "UTC",
 });
 
+// ─── Daily Elo refresh (08:00 UTC) ──────────────────────────────────────
+// Rolls each team-sport's Elo ratings forward from completed games and
+// PERSISTS them to the eloRating table. Without this the table is frozen
+// (nothing in the live engine path ever writes it), so the dominant
+// rating_diff factor reads stale/default 1500 and predictions compress toward
+// a coin flip. A full chronological replay per league (idempotent) via the
+// existing runEloUpdate -> initializeEloFromSchedule, which flushes via
+// setEloRating. The web process picks up the fresh ratings within the
+// eloCache TTL (6h). Fails safe: any league that errors is skipped and its
+// ratings simply stay as-is (today's behavior). TENNIS is excluded — its Elo
+// is per-player, not per-team, so the team-list path does not apply.
+const ELO_REFRESH_LEAGUES = ["NFL", "NBA", "MLB", "NHL", "MLS", "EPL", "UCL", "IPL", "NCAAF", "NCAAB"] as const;
+let eloRefreshRunning = false;
+async function eloRefreshGuarded() {
+  if (isShuttingDown) {
+    eloLogger.info("shutdown in progress, skipping tick");
+    return;
+  }
+  if (eloRefreshRunning) {
+    eloLogger.info("previous run still in progress, skipping");
+    return;
+  }
+  eloRefreshRunning = true;
+  const startedAt = Date.now();
+  let updated = 0;
+  let skipped = 0;
+  try {
+    for (const sport of ELO_REFRESH_LEAGUES) {
+      if (isShuttingDown) break;
+      try {
+        const teamIds = await fetchLeagueTeamIds(sport);
+        if (teamIds.length === 0) {
+          skipped += 1;
+          eloLogger.info({ sport }, "no team ids resolved — skipping (ratings unchanged)");
+          continue;
+        }
+        const ratings = await runEloUpdate(sport, teamIds);
+        updated += 1;
+        eloLogger.info({ sport, teams: ratings.size }, "elo refreshed");
+      } catch (err) {
+        skipped += 1;
+        eloLogger.error({ err, sport }, "league refresh failed — skipping");
+        Sentry.captureException(err, {
+          tags: { job: "elo-refresh", service: "worker", sport },
+        });
+      }
+    }
+    // Tennis is per-PLAYER, not per-team, so it runs its own roll-forward from
+    // ESPN tennis results (keyed by ESPN player id) rather than the team path.
+    if (!isShuttingDown) {
+      try {
+        const players = await refreshTennisPlayerElo();
+        if (players.size > 0) {
+          updated += 1;
+          eloLogger.info({ sport: "TENNIS", players: players.size }, "tennis player elo refreshed");
+        } else {
+          skipped += 1;
+        }
+      } catch (err) {
+        skipped += 1;
+        eloLogger.error({ err, sport: "TENNIS" }, "tennis elo refresh failed — skipping");
+        Sentry.captureException(err, { tags: { job: "elo-refresh", service: "worker", sport: "TENNIS" } });
+      }
+    }
+    eloLogger.info({ updated, skipped, ms: Date.now() - startedAt }, "tick complete");
+  } catch (err) {
+    eloLogger.error({ err }, "tick failed");
+    Sentry.captureException(err, {
+      tags: { job: "elo-refresh", service: "worker" },
+    });
+  } finally {
+    eloRefreshRunning = false;
+  }
+}
+
+eloLogger.info({ schedule: "0 8 * * *", tz: "UTC" }, "scheduled");
+const eloRefreshCron = cron.schedule("0 8 * * *", eloRefreshGuarded, {
+  timezone: "UTC",
+});
+
 // ─── Graceful shutdown ──────────────────────────────────────────────────
 
 async function gracefulShutdown(signal: NodeJS.Signals) {
@@ -360,6 +444,7 @@ async function gracefulShutdown(signal: NodeJS.Signals) {
     Promise.resolve(calibrationCron.stop()),
     Promise.resolve(marketSnapshotCron.stop()),
     Promise.resolve(ingestionCron.stop()),
+    Promise.resolve(eloRefreshCron.stop()),
   ]);
 
   try {

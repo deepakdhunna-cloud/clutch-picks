@@ -739,6 +739,86 @@ function preserveNonMarketOutcome(args: {
   return { home: normHome, away: normAway };
 }
 
+/**
+ * Decide the final blended outcome. By DEFAULT the factor/projection favorite is
+ * preserved — the market can only shrink or grow the gap, never flip the pick.
+ * That default makes a wrong factor pick impossible for the market to correct,
+ * which caps accuracy. When the (free, ESPN-sourced) market anchor is enabled
+ * AND the market is CONFIDENT in a favorite that disagrees with the factor lean,
+ * we let the market flip the pick — that is exactly where a real line fixes a
+ * wrong factor pick (the accuracy win). Gated + thresholded via env so the flip
+ * behavior is A/B-validated on the backtest before it ships.
+ */
+function resolveBlendOutcome(args: {
+  home: number;
+  away: number;
+  draw?: number;
+  nonMarketHome: number;
+  nonMarketAway: number;
+  nonMarketDraw?: number;
+  marketHome: number;
+  marketAway: number;
+  marketDraw?: number;
+  marketWeight: number;
+}): { home: number; away: number; draw?: number } {
+  const preserve = () =>
+    preserveNonMarketOutcome({
+      home: args.home,
+      away: args.away,
+      draw: args.draw,
+      nonMarketHome: args.nonMarketHome,
+      nonMarketAway: args.nonMarketAway,
+      nonMarketDraw: args.nonMarketDraw,
+    });
+  if (process.env.ENGINE_ESPN_MARKET === "false" || args.marketWeight <= 0) return preserve();
+  const flipMinRaw = Number(process.env.ENGINE_MARKET_FLIP_MIN);
+  // Default 0.52: in weak-factor leagues (heavy market weight) the market is
+  // allowed to set the pick when it favors a side, which is where its accuracy
+  // edge lives (MLB +4). The downstream pick-stability lock (7pp commit gate)
+  // prevents this from oscillating the SHOWN pick on noise.
+  const flipMin = Number.isFinite(flipMinRaw) && flipMinRaw > 0.5 ? flipMinRaw : 0.52;
+  const nmTop = topOutcome(args.nonMarketHome, args.nonMarketAway, args.nonMarketDraw);
+  const mTop = topOutcome(args.marketHome, args.marketAway, args.marketDraw);
+  const mTopProb = Math.max(args.marketHome, args.marketAway, args.marketDraw ?? 0);
+  // Let the market override only when it confidently picks a different side.
+  if (mTop !== nmTop && mTopProb >= flipMin) {
+    return { home: args.home, away: args.away, draw: args.draw };
+  }
+  return preserve();
+}
+
+/**
+ * League-aware market weight (only when the free ESPN market anchor is enabled).
+ * The market is not uniformly better than our factor model — the backtest shows
+ * it BEATS our model where our signal is weak (MLB market +7) and LOSES to it
+ * where our signal is strong (NBA factor model > line). So we lean on the market
+ * heavily in weak-factor leagues and lightly in strong-factor leagues, instead
+ * of one blanket weight. Tunable per env (ENGINE_MARKET_WEIGHT) for sweeps;
+ * these defaults are the starting point validated on the leak-aware replay.
+ */
+function marketWeightForSport(sport: string): number {
+  switch (sport) {
+    // Our model is at/above the line here — keep the market a light calibrator.
+    case "NBA":
+    case "NCAAB":
+      return 0.15;
+    // Weak factor models / high single-game variance — lean on the market.
+    case "MLB":
+      return 0.65;
+    case "MLS":
+    case "EPL":
+    case "UCL":
+      return 0.6;
+    case "NHL":
+      return 0.4;
+    case "NFL":
+    case "NCAAF":
+      return 0.45;
+    default:
+      return 0.4;
+  }
+}
+
 function blendModelProjectionAndMarket(args: {
   ctx: GameContext;
   factorHomeProb: number;
@@ -761,7 +841,20 @@ function blendModelProjectionAndMarket(args: {
   } = args;
   const hasMarket = ctx.marketConsensus && Number.isFinite(ctx.marketConsensus.noVigHomeProb);
   const projectionWeight = clamp(0.08 + coverage * 0.06, 0.08, 0.14);
-  const marketWeight = hasMarket ? clamp(0.06 + coverage * 0.04, 0.06, 0.10) : 0;
+  // Market weight. The legacy default treats the market as a tiny ~6-10%
+  // calibration nudge. When the (free, ESPN-sourced) market anchor is enabled,
+  // the market — the most predictive single signal — gets real weight so it can
+  // actually move the pick. Both are env-tunable for backtest sweeps.
+  const espnMarketEnabled = process.env.ENGINE_ESPN_MARKET !== "false";
+  const marketWeightRaw = Number(process.env.ENGINE_MARKET_WEIGHT);
+  const marketWeightOverride =
+    Number.isFinite(marketWeightRaw) && marketWeightRaw > 0 ? clamp(marketWeightRaw, 0, 0.9) : null;
+  const marketWeight = hasMarket
+    ? marketWeightOverride ??
+      (espnMarketEnabled
+        ? marketWeightForSport(ctx.sport)
+        : clamp(0.06 + coverage * 0.04, 0.06, 0.1))
+    : 0;
   const factorWeight = 1 - projectionWeight - marketWeight;
   const weights = {
     factor: factorWeight,
@@ -793,13 +886,17 @@ function blendModelProjectionAndMarket(args: {
       nonMarketDraw * (1 - marketWeight) + marketDrawNorm * marketWeight,
       nonMarketAway * (1 - marketWeight) + marketAway * marketWeight,
     );
-    const preserved = preserveNonMarketOutcome({
+    const preserved = resolveBlendOutcome({
       home,
       away,
       draw,
       nonMarketHome,
       nonMarketAway,
       nonMarketDraw,
+      marketHome,
+      marketAway,
+      marketDraw: marketDrawNorm,
+      marketWeight,
     });
     return { ...preserved, weights };
   }
@@ -815,11 +912,14 @@ function blendModelProjectionAndMarket(args: {
     nonMarketHome * (1 - marketWeight) + marketHome * marketWeight,
     nonMarketAway * (1 - marketWeight) + marketAway * marketWeight,
   );
-  const preserved = preserveNonMarketOutcome({
+  const preserved = resolveBlendOutcome({
     home,
     away,
     nonMarketHome,
     nonMarketAway,
+    marketHome,
+    marketAway,
+    marketWeight,
   });
   return { ...preserved, weights };
 }
@@ -1082,11 +1182,34 @@ export function sumRatingDelta(factors: FactorContribution[]): number {
   }
 
   const ratingFactor = factors.find((f) => f.key === "rating_diff");
-  const eloBase = ratingFactor?.available ? ratingFactor.homeDelta : 0;
   let adjustments = 0;
   for (const factor of factors) {
     if (factor.key === "rating_diff") continue;
     if (factor.available) adjustments += factor.homeDelta * factor.weight;
+  }
+  if (!ratingFactor?.available) return adjustments;
+
+  // Full-scale takes the Elo delta at FULL scale (the decompression we want),
+  // with two protections so it can't manufacture confident-but-wrong picks:
+  //
+  // 1. eloScale — honor any thin-data down-weighting of rating_diff. The pipeline
+  //    (e.g. the NBA playoff thin-data guard) cuts rating_diff's weight below its
+  //    nominal 0.40 when Elo is unreliable; full-scale shrinks the Elo base in
+  //    proportion (>=0.40 keeps the full delta).
+  // 2. conflict-aware blend — full-scale enters Elo at full magnitude while the
+  //    other factors enter weight-diluted, so when the TRUSTED factors point the
+  //    OPPOSITE way from Elo (a cold/injured higher-Elo team vs a hot healthy
+  //    underdog), the full Elo base would drown them. So when adjustments oppose
+  //    the Elo lean, blend the Elo base back toward its legacy (weight-shrunk)
+  //    value in proportion to how strongly they oppose it. Agreeing signals keep
+  //    the full decompression; strong disagreement falls back to balanced legacy.
+  const NOMINAL_RATING_WEIGHT = 0.4;
+  const eloScale = Math.min(1, ratingFactor.weight / NOMINAL_RATING_WEIGHT);
+  const legacyBase = ratingFactor.homeDelta * ratingFactor.weight;
+  let eloBase = ratingFactor.homeDelta * eloScale;
+  if (eloBase !== 0 && adjustments * eloBase < 0 && Math.abs(legacyBase) > 1e-9) {
+    const opposition = Math.min(1, Math.abs(adjustments) / Math.abs(legacyBase));
+    eloBase = eloBase * (1 - opposition) + legacyBase * opposition;
   }
   return eloBase + adjustments;
 }

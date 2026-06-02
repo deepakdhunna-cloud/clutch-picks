@@ -36,6 +36,12 @@ describe('onboarding accessibility', () => {
     expect(onboardingSource).toContain('accessibilityLabel="Continue free"');
   });
 
+  it('uses centralized Pro trial and price copy on the onboarding paywall entry', () => {
+    expect(onboardingSource).toContain("from '@/lib/subscription-config'");
+    expect(onboardingSource).toContain('PAYWALL_COPY.onboardingDisclosure');
+    expect(onboardingSource).not.toContain('3-day free trial for eligible users. Price shown before purchase.');
+  });
+
   it('names standalone profile setup controls', () => {
     expect(profileSetupSource).toContain('accessibilityLabel={profileImage ? "Change profile photo" : "Add profile photo"}');
     expect(profileSetupSource).toContain('accessibilityLabel="Add profile photo"');

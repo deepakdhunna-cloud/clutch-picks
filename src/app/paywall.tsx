@@ -1,3 +1,9 @@
+/**
+ * RELEASE-CRITICAL PAYWALL SCREEN.
+ *
+ * Do not change purchase, restore, trial, price, or RevenueCat identifier
+ * behavior without running `bun run verify:paywall` and paywall tests.
+ */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
@@ -18,7 +24,6 @@ import {
   isRevenueCatEnabled,
   getRevenueCatAppUserId,
   invalidateCustomerInfoCache,
-  REVENUECAT_MONTHLY_PACKAGE_ID,
   customerInfoHasPremium,
 } from '@/lib/revenuecatClient';
 import { useSubscription } from '@/lib/subscription-context';
@@ -30,9 +35,13 @@ import {
   PRO_MONTHLY_PRICE_FALLBACK,
   resolvePaywallPriceString,
 } from '@/lib/subscription-pricing';
+import {
+  PAYWALL_COPY,
+  REVENUECAT_PACKAGE_IDS,
+} from '@/lib/subscription-config';
 import { FeedbackModal } from '@/components/FeedbackModal';
 
-import { BG, MAROON, MAROON_GLOW, TEAL } from '@/lib/theme';
+import { BG, MAROON, TEAL } from '@/lib/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const MAROON_DIM = 'rgba(139,10,31,0.12)';
@@ -97,7 +106,7 @@ function IconWatch({ color }: { color: string }) {
 
 // ─── Shimmer CTA button ─────────────────────────────────────────
 function ShimmerButton({ onPress, loading, label, loadingLabel = 'Opening App Store...' }: {
-  onPress: () => void; loading: boolean; label: string; loadingLabel?: string;
+  onPress?: () => void; loading: boolean; label: string; loadingLabel?: string;
 }) {
   const shimmerX = useSharedValue(-80);
   useEffect(() => {
@@ -117,17 +126,18 @@ function ShimmerButton({ onPress, loading, label, loadingLabel = 'Opening App St
     transform: [{ translateX: shimmerX.value }, { rotate: '20deg' }],
   }));
   const visibleLabel = loading ? loadingLabel : label;
+  const disabled = loading || !onPress;
 
   return (
     <Pressable
       onPress={onPress}
-      disabled={loading}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={visibleLabel}
-      accessibilityState={{ disabled: loading, busy: loading }}
+      accessibilityState={{ disabled, busy: loading }}
       style={({ pressed }) => ({
-        opacity: pressed && !loading ? 0.92 : 1,
-        transform: [{ scale: pressed && !loading ? 0.985 : 1 }],
+        opacity: pressed && !disabled ? 0.92 : 1,
+        transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
       })}
     >
       <LinearGradient
@@ -162,7 +172,7 @@ function ShimmerButton({ onPress, loading, label, loadingLabel = 'Opening App St
 }
 
 const isMonthlySubscription = (pkg: PurchasesPackage) => {
-  return pkg.identifier === REVENUECAT_MONTHLY_PACKAGE_ID &&
+  return pkg.identifier === REVENUECAT_PACKAGE_IDS.monthly &&
     pkg.product.subscriptionPeriod === 'P1M';
 };
 
@@ -178,11 +188,11 @@ const packageMetadataWarnings = (pkg: PurchasesPackage) => {
   const warnings: string[] = [];
 
   if (!isMonthlySubscription(pkg)) {
-    warnings.push(`${REVENUECAT_MONTHLY_PACKAGE_ID} metadata expected monthly subscription; found period ${pkg.product.subscriptionPeriod || 'none'}.`);
+    warnings.push(`${REVENUECAT_PACKAGE_IDS.monthly} metadata expected monthly subscription; found period ${pkg.product.subscriptionPeriod || 'none'}.`);
   }
 
   if (!hasThreeDayFreeTrial(pkg)) {
-    warnings.push(`${REVENUECAT_MONTHLY_PACKAGE_ID} metadata did not include the configured 3-day trial.`);
+    warnings.push(`${REVENUECAT_PACKAGE_IDS.monthly} metadata did not include the configured 3-day trial.`);
   }
 
   return warnings;
@@ -203,7 +213,6 @@ export default function PaywallScreen() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [monthlyPackage, setMonthlyPackage] = useState<PurchasesPackage | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [errorDetail, setErrorDetail] = useState<string>('');
   const [promoCode, setPromoCode] = useState('');
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoLoading, setPromoLoading] = useState(false);
@@ -258,7 +267,7 @@ export default function PaywallScreen() {
       -1, true
     );
     return () => cancelAnimation(ctaGlow);
-  }, []);
+  }, [ctaGlow]);
   const ctaGlowStyle = useAnimatedStyle(() => ({
     shadowOpacity: interpolate(ctaGlow.value, [0, 1], [0.1, 0.3]),
   }));
@@ -278,7 +287,6 @@ export default function PaywallScreen() {
 
   const loadOfferings = async (): Promise<PurchasesPackage | null> => {
     setLoadError(false);
-    setErrorDetail('');
 
     const enabled = isRevenueCatEnabled();
     if (__DEV__) console.log('[Paywall] isRevenueCatEnabled:', enabled);
@@ -287,7 +295,6 @@ export default function PaywallScreen() {
       if (__DEV__) console.log('[Paywall] RevenueCat not enabled');
       setIsLoading(false);
       setLoadError(true);
-      setErrorDetail('SDK not enabled - key missing');
       return null;
     }
 
@@ -299,7 +306,6 @@ export default function PaywallScreen() {
       if (!result.ok) {
         if (__DEV__) console.log('[Paywall] Failed reason:', result.reason, 'error:', result.error);
         setLoadError(true);
-        setErrorDetail(`Offerings failed: ${result.reason} ${result.error || ''}`);
         setIsLoading(false);
         return null;
       }
@@ -309,7 +315,6 @@ export default function PaywallScreen() {
       if (!result.data.current) {
         if (__DEV__) console.log('[Paywall] No current offering found');
         setLoadError(true);
-        setErrorDetail('No current offering in RevenueCat');
         setIsLoading(false);
         return null;
       }
@@ -317,12 +322,11 @@ export default function PaywallScreen() {
       const packages = result.data.current.availablePackages;
       if (__DEV__) console.log('[Paywall] Available packages:', packages.map(p => p.identifier));
 
-      const monthly = packages.find((pkg) => pkg.identifier === REVENUECAT_MONTHLY_PACKAGE_ID);
+      const monthly = packages.find((pkg) => pkg.identifier === REVENUECAT_PACKAGE_IDS.monthly);
       if (__DEV__) console.log('[Paywall] Found $rc_monthly:', !!monthly);
 
       if (!monthly) {
         setLoadError(true);
-        setErrorDetail(`No ${REVENUECAT_MONTHLY_PACKAGE_ID} package. Found: ${packages.map(p => p.identifier).join(', ') || 'none'}`);
         setIsLoading(false);
         return null;
       }
@@ -339,7 +343,6 @@ export default function PaywallScreen() {
     } catch (error: any) {
       if (__DEV__) console.log('[Paywall] Exception:', error?.message || error);
       setLoadError(true);
-      setErrorDetail(`Exception: ${error?.message || String(error)}`);
     }
     setIsLoading(false);
     return null;
@@ -401,7 +404,7 @@ export default function PaywallScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = await restorePurchases();
     if (result.ok) {
-      await checkSubscription();
+      await checkSubscription({ restored: true });
       const hasActive = customerInfoHasPremium(result.data);
       if (hasActive) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -448,10 +451,10 @@ export default function PaywallScreen() {
   }, [monthlyPackage, storePriceString, useRevenueCatTestStore]);
   const monthlyPackageHasTrial = shouldAdvertiseThreeDayTrial(monthlyPackage);
   const trialDisclosure = monthlyPackageHasTrial
-    ? `Eligible users receive a 3-day free trial, then ${priceWithMonthlyPeriod}. App Store confirms final terms before purchase.`
-    : `Subscription renews monthly at ${priceWithMonthlyPeriod}. App Store confirms final terms before purchase.`;
+    ? PAYWALL_COPY.trialDisclosure(priceWithMonthlyPeriod)
+    : PAYWALL_COPY.recurringDisclosure(priceWithMonthlyPeriod);
   const purchaseCtaLabel = monthlyPackageHasTrial
-    ? 'Start 3-Day Free Trial'
+    ? PAYWALL_COPY.primaryTrialCta
     : `Start Pro for ${priceWithShortPeriod}`;
   const sandboxPurchaseHint = __DEV__
     ? 'Development builds use Apple Sandbox, not your Clutch login. Use a Sandbox Apple Account from App Store Connect to test purchases.'
@@ -691,6 +694,7 @@ export default function PaywallScreen() {
                         onChangeText={(t) => setPromoCode(t.toUpperCase())}
                         autoCapitalize="characters"
                         autoCorrect={false}
+                        returnKeyType="done"
                       />
                       {promoCode.length > 0 ? (
                         <Pressable
@@ -766,7 +770,7 @@ export default function PaywallScreen() {
 
                 {/* CTA button */}
                 {isLoading ? (
-                  <ShimmerButton onPress={() => {}} loading={true} label="Loading..." />
+                  <ShimmerButton loading={true} label="Loading..." />
                 ) : loadError ? (
                   <ShimmerButton onPress={loadOfferings} loading={false} label="Tap to Retry" />
                 ) : (

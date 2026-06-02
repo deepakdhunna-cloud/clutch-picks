@@ -18,6 +18,7 @@ describe('profile settings control', () => {
 
 describe('profile primary actions', () => {
   it('exposes visible profile actions as real buttons with 44 point touch targets', () => {
+    expect(profileSource).toContain('accessibilityLabel="Sign in to Clutch Picks"');
     expect(profileSource).toContain('accessibilityLabel="Edit profile"');
     expect(profileSource).toContain('accessibilityLabel="Share analyst card"');
     expect(profileSource).toContain('accessibilityLabel="Sign out"');

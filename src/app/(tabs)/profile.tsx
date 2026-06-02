@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, ScrollView, Share,
+  View, Text, Pressable, ActivityIndicator, ScrollView, Share, Dimensions,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
 import { useRouter } from 'expo-router';
@@ -32,6 +31,7 @@ import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
 import { profileDisplayName } from '@/lib/profile-presentation';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 import type { GameWithPrediction } from '@/types/sports';
 
 // ─── COLORS ───
@@ -56,7 +56,13 @@ const C = {
   TEXT_MUTED: '#6B7C94',
 } as const;
 
+const { width: PROFILE_SCREEN_WIDTH } = Dimensions.get('window');
 const PROFILE_RECENT_PICK_LIMIT = 10;
+const RECENT_PICK_CARD_W = 124;
+const RECENT_PICK_CARD_GAP = 10;
+const RECENT_PICK_SNAP_INTERVAL = RECENT_PICK_CARD_W + RECENT_PICK_CARD_GAP;
+const RECENT_PICK_RAIL_WIDTH = Math.max(RECENT_PICK_CARD_W, PROFILE_SCREEN_WIDTH - 32 - RECENT_PICK_CARD_W);
+const RECENT_PICK_RAIL_SIDE_PADDING = Math.max(RECENT_PICK_CARD_GAP, (RECENT_PICK_RAIL_WIDTH - RECENT_PICK_CARD_W) / 2);
 
 const ProfileLoadingState = memo(function ProfileLoadingState() {
   return (
@@ -195,32 +201,6 @@ function UserIcon({ size = 40, color = C.TEAL }: { size?: number; color?: string
   );
 }
 
-// ─── SPORT MASTERY RING ───
-const SportMasteryRing = memo(function SportMasteryRing({ sport, pct, wins, total }: { sport: string; pct: number; wins: number; total: number }) {
-  const r = 21;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - pct / 100);
-  const ringColor = pct > 65 ? C.TEAL : pct >= 55 ? C.MAROON : C.TEAL_DARK;
-
-  return (
-    <View style={{ minWidth: 88, backgroundColor: C.GLASS, borderRadius: 16, padding: 14, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center' }}>
-      <View style={{ width: 48, height: 48, marginBottom: 6 }}>
-        <Svg width={48} height={48} viewBox="0 0 48 48">
-          <SvgCircle cx={24} cy={24} r={r} stroke="#2A3444" strokeWidth={3} fill="none" />
-          <SvgCircle cx={24} cy={24} r={r} stroke={ringColor} strokeWidth={3} fill="none"
-            strokeDasharray={`${circ}`} strokeDashoffset={`${offset}`} strokeLinecap="round"
-            transform="rotate(-90 24 24)" />
-        </Svg>
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontSize: 13, fontWeight: '800', color: C.TEXT_PRIMARY }}>{pct}%</Text>
-        </View>
-      </View>
-      <Text style={{ fontSize: 10, fontWeight: '700', color: C.TEXT_PRIMARY, marginBottom: 2 }}>{displaySport(sport)}</Text>
-      <Text style={{ fontSize: 8, color: C.TEXT_MUTED }}>{wins}-{total - wins}</Text>
-    </View>
-  );
-});
-
 // ─── ACHIEVEMENT BADGE ───
 const AchievementBadge = memo(function AchievementBadge({ name, desc, earned, icon }: { name: string; desc: string; earned: boolean; icon: string }) {
   const iconColor = earned ? C.MAROON : '#2A3444';
@@ -315,7 +295,19 @@ const SignedOutState = memo(function SignedOutState() {
         </View>
         <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 8, textAlign: 'center' }}>Sign in to see your card</Text>
         <Text style={{ fontSize: 14, color: C.TEXT_MUTED, textAlign: 'center', marginBottom: 28 }}>Track your picks, build your analyst record.</Text>
-        <Pressable onPress={() => router.replace('/sign-in')} style={{ width: '100%', borderRadius: 14, overflow: 'hidden' }}>
+        <Pressable
+          onPress={() => router.replace('/sign-in')}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in to Clutch Picks"
+          accessibilityHint="Opens sign in"
+          style={({ pressed }) => ({
+            width: '100%',
+            borderRadius: 14,
+            overflow: 'hidden',
+            opacity: pressed ? 0.9 : 1,
+            transform: [{ scale: pressed ? 0.992 : 1 }],
+          })}
+        >
           <LinearGradient colors={[C.TEAL, C.TEAL_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 16, alignItems: 'center', borderRadius: 14 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: C.TEXT_PRIMARY }}>Sign In</Text>
           </LinearGradient>
@@ -338,7 +330,7 @@ const RecentPicksSummaryTile = memo(function RecentPicksSummaryTile({
       accessibilityRole="button"
       accessibilityLabel={`${totalPicks} predictions`}
       style={({ pressed }) => ({
-        width: 124,
+        width: RECENT_PICK_CARD_W,
         height: 140,
         opacity: pressed ? 0.88 : 1,
         transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -390,7 +382,7 @@ const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
       accessibilityRole="button"
       accessibilityLabel="View all predictions"
       style={({ pressed }) => ({
-        width: 104,
+        width: RECENT_PICK_CARD_W,
         height: 140,
         opacity: pressed ? 0.88 : 1,
         transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -477,7 +469,7 @@ const RecentPickTile = memo(function RecentPickTile({
       accessibilityRole="button"
       accessibilityLabel={`Open ${pick.abbreviation} versus ${pick.opponentAbbr}`}
       style={({ pressed }) => ({
-        width: 124,
+        width: RECENT_PICK_CARD_W,
         height: 140,
         opacity: pressed ? 0.88 : 1,
         transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -688,26 +680,6 @@ export default function ProfileScreen() {
     return diff > 0 ? `+${diff}% this week` : `${diff}% this week`;
   }, [displayPicks, accuracy]);
 
-  // Sport breakdown
-  const sportBreakdown = useMemo(() => {
-    if (displayPicks.length === 0 || !allGames) return [];
-    const gameMap = new Map(allGames.map((g) => [g.id, g]));
-    const map = new Map<string, { wins: number; total: number }>();
-    for (const p of displayPicks) {
-      const game = gameMap.get(p.gameId);
-      const sport = game?.sport ?? p.sport ?? 'Unknown';
-      if (sport === 'Unknown') continue;
-      const e = map.get(sport) ?? { wins: 0, total: 0 };
-      if (p.result === 'win') e.wins++;
-      if (p.result === 'win' || p.result === 'loss') e.total++;
-      map.set(sport, e);
-    }
-    return Array.from(map.entries())
-      .filter(([, d]) => d.total >= 2)
-      .map(([sport, d]) => ({ sport, wins: d.wins, total: d.total, pct: Math.round((d.wins / d.total) * 100) }))
-      .sort((a, b) => b.total - a.total);
-  }, [displayPicks, allGames]);
-
   // Signature calls — eligibility + narrative live in src/lib/signature-calls.ts.
   // Reads enriched fields directly off the pick row, so it works for any
   // settled win regardless of whether the game is still in `allGames`.
@@ -855,17 +827,13 @@ export default function ProfileScreen() {
                 <View style={{ width: 72, height: 72, borderRadius: 36, padding: 3, overflow: 'hidden' }}>
                   <LinearGradient colors={[C.MAROON, C.TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                   <View style={{ flex: 1, borderRadius: 33, backgroundColor: C.BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    {userImage ? (
-                      <Image
-                        source={{ uri: userImage }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        transition={160}
-                      />
-                    ) : (
+                    <ProfileAvatarImage
+                      uri={userImage}
+                      style={{ width: '100%', height: '100%' }}
+                      recyclingKey={userId}
+                    >
                       <Text style={{ fontSize: 24, fontWeight: '800', color: C.TEXT_PRIMARY }}>{initial}</Text>
-                    )}
+                    </ProfileAvatarImage>
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
@@ -980,7 +948,11 @@ export default function ProfileScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={{ flex: 1, height: 146 }}
-                contentContainerStyle={{ paddingLeft: 10, gap: 10 }}
+                contentContainerStyle={{ paddingLeft: RECENT_PICK_RAIL_SIDE_PADDING, paddingRight: RECENT_PICK_RAIL_SIDE_PADDING, gap: RECENT_PICK_CARD_GAP }}
+                snapToInterval={RECENT_PICK_SNAP_INTERVAL}
+                snapToAlignment="start"
+                disableIntervalMomentum
+                decelerationRate="fast"
               >
                 {recentPickTiles.map((p) => (
                   <RecentPickTile
@@ -992,7 +964,7 @@ export default function ProfileScreen() {
                 ))}
 
                 {recentPickTiles.length === 0 ? (
-                  <View style={{ width: 124, height: 140, backgroundColor: C.GLASS, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ width: RECENT_PICK_CARD_W, height: 140, backgroundColor: C.GLASS, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ fontSize: 10, color: C.TEXT_MUTED, textAlign: 'center' }}>Make picks to see them here</Text>
                   </View>
                 ) : (

@@ -554,8 +554,16 @@ async function replayCandidate(args: {
 }): Promise<ReplayRow | null> {
   try {
     const ctx = await args.buildGameContext(gameForContext(args.candidate.event));
-    ctx.homeElo = args.candidate.homeElo;
-    ctx.awayElo = args.candidate.awayElo;
+    // REPLAY_FREEZE_ELO=true simulates production's frozen-Elo state (every team
+    // at the default 1500) so we can A/B the value of a live Elo refresh: a
+    // frozen run vs the normal rolled-forward run, holding everything else equal.
+    if (process.env.REPLAY_FREEZE_ELO === "true") {
+      ctx.homeElo = 1500;
+      ctx.awayElo = 1500;
+    } else {
+      ctx.homeElo = args.candidate.homeElo;
+      ctx.awayElo = args.candidate.awayElo;
+    }
 
     const prediction = args.predictGame(ctx);
     const predictedPick = finalPick(prediction);

@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo, useState, memo } from 'react';
-import { View, Text, Pressable, SectionList, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Pressable, SectionList, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,8 +14,7 @@ import { Sport } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
-
-const { width: SW } = Dimensions.get('window');
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 
 // ─── PALETTE ───
 const C = {
@@ -409,6 +408,11 @@ export default function PicksHistoryScreen() {
             )}
             stickySectionHeadersEnabled={false}
             showsVerticalScrollIndicator={false}
+            removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            updateCellsBatchingPeriod={40}
+            windowSize={7}
             contentContainerStyle={{ paddingBottom: 50 }}
           />
         )}

@@ -1987,9 +1987,19 @@ async function annotateMarketComparison(game: Game, prediction: GamePrediction):
 
 type PredictionOutcome = "home" | "away" | "draw";
 
+// ─── Pick-stability lock (commit + only change on a real, decisive reason) ──
+// Once a pick is shown it COMMITS. A re-prediction can only flip the displayed
+// SIDE when the new side is clearly favored (lead >= MATERIAL_PICK_FLIP_LEAD_PP);
+// anything inside that band keeps the prior pick, so a coin-flip never
+// oscillates and the (heavily-weighted, free) market anchor can inform the pick
+// without chasing the line tick-by-tick. The threshold is intentionally
+// conservative for a betting product: a user who acts on a pick should not come
+// back to a silent switch — when it DOES flip, the new side is decisively ahead
+// (the signature of real news: a confirmed injury, an announced pitcher/goalie,
+// or a big line move), which is exactly what a bettor would want to see.
 const MATERIAL_PREDICTION_PROBABILITY_MOVE_PP = 3;
 const MATERIAL_CONFIDENCE_MOVE_PP = 4;
-const MATERIAL_PICK_FLIP_LEAD_PP = 5;
+const MATERIAL_PICK_FLIP_LEAD_PP = 7;
 const MATERIAL_MARKET_DIVERGENCE_MOVE_PP = 7;
 
 function predictionOutcome(prediction: GamePrediction): PredictionOutcome {

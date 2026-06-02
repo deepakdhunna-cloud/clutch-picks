@@ -1,0 +1,4186 @@
+{
+  "runAt": "2026-06-02T11:56:59.698Z",
+  "mode": "current-engine-historical-replay",
+  "sportsRequested": [
+    "TENNIS"
+  ],
+  "daysScanned": 200,
+  "warmupGamesPerTeam": 3,
+  "maxGamesPerSport": 500,
+  "totalHistoricalGamesFound": 354,
+  "totalGamesScored": 147,
+  "overall": {
+    "sport": "OVERALL",
+    "scoredGames": 147,
+    "correct": 95,
+    "accuracy": 64.6,
+    "avgConfidence": 54.271,
+    "avgActualProbability": 52.349,
+    "logLoss": 0.652,
+    "brier": 0.46,
+    "homeScoreMae": 0.694,
+    "awayScoreMae": 0.68,
+    "totalMae": 0.585,
+    "marginMae": 1.347
+  },
+  "perSport": [
+    {
+      "sport": "TENNIS",
+      "scoredGames": 147,
+      "correct": 95,
+      "accuracy": 64.6,
+      "avgConfidence": 54.271,
+      "avgActualProbability": 52.349,
+      "logLoss": 0.652,
+      "brier": 0.46,
+      "homeScoreMae": 0.694,
+      "awayScoreMae": 0.68,
+      "totalMae": 0.585,
+      "marginMae": 1.347
+    }
+  ],
+  "calibration": [
+    {
+      "label": "0-39",
+      "min": 0,
+      "max": 39,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    },
+    {
+      "label": "40-44",
+      "min": 40,
+      "max": 44,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    },
+    {
+      "label": "45-49",
+      "min": 45,
+      "max": 49,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    },
+    {
+      "label": "50-54",
+      "min": 50,
+      "max": 54,
+      "total": 88,
+      "correct": 49,
+      "accuracy": 55.7
+    },
+    {
+      "label": "55-59",
+      "min": 55,
+      "max": 59,
+      "total": 29,
+      "correct": 22,
+      "accuracy": 75.9
+    },
+    {
+      "label": "60-64",
+      "min": 60,
+      "max": 64,
+      "total": 7,
+      "correct": 5,
+      "accuracy": 71.4
+    },
+    {
+      "label": "65-69",
+      "min": 65,
+      "max": 69,
+      "total": 3,
+      "correct": 3,
+      "accuracy": 100
+    },
+    {
+      "label": "70-74",
+      "min": 70,
+      "max": 74,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    },
+    {
+      "label": "75-79",
+      "min": 75,
+      "max": 79,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    },
+    {
+      "label": "80-100",
+      "min": 80,
+      "max": 100,
+      "total": 0,
+      "correct": 0,
+      "accuracy": null
+    }
+  ],
+  "highConfidenceMisses": [
+    {
+      "gameId": "175987",
+      "sport": "TENNIS",
+      "date": "2026-05-09T14:05Z",
+      "matchup": "S. Cirstea @ A. Sabalenka",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.8,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.3819,
+      "brier": 0.76409522,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "172939",
+      "sport": "TENNIS",
+      "date": "2026-03-14T22:30Z",
+      "matchup": "D. Medvedev @ C. Alcaraz",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 60.6,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.394,
+      "brier": 0.734472,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "174293",
+      "sport": "TENNIS",
+      "date": "2026-04-26T13:45Z",
+      "matchup": "M. Kostyuk @ J. Pegula",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4299,
+      "brier": 0.6500280200000002,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175939",
+      "sport": "TENNIS",
+      "date": "2026-05-09T19:25Z",
+      "matchup": "A. Kalinskaya @ B. Bencic",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 56.2,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4377,
+      "brier": 0.63236258,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "170112",
+      "sport": "TENNIS",
+      "date": "2026-02-12T16:55Z",
+      "matchup": "E. Rybakina @ V. Mboko",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 56.1,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.439,
+      "brier": 0.6294420000000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175540",
+      "sport": "TENNIS",
+      "date": "2026-06-01T12:30Z",
+      "matchup": "D. Shnaider @ M. Keys",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 55.9,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4411,
+      "brier": 0.6247384199999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175977",
+      "sport": "TENNIS",
+      "date": "2026-05-13T17:55Z",
+      "matchup": "E. Rybakina @ E. Svitolina",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 55.6,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4438,
+      "brier": 0.61871688,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175981",
+      "sport": "TENNIS",
+      "date": "2026-05-13T11:10Z",
+      "matchup": "I. Swiatek @ J. Pegula",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 55.5,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4453,
+      "brier": 0.61538418,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "172793",
+      "sport": "TENNIS",
+      "date": "2026-03-09T01:10Z",
+      "matchup": "A. Eala @ C. Gauff",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 55.4,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4464,
+      "brier": 0.6129459199999999,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "175317",
+      "sport": "TENNIS",
+      "date": "2026-05-12T10:40Z",
+      "matchup": "L. Tien @ R. Jodar",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4513,
+      "brier": 0.6021433799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175311",
+      "sport": "TENNIS",
+      "date": "2026-05-12T12:20Z",
+      "matchup": "A. Zverev @ L. Darderi",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.4,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4561,
+      "brier": 0.5916544200000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "169659",
+      "sport": "TENNIS",
+      "date": "2026-02-22T01:10Z",
+      "matchup": "L. Tien @ T. Paul",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4575,
+      "brier": 0.5886125,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "175709",
+      "sport": "TENNIS",
+      "date": "2026-05-29T15:50Z",
+      "matchup": "J. Mensik @ A. de Minaur",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 54.1,
+      "actualScore": {
+        "home": 1,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4593,
+      "brier": 0.5847129799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175583",
+      "sport": "TENNIS",
+      "date": "2026-05-30T17:20Z",
+      "matchup": "M. Keys @ V. Mboko",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.6,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.464,
+      "brier": 0.5745920000000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168468",
+      "sport": "TENNIS",
+      "date": "2026-01-31T08:40Z",
+      "matchup": "E. Rybakina @ A. Sabalenka",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.5,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4655,
+      "brier": 0.5713805,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    }
+  ],
+  "rows": [
+    {
+      "gameId": "167711",
+      "sport": "TENNIS",
+      "date": "2025-11-15T13:40Z",
+      "matchup": "A. de Minaur @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.5,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5751,
+      "brier": 0.36108002000000006,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "167709",
+      "sport": "TENNIS",
+      "date": "2025-11-15T19:40Z",
+      "matchup": "F. Auger-Aliassime @ C. Alcaraz",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5498,
+      "brier": 0.40536008,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "167710",
+      "sport": "TENNIS",
+      "date": "2025-11-16T17:15Z",
+      "matchup": "J. Sinner @ C. Alcaraz",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5179,
+      "brier": 0.46484081999999993,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "169245",
+      "sport": "TENNIS",
+      "date": "2025-12-20T16:10Z",
+      "matchup": "N. Budkov Kjaer @ A. Blockx",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.9,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5391,
+      "brier": 0.42485761999999994,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "169244",
+      "sport": "TENNIS",
+      "date": "2025-12-20T18:10Z",
+      "matchup": "N. Basavareddy @ L. Tien",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.1,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.521,
+      "brier": 0.45888199999999996,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "169246",
+      "sport": "TENNIS",
+      "date": "2025-12-21T17:10Z",
+      "matchup": "A. Blockx @ L. Tien",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.5,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4852,
+      "brier": 0.53003808,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168447",
+      "sport": "TENNIS",
+      "date": "2026-01-25T00:40Z",
+      "matchup": "V. Mboko @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.5,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5549,
+      "brier": 0.39622802,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168460",
+      "sport": "TENNIS",
+      "date": "2026-01-25T10:10Z",
+      "matchup": "M. Andreeva @ E. Svitolina",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4906,
+      "brier": 0.5189767200000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168568",
+      "sport": "TENNIS",
+      "date": "2026-01-26T03:10Z",
+      "matchup": "T. Fritz @ L. Musetti",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.1,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5108,
+      "brier": 0.47863328,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168467",
+      "sport": "TENNIS",
+      "date": "2026-01-27T00:40Z",
+      "matchup": "I. Jovic @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.8,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5778,
+      "brier": 0.35650568000000005,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168602",
+      "sport": "TENNIS",
+      "date": "2026-01-27T02:45Z",
+      "matchup": "L. Tien @ A. Zverev",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.1,
+      "actualScore": {
+        "home": 3,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5215,
+      "brier": 0.4579245,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168601",
+      "sport": "TENNIS",
+      "date": "2026-01-27T09:25Z",
+      "matchup": "A. de Minaur @ C. Alcaraz",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.5,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5553,
+      "brier": 0.39551618,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168570",
+      "sport": "TENNIS",
+      "date": "2026-01-28T08:30Z",
+      "matchup": "J. Sinner @ B. Shelton",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 59.6,
+      "actualScore": {
+        "home": 0,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.596,
+      "brier": 0.32643200000000006,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168469",
+      "sport": "TENNIS",
+      "date": "2026-01-29T08:40Z",
+      "matchup": "E. Svitolina @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.3,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5235,
+      "brier": 0.4541045,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168470",
+      "sport": "TENNIS",
+      "date": "2026-01-29T10:20Z",
+      "matchup": "E. Rybakina @ J. Pegula",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5092,
+      "brier": 0.48176928,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168573",
+      "sport": "TENNIS",
+      "date": "2026-01-30T03:45Z",
+      "matchup": "A. Zverev @ C. Alcaraz",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.4,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5337,
+      "brier": 0.43487138000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168468",
+      "sport": "TENNIS",
+      "date": "2026-01-31T08:40Z",
+      "matchup": "E. Rybakina @ A. Sabalenka",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.5,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4655,
+      "brier": 0.5713805,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "168571",
+      "sport": "TENNIS",
+      "date": "2026-02-01T08:45Z",
+      "matchup": "N. Djokovic @ C. Alcaraz",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.8,
+      "actualScore": {
+        "home": 3,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5477,
+      "brier": 0.40915058000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "170104",
+      "sport": "TENNIS",
+      "date": "2026-02-11T12:05Z",
+      "matchup": "V. Mboko @ M. Andreeva",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.4,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4657,
+      "brier": 0.5709529799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "170112",
+      "sport": "TENNIS",
+      "date": "2026-02-12T16:55Z",
+      "matchup": "E. Rybakina @ V. Mboko",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 56.1,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.439,
+      "brier": 0.6294420000000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "170113",
+      "sport": "TENNIS",
+      "date": "2026-02-14T15:10Z",
+      "matchup": "V. Mboko @ K. Muchova",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.3,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4875,
+      "brier": 0.5253125,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "169520",
+      "sport": "TENNIS",
+      "date": "2026-02-15T14:45Z",
+      "matchup": "F. Auger-Aliassime @ A. de Minaur",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.3,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.503,
+      "brier": 0.494018,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "169637",
+      "sport": "TENNIS",
+      "date": "2026-02-15T19:10Z",
+      "matchup": "L. Darderi @ F. Cerundolo",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.2,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4983,
+      "brier": 0.50340578,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "169574",
+      "sport": "TENNIS",
+      "date": "2026-02-15T19:10Z",
+      "matchup": "B. Shelton @ T. Fritz",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.4,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5041,
+      "brier": 0.49183362,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "170221",
+      "sport": "TENNIS",
+      "date": "2026-02-18T09:05Z",
+      "matchup": "J. Pegula @ I. Jovic",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 55.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5578,
+      "brier": 0.39108168,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "170200",
+      "sport": "TENNIS",
+      "date": "2026-02-20T13:55Z",
+      "matchup": "A. Anisimova @ J. Pegula",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.6,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5259,
+      "brier": 0.44954162,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "169712",
+      "sport": "TENNIS",
+      "date": "2026-02-20T16:40Z",
+      "matchup": "A. Rublev @ C. Alcaraz",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 59,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5897,
+      "brier": 0.33669218,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "169654",
+      "sport": "TENNIS",
+      "date": "2026-02-21T02:10Z",
+      "matchup": "T. Paul @ T. Fritz",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.2,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4985,
+      "brier": 0.5030045,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "170199",
+      "sport": "TENNIS",
+      "date": "2026-02-21T15:10Z",
+      "matchup": "J. Pegula @ E. Svitolina",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.6,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5064,
+      "brier": 0.48728192000000004,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "169659",
+      "sport": "TENNIS",
+      "date": "2026-02-22T01:10Z",
+      "matchup": "L. Tien @ T. Paul",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4575,
+      "brier": 0.5886125,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "169845",
+      "sport": "TENNIS",
+      "date": "2026-02-28T22:55Z",
+      "matchup": "L. Darderi @ S. Baez",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5254,
+      "brier": 0.45049032000000006,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "172924",
+      "sport": "TENNIS",
+      "date": "2026-03-08T20:10Z",
+      "matchup": "L. Tien @ B. Shelton",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4907,
+      "brier": 0.5187729799999999,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172927",
+      "sport": "TENNIS",
+      "date": "2026-03-08T21:10Z",
+      "matchup": "J. Mensik @ A. Davidovich Fokina",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4725,
+      "brier": 0.5565125000000001,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172793",
+      "sport": "TENNIS",
+      "date": "2026-03-09T01:10Z",
+      "matchup": "A. Eala @ C. Gauff",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 55.4,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4464,
+      "brier": 0.6129459199999999,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172788",
+      "sport": "TENNIS",
+      "date": "2026-03-10T04:25Z",
+      "matchup": "E. Rybakina @ M. Kostyuk",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5275,
+      "brier": 0.4465125,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172932",
+      "sport": "TENNIS",
+      "date": "2026-03-10T20:10Z",
+      "matchup": "A. Zverev @ F. Tiafoe",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 56.9,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5689,
+      "brier": 0.37169442,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172935",
+      "sport": "TENNIS",
+      "date": "2026-03-10T22:05Z",
+      "matchup": "A. Davidovich Fokina @ L. Tien",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.8,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5285,
+      "brier": 0.4446245,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172805",
+      "sport": "TENNIS",
+      "date": "2026-03-11T01:05Z",
+      "matchup": "A. Anisimova @ V. Mboko",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4901,
+      "brier": 0.51999602,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172808",
+      "sport": "TENNIS",
+      "date": "2026-03-11T18:10Z",
+      "matchup": "I. Swiatek @ K. Muchova",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5078,
+      "brier": 0.48452168,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172810",
+      "sport": "TENNIS",
+      "date": "2026-03-12T18:10Z",
+      "matchup": "V. Mboko @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56.8,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5677,
+      "brier": 0.37376658,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172940",
+      "sport": "TENNIS",
+      "date": "2026-03-12T20:20Z",
+      "matchup": "J. Sinner @ L. Tien",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 55.9,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5587,
+      "brier": 0.38949138000000005,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172811",
+      "sport": "TENNIS",
+      "date": "2026-03-12T22:10Z",
+      "matchup": "I. Swiatek @ E. Svitolina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.7,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5075,
+      "brier": 0.48511250000000006,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172812",
+      "sport": "TENNIS",
+      "date": "2026-03-13T00:10Z",
+      "matchup": "E. Rybakina @ J. Pegula",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.5,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5053,
+      "brier": 0.48945618,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172813",
+      "sport": "TENNIS",
+      "date": "2026-03-14T01:10Z",
+      "matchup": "E. Svitolina @ E. Rybakina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5253,
+      "brier": 0.45068018000000004,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172942",
+      "sport": "TENNIS",
+      "date": "2026-03-14T20:40Z",
+      "matchup": "J. Sinner @ A. Zverev",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 54.7,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.547,
+      "brier": 0.41041799999999995,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172939",
+      "sport": "TENNIS",
+      "date": "2026-03-14T22:30Z",
+      "matchup": "D. Medvedev @ C. Alcaraz",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 60.6,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.394,
+      "brier": 0.734472,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172815",
+      "sport": "TENNIS",
+      "date": "2026-03-15T18:05Z",
+      "matchup": "E. Rybakina @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.4,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5239,
+      "brier": 0.45334241999999997,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "172941",
+      "sport": "TENNIS",
+      "date": "2026-03-15T21:25Z",
+      "matchup": "J. Sinner @ D. Medvedev",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 59,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5902,
+      "brier": 0.33587208,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173115",
+      "sport": "TENNIS",
+      "date": "2026-03-21T18:15Z",
+      "matchup": "B. Bencic @ D. Shnaider",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 53,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5299,
+      "brier": 0.44198802,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173104",
+      "sport": "TENNIS",
+      "date": "2026-03-22T19:35Z",
+      "matchup": "M. Kostyuk @ E. Rybakina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.4,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5544,
+      "brier": 0.39711872,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173126",
+      "sport": "TENNIS",
+      "date": "2026-03-23T15:05Z",
+      "matchup": "A. Eala @ K. Muchova",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.6,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5558,
+      "brier": 0.39462728,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173231",
+      "sport": "TENNIS",
+      "date": "2026-03-23T16:10Z",
+      "matchup": "D. Medvedev @ F. Cerundolo",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 53.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4678,
+      "brier": 0.56647368,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173127",
+      "sport": "TENNIS",
+      "date": "2026-03-23T16:50Z",
+      "matchup": "V. Mboko @ M. Andreeva",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4825,
+      "brier": 0.5356125,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173243",
+      "sport": "TENNIS",
+      "date": "2026-03-23T18:45Z",
+      "matchup": "J. Mensik @ F. Tiafoe",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.475,
+      "brier": 0.55125,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173125",
+      "sport": "TENNIS",
+      "date": "2026-03-24T01:05Z",
+      "matchup": "B. Bencic @ A. Anisimova",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4822,
+      "brier": 0.53623368,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173239",
+      "sport": "TENNIS",
+      "date": "2026-03-24T18:00Z",
+      "matchup": "A. Fils @ V. Vacherot",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.1,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5013,
+      "brier": 0.49740338,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173129",
+      "sport": "TENNIS",
+      "date": "2026-03-24T18:50Z",
+      "matchup": "K. Muchova @ V. Mboko",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4914,
+      "brier": 0.51734792,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173120",
+      "sport": "TENNIS",
+      "date": "2026-03-24T23:25Z",
+      "matchup": "C. Gauff @ B. Bencic",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.4,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5241,
+      "brier": 0.45296161999999995,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173118",
+      "sport": "TENNIS",
+      "date": "2026-03-25T17:10Z",
+      "matchup": "J. Pegula @ E. Rybakina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.512,
+      "brier": 0.476288,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173256",
+      "sport": "TENNIS",
+      "date": "2026-03-26T00:50Z",
+      "matchup": "A. Fils @ T. Paul",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.473,
+      "brier": 0.555458,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173258",
+      "sport": "TENNIS",
+      "date": "2026-03-26T17:10Z",
+      "matchup": "J. Sinner @ F. Tiafoe",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 64.3,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 0,
+        "away": 2,
+        "spread": -2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6427,
+      "brier": 0.25532657999999997,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173131",
+      "sport": "TENNIS",
+      "date": "2026-03-26T19:05Z",
+      "matchup": "K. Muchova @ C. Gauff",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5101,
+      "brier": 0.48000402000000003,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173255",
+      "sport": "TENNIS",
+      "date": "2026-03-26T23:10Z",
+      "matchup": "A. Zverev @ F. Cerundolo",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 54.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5482,
+      "brier": 0.40824647999999997,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173128",
+      "sport": "TENNIS",
+      "date": "2026-03-27T00:35Z",
+      "matchup": "E. Rybakina @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5288,
+      "brier": 0.44405887999999993,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173250",
+      "sport": "TENNIS",
+      "date": "2026-03-27T23:10Z",
+      "matchup": "J. Sinner @ A. Zverev",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 57.1,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5713,
+      "brier": 0.36756738,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173130",
+      "sport": "TENNIS",
+      "date": "2026-03-28T19:00Z",
+      "matchup": "C. Gauff @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 59.9,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5987,
+      "brier": 0.32208338,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173228",
+      "sport": "TENNIS",
+      "date": "2026-03-29T20:30Z",
+      "matchup": "J. Sinner @ J. Lehecka",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 63.6,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 0,
+        "away": 2,
+        "spread": -2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6363,
+      "brier": 0.26455538,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173782",
+      "sport": "TENNIS",
+      "date": "2026-04-03T15:05Z",
+      "matchup": "D. Shnaider @ J. Pegula",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 59.8,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5984,
+      "brier": 0.32256512,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173780",
+      "sport": "TENNIS",
+      "date": "2026-04-03T17:35Z",
+      "matchup": "B. Bencic @ M. Keys",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.7,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.473,
+      "brier": 0.555458,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173784",
+      "sport": "TENNIS",
+      "date": "2026-04-04T17:05Z",
+      "matchup": "I. Jovic @ J. Pegula",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 58.7,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5871,
+      "brier": 0.34097282000000007,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173350",
+      "sport": "TENNIS",
+      "date": "2026-04-04T17:35Z",
+      "matchup": "F. Tiafoe @ T. Paul",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5182,
+      "brier": 0.46426248000000003,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173900",
+      "sport": "TENNIS",
+      "date": "2026-04-09T10:40Z",
+      "matchup": "C. Ruud @ F. Auger-Aliassime",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.2,
+      "actualScore": {
+        "home": 1,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4978,
+      "brier": 0.50440968,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173902",
+      "sport": "TENNIS",
+      "date": "2026-04-09T12:55Z",
+      "matchup": "A. Bublik @ J. Lehecka",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4895,
+      "brier": 0.5212204999999999,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173905",
+      "sport": "TENNIS",
+      "date": "2026-04-10T12:15Z",
+      "matchup": "J. Sinner @ F. Auger-Aliassime",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 64.1,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 0,
+        "away": 2,
+        "spread": -2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6413,
+      "brier": 0.25733138000000005,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173896",
+      "sport": "TENNIS",
+      "date": "2026-04-10T14:05Z",
+      "matchup": "A. Bublik @ C. Alcaraz",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 61.2,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6118,
+      "brier": 0.30139847999999997,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173908",
+      "sport": "TENNIS",
+      "date": "2026-04-11T11:40Z",
+      "matchup": "J. Sinner @ A. Zverev",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 59.8,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5977,
+      "brier": 0.32369058,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173907",
+      "sport": "TENNIS",
+      "date": "2026-04-12T13:10Z",
+      "matchup": "J. Sinner @ C. Alcaraz",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 54.4,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5443,
+      "brier": 0.41532498,
+      "availableFactors": 6,
+      "unavailableFactors": 3,
+      "warnings": []
+    },
+    {
+      "gameId": "173965",
+      "sport": "TENNIS",
+      "date": "2026-04-17T11:00Z",
+      "matchup": "F. Cerundolo @ A. Zverev",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.8,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5384,
+      "brier": 0.42614912,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174466",
+      "sport": "TENNIS",
+      "date": "2026-04-17T12:35Z",
+      "matchup": "C. Gauff @ K. Muchova",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.1,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4886,
+      "brier": 0.52305992,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174012",
+      "sport": "TENNIS",
+      "date": "2026-04-17T14:10Z",
+      "matchup": "L. Musetti @ A. Fils",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.4,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.496,
+      "brier": 0.508032,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174468",
+      "sport": "TENNIS",
+      "date": "2026-04-17T15:15Z",
+      "matchup": "M. Andreeva @ I. Swiatek",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.3,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4972,
+      "brier": 0.50561568,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174469",
+      "sport": "TENNIS",
+      "date": "2026-04-18T12:05Z",
+      "matchup": "K. Muchova @ E. Svitolina",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4703,
+      "brier": 0.56116418,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174470",
+      "sport": "TENNIS",
+      "date": "2026-04-18T14:40Z",
+      "matchup": "M. Andreeva @ E. Rybakina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5597,
+      "brier": 0.38772818000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174471",
+      "sport": "TENNIS",
+      "date": "2026-04-19T11:05Z",
+      "matchup": "K. Muchova @ E. Rybakina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 56,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5597,
+      "brier": 0.38772818000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "173971",
+      "sport": "TENNIS",
+      "date": "2026-04-19T11:40Z",
+      "matchup": "B. Shelton @ F. Cobolli",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.1,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5009,
+      "brier": 0.49820161999999996,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174017",
+      "sport": "TENNIS",
+      "date": "2026-04-19T14:10Z",
+      "matchup": "A. Fils @ A. Rublev",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.1,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5008,
+      "brier": 0.49840127999999995,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "174291",
+      "sport": "TENNIS",
+      "date": "2026-04-25T09:05Z",
+      "matchup": "D. Shnaider @ B. Bencic",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.5,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.545,
+      "brier": 0.41405,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174298",
+      "sport": "TENNIS",
+      "date": "2026-04-26T09:05Z",
+      "matchup": "C. Gauff @ S. Cirstea",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5199,
+      "brier": 0.46099202,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174293",
+      "sport": "TENNIS",
+      "date": "2026-04-26T13:45Z",
+      "matchup": "M. Kostyuk @ J. Pegula",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 57,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4299,
+      "brier": 0.6500280200000002,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174135",
+      "sport": "TENNIS",
+      "date": "2026-04-27T09:10Z",
+      "matchup": "C. Ruud @ A. Davidovich Fokina",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 53.7,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5365,
+      "brier": 0.42966450000000006,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174141",
+      "sport": "TENNIS",
+      "date": "2026-04-27T13:10Z",
+      "matchup": "L. Darderi @ F. Cerundolo",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.4,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4958,
+      "brier": 0.5084352799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174311",
+      "sport": "TENNIS",
+      "date": "2026-04-27T14:05Z",
+      "matchup": "C. Gauff @ L. Noskova",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4746,
+      "brier": 0.5520903199999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174142",
+      "sport": "TENNIS",
+      "date": "2026-04-28T09:10Z",
+      "matchup": "C. Norrie @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 68.4,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6837,
+      "brier": 0.20009138000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174148",
+      "sport": "TENNIS",
+      "date": "2026-04-28T09:10Z",
+      "matchup": "A. Fils @ T. Etcheverry",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 56.4,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5642,
+      "brier": 0.37984328,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174147",
+      "sport": "TENNIS",
+      "date": "2026-04-28T11:00Z",
+      "matchup": "L. Musetti @ J. Lehecka",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.6,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4938,
+      "brier": 0.5124768799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174304",
+      "sport": "TENNIS",
+      "date": "2026-04-28T11:10Z",
+      "matchup": "M. Andreeva @ L. Fernandez",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 54.4,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5443,
+      "brier": 0.41532498,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174150",
+      "sport": "TENNIS",
+      "date": "2026-04-28T19:10Z",
+      "matchup": "F. Cobolli @ D. Medvedev",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4823,
+      "brier": 0.5360265800000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174152",
+      "sport": "TENNIS",
+      "date": "2026-04-28T21:00Z",
+      "matchup": "A. Zverev @ J. Mensik",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 56.6,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5663,
+      "brier": 0.37619137999999996,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174303",
+      "sport": "TENNIS",
+      "date": "2026-04-29T18:05Z",
+      "matchup": "L. Noskova @ M. Kostyuk",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.1,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4988,
+      "brier": 0.50240288,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174155",
+      "sport": "TENNIS",
+      "date": "2026-04-29T20:00Z",
+      "matchup": "J. Lehecka @ A. Fils",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 50.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4914,
+      "brier": 0.51734792,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174316",
+      "sport": "TENNIS",
+      "date": "2026-04-30T14:05Z",
+      "matchup": "M. Andreeva @ H. Baptiste",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 53.9,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5392,
+      "brier": 0.42467328,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174153",
+      "sport": "TENNIS",
+      "date": "2026-04-30T18:15Z",
+      "matchup": "A. Zverev @ F. Cobolli",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 54.6,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.546,
+      "brier": 0.412232,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174159",
+      "sport": "TENNIS",
+      "date": "2026-05-01T14:10Z",
+      "matchup": "A. Fils @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 64,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.64,
+      "brier": 0.2592,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174314",
+      "sport": "TENNIS",
+      "date": "2026-05-02T15:05Z",
+      "matchup": "M. Kostyuk @ M. Andreeva",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 51.1,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4895,
+      "brier": 0.5212204999999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "174157",
+      "sport": "TENNIS",
+      "date": "2026-05-03T15:10Z",
+      "matchup": "A. Zverev @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 62.1,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6215,
+      "brier": 0.28652449999999996,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175987",
+      "sport": "TENNIS",
+      "date": "2026-05-09T14:05Z",
+      "matchup": "S. Cirstea @ A. Sabalenka",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 61.8,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.3819,
+      "brier": 0.76409522,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175939",
+      "sport": "TENNIS",
+      "date": "2026-05-09T19:25Z",
+      "matchup": "A. Kalinskaya @ B. Bencic",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 56.2,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4377,
+      "brier": 0.63236258,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175988",
+      "sport": "TENNIS",
+      "date": "2026-05-10T09:05Z",
+      "matchup": "H. Baptiste @ E. Svitolina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 55.8,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5583,
+      "brier": 0.39019778,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175325",
+      "sport": "TENNIS",
+      "date": "2026-05-10T09:10Z",
+      "matchup": "J. Lehecka @ C. Ruud",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.2,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4782,
+      "brier": 0.5445504800000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175329",
+      "sport": "TENNIS",
+      "date": "2026-05-10T13:10Z",
+      "matchup": "F. Cerundolo @ L. Musetti",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 51.3,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5127,
+      "brier": 0.47492258,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175286",
+      "sport": "TENNIS",
+      "date": "2026-05-10T16:00Z",
+      "matchup": "A. Bublik @ L. Tien",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.6,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5258,
+      "brier": 0.44973127999999996,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175297",
+      "sport": "TENNIS",
+      "date": "2026-05-10T16:05Z",
+      "matchup": "L. Darderi @ T. Paul",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 52.3,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4766,
+      "brier": 0.54789512,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175980",
+      "sport": "TENNIS",
+      "date": "2026-05-11T09:05Z",
+      "matchup": "L. Noskova @ S. Cirstea",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.3,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.487,
+      "brier": 0.526338,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175301",
+      "sport": "TENNIS",
+      "date": "2026-05-11T09:10Z",
+      "matchup": "A. Davidovich Fokina @ A. Rublev",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.2,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5316,
+      "brier": 0.43879712000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175945",
+      "sport": "TENNIS",
+      "date": "2026-05-11T10:50Z",
+      "matchup": "I. Jovic @ C. Gauff",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.4,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5439,
+      "brier": 0.41605442,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175944",
+      "sport": "TENNIS",
+      "date": "2026-05-11T12:45Z",
+      "matchup": "M. Andreeva @ E. Mertens",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 56,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5603,
+      "brier": 0.38667218,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175992",
+      "sport": "TENNIS",
+      "date": "2026-05-11T17:55Z",
+      "matchup": "I. Swiatek @ N. Osaka",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5253,
+      "brier": 0.45068018000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175302",
+      "sport": "TENNIS",
+      "date": "2026-05-12T09:10Z",
+      "matchup": "C. Ruud @ L. Musetti",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.7,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4929,
+      "brier": 0.51430082,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175317",
+      "sport": "TENNIS",
+      "date": "2026-05-12T10:40Z",
+      "matchup": "L. Tien @ R. Jodar",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4513,
+      "brier": 0.6021433799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175311",
+      "sport": "TENNIS",
+      "date": "2026-05-12T12:20Z",
+      "matchup": "A. Zverev @ L. Darderi",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 54.4,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4561,
+      "brier": 0.5916544200000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175948",
+      "sport": "TENNIS",
+      "date": "2026-05-12T17:05Z",
+      "matchup": "M. Andreeva @ C. Gauff",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.7,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5065,
+      "brier": 0.48708450000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175981",
+      "sport": "TENNIS",
+      "date": "2026-05-13T11:10Z",
+      "matchup": "I. Swiatek @ J. Pegula",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 55.5,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4453,
+      "brier": 0.61538418,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175343",
+      "sport": "TENNIS",
+      "date": "2026-05-13T13:10Z",
+      "matchup": "K. Khachanov @ C. Ruud",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.1,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5306,
+      "brier": 0.44067272,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175977",
+      "sport": "TENNIS",
+      "date": "2026-05-13T17:55Z",
+      "matchup": "E. Rybakina @ E. Svitolina",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 55.6,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4438,
+      "brier": 0.61871688,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175362",
+      "sport": "TENNIS",
+      "date": "2026-05-13T20:50Z",
+      "matchup": "L. Darderi @ R. Jodar",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.1,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5207,
+      "brier": 0.45945697999999996,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175346",
+      "sport": "TENNIS",
+      "date": "2026-05-14T11:10Z",
+      "matchup": "A. Rublev @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 69.1,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6906,
+      "brier": 0.19145672,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175976",
+      "sport": "TENNIS",
+      "date": "2026-05-14T13:05Z",
+      "matchup": "C. Gauff @ S. Cirstea",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5204,
+      "brier": 0.46003232000000005,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175986",
+      "sport": "TENNIS",
+      "date": "2026-05-14T20:15Z",
+      "matchup": "E. Svitolina @ I. Swiatek",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 52.4,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5239,
+      "brier": 0.45334241999999997,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175355",
+      "sport": "TENNIS",
+      "date": "2026-05-15T13:40Z",
+      "matchup": "L. Darderi @ C. Ruud",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 51.8,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4818,
+      "brier": 0.53706248,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175353",
+      "sport": "TENNIS",
+      "date": "2026-05-16T14:05Z",
+      "matchup": "D. Medvedev @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 68,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6798,
+      "brier": 0.20505608000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175983",
+      "sport": "TENNIS",
+      "date": "2026-05-16T16:05Z",
+      "matchup": "E. Svitolina @ C. Gauff",
+      "actualPick": "away",
+      "predictedPick": "none",
+      "correct": false,
+      "confidence": 50,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4999,
+      "brier": 0.50020002,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": [
+        "Projection engine disagreed before reconciliation; final pick uses orchestrator output."
+      ]
+    },
+    {
+      "gameId": "175402",
+      "sport": "TENNIS",
+      "date": "2026-05-17T15:20Z",
+      "matchup": "C. Ruud @ J. Sinner",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 66.5,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6651,
+      "brier": 0.22431601999999998,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "176098",
+      "sport": "TENNIS",
+      "date": "2026-05-21T16:20Z",
+      "matchup": "L. Fernandez @ V. Mboko",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.9,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5387,
+      "brier": 0.42559538,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175451",
+      "sport": "TENNIS",
+      "date": "2026-05-21T18:20Z",
+      "matchup": "A. de Minaur @ L. Darderi",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 50.1,
+      "actualScore": {
+        "home": 0,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5006,
+      "brier": 0.49880072,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175509",
+      "sport": "TENNIS",
+      "date": "2026-05-22T14:10Z",
+      "matchup": "A. Bublik @ L. Tien",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 54.2,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5415,
+      "brier": 0.42044450000000005,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175434",
+      "sport": "TENNIS",
+      "date": "2026-05-22T15:40Z",
+      "matchup": "T. Paul @ A. de Minaur",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 50.2,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4976,
+      "brier": 0.50481152,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175709",
+      "sport": "TENNIS",
+      "date": "2026-05-29T15:50Z",
+      "matchup": "J. Mensik @ A. de Minaur",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 54.1,
+      "actualScore": {
+        "home": 1,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4593,
+      "brier": 0.5847129799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175734",
+      "sport": "TENNIS",
+      "date": "2026-05-29T16:30Z",
+      "matchup": "T. Paul @ C. Ruud",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.6,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5257,
+      "brier": 0.44992098,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175580",
+      "sport": "TENNIS",
+      "date": "2026-05-30T09:10Z",
+      "matchup": "N. Osaka @ I. Jovic",
+      "actualPick": "away",
+      "predictedPick": "away",
+      "correct": true,
+      "confidence": 51.2,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5123,
+      "brier": 0.47570258000000004,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175712",
+      "sport": "TENNIS",
+      "date": "2026-05-30T10:05Z",
+      "matchup": "L. Tien @ F. Cobolli",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 50.3,
+      "actualScore": {
+        "home": 3,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5033,
+      "brier": 0.49342178000000003,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175583",
+      "sport": "TENNIS",
+      "date": "2026-05-30T17:20Z",
+      "matchup": "M. Keys @ V. Mboko",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 53.6,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.464,
+      "brier": 0.5745920000000001,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175574",
+      "sport": "TENNIS",
+      "date": "2026-05-31T09:05Z",
+      "matchup": "I. Swiatek @ M. Kostyuk",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 52.5,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5252,
+      "brier": 0.45087008,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175575",
+      "sport": "TENNIS",
+      "date": "2026-05-31T11:10Z",
+      "matchup": "B. Bencic @ E. Svitolina",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 57.4,
+      "actualScore": {
+        "home": 2,
+        "away": 1
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5739,
+      "brier": 0.36312242,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175762",
+      "sport": "TENNIS",
+      "date": "2026-05-31T17:25Z",
+      "matchup": "A. Rublev @ J. Mensik",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 52.9,
+      "actualScore": {
+        "home": 3,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 1,
+        "away": 2,
+        "spread": -1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4713,
+      "brier": 0.5590473799999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175540",
+      "sport": "TENNIS",
+      "date": "2026-06-01T12:30Z",
+      "matchup": "D. Shnaider @ M. Keys",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 55.9,
+      "actualScore": {
+        "home": 1,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.4411,
+      "brier": 0.6247384199999999,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175544",
+      "sport": "TENNIS",
+      "date": "2026-06-01T18:30Z",
+      "matchup": "N. Osaka @ A. Sabalenka",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 63.4,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 0,
+        "spread": 2,
+        "total": 2
+      },
+      "probabilityAssignedToActual": 0.6343,
+      "brier": 0.26747298,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    },
+    {
+      "gameId": "175568",
+      "sport": "TENNIS",
+      "date": "2026-06-02T09:05Z",
+      "matchup": "S. Cirstea @ M. Andreeva",
+      "actualPick": "home",
+      "predictedPick": "home",
+      "correct": true,
+      "confidence": 53.2,
+      "actualScore": {
+        "home": 2,
+        "away": 0
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 1,
+        "spread": 1,
+        "total": 3
+      },
+      "probabilityAssignedToActual": 0.5315,
+      "brier": 0.43898450000000006,
+      "availableFactors": 7,
+      "unavailableFactors": 2,
+      "warnings": []
+    }
+  ],
+  "warnings": [],
+  "dataQualityNote": "Approximate replay: final scores are real ESPN historical results, Elo is rolled forward chronologically, and ESPN recent-form/stat windows are capped before each event. Rebuilt context such as injuries, standings, weather, and provider enrichment can still reflect current availability instead of the exact pregame snapshot. Exact accuracy requires saved point-in-time GameContext fixtures."
+}

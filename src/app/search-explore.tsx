@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, useRef, memo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Dimensions } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,6 +16,7 @@ import {
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { getTeamColors } from '@/lib/team-colors';
+import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { TeamJersey } from '@/components/sports/TeamJersey';
 import { useSubscription } from '@/lib/subscription-context';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
@@ -65,6 +66,7 @@ const RESULT_INITIAL_RENDER_COUNT = 8;
 const RESULT_RENDER_BATCH_SIZE = 6;
 const RESULT_ROW_HEIGHT = 98;
 const SEARCH_DEBOUNCE_MS = 120;
+const { width: EXPLORE_SCREEN_WIDTH } = Dimensions.get('window');
 
 function afterFrame(task: () => void) {
   if (typeof requestAnimationFrame === 'function') {
@@ -99,6 +101,8 @@ const LiveDot = memo(function LiveDot() {
 // ─── SPORT BROWSE CARD ───
 const SPORT_CARD_W = 130;
 const SPORT_CARD_GAP = 14;
+const SPORT_CARD_SNAP_INTERVAL = SPORT_CARD_W + SPORT_CARD_GAP;
+const SPORT_CARD_RAIL_SIDE_PADDING = Math.max(20, (EXPLORE_SCREEN_WIDTH - SPORT_CARD_W) / 2);
 
 const SportCard = memo(function SportCard({ sport, count, onSelect }: { sport: string; count: number; onSelect: (sport: string) => void }) {
   const meta = SPORT_META[sport as Sport];
@@ -236,10 +240,12 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
 const ResultGameRow = memo(function ResultGameRow({
   game,
   onSelect,
+  onWarm,
   showModelSignals = false,
 }: {
   game: GameWithPrediction;
   onSelect: (game: GameWithPrediction) => void;
+  onWarm?: (game: GameWithPrediction) => void;
   showModelSignals?: boolean;
 }) {
   const live = isLiveGame(game);
@@ -259,9 +265,11 @@ const ResultGameRow = memo(function ResultGameRow({
   const homeScore = game.homeScore ?? 0;
   const showBadge = predictionDisplay && predictionDisplay.outcome !== 'none' && confidence !== null;
   const handlePress = useCallback(() => onSelect(game), [game, onSelect]);
+  const handlePressIn = useCallback(() => onWarm?.(game), [game, onWarm]);
 
   return (
     <Pressable
+      onPressIn={handlePressIn}
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
@@ -396,8 +404,44 @@ const RecentSearchRow = memo(function RecentSearchRow({
 
 const STORY_CARD_W = 180;
 const STORY_CARD_GAP = 16;
+const STORY_CARD_SNAP_INTERVAL = STORY_CARD_W + STORY_CARD_GAP;
+const STORY_CARD_RAIL_SIDE_PADDING = Math.max(20, (EXPLORE_SCREEN_WIDTH - STORY_CARD_W) / 2);
 
-const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress }: { game: GameWithPrediction; tone: StoryTone; title: string; subtitle: string; onPress: () => void }) {
+const SportCardRail = memo(function SportCardRail({ children }: { children: React.ReactNode }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexGrow: 0 }}
+      contentContainerStyle={{ paddingLeft: SPORT_CARD_RAIL_SIDE_PADDING, paddingRight: SPORT_CARD_RAIL_SIDE_PADDING }}
+      snapToInterval={SPORT_CARD_SNAP_INTERVAL}
+      snapToAlignment="start"
+      disableIntervalMomentum
+      decelerationRate="fast"
+    >
+      {children}
+    </ScrollView>
+  );
+});
+
+const StoryCardRail = memo(function StoryCardRail({ children }: { children: React.ReactNode }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexGrow: 0 }}
+      contentContainerStyle={{ paddingLeft: STORY_CARD_RAIL_SIDE_PADDING, paddingRight: STORY_CARD_RAIL_SIDE_PADDING }}
+      snapToInterval={STORY_CARD_SNAP_INTERVAL}
+      snapToAlignment="start"
+      disableIntervalMomentum
+      decelerationRate="fast"
+    >
+      {children}
+    </ScrollView>
+  );
+});
+
+const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress, onWarm }: { game: GameWithPrediction; tone: StoryTone; title: string; subtitle: string; onPress: () => void; onWarm?: () => void }) {
   const live = game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
   const accent = tone === 'live' ? LIVE_RED : tone === 'upset' ? MAROON : tone === 'soon' ? TEAL : tone === 'final' ? '#94a3b8' : tone === 'tossup' ? '#94a3b8' : TEAL;
   const sportMeta = SPORT_META[game.sport as Sport];
@@ -407,6 +451,7 @@ const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress
   const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
   return (
     <Pressable
+      onPressIn={onWarm}
       onPress={() => { if (!shouldHandlePress()) return; onPress(); }}
       accessibilityRole="button"
       accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
@@ -638,8 +683,8 @@ export default function SearchExploreScreen() {
   const normalizedDeferredQuery = deferredDebouncedQuery.trim();
   const isSearchSettling = !sportFilter && normalizedQuery.length > 0 && normalizedDeferredQuery !== normalizedQuery;
   const showResults = sportFilter !== null || normalizedQuery.length > 0;
-  const resultTitle = sportFilter ? displaySport(sportFilter) : normalizedQuery;
-  const displayedFilteredGames = isSearchSettling ? [] : filteredGames;
+  const resultTitle = sportFilter ? displaySport(sportFilter) : (isSearchSettling && normalizedDeferredQuery ? normalizedDeferredQuery : normalizedQuery);
+  const displayedFilteredGames = filteredGames;
   const hasExploreContent = recentSearches.length > 0
     || sportCounts.length > 0
     || liveGames.length > 0
@@ -689,9 +734,9 @@ export default function SearchExploreScreen() {
 
   const renderResultGame = useCallback(({ item }: { item: GameWithPrediction }) => (
     <View style={{ paddingHorizontal: 20 }}>
-      <ResultGameRow game={item} showModelSignals={isPremium} onSelect={navGame} />
+      <ResultGameRow game={item} showModelSignals={isPremium} onSelect={navGame} onWarm={warmGame} />
     </View>
-  ), [isPremium, navGame]);
+  ), [isPremium, navGame, warmGame]);
 
   const resultKeyExtractor = useCallback((item: GameWithPrediction) => item.id, []);
   const resultSeparator = useCallback(() => <View style={{ height: 12 }} />, []);
@@ -705,7 +750,7 @@ export default function SearchExploreScreen() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ fontSize: 10, fontWeight: '900', color: hexWithAlpha(TEAL, 0.9), letterSpacing: 2, marginBottom: 5 }}>
-                {sportFilter ? 'BROWSING SPORT' : 'SEARCH RESULTS'}
+                {isSearchSettling ? 'UPDATING RESULTS' : sportFilter ? 'BROWSING SPORT' : 'SEARCH RESULTS'}
               </Text>
               <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: '900', color: WHITE }} numberOfLines={1}>
                 {resultTitle}
@@ -723,7 +768,7 @@ export default function SearchExploreScreen() {
             ) : null}
           </View>
           <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(196,219,240,0.68)', marginTop: 5 }}>
-            {baseFilteredGames.length} match{baseFilteredGames.length !== 1 ? 'es' : ''}
+            {isSearchSettling ? 'Refreshing matches...' : `${baseFilteredGames.length} match${baseFilteredGames.length !== 1 ? 'es' : ''}`}
           </Text>
         </View>
 
@@ -763,7 +808,7 @@ export default function SearchExploreScreen() {
         </View>
       </View>
     );
-  }, [baseFilteredGames.length, clearSportFilter, resultTitle, sportFilter, statusFilter]);
+  }, [baseFilteredGames.length, clearSportFilter, isSearchSettling, resultTitle, sportFilter, statusFilter]);
 
   const emptyResults = useMemo(() => {
     if (isSearchSettling || gamesLoading) {
@@ -798,13 +843,13 @@ export default function SearchExploreScreen() {
                 BROWSE SPORTS
               </Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+            <SportCardRail>
               {sportCounts.map(({ sport, count }, i) => (
                 <View key={sport} style={{ marginRight: i === sportCounts.length - 1 ? 0 : SPORT_CARD_GAP }}>
                   <SportCard sport={sport} count={count} onSelect={handleSportTap} />
                 </View>
               ))}
-            </ScrollView>
+            </SportCardRail>
           </View>
         ) : null}
       </View>
@@ -875,7 +920,7 @@ export default function SearchExploreScreen() {
           renderItem={renderResultGame}
           keyExtractor={resultKeyExtractor}
           ItemSeparatorComponent={resultSeparator}
-          ListHeaderComponent={isSearchSettling ? null : resultsHeader}
+          ListHeaderComponent={resultsHeader}
           ListEmptyComponent={emptyResults}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -886,7 +931,7 @@ export default function SearchExploreScreen() {
           maxToRenderPerBatch={RESULT_RENDER_BATCH_SIZE}
           updateCellsBatchingPeriod={40}
           windowSize={7}
-          removeClippedSubviews
+          removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss} contentContainerStyle={{ paddingBottom: 60 }}>
@@ -925,7 +970,7 @@ export default function SearchExploreScreen() {
             {liveGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
                 <SectionHeader icon={<Radio size={14} color={LIVE_RED} />} label="HAPPENING NOW" title="Live games" accent={LIVE_RED} />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <StoryCardRail>
                   {liveGames.map((game, i) => (
                     <View key={`live-${game.id}`} style={storyRowKey(i, liveGames.length)}>
                       <StoryCard
@@ -933,11 +978,12 @@ export default function SearchExploreScreen() {
                         tone="live"
                         title="Live"
                         subtitle={`${game.awayScore ?? 0}-${game.homeScore ?? 0} · ${formatGameTime(game.sport, game.quarter, game.clock) ?? 'In progress'}`}
+                        onWarm={() => warmGame(game)}
                         onPress={() => navGame(game)}
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </StoryCardRail>
               </View>
             ) : null}
 
@@ -947,20 +993,20 @@ export default function SearchExploreScreen() {
                   <View style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: TEAL, marginRight: 11 }} />
                   <Text style={{ fontSize: 11, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 2 }}>BROWSE THE SLATE</Text>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <SportCardRail>
                   {sportCounts.map(({ sport, count }, i) => (
                     <View key={sport} style={{ marginRight: i === sportCounts.length - 1 ? 0 : SPORT_CARD_GAP }}>
                       <SportCard sport={sport} count={count} onSelect={handleSportTap} />
                     </View>
                   ))}
-                </ScrollView>
+                </SportCardRail>
               </View>
             ) : null}
 
             {todaySchedule.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
                 <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="TODAY" title="Scheduled games" accent={TEAL} />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <StoryCardRail>
                   {todaySchedule.map((game, i) => (
                     <View key={`today-${game.id}`} style={storyRowKey(i, todaySchedule.length)}>
                       <StoryCard
@@ -968,18 +1014,19 @@ export default function SearchExploreScreen() {
                         tone="soon"
                         title={fmtTime(game.gameTime)}
                         subtitle={`${displaySport(game.sport)} · ${game.venue && game.venue !== 'TBD' ? game.venue : 'Scheduled'}`}
+                        onWarm={() => warmGame(game)}
                         onPress={() => navGame(game)}
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </StoryCardRail>
               </View>
             ) : null}
 
             {finalGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
                 <SectionHeader icon={<Clock size={14} color={MAROON} />} label="RECENT" title="Final scores" accent={MAROON} />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <StoryCardRail>
                   {finalGames.map((game, i) => (
                     <View key={`final-${game.id}`} style={storyRowKey(i, finalGames.length)}>
                       <StoryCard
@@ -987,18 +1034,19 @@ export default function SearchExploreScreen() {
                         tone="final"
                         title="Final"
                         subtitle={`${game.awayTeam.name} ${game.awayScore ?? 0} · ${game.homeTeam.name} ${game.homeScore ?? 0}`}
+                        onWarm={() => warmGame(game)}
                         onPress={() => navGame(game)}
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </StoryCardRail>
               </View>
             ) : null}
 
             {tossUpGames.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
                 <SectionHeader icon={<Flame size={14} color={TEAL} />} label="CLOSEST READS" title="Toss-up watch" accent={TEAL} />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <StoryCardRail>
                   {tossUpGames.map((game, i) => (
                     <View key={`toss-${game.id}`} style={storyRowKey(i, tossUpGames.length)}>
                       <StoryCard
@@ -1006,18 +1054,19 @@ export default function SearchExploreScreen() {
                         tone="tossup"
                         title="Toss-up"
                         subtitle={`Model has this close to even · ${fmtTime(game.gameTime)}`}
+                        onWarm={() => warmGame(game)}
                         onPress={() => navGame(game)}
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </StoryCardRail>
               </View>
             ) : null}
 
             {startingSoon.length > 0 ? (
               <View style={{ marginBottom: 32 }}>
                 <SectionHeader icon={<CalendarClock size={14} color={TEAL} />} label="NEXT WINDOW" title="Starting soon" accent={TEAL} />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <StoryCardRail>
                   {startingSoon.map((game, i) => (
                     <View key={`soon-${game.id}`} style={storyRowKey(i, startingSoon.length)}>
                       <StoryCard
@@ -1025,11 +1074,12 @@ export default function SearchExploreScreen() {
                         tone="soon"
                         title={fmtTime(game.gameTime)}
                         subtitle={`${displaySport(game.sport)} · ${game.venue && game.venue !== 'TBD' ? game.venue : 'Scheduled'}`}
+                        onWarm={() => warmGame(game)}
                         onPress={() => navGame(game)}
                       />
                     </View>
                   ))}
-                </ScrollView>
+                </StoryCardRail>
               </View>
             ) : null}
 

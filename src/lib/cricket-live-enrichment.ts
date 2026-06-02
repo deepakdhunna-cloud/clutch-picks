@@ -33,7 +33,7 @@ type ESPNCricketCompetitor = {
 
 type ESPNCricketEvent = {
   id: string;
-  competitions?: Array<{
+  competitions?: {
     competitors?: ESPNCricketCompetitor[];
     status?: {
       period?: number;
@@ -44,7 +44,7 @@ type ESPNCricketEvent = {
         shortDetail?: string;
       };
     };
-  }>;
+  }[];
 };
 
 type ESPNCricketScoreboard = {
@@ -60,9 +60,9 @@ type ESPNCricketStat = {
 type ESPNCricketPlayerLineScore = {
   linescores?: ESPNCricketPlayerLineScore[];
   statistics?: {
-    categories?: Array<{
+    categories?: {
       stats?: ESPNCricketStat[];
-    }>;
+    }[];
   };
 };
 
@@ -77,14 +77,14 @@ type ESPNCricketRosterEntry = {
 
 type ESPNCricketSummary = {
   header?: {
-    competitions?: Array<{
+    competitions?: {
       commentaries?: Record<string, ESPNCricketCommentary> | ESPNCricketCommentary[];
       competitors?: ESPNCricketSummaryCompetitor[];
-    }>;
+    }[];
   };
-  rosters?: Array<{
+  rosters?: {
     roster?: ESPNCricketRosterEntry[];
-  }>;
+  }[];
 };
 
 type ESPNCricketOverLine = {
@@ -95,12 +95,12 @@ type ESPNCricketOverLine = {
 
 type ESPNCricketSummaryCompetitor = {
   score?: string;
-  linescores?: Array<{
+  linescores?: {
     isBatting?: boolean | number;
     statistics?: {
       overs?: ESPNCricketOverLine[][];
     };
-  }>;
+  }[];
 };
 
 type ESPNCricketCommentary = {

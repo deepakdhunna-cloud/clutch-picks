@@ -808,7 +808,6 @@ function SportConstruction({
   reducedDetail?: boolean;
 }) {
   if (variant === 'basketball' || variant === 'college-basketball') {
-    const college = variant === 'college-basketball';
     return (
       <>
         <Path d="M35 9 L50 29 L65 9" stroke={`url(#${ids.trim})`} strokeWidth={5.6} fill="none" strokeLinecap="round" strokeLinejoin="round" />

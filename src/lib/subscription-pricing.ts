@@ -1,6 +1,8 @@
-export const PRO_MONTHLY_PRICE_FALLBACK = '$6.99';
-export const PRO_MONTHLY_PRICE_COPY = `${PRO_MONTHLY_PRICE_FALLBACK}/mo`;
-export const PRO_MONTHLY_HAS_THREE_DAY_TRIAL = true;
+import { PAYWALL_COPY } from './subscription-config';
+
+export const PRO_MONTHLY_PRICE_FALLBACK = PAYWALL_COPY.monthlyPrice;
+export const PRO_MONTHLY_PRICE_COPY = PAYWALL_COPY.shortPrice;
+export const PRO_MONTHLY_HAS_THREE_DAY_TRIAL = PAYWALL_COPY.hasThreeDayTrial;
 
 type ResolvePaywallPriceOptions = {
   useRevenueCatTestStore?: boolean;
@@ -10,9 +12,7 @@ export function resolvePaywallPriceString(
   storePriceString?: string | null,
   options: ResolvePaywallPriceOptions = {},
 ): string {
-  if (options.useRevenueCatTestStore) {
-    return PRO_MONTHLY_PRICE_FALLBACK;
-  }
-
-  return storePriceString?.trim() || PRO_MONTHLY_PRICE_FALLBACK;
+  void storePriceString;
+  void options;
+  return PRO_MONTHLY_PRICE_FALLBACK;
 }

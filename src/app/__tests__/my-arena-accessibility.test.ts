@@ -28,4 +28,34 @@ describe('my arena accessibility', () => {
     expect(arenaSource).toContain('accessibilityLabel={`Preview Pro: ${title}`}');
     expect(arenaSource).toContain('accessibilityHint="Opens Clutch Picks Pro"');
   });
+
+  it('labels expandable intel, model-grade cards, matchup cards, and prep tabs', () => {
+    expect(arenaSource).toContain('accessibilityLabel={isLong ? (expanded ? `Collapse ${title} live intel` : `Read full ${title} live intel`) : undefined}');
+    expect(arenaSource).toContain('accessibilityState={isLong ? { expanded } : undefined}');
+    expect(arenaSource).toContain('accessibilityLabel={`Open model grade for ${game.awayTeam.name} at ${game.homeTeam.name}`}');
+    expect(arenaSource).toContain('accessibilityLabel={expanded ? `Collapse matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}` : `Expand matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}');
+    expect(arenaSource).toContain('accessibilityLabel={`Open game details for ${game.awayTeam.name} at ${game.homeTeam.name}`}');
+    expect(arenaSource).toContain('accessibilityLabel={`${label} prep tab, ${count} matchup${count === 1 ? \'\': \'s\'}`}');
+  });
+
+  it('keeps My Arena tennis live cards on the compact player-score layout', () => {
+    expect(arenaSource).toContain("import { TennisScoreGrid } from '@/components/sports/TennisScoreGrid';");
+    expect(arenaSource).toContain('renderTennisBody');
+    expect(arenaSource).toContain('tennisScoreScale = 0.82');
+    expect(arenaSource).toContain('compactTennisPlayerName');
+    expect(arenaSource).toContain('variant="rail"');
+  });
+
+  it('keeps the My Arena live rail on exact centered snap correction', () => {
+    expect(arenaSource).toContain('const liveRailRef = useRef<FlatList<GameWithPrediction> | null>(null);');
+    expect(arenaSource).toContain('ref={liveRailRef}');
+    expect(arenaSource).toContain('onLiveRailLayout');
+    expect(arenaSource).toContain('const liveVisibleRailWidth = Math.min(liveRailWidth, SW);');
+    expect(arenaSource).toContain('LIVE_RAIL_PAGER_GUTTER_CORRECTION');
+    expect(arenaSource).toContain('ListHeaderComponent={<View style={{ width: liveRailEdgeSpacer }} />}');
+    expect(arenaSource).toContain('ListFooterComponent={<View style={{ width: liveRailEdgeSpacer }} />}');
+    expect(arenaSource).toContain('snapToOffsets={liveSnapOffsets}');
+    expect(arenaSource).toContain('key={`live-rail-${Math.round(liveCardWidth)}-${liveSportFilter}-${liveSearch.trim()}`}');
+    expect(arenaSource).toContain('snapLiveRail(event, true)');
+  });
 });

@@ -337,3 +337,52 @@ SHIPPED + DEPLOYED (commit fcb5ef4; Railway deploy 2026-05-29). POST-DEPLOY: /he
 2.11.0; live spot-check of 48 predictions -> 0 confident-pick-with-near-tie-line inconsistencies. Stale
 pre-deploy stored snapshots (decimal NBA, games-based tennis) regenerate to the new format as the slate
 refreshes. Mobile (prediction-display/projection-display) ships on the next app build/reload.
+
+### Run 3 — Elo unfreeze + cache TTL; full-scale validated-but-held (2026-06-02)
+MEASURE (live /api/calibration, n=1635): ALL acc 56.3%, Brier 0.244 (barely > random). MLB 52.2%
+(n727, 60-65 band +24pt over-confident), MLS 48.1%, NBA 67.7%/EPL 64.8%/TENNIS 59.7% healthy but
+under-confident (NBA 50-55 band wins 69%). 57% of all picks compressed into the 50-55% band.
+DIAGNOSE (6-dim adversarial workflow, 32 agents, 20 verified findings): two root causes —
+(1) Elo FROZEN: updateEloAfterGame has no runtime caller, no Elo cron, grading never writes ratings →
+rating_diff (0.40 weight, the dominant factor) reads stale/default 1500. (2) systemic under-confidence
+(full-scale flag OFF → rating delta shrunk ~60% pre-logistic).
+
+SHIPPED (validated, low-risk):
+- S2 Elo refresh cron (worker.ts): wired the never-called runEloUpdate into a guarded daily 08:00 UTC
+  job over the 10 team-sports; added fetchLeagueTeamIds (espnStats.ts, ESPN teams endpoint). Failsafe —
+  any league that errors is skipped, ratings stay as-is. VALIDATED via new REPLAY_FREEZE_ELO harness
+  A/B (frozen all-1500 vs rolled, legacy, 180d): overall Brier 0.483→0.476, NBA 0.474→0.454, NHL
+  0.491→0.485, MLB +0.005 (flat — weak baseball Elo). Accuracy at n40 too noisy (frozen MLB 70% was a
+  lucky sample); Brier is the clean signal and shows rolled Elo is better-or-neutral everywhere.
+- S3 eloCache TTL (lib/elo.ts): cache was permanent → the web process would never see the worker cron's
+  writes (separate processes). Added 6h TTL (entries store fetchedAt; getEloRating re-reads when stale).
+  Unit-tested (proves stale re-read). Precondition for S2 to reach the serving process.
+
+HELD (validated net-positive but trips a guardrail — needs a conflict-aware fix first):
+- S1 full-scale rating (#2): powered 180d A/B (n40/league) confirmed net-positive — overall acc
+  58.3→59.2, confidence finally aligns with accuracy (NBA conf 56→65 for a ~65% model, NHL 54→57,
+  MLB 55→58, no acc regression). BUT enabling it trips the NBA playoff thin-data guardrail test: a
+  cold+injured higher-Elo home team vs a red-hot healthy away team → full-scale lets stale Elo + home
+  court drown the form signal and wrongly favors the cold team. Root cause: full-scale takes Elo at full
+  scale while other factors enter weight-diluted, so Elo dominates when signals CONFLICT. Landed a
+  partial fix (sumRatingDelta eloScale: honors any rating_diff weight reduction) but it's necessary-not-
+  sufficient (the canonical conflict case still flips). Kept flag OFF by default; needs a conflict-aware
+  down-weight (shrink Elo when trusted factors strongly disagree) before enabling. Added REPLAY_FREEZE_ELO
+  diagnostic to the replay harness.
+DEFERRED (verifiers killed as overfit/small-n): per-league temperature recalibration (non-monotonic
+curves), MLB structural change (Elo genuinely weak; baseball is hard), MLS over-reaction (n129 within
+CI of 50%), all IPL tuning (n10 noise). 461 backend tests pass, typecheck clean. NOT yet deployed.
+
+### Run 3 UPDATE — full-scale UN-HELD: conflict-aware fix resolves the regression
+Built the conflict-aware blend in sumRatingDelta (index.ts): the Elo base blends back toward its legacy
+weight-shrunk value in proportion to how strongly the trusted non-rating factors OPPOSE it
+(opposition = min(1, |adjustments| / |legacyBase|)). Agreeing signals keep the full decompression;
+strong disagreement falls back to balanced legacy. Result: the NBA playoff thin-data guardrail PASSES
+under full-scale ON, and the decompression win SURVIVES. Re-validated on the powered 240-day replay
+(n=100/league, rolled Elo), OFF vs ON: overall acc 58.0→58.7 (NBA flat 66, NHL 53→55, MLB flat 55 — no
+regression), Brier improves in EVERY league (NBA 0.439→0.434, MLB 0.480→0.476, NHL 0.484→0.480, overall
+0.468→0.464), confidence aligns with accuracy (NBA conf 59.9→67.7 for a 66% model). GRADUATED full-scale
+to ON by default (ENGINE_FULL_SCALE_RATING=false to force legacy). All 462 backend tests pass under the
+new default, typecheck clean. This cycle ships S1 (full-scale, conflict-aware) + S2 (Elo unfreeze cron) +
+S3 (cache TTL) together — both engine root causes (frozen Elo + under-confidence compression) fixed and
+validated. NOT yet deployed (awaiting authorization).

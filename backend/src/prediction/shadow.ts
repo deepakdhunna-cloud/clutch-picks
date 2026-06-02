@@ -54,6 +54,7 @@ import {
   lookupUclTravelInfo,
 } from "../lib/uclVerifiedData";
 import { fetchMarketConsensus } from "../lib/sharpApi";
+import { fetchEspnMarketConsensus } from "../lib/espnOdds";
 import { buildMarketConsensusFromGameOdds } from "./market";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "./seasonContext";
 import type { SoccerStakes } from "./types";
@@ -359,8 +360,19 @@ export async function buildGameContext(
     sport === "TENNIS" && awayTennisProfile?.form?.results.length
       ? awayTennisProfile.form
       : awayForm;
+  // Market consensus priority: paid SharpAPI (if configured) > FREE ESPN
+  // moneyline consensus (real DraftKings line de-vigged to a win probability) >
+  // the weak spread-only fallback derived from the game shell. The ESPN
+  // moneyline path is the no-cost market anchor when SHARPAPI_KEY is unset; it
+  // is gated behind ENGINE_ESPN_MARKET so its accuracy lift can be A/B'd on the
+  // backtest before it carries weight in production.
+  const espnMarketConsensus =
+    sharpMarketConsensus || process.env.ENGINE_ESPN_MARKET === "false"
+      ? null
+      : await fetchEspnMarketConsensus(sport, game.id);
   const marketConsensus =
     sharpMarketConsensus ??
+    espnMarketConsensus ??
     buildMarketConsensusFromGameOdds({
       sport,
       marketFavorite: game.marketFavorite,

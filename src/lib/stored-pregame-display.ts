@@ -103,7 +103,7 @@ function t20RunsFromRunRate(rate: number | null): number | null {
   return clamp(rate * 20, 80, 240);
 }
 
-function averageFinite(values: Array<number | null>): number | null {
+function averageFinite(values: (number | null)[]): number | null {
   const finite = values.filter((value): value is number => value !== null && Number.isFinite(value));
   if (finite.length === 0) return null;
   return finite.reduce((sum, value) => sum + value, 0) / finite.length;

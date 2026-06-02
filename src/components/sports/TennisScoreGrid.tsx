@@ -34,7 +34,7 @@ type TennisScoreColumn = {
   total?: boolean;
 };
 
-type Variant = 'compact' | 'detail';
+type Variant = 'rail' | 'compact' | 'detail';
 
 function tennisPoint(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -255,11 +255,12 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
     );
   }
 
-  const rowStyle = detailed ? styles.detailRow : styles.compactRow;
-  const teamCellStyle = detailed ? styles.detailTeamCell : styles.compactTeamCell;
-  const baseCellStyle = detailed ? styles.detailScoreCell : styles.compactScoreCell;
-  const activeCellStyle = detailed ? styles.detailActiveCell : styles.compactActiveCell;
-  const textStyle = detailed ? styles.detailScoreText : styles.compactScoreText;
+  const rail = variant === 'rail';
+  const rowStyle = rail ? styles.railRow : detailed ? styles.detailRow : styles.compactRow;
+  const teamCellStyle = rail ? styles.compactTeamCell : detailed ? styles.detailTeamCell : styles.compactTeamCell;
+  const baseCellStyle = rail ? styles.railScoreCell : detailed ? styles.detailScoreCell : styles.compactScoreCell;
+  const activeCellStyle = rail ? styles.railActiveCell : detailed ? styles.detailActiveCell : styles.compactActiveCell;
+  const textStyle = rail ? styles.railScoreText : detailed ? styles.detailScoreText : styles.compactScoreText;
   const totalStyle = detailed ? styles.detailTotalCell : null;
 
   const renderRow = (
@@ -268,7 +269,7 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
     accent: string,
     abbreviation?: string,
   ) => (
-    <View style={[rowStyle, side === 'home' ? styles.compactTopRow : null]}>
+    <View style={[rowStyle, side === 'home' ? (rail ? styles.railTopRow : styles.compactTopRow) : null]}>
       {withTeams ? (
         <View style={teamCellStyle}>
           <View style={[styles.teamBadge, { backgroundColor: accent }]}>
@@ -284,7 +285,7 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
           style={[
             baseCellStyle,
             column.active && activeCellStyle,
-            index > 0 && (detailed ? styles.detailCellGap : styles.compactCellGap),
+            index > 0 && (rail ? styles.railCellGap : detailed ? styles.detailCellGap : styles.compactCellGap),
             column.total && totalStyle,
           ]}
         >
@@ -294,11 +295,12 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
             minimumFontScale={detailed ? 0.74 : 1}
             allowFontScaling={false}
             style={[
-              textStyle,
-              column.active && styles.activeScoreText,
-              column.total && styles.totalScoreText,
-              values[index] === '' && styles.emptyScoreText,
-            ]}
+            textStyle,
+            column.active && styles.activeScoreText,
+            rail && column.active && styles.railActiveScoreText,
+            column.total && styles.totalScoreText,
+            values[index] === '' && styles.emptyScoreText,
+          ]}
           >
             {values[index] || '-'}
           </Text>
@@ -308,7 +310,7 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
   );
 
   return (
-    <View style={styles.compactShell}>
+    <View style={rail ? styles.railShell : styles.compactShell}>
       {renderRow('home', columns.map((column) => column.home), homeColor, game.homeTeam.abbreviation)}
       {renderRow('away', columns.map((column) => column.away), awayColor, game.awayTeam.abbreviation)}
     </View>
@@ -318,6 +320,10 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
 const styles = StyleSheet.create({
   compactShell: {
     marginTop: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  railShell: {
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -375,6 +381,15 @@ const styles = StyleSheet.create({
   compactTopRow: {
     marginBottom: 1,
   },
+  railRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 26,
+  },
+  railTopRow: {
+    marginBottom: 3,
+  },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,8 +443,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(180,211,235,0.16)',
   },
+  railScoreCell: {
+    width: 21,
+    height: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  railActiveCell: {
+    width: 32,
+    height: 25,
+    borderRadius: 10,
+    backgroundColor: 'rgba(45,54,68,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(180,211,235,0.30)',
+    shadowColor: '#7A9DB8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+  },
   compactCellGap: {
     marginLeft: 11,
+  },
+  railCellGap: {
+    marginLeft: 6,
   },
   detailScoreCell: {
     width: 38,
@@ -484,6 +520,18 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontFamily: 'VT323_400Regular',
     letterSpacing: 0.4,
+  },
+  railScoreText: {
+    color: 'rgba(248,250,252,0.9)',
+    fontSize: 22,
+    lineHeight: 27,
+    fontFamily: 'VT323_400Regular',
+    letterSpacing: 0.35,
+    textAlign: 'center',
+  },
+  railActiveScoreText: {
+    lineHeight: 23,
+    transform: [{ translateY: -1 }],
   },
   detailScoreText: {
     color: 'rgba(248,250,252,0.9)',

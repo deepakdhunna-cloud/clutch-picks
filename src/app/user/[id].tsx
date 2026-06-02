@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { User, ArrowLeft, Lock, UserPlus, UserMinus, Trophy, Target, Flame, CheckCircle2, XCircle, Activity, Flag, Ban } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -11,10 +9,10 @@ import { useSession } from '@/lib/auth/use-session';
 import { useUserProfile, useIsFollowing, useFollowUser, useUnfollowUser, useUserPickStats, useBlockUser, useReportUser } from '@/hooks/useSocial';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
-import * as Haptics from 'expo-haptics';
 import { MAROON, TEAL, WIN, LOSS } from '@/lib/theme';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';
+import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 
 const GLASS_BG = 'rgba(4,5,10,0.97)';
 const GLASS_BORDER = 'rgba(255,255,255,0.13)';
@@ -303,17 +301,13 @@ export default function UserProfileScreen() {
                     overflow: 'hidden',
                   }}
                 >
-                  {profile.image ? (
-                    <Image
-                      source={{ uri: profile.image }}
+                  <ProfileAvatarImage
+                    uri={profile.image}
                       style={{ width: 80, height: 80, borderRadius: 40 }}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      transition={160}
-                    />
-                  ) : (
+                    recyclingKey={profile.id}
+                  >
                     <Text style={{ color: '#FFFFFF', fontSize: 26, fontWeight: '800' }}>{displayInitials}</Text>
-                  )}
+                  </ProfileAvatarImage>
                 </View>
 
                 <View style={{ flex: 1 }}>
