@@ -386,3 +386,34 @@ to ON by default (ENGINE_FULL_SCALE_RATING=false to force legacy). All 462 backe
 new default, typecheck clean. This cycle ships S1 (full-scale, conflict-aware) + S2 (Elo unfreeze cron) +
 S3 (cache TTL) together — both engine root causes (frozen Elo + under-confidence compression) fixed and
 validated. NOT yet deployed (awaiting authorization).
+
+### Run 4 — Accuracy push (free, no paid APIs) — SHIPPED + DEPLOYED (2026-06-02)
+User: recent picks "didn't do well"; calibration tweaks ≠ accuracy; APIs too expensive → find the free
+workaround. Accuracy-only adversarial hunt (33 agents) + extensive leak-aware replay A/Bs.
+ROOT CAUSE of low accuracy: the engine is a FACTOR-ONLY model near its ceiling (NBA 66/EPL 64 maxed),
+with the single biggest predictor — the betting market — at 6-10% weight and no real odds feed
+(SHARPAPI_KEY unset). FREE WORKAROUND FOUND: ESPN core-odds API serves real DraftKings moneylines
+(home/away/draw) for every major league, free, no key, INCLUDING historical games (so it's backtestable).
+SHIPPED (all free, default-on, validated on the 240d n=100/league replay):
+- Free ESPN market anchor (lib/espnOdds.ts → de-vig → MarketConsensus, wired in shadow.ts). LEAGUE-AWARE
+  weight (index.ts marketWeightForSport): heavy where the factor model is weak (MLB 0.65, soccer 0.60,
+  NHL 0.40), light where it's strong (NBA 0.15 — our model beats the line). resolveBlendOutcome lets a
+  CONFIDENT market flip the pick (relaxes preserveNonMarketOutcome); permissive flip default 0.52.
+- MLB starting-pitcher zero-out bug fix (factors/mlb.ts): ESPN-only pitchers had undefined IP →
+  regression×0 → ace contributed nothing. Now regress against a 70-IP prior when ERA present.
+- MLS draw-form bug fix (factors/base.ts): draws now count 0.5 in the win-rate (were denominator-only).
+- Tennis player-Elo (lib/tennisElo.ts + worker cron): rolls per-PLAYER Elo from ESPN tennis results
+  (ESPN-consistent ids, no Sackmann name-matching), persists via the proven initializeEloFromSchedule.
+  The audit's strongest lever (replay +5-8 picks); lands in prod as the daily cron runs.
+- Pick-STABILITY lock (games.ts): strengthened the existing shouldPromotePredictionUpdate gate —
+  MATERIAL_PICK_FLIP_LEAD_PP 5→7. A shown pick only flips when the new side is decisively ahead (>=7pp,
+  the signature of real news); sits AFTER the market-flip so the heavy market weight can't chase the
+  line tick-by-tick. Betting-product trust requirement from the user.
+- (Earlier this session, also shipped here) full-scale rating (conflict-aware, default ON), Elo-unfreeze
+  daily cron + eloCache TTL.
+HEADLINE replay A/B (original engine vs full package, n=100/league): overall acc 52.4→54.2 (+1.8);
+MLB 53→57 (+4), EPL 46→49 (+3), NHL 53→54, MLS 44→45, NBA flat 66 but confidence 60→67 (now honest).
+Plus tennis +5-8 (prod, as cron runs). 468 backend tests pass, typecheck clean. Honest ceiling: free
+data buys incremental, league-specific gains — NOT a jump to 65% across the board.
+DEPLOYED: web (clutch-picks) + worker (clutch-picks-worker), both /health 200, engine 2.11.0.
+NOT yet done: NHL real-starting-goalie (+2-4, needs a new ESPN athlete-stats fetch) — fast-follow.
