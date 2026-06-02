@@ -27,6 +27,16 @@ describe('home accessibility', () => {
     expect(homeSource).toContain('minHeight: 44');
   });
 
+  it('uses a shared slight blur surface for home filter pills', () => {
+    expect(homeSource).toContain("import { BlurView } from 'expo-blur';");
+    expect(homeSource).toContain('const HOME_FILTER_PILL_BLUR_INTENSITY = 18;');
+    expect(homeSource).toContain('const HomeFilterPillSurface = memo');
+    expect(homeSource).toContain('<BlurView intensity={HOME_FILTER_PILL_BLUR_INTENSITY} tint="dark" style={StyleSheet.absoluteFillObject} />');
+    expect(homeSource).toContain('<HomeFilterPillSurface active={!selectedLiveSportFilter}>');
+    expect(homeSource).toContain('<HomeFilterPillSurface active={isChipSelected}>');
+    expect(homeSource).toContain('<HomeFilterPillSurface active={active}>');
+  });
+
   it('exposes sport tiles and live/game cards as named buttons', () => {
     expect(sportCardSource).toContain('accessibilityLabel={`${displaySport(sport)}, ${gameCount} game${gameCount === 1 ? \'\' : \'s\'}`}');
     expect(sportCardSource).toContain('accessibilityState={{ selected: isSelected }}');

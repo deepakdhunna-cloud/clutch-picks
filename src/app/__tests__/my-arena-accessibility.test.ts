@@ -137,10 +137,11 @@ describe('my arena accessibility', () => {
 
   it('keeps live intel cards compact and avoids hiding normal-length reads behind tap-to-read-more', () => {
     expect(arenaSource).toContain('const INTEL_BODY_COLLAPSE_THRESHOLD = 220;');
-    expect(arenaSource).toContain('const LIVE_INTEL_CARD_GAP = 16;');
+    expect(arenaSource).toContain('const LIVE_INTEL_CARD_GAP = 22;');
     expect(arenaSource).toContain('body.length > INTEL_BODY_COLLAPSE_THRESHOLD');
     expect(arenaSource).toContain('body.substring(0, INTEL_BODY_COLLAPSE_THRESHOLD)');
-    expect(arenaSource).toContain('marginBottom: LIVE_INTEL_CARD_GAP');
+    expect(arenaSource).toContain('marginBottom: i === intel.length - 1 ? 0 : LIVE_INTEL_CARD_GAP');
+    expect(arenaSource).not.toContain('marginBottom: LIVE_INTEL_CARD_GAP,');
     expect(arenaSource).not.toContain('body.length > 140');
     expect(arenaSource).not.toContain('body.substring(0, 140)');
     expect(arenaSource).not.toContain('whether they control the next pressure moment too');

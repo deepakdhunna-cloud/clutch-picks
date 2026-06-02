@@ -65,7 +65,7 @@ const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENN
 const ARENA_SIDE_PADDING = 20;
 const ARENA_SECTION_GAP = 28;
 const ARENA_CARD_GAP = 18;
-const LIVE_INTEL_CARD_GAP = 16;
+const LIVE_INTEL_CARD_GAP = 22;
 const INTEL_BODY_COLLAPSE_THRESHOLD = 220;
 const MODE_SEGMENT_GAP = 8;
 const MODES = ['Game Day', 'Prep Mode', 'Review'] as const;
@@ -2040,7 +2040,6 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
       accessibilityLabel={isLong ? (expanded ? `Collapse ${title} live intel` : `Read full ${title} live intel`) : undefined}
       accessibilityState={isLong ? { expanded } : undefined}
       style={({ pressed }) => ({
-        marginBottom: LIVE_INTEL_CARD_GAP,
         borderRadius: 14,
         opacity: pressed && isLong ? 0.9 : 1,
         transform: [{ scale: pressed && isLong ? 0.992 : 1 }],
@@ -2108,7 +2107,9 @@ const LiveIntelStage = memo(function LiveIntelStage({ game, intel }: { game: Gam
   return (
     <View style={{ paddingHorizontal: ARENA_SIDE_PADDING, marginTop: 12, marginBottom: ARENA_SECTION_GAP }}>
       {intel.map((item, i) => (
-        <IntelCard key={`${game.id}-${item.title}-${i}`} type={item.type} title={item.title} body={item.body} />
+        <View key={`${game.id}-${item.title}-${i}`} style={{ marginBottom: i === intel.length - 1 ? 0 : LIVE_INTEL_CARD_GAP }}>
+          <IntelCard type={item.type} title={item.title} body={item.body} />
+        </View>
       ))}
     </View>
   );

@@ -1,4 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, Platform, StyleSheet } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -25,6 +25,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
 import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
@@ -44,9 +45,35 @@ const SEARCH_RESULT_ITEM_HEIGHT = 88;
 const HOME_LIVE_CARD_WIDTH = 300;
 const HOME_LIVE_CARD_GAP = 10;
 const HOME_LIVE_CARD_SNAP_INTERVAL = HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP;
+const HOME_FILTER_PILL_HEIGHT = 44;
+const HOME_FILTER_PILL_RADIUS = 22;
+const HOME_FILTER_PILL_BLUR_INTENSITY = 18;
+const HOME_FILTER_PILL_ACTIVE_GRADIENT = ['rgba(139,10,31,0.84)', 'rgba(122,157,184,0.74)'] as const;
 
 const HomeLiveRailSeparator = memo(function HomeLiveRailSeparator() {
   return <View style={{ width: HOME_LIVE_CARD_GAP }} />;
+});
+
+const HomeFilterPillSurface = memo(function HomeFilterPillSurface({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <View style={{ minHeight: HOME_FILTER_PILL_HEIGHT, borderRadius: HOME_FILTER_PILL_RADIUS, overflow: 'hidden', justifyContent: 'center' }}>
+      <BlurView intensity={HOME_FILTER_PILL_BLUR_INTENSITY} tint="dark" style={StyleSheet.absoluteFillObject} />
+      {active ? (
+        <LinearGradient
+          colors={HOME_FILTER_PILL_ACTIVE_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ minHeight: HOME_FILTER_PILL_HEIGHT, paddingHorizontal: 16, borderRadius: HOME_FILTER_PILL_RADIUS, justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' }}
+        >
+          {children}
+        </LinearGradient>
+      ) : (
+        <View style={{ minHeight: HOME_FILTER_PILL_HEIGHT, paddingHorizontal: 16, borderRadius: HOME_FILTER_PILL_RADIUS, backgroundColor: 'rgba(122,157,184,0.075)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.16)', justifyContent: 'center' }}>
+          {children}
+        </View>
+      )}
+    </View>
+  );
 });
 
 const RefreshPill = memo(function RefreshPill({ visible, label }: { visible: boolean; label: string }) {
@@ -361,20 +388,9 @@ const StatusFilterRail = memo(function StatusFilterRail({
             onTouchCancel={onTouchCancel}
             style={{ minHeight: 44, borderRadius: 22, overflow: 'hidden' as const, opacity: dimmed ? 0.5 : 1, justifyContent: 'center' }}
           >
-            {active ? (
-              <LinearGradient
-                colors={[MAROON, TEAL]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{f.label}</Text>
-              </LinearGradient>
-            ) : (
-              <View style={{ minHeight: 44, paddingHorizontal: 16, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', borderRadius: 22, justifyContent: 'center' }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{f.label}</Text>
-              </View>
-            )}
+            <HomeFilterPillSurface active={active}>
+              <Text style={{ fontSize: 12, fontWeight: active ? '700' : '600', color: active ? '#FFFFFF' : TEAL }}>{f.label}</Text>
+            </HomeFilterPillSurface>
           </Pressable>
         );
       })}
@@ -564,20 +580,9 @@ const HomeHeader = React.memo(function HomeHeader({
                 onTouchCancel={onLiveChipTouchCancel}
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                {!selectedLiveSportFilter ? (
-                  <LinearGradient
-                    colors={[MAROON, TEAL]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>All ({filteredLiveGames.length})</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>All ({filteredLiveGames.length})</Text>
-                  </View>
-                )}
+                <HomeFilterPillSurface active={!selectedLiveSportFilter}>
+                  <Text style={{ fontSize: 12, fontWeight: !selectedLiveSportFilter ? '700' : '600', color: !selectedLiveSportFilter ? '#FFFFFF' : TEAL }}>All ({filteredLiveGames.length})</Text>
+                </HomeFilterPillSurface>
               </Pressable>
 
               {/* Per-sport pills */}
@@ -601,20 +606,9 @@ const HomeHeader = React.memo(function HomeHeader({
                     onTouchCancel={onLiveChipTouchCancel}
                     style={{ minHeight: 44, justifyContent: 'center' }}
                   >
-                    {isChipSelected ? (
-                      <LinearGradient
-                        colors={[MAROON, TEAL]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' }}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{displayName} ({count})</Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 22, backgroundColor: 'rgba(122,157,184,0.08)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.12)', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{displayName} ({count})</Text>
-                      </View>
-                    )}
+                    <HomeFilterPillSurface active={isChipSelected}>
+                      <Text style={{ fontSize: 12, fontWeight: isChipSelected ? '700' : '600', color: isChipSelected ? '#FFFFFF' : TEAL }}>{displayName} ({count})</Text>
+                    </HomeFilterPillSurface>
                   </Pressable>
                 );
               })}
