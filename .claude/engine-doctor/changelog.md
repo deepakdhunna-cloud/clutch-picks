@@ -417,3 +417,39 @@ Plus tennis +5-8 (prod, as cron runs). 468 backend tests pass, typecheck clean. 
 data buys incremental, league-specific gains — NOT a jump to 65% across the board.
 DEPLOYED: web (clutch-picks) + worker (clutch-picks-worker), both /health 200, engine 2.11.0.
 NOT yet done: NHL real-starting-goalie (+2-4, needs a new ESPN athlete-stats fetch) — fast-follow.
+
+────────────────────────────────────────────────────────────────────────────
+RUN 5 (2026-06-02) — "make MLB + projections more accurate" (validated, sequential replay)
+────────────────────────────────────────────────────────────────────────────
+KEY METHOD FIX: prior backtests ran concurrency=4, which STARVES the un-retried ESPN odds fetch →
+many games fell back to a market-blind coin-flip, understating the market. Re-ran SEQUENTIALLY
+(concurrency=1) so the single-book DraftKings line attaches on every game. This is the trustworthy harness.
+
+WIN-SIDE (index.ts marketWeightForSport):
+- MLB 0.65 → 0.80. Sequential A/B (n=110): blind 52.7% < 0.65 54.5% < 0.80 59.1% = 0.90 59.1%.
+  Accuracy climbs with market weight and PEAKS at 0.80 (validated +4.6pp). NBA/EPL/NHL UNCHANGED on
+  purpose — swept and confirmed no gain (NBA blind 67.3/0.15 68.2/0.40 68.2 — factor model already wins;
+  EPL 0.60 50.9 → 0.80 49.1 worse; NHL 0.40 54.5 → 0.65 55.5 = +1 game = noise).
+
+PROJECTION ACCURACY (the score/total, not just the pick) — multi-agent audit (23 levers, 17 rejected):
+- ROOT CAUSE FOUND: the total anchor (simulation.ts) was DEAD. ctx.marketOverUnder was fed from
+  game.overUnder, which ESPN's *site* scoreboard returns null for ~100% of games, so the 0.65/0.35
+  total blend never fired. Same root issue partially affected the spread/favorite.
+- FIX (shadow.ts): ctx.marketFavorite/marketSpread/marketOverUnder now prefer the fresh ESPN
+  marketConsensus (real de-vigged DraftKings spread + over/under), fall back to game.*. Activates the
+  total anchor for the first time in the backtest.
+- TUNE (simulation.ts): total anchor weight 0.35 → 0.65 (env-tunable ENGINE_TOTAL_ANCHOR_WEIGHT).
+  Sweep: NBA totalMAE 13.62 → 13.36 (wiring) → 12.97 (0.65); minimum at 0.65, edges back up past it.
+  Margin anchor LEFT at 0.22 — sweep showed bumping it is a no-op (MLB spread = fixed ±1.5 runline).
+- RESULT (shipped defaults, n=90, no accuracy regression): NBA totalMAE 13.62→12.97 (−0.66, ~5%) and
+  away-score MAE 10.18→9.89 (−0.29); MLB totalMAE 3.72→3.65; NHL 1.79→1.75.
+
+ROBUSTNESS (lib/espnOdds.ts): odds fetch now retries once on a transient failure and uses a 60s
+negative-cache (was caching null 10min → a single blip ran a game market-blind for 10 minutes). Also
+made multi-book-ready (ESPN currently returns 1 book/game = DraftKings, so no consensus juice today).
+
+468 backend tests pass, typecheck clean. HONEST CEILING: projection gains are real but modest in
+absolute terms (bounded by game-to-game variance — you can't out-predict the over/under by much). The
+headline remains MLB pick accuracy +4.6pp. NOT done (production-only, untestable now): NHL real-goalie,
+NCAAB baseline.total 144→135 (out of season).
+DEPLOYED: web (clutch-picks) + worker (clutch-picks-worker).

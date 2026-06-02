@@ -492,9 +492,17 @@ export async function buildGameContext(
     uclPedigree,
     uclTravel,
     marketConsensus,
-    marketFavorite: game.marketFavorite,
-    marketSpread: game.spread,
-    marketOverUnder: game.overUnder,
+    // The score-projection anchors (simulation.ts margin + total) read these
+    // three fields. They MUST prefer the fresh ESPN consensus line (real de-vigged
+    // DraftKings spread + over/under, fetched per game) over the route-level
+    // game.* values — which are frequently absent (ESPN's *site* scoreboard, the
+    // replay's source, posts no totals, so game.overUnder is ~always null and the
+    // total anchor never fired). Falling back to game.* preserves the old behavior
+    // when no consensus line exists. The margin anchor takes |spread| and applies
+    // the favorite's sign, so favorite + spread are sourced together for coherence.
+    marketFavorite: marketConsensus?.marketFavorite ?? game.marketFavorite,
+    marketSpread: marketConsensus?.spread ?? game.spread,
+    marketOverUnder: marketConsensus?.overUnder ?? game.overUnder,
     sportsDataIO: {
       homeAdvanced: !!homeSportsDataIOAdvanced,
       awayAdvanced: !!awaySportsDataIOAdvanced,

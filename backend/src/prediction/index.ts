@@ -790,11 +790,21 @@ function resolveBlendOutcome(args: {
 /**
  * League-aware market weight (only when the free ESPN market anchor is enabled).
  * The market is not uniformly better than our factor model — the backtest shows
- * it BEATS our model where our signal is weak (MLB market +7) and LOSES to it
- * where our signal is strong (NBA factor model > line). So we lean on the market
- * heavily in weak-factor leagues and lightly in strong-factor leagues, instead
- * of one blanket weight. Tunable per env (ENGINE_MARKET_WEIGHT) for sweeps;
- * these defaults are the starting point validated on the leak-aware replay.
+ * it BEATS our model where our signal is weak and LOSES to it where our signal
+ * is strong. So we lean on the market heavily in weak-factor leagues and lightly
+ * in strong-factor leagues, instead of one blanket weight.
+ *
+ * Calibrated on a leak-aware, SEQUENTIAL historical replay (concurrency=1 so the
+ * single-book ESPN/DraftKings line attaches on every game; running it wide
+ * starves the odds fetch and silently understates the market). n=110/league:
+ *   - MLB: blind 52.7% → 0.65 54.5% → 0.80 59.1% → 0.90 59.1%. Accuracy climbs
+ *     with market weight and PEAKS at 0.80 (0.90 identical), so MLB sits at 0.80.
+ *   - NBA: blind 67.3% → 0.15 68.2% → 0.40 68.2%. Factor model is strong and
+ *     market-insensitive — keep the market a light 0.15 calibrator.
+ *   - EPL: 0.60 50.9% → 0.80 49.1%. Leaning harder does NOT help 3-way soccer
+ *     (draws don't sharpen by over-following) — hold at 0.60.
+ *   - NHL: 0.40 54.5% → 0.65 55.5% (+1 game = noise) — hold at 0.40.
+ * Tunable per env (ENGINE_MARKET_WEIGHT) for future sweeps.
  */
 function marketWeightForSport(sport: string): number {
   switch (sport) {
@@ -802,9 +812,10 @@ function marketWeightForSport(sport: string): number {
     case "NBA":
     case "NCAAB":
       return 0.15;
-    // Weak factor models / high single-game variance — lean on the market.
+    // Weak factor model + high single-game variance: the DraftKings line is the
+    // single best free predictor and accuracy peaks here (validated +4.6pp).
     case "MLB":
-      return 0.65;
+      return 0.8;
     case "MLS":
     case "EPL":
     case "UCL":

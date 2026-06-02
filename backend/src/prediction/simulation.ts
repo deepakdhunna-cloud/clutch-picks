@@ -21,6 +21,24 @@ const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
 
 const ITERATIONS = 50000;
 
+// How much the projected MARGIN and TOTAL lean on the market line (spread /
+// over-under) versus the model's own game script. Read once at module load so
+// the leak-aware replay can sweep them per run. Defaults preserve the behavior
+// validated when the fresh-consensus anchor was first wired in.
+function envWeight(name: string, fallback: number): number {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v >= 0 && v <= 0.9 ? v : fallback;
+}
+// Margin anchor stays light (0.22): the sweep showed bumping it does nothing —
+// MLB's "spread" is the fixed ±1.5 runline (no margin info) and elsewhere the
+// model margin already tracks the spread. Total anchor lifted 0.35 → 0.65: once
+// the anchor was fed the real ESPN over/under it became a sharp signal, and the
+// leak-aware sweep showed totalMAE falls monotonically to ~0.65 then flattens
+// (NBA 13.62→12.97, MLB 3.72→3.65) with NO accuracy change. Past 0.65 NBA edges
+// back up, so 0.65 is the data-optimal single default. Both env-tunable for sweeps.
+const MARGIN_ANCHOR_MARKET_WEIGHT = envWeight("ENGINE_MARGIN_ANCHOR_WEIGHT", 0.22);
+const TOTAL_ANCHOR_MARKET_WEIGHT = envWeight("ENGINE_TOTAL_ANCHOR_WEIGHT", 0.65);
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -341,7 +359,8 @@ function buildScoreModel(
         ? Math.abs(ctx.marketSpread)
         : -Math.abs(ctx.marketSpread);
     const previousMargin = expectedMargin;
-    expectedMargin = previousMargin * 0.78 + marketMargin * 0.22;
+    expectedMargin =
+      previousMargin * (1 - MARGIN_ANCHOR_MARKET_WEIGHT) + marketMargin * MARGIN_ANCHOR_MARKET_WEIGHT;
     signals.push({
       key: "market-spread-anchor",
       label: "Market spread anchor",
@@ -511,7 +530,8 @@ function buildScoreModel(
     ctx.marketOverUnder > 0
   ) {
     const previousTotal = totalMean;
-    totalMean = previousTotal * 0.65 + ctx.marketOverUnder * 0.35;
+    totalMean =
+      previousTotal * (1 - TOTAL_ANCHOR_MARKET_WEIGHT) + ctx.marketOverUnder * TOTAL_ANCHOR_MARKET_WEIGHT;
     signals.push({
       key: "market-total-anchor",
       label: "Market total anchor",
