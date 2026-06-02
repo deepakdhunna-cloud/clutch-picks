@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, ScrollView, Share, Dimensions,
+  View, Text, Pressable, ActivityIndicator, ScrollView, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
@@ -56,13 +56,11 @@ const C = {
   TEXT_MUTED: '#6B7C94',
 } as const;
 
-const { width: PROFILE_SCREEN_WIDTH } = Dimensions.get('window');
 const PROFILE_RECENT_PICK_LIMIT = 10;
 const RECENT_PICK_CARD_W = 124;
 const RECENT_PICK_CARD_GAP = 10;
 const RECENT_PICK_SNAP_INTERVAL = RECENT_PICK_CARD_W + RECENT_PICK_CARD_GAP;
-const RECENT_PICK_RAIL_WIDTH = Math.max(RECENT_PICK_CARD_W, PROFILE_SCREEN_WIDTH - 32 - RECENT_PICK_CARD_W);
-const RECENT_PICK_RAIL_SIDE_PADDING = Math.max(RECENT_PICK_CARD_GAP, (RECENT_PICK_RAIL_WIDTH - RECENT_PICK_CARD_W) / 2);
+const RECENT_PICK_RAIL_EDGE_PADDING = RECENT_PICK_CARD_GAP;
 
 const ProfileLoadingState = memo(function ProfileLoadingState() {
   return (
@@ -447,7 +445,7 @@ const RecentPickTile = memo(function RecentPickTile({
   onPress: (gameId: string, game?: GameWithPrediction) => void;
   onWarm: (gameId: string, game?: GameWithPrediction) => void;
 }) {
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
   const teamColors = getTeamColors(pick.abbreviation, pick.sport as any, pick.color);
   const jerseyType = sportEnumToJersey(pick.sport);
   const isWin = pick.result === 'win';
@@ -948,7 +946,7 @@ export default function ProfileScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={{ flex: 1, height: 146 }}
-                contentContainerStyle={{ paddingLeft: RECENT_PICK_RAIL_SIDE_PADDING, paddingRight: RECENT_PICK_RAIL_SIDE_PADDING, gap: RECENT_PICK_CARD_GAP }}
+                contentContainerStyle={{ paddingLeft: RECENT_PICK_RAIL_EDGE_PADDING, paddingRight: 16, gap: RECENT_PICK_CARD_GAP }}
                 snapToInterval={RECENT_PICK_SNAP_INTERVAL}
                 snapToAlignment="start"
                 disableIntervalMomentum

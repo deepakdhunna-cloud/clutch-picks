@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, useRef, memo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Dimensions } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Dimensions, Platform } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -65,7 +65,7 @@ type StoryTone = 'live' | 'upset' | 'tossup' | 'soon' | 'final' | 'model';
 const RESULT_INITIAL_RENDER_COUNT = 8;
 const RESULT_RENDER_BATCH_SIZE = 6;
 const RESULT_ROW_HEIGHT = 98;
-const SEARCH_DEBOUNCE_MS = 120;
+const SEARCH_DEBOUNCE_MS = 180;
 const { width: EXPLORE_SCREEN_WIDTH } = Dimensions.get('window');
 
 function afterFrame(task: () => void) {
@@ -448,7 +448,7 @@ const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
   // Per-item guard: every StoryCard lives in a horizontal rail, so a swipe
   // must not register as a tap and open the wrong game.
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
   return (
     <Pressable
       onPressIn={onWarm}
@@ -514,8 +514,8 @@ export default function SearchExploreScreen() {
 
   const onChangeText = useCallback((text: string, instant?: boolean) => {
     setQuery(text);
-    setSportFilter(null);
-    setStatusFilter('all');
+    setSportFilter((current) => current === null ? current : null);
+    setStatusFilter((current) => current === 'all' ? current : 'all');
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (instant) {
       setDebouncedQuery(text);
@@ -585,6 +585,14 @@ export default function SearchExploreScreen() {
     const m = new Map<string, number>();
     for (const g of allGames) m.set(g.sport, (m.get(g.sport) ?? 0) + 1);
     return Array.from(m.entries()).map(([s, c]) => ({ sport: s, count: c })).sort((a, b) => b.count - a.count);
+  }, [allGames]);
+
+  const searchableGames = useMemo(() => {
+    if (!allGames) return [];
+    return allGames.map((game) => ({
+      game,
+      haystack: `${game.homeTeam.name} ${game.homeTeam.abbreviation} ${game.homeTeam.city} ${game.awayTeam.name} ${game.awayTeam.abbreviation} ${game.awayTeam.city} ${game.sport} ${game.venue ?? ''}`.toLowerCase(),
+    }));
   }, [allGames]);
 
   const todayKey = useMemo(() => {
@@ -660,17 +668,16 @@ export default function SearchExploreScreen() {
   }, [allGames, isPremium]);
 
   const baseFilteredGames = useMemo(() => {
-    if (!allGames) return [];
-    if (sportFilter) return allGames.filter(g => g.sport === sportFilter).sort(compareExploreGames);
+    if (!searchableGames.length) return [];
+    if (sportFilter) return searchableGames.map(({ game }) => game).filter(g => g.sport === sportFilter).sort(compareExploreGames);
     if (!deferredDebouncedQuery.trim()) return [];
     // Split query into words, filter out "vs"/"at"/"@", match ANY word against game fields
     const words = deferredDebouncedQuery.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0 && !['vs', 'at', '@', '-'].includes(w));
     if (words.length === 0) return [];
-    return allGames.filter(g => {
-      const haystack = `${g.homeTeam.name} ${g.homeTeam.abbreviation} ${g.homeTeam.city} ${g.awayTeam.name} ${g.awayTeam.abbreviation} ${g.awayTeam.city} ${g.sport} ${g.venue ?? ''}`.toLowerCase();
+    return searchableGames.filter(({ haystack }) => {
       return words.some(w => haystack.includes(w));
-    }).sort(compareExploreGames);
-  }, [deferredDebouncedQuery, sportFilter, allGames]);
+    }).map(({ game }) => game).sort(compareExploreGames);
+  }, [deferredDebouncedQuery, sportFilter, searchableGames]);
 
   const filteredGames = useMemo(() => {
     if (statusFilter === 'all') return baseFilteredGames;
@@ -896,6 +903,9 @@ export default function SearchExploreScreen() {
               selectionColor={TEAL}
               cursorColor={TEAL}
               returnKeyType="done"
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
               value={query}
               onChangeText={onChangeText}
               onSubmitEditing={() => Keyboard.dismiss()}
@@ -924,8 +934,8 @@ export default function SearchExploreScreen() {
           ListEmptyComponent={emptyResults}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onScrollBeginDrag={Keyboard.dismiss}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           contentContainerStyle={{ paddingBottom: 60, flexGrow: 1 }}
           initialNumToRender={RESULT_INITIAL_RENDER_COUNT}
           maxToRenderPerBatch={RESULT_RENDER_BATCH_SIZE}
@@ -934,7 +944,13 @@ export default function SearchExploreScreen() {
           removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
         />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss} contentContainerStyle={{ paddingBottom: 60 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          contentContainerStyle={{ paddingBottom: 60 }}
+        >
           <>
             {recentSearches.length > 0 ? (
               <View style={{ marginBottom: 32 }}>

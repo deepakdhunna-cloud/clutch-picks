@@ -640,7 +640,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   const { openGame, warmGame } = useGameDetailActions();
   // Per-item guard: this card lives in a horizontal FlatList, so a swipe across
   // it must not fire a tap and open the wrong game.
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
   const live = game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
   const final = game.status === GameStatus.FINAL;
   const awayScore = typeof game.awayScore === 'number' ? game.awayScore : null;
@@ -1052,17 +1052,19 @@ const LiveCard = memo(function LiveCard({
   cardWidth,
   showModelEdge = true,
   showMomentum = true,
+  canOpen,
 }: {
   game: GameWithPrediction;
   pick?: UserPick;
   cardWidth: number;
   showModelEdge?: boolean;
   showMomentum?: boolean;
+  canOpen?: () => boolean;
 }) {
   const { openGame, warmGame } = useGameDetailActions();
   // Per-item guard: this card lives in a horizontal snap FlatList, so a swipe
   // must not register as a tap and open the wrong live game.
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
   const hs = game.homeScore ?? 0;
   const as2 = game.awayScore ?? 0;
   const ph = pick?.pickedTeam === 'home';
@@ -1267,7 +1269,7 @@ const LiveCard = memo(function LiveCard({
   return (
     <Pressable
       onPressIn={() => warmGame(game)}
-      onPress={() => { if (!shouldHandlePress()) return; openGame(game); }}
+      onPress={() => { if (!shouldHandlePress() || (canOpen && !canOpen())) return; openGame(game); }}
       accessibilityRole="button"
       accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
       accessibilityHint="Opens game details"
@@ -1922,7 +1924,7 @@ const LiveIntelStage = memo(function LiveIntelStage({ game, intel }: { game: Gam
   // Header intentionally omitted — the "Live intelligence" heading above the live
   // game card already opens this section; the word cards flow under it as one unit.
   return (
-    <View style={{ paddingHorizontal: ARENA_SIDE_PADDING, marginTop: 6, marginBottom: ARENA_SECTION_GAP }}>
+    <View style={{ paddingHorizontal: ARENA_SIDE_PADDING, marginTop: 12, marginBottom: ARENA_SECTION_GAP }}>
       {intel.map((item, i) => (
         <IntelCard key={`${game.id}-${item.title}-${i}`} type={item.type} title={item.title} body={item.body} />
       ))}
@@ -2329,9 +2331,7 @@ const ResultCard = memo(function ResultCard({ game, pick }: { game: GameWithPred
 const LIVE_CARD_SIDE_PEEK = 28;
 const LIVE_CARD_SIDE_SPACE = ARENA_CARD_GAP + LIVE_CARD_SIDE_PEEK;
 const LIVE_CARD_MIN_W = 260;
-// PagerView reports a slightly wider horizontal rail than the visible iPhone viewport.
-// Keep this correction isolated to the My Arena carousel spacer so the card size stays stable.
-const LIVE_RAIL_PAGER_GUTTER_CORRECTION = 11;
+const LIVE_RAIL_VISUAL_CENTER_CORRECTION = 11;
 
 const GameDay = memo(function GameDay({
   live,
@@ -2364,6 +2364,7 @@ const GameDay = memo(function GameDay({
 }) {
   const pm = useMemo(() => { const m = new Map<string, UserPick>(); picks.forEach(p => m.set(p.gameId, p)); return m; }, [picks]);
   const liveRailRef = useRef<FlatList<GameWithPrediction> | null>(null);
+  const liveRailBlockOpenUntilRef = useRef(0);
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [liveSearch, setLiveSearch] = useState('');
   const [liveSportFilter, setLiveSportFilter] = useState('All');
@@ -2390,9 +2391,9 @@ const GameDay = memo(function GameDay({
   const focusedIntel = useMemo(() => liveIntelLocked ? [] : generateLiveIntel(focusedGame), [focusedGame, liveIntelLocked]);
   const liveInitialRenderCount = Math.min(filteredLive.length, 3);
   const liveVisibleRailWidth = Math.min(liveRailWidth, SW);
-  const liveCardWidth = Math.max(LIVE_CARD_MIN_W, liveRailWidth - LIVE_CARD_SIDE_SPACE * 2);
+  const liveCardWidth = Math.max(LIVE_CARD_MIN_W, liveVisibleRailWidth - LIVE_CARD_SIDE_SPACE * 2);
   const liveCardSidePadding = Math.max(0, (liveVisibleRailWidth - liveCardWidth) / 2);
-  const liveRailEdgeSpacer = Math.max(0, liveCardSidePadding - LIVE_RAIL_PAGER_GUTTER_CORRECTION);
+  const liveRailSidePadding = Math.max(0, liveCardSidePadding - LIVE_RAIL_VISUAL_CENTER_CORRECTION);
   const liveCardSnapInterval = liveCardWidth + ARENA_CARD_GAP;
   const liveSnapOffsets = useMemo(
     () => filteredLive.map((_, index) => index * liveCardSnapInterval),
@@ -2403,6 +2404,15 @@ const GameDay = memo(function GameDay({
     if (width <= 0) return;
     setLiveRailWidth((current) => current === width ? current : width);
   }, []);
+  const canOpenLiveCard = useCallback(() => Date.now() > liveRailBlockOpenUntilRef.current, []);
+  const markLiveRailScrollStart = useCallback(() => {
+    liveRailBlockOpenUntilRef.current = Date.now() + 500;
+    horizontalGestureGuard?.onHorizontalGestureStart?.();
+  }, [horizontalGestureGuard]);
+  const markLiveRailScrollEnd = useCallback(() => {
+    liveRailBlockOpenUntilRef.current = Date.now() + 220;
+    horizontalGestureGuard?.onHorizontalGestureEnd?.();
+  }, [horizontalGestureGuard]);
   useEffect(() => {
     if (liveSportFilter !== 'All' && !liveSports.has(liveSportFilter)) setLiveSportFilter('All');
   }, [liveSportFilter, liveSports]);
@@ -2558,13 +2568,14 @@ const GameDay = memo(function GameDay({
           <Text style={{fontSize:13, color:TEXT_MUTED}}>{liveSearch.trim() ? `No live games match "${liveSearch}"` : 'No live games match this sport'}</Text>
         </View>
       ) : filteredLive.length === 1 ? (
-        <View onLayout={onLiveRailLayout} style={{paddingHorizontal:liveCardSidePadding, marginBottom:ARENA_CARD_GAP}}>
+        <View onLayout={onLiveRailLayout} style={{paddingHorizontal:liveRailSidePadding, marginBottom:ARENA_CARD_GAP}}>
           <LiveCard
             game={filteredLive[0]}
             pick={pm.get(filteredLive[0].id)}
             cardWidth={liveCardWidth}
             showModelEdge={!liveIntelLocked}
             showMomentum={!liveIntelLocked}
+            canOpen={canOpenLiveCard}
           />
         </View>
       ) : (
@@ -2579,8 +2590,7 @@ const GameDay = memo(function GameDay({
             snapToAlignment="start"
             disableIntervalMomentum
             decelerationRate="fast"
-            ListHeaderComponent={<View style={{ width: liveRailEdgeSpacer }} />}
-            ListFooterComponent={<View style={{ width: liveRailEdgeSpacer }} />}
+            contentContainerStyle={{ paddingHorizontal: liveRailSidePadding }}
             ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
             initialNumToRender={liveInitialRenderCount}
             maxToRenderPerBatch={3}
@@ -2595,6 +2605,7 @@ const GameDay = memo(function GameDay({
                 cardWidth={liveCardWidth}
                 showModelEdge={!liveIntelLocked}
                 showMomentum={!liveIntelLocked}
+                canOpen={canOpenLiveCard}
               />
             )}
             getItemLayout={(_, index) => ({ length: liveCardSnapInterval, offset: liveCardSnapInterval * index, index })}
@@ -2602,15 +2613,15 @@ const GameDay = memo(function GameDay({
             onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
             onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
             onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
+            onScrollBeginDrag={markLiveRailScrollStart}
             onScrollEndDrag={(event) => {
               snapLiveRail(event, true);
-              horizontalGestureGuard?.onHorizontalGestureEnd?.();
+              markLiveRailScrollEnd();
             }}
-            onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
+            onMomentumScrollBegin={markLiveRailScrollStart}
             onMomentumScrollEnd={(event) => {
               snapLiveRail(event, true);
-              horizontalGestureGuard?.onHorizontalGestureEnd?.();
+              markLiveRailScrollEnd();
             }}
           />
         </View>
@@ -2618,7 +2629,7 @@ const GameDay = memo(function GameDay({
 
       {/* 5. Page dots */}
       {filteredLive.length > 1 ? (
-        <View style={{flexDirection:'row', justifyContent:'center', marginTop:10, marginBottom:4}}>
+        <View style={{flexDirection:'row', justifyContent:'center', marginTop:12, marginBottom:12}}>
           {filteredLive.map((_, i) => <View key={i} style={{width:i===focusedIdx?8:4, height:4, borderRadius:2, backgroundColor:i===focusedIdx?MAROON:'rgba(255,255,255,0.15)', marginHorizontal:2}} />)}
         </View>
       ) : null}
@@ -2660,7 +2671,7 @@ const Top3Card = memo(function Top3Card({
   isLast: boolean;
 }) {
   const { openGame, warmGame } = useGameDetailActions();
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
   const conf = Math.round(getCanonicalConfidence(game.prediction));
   const predictionDisplay = getGamePredictionDisplay(game);
   return (

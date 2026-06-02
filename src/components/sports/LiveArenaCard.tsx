@@ -233,7 +233,7 @@ export const LiveArenaCard = memo(function LiveArenaCard({
   onPressIn,
 }: LiveArenaCardProps) {
   const cfg = variant === 'rail' ? RAIL : FULL;
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard();
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
 
   const awayColors = useMemo(
     () => getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color),

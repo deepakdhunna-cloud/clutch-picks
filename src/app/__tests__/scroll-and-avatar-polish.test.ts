@@ -22,13 +22,15 @@ describe('scroll and avatar polish regressions', () => {
     expect(homeSource).toContain('snapToInterval={HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP}');
     expect(homeSource).toContain('snapToAlignment="start"');
     expect(arenaSource).toContain('snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}');
-    expect(arenaSource).toContain('snapToInterval={LIVE_CARD_SNAP_INTERVAL}');
     expect(arenaSource).toContain('const LIVE_CARD_SIDE_PEEK = 28;');
-    expect(arenaSource).toContain('contentContainerStyle={{paddingHorizontal:LIVE_CARD_SIDE_PADDING}}');
+    expect(arenaSource).toContain('const liveVisibleRailWidth = Math.min(liveRailWidth, SW);');
+    expect(arenaSource).toContain('contentContainerStyle={{ paddingHorizontal: liveRailSidePadding }}');
     expect(arenaSource).toContain('snapToInterval={TOP_GRADE_CARD_SNAP_INTERVAL}');
     expect(exploreSource).toContain('const StoryCardRail = memo');
     expect(exploreSource).toContain('snapToInterval={STORY_CARD_SNAP_INTERVAL}');
     expect(profileSource).toContain('snapToInterval={RECENT_PICK_SNAP_INTERVAL}');
+    expect(profileSource).toContain('const RECENT_PICK_RAIL_EDGE_PADDING = RECENT_PICK_CARD_GAP;');
+    expect(profileSource).not.toContain('RECENT_PICK_RAIL_SIDE_PADDING');
     expect(profileSource).toContain('disableIntervalMomentum');
   });
 
@@ -39,5 +41,15 @@ describe('scroll and avatar polish regressions', () => {
     expect(profileSource).toContain('<ProfileAvatarImage');
     expect(read('src/app/edit-profile.tsx')).toContain('<ProfileAvatarImage');
     expect(read('src/app/profile-setup.tsx')).toContain('<ProfileAvatarImage');
+  });
+
+  it('keeps arena search input light while the keyboard is active', () => {
+    expect(exploreSource).toContain('const SEARCH_DEBOUNCE_MS = 180;');
+    expect(exploreSource).toContain('const searchableGames = useMemo');
+    expect(exploreSource).toContain('setSportFilter((current) => current === null ? current : null);');
+    expect(exploreSource).toContain('keyboardDismissMode={Platform.OS === \'ios\' ? \'interactive\' : \'on-drag\'}');
+    expect(exploreSource).toContain('automaticallyAdjustKeyboardInsets={Platform.OS === \'ios\'}');
+    expect(exploreSource).toContain('autoCorrect={false}');
+    expect(exploreSource).toContain('spellCheck={false}');
   });
 });

@@ -51,9 +51,15 @@ describe('my arena accessibility', () => {
     expect(arenaSource).toContain('ref={liveRailRef}');
     expect(arenaSource).toContain('onLiveRailLayout');
     expect(arenaSource).toContain('const liveVisibleRailWidth = Math.min(liveRailWidth, SW);');
-    expect(arenaSource).toContain('LIVE_RAIL_PAGER_GUTTER_CORRECTION');
-    expect(arenaSource).toContain('ListHeaderComponent={<View style={{ width: liveRailEdgeSpacer }} />}');
-    expect(arenaSource).toContain('ListFooterComponent={<View style={{ width: liveRailEdgeSpacer }} />}');
+    expect(arenaSource).toContain('const liveCardWidth = Math.max(LIVE_CARD_MIN_W, liveVisibleRailWidth - LIVE_CARD_SIDE_SPACE * 2);');
+    expect(arenaSource).toContain('const LIVE_RAIL_VISUAL_CENTER_CORRECTION = 11;');
+    expect(arenaSource).toContain('const liveRailSidePadding = Math.max(0, liveCardSidePadding - LIVE_RAIL_VISUAL_CENTER_CORRECTION);');
+    expect(arenaSource).toContain('contentContainerStyle={{ paddingHorizontal: liveRailSidePadding }}');
+    expect(arenaSource).toContain('const canOpenLiveCard = useCallback(() => Date.now() > liveRailBlockOpenUntilRef.current, []);');
+    expect(arenaSource).toContain('onScrollBeginDrag={markLiveRailScrollStart}');
+    expect(arenaSource).toContain('canOpen={canOpenLiveCard}');
+    expect(arenaSource).not.toContain('LIVE_RAIL_PAGER_GUTTER_CORRECTION');
+    expect(arenaSource).not.toContain('ListHeaderComponent={<View style={{ width: liveRailEdgeSpacer }} />}');
     expect(arenaSource).toContain('snapToOffsets={liveSnapOffsets}');
     expect(arenaSource).toContain('key={`live-rail-${Math.round(liveCardWidth)}-${liveSportFilter}-${liveSearch.trim()}`}');
     expect(arenaSource).toContain('snapLiveRail(event, true)');
