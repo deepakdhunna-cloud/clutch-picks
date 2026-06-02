@@ -22,6 +22,7 @@ import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useLiveScores } from '@/hooks/useLiveScores';
+import { guardedRouterReplace } from '@/lib/navigation-guard';
 
 
 enableScreens(true);
@@ -165,12 +166,12 @@ function RootLayoutNav({
     if (hasUser && inAuthGroup && segment !== 'onboarding') {
       // Check if onboarding is complete — if not, send to onboarding first
       if (!onboardingDone) {
-        router.replace('/onboarding');
+        guardedRouterReplace(router, '/onboarding');
       } else {
-        router.replace('/(tabs)');
+        guardedRouterReplace(router, '/(tabs)');
       }
     } else if (!hasUser && !inAuthGroup && !inPublicGroup) {
-      router.replace('/welcome');
+      guardedRouterReplace(router, '/welcome');
     }
   }, [hasUser, isLoading, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup, router]);
 
@@ -201,8 +202,6 @@ function RootLayoutNav({
           <Stack.Screen name="(tabs)" options={{ freezeOnBlur: false, gestureEnabled: false, fullScreenGestureEnabled: false }} />
           <Stack.Screen name="game/[id]" options={{ freezeOnBlur: false }} />
           <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="user/[id]" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="followers/[userId]" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="edit-profile" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="privacy-policy" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="terms" options={{ freezeOnBlur: true }} />

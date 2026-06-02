@@ -9,8 +9,6 @@ const routeFiles = [
   'src/app/terms.tsx',
   'src/app/live-games.tsx',
   'src/app/sport/[sport].tsx',
-  'src/app/user/[id].tsx',
-  'src/app/followers/[userId].tsx',
   'src/app/game-analysis.tsx',
 ];
 

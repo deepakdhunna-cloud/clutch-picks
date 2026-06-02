@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, useRef, memo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Dimensions, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Keyboard, StyleSheet, InteractionManager, FlatList, Platform } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,11 +15,14 @@ import {
   getCanonicalConfidence,
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
+import { compareSuspendedGamePriority, isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
 import { getTeamColors } from '@/lib/team-colors';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { TeamJersey } from '@/components/sports/TeamJersey';
 import { useSubscription } from '@/lib/subscription-context';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { guardedRouterBack, guardedRouterPush } from '@/lib/navigation-guard';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import {
   MAROON, TEAL, LIVE_RED, BG, PANEL_DARK, BORDER_MED,
@@ -66,7 +69,7 @@ const RESULT_INITIAL_RENDER_COUNT = 8;
 const RESULT_RENDER_BATCH_SIZE = 6;
 const RESULT_ROW_HEIGHT = 98;
 const SEARCH_DEBOUNCE_MS = 180;
-const { width: EXPLORE_SCREEN_WIDTH } = Dimensions.get('window');
+const EXPLORE_RAIL_SIDE_PADDING = 20;
 
 function afterFrame(task: () => void) {
   if (typeof requestAnimationFrame === 'function') {
@@ -77,13 +80,17 @@ function afterFrame(task: () => void) {
 }
 
 function isLiveGame(game: GameWithPrediction): boolean {
-  return game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
+  return isLiveGameLike(game);
 }
 
 function compareExploreGames(a: GameWithPrediction, b: GameWithPrediction): number {
   const aRank = isLiveGame(a) ? 0 : a.status === GameStatus.SCHEDULED ? 1 : a.status === GameStatus.FINAL ? 2 : 3;
   const bRank = isLiveGame(b) ? 0 : b.status === GameStatus.SCHEDULED ? 1 : b.status === GameStatus.FINAL ? 2 : 3;
   if (aRank !== bRank) return aRank - bRank;
+  if (aRank === 0) {
+    const suspendedOrder = compareSuspendedGamePriority(a, b);
+    if (suspendedOrder !== 0) return suspendedOrder;
+  }
 
   const aTime = new Date(a.gameTime).getTime();
   const bTime = new Date(b.gameTime).getTime();
@@ -102,16 +109,23 @@ const LiveDot = memo(function LiveDot() {
 const SPORT_CARD_W = 130;
 const SPORT_CARD_GAP = 14;
 const SPORT_CARD_SNAP_INTERVAL = SPORT_CARD_W + SPORT_CARD_GAP;
-const SPORT_CARD_RAIL_SIDE_PADDING = Math.max(20, (EXPLORE_SCREEN_WIDTH - SPORT_CARD_W) / 2);
 
 const SportCard = memo(function SportCard({ sport, count, onSelect }: { sport: string; count: number; onSelect: (sport: string) => void }) {
   const meta = SPORT_META[sport as Sport];
   const color = meta?.color ?? TEXT_MUTED;
   const badgeLabel = SPORT_BADGE_LABELS[sport] ?? displaySport(sport);
-  const handlePress = useCallback(() => onSelect(sport), [onSelect, sport]);
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
+  const handlePress = useCallback(() => {
+    if (!shouldHandlePress()) return;
+    onSelect(sport);
+  }, [onSelect, shouldHandlePress, sport]);
   return (
     <Pressable
       onPress={handlePress}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
+      pressRetentionOffset={6}
       accessibilityRole="button"
       accessibilityLabel={`Browse ${displaySport(sport)}, ${count} game${count !== 1 ? 's' : ''}`}
       accessibilityHint="Shows games for this sport"
@@ -146,7 +160,7 @@ const GAME_BAR_MIN_HEIGHT = 158;
 const GAME_BAR_CENTER_W = 112;
 
 const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false }: { game: GameWithPrediction; onPress: () => void; showModelSignals?: boolean }) {
-  const live = game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
+  const live = isLiveGame(game);
   const final = game.status === GameStatus.FINAL;
   const awayC = getTeamColors(game.awayTeam.abbreviation, game.sport as Sport, game.awayTeam.color);
   const homeC = getTeamColors(game.homeTeam.abbreviation, game.sport as Sport, game.homeTeam.color);
@@ -166,10 +180,15 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
   const homeWon = final && homeScore > awayScore;
   const showBadge = predictionDisplay && predictionDisplay.outcome !== 'none' && confidence !== null;
   const badgeLabelText = showBadge ? `${predictionDisplay!.badgeLabel} ${confidence}%` : null;
+  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { if (!shouldHandlePress()) return; onPress(); }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchCancel={onTouchCancel}
+      pressRetentionOffset={6}
       accessibilityRole="button"
       accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
       accessibilityHint="Opens game details"
@@ -242,11 +261,13 @@ const ResultGameRow = memo(function ResultGameRow({
   onSelect,
   onWarm,
   showModelSignals = false,
+  canOpen,
 }: {
   game: GameWithPrediction;
   onSelect: (game: GameWithPrediction) => void;
   onWarm?: (game: GameWithPrediction) => void;
   showModelSignals?: boolean;
+  canOpen?: () => boolean;
 }) {
   const live = isLiveGame(game);
   const final = game.status === GameStatus.FINAL;
@@ -264,7 +285,10 @@ const ResultGameRow = memo(function ResultGameRow({
   const awayScore = game.awayScore ?? 0;
   const homeScore = game.homeScore ?? 0;
   const showBadge = predictionDisplay && predictionDisplay.outcome !== 'none' && confidence !== null;
-  const handlePress = useCallback(() => onSelect(game), [game, onSelect]);
+  const handlePress = useCallback(() => {
+    if (canOpen && !canOpen()) return;
+    onSelect(game);
+  }, [canOpen, game, onSelect]);
   const handlePressIn = useCallback(() => onWarm?.(game), [game, onWarm]);
 
   return (
@@ -345,13 +369,13 @@ const ResultGameRow = memo(function ResultGameRow({
 
 const SectionHeader = memo(function SectionHeader({ label, title, icon, accent = TEAL }: { label?: string; title: string; icon?: React.ReactNode; accent?: string }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14, position: 'relative', zIndex: 1 }}>
       {/* Accent edge anchors the section to its meaning (live=red, model/prep=teal). */}
       <View style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, backgroundColor: accent, marginRight: 11 }} />
       {icon ? <View style={{ marginRight: 8 }}>{icon}</View> : null}
       <View style={{ flex: 1, minWidth: 0 }}>
-        {label ? <Text style={{ fontSize: 9.5, fontWeight: '900', color: hexWithAlpha(accent, 0.92), letterSpacing: 2, marginBottom: 3 }} numberOfLines={1}>{label}</Text> : null}
-        <Text style={{ fontSize: 17, lineHeight: 21, fontWeight: '900', color: WHITE }} numberOfLines={1}>{title}</Text>
+        {label ? <Text style={{ fontSize: 9.5, lineHeight: 13, fontWeight: '900', color: hexWithAlpha(accent, 0.92), letterSpacing: 2, marginBottom: 3 }} numberOfLines={1}>{label}</Text> : null}
+        <Text style={{ fontSize: 18, lineHeight: 24, fontWeight: '900', color: WHITE }} numberOfLines={1}>{title}</Text>
       </View>
     </View>
   );
@@ -405,7 +429,6 @@ const RecentSearchRow = memo(function RecentSearchRow({
 const STORY_CARD_W = 180;
 const STORY_CARD_GAP = 16;
 const STORY_CARD_SNAP_INTERVAL = STORY_CARD_W + STORY_CARD_GAP;
-const STORY_CARD_RAIL_SIDE_PADDING = Math.max(20, (EXPLORE_SCREEN_WIDTH - STORY_CARD_W) / 2);
 
 const SportCardRail = memo(function SportCardRail({ children }: { children: React.ReactNode }) {
   return (
@@ -413,7 +436,7 @@ const SportCardRail = memo(function SportCardRail({ children }: { children: Reac
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0 }}
-      contentContainerStyle={{ paddingLeft: SPORT_CARD_RAIL_SIDE_PADDING, paddingRight: SPORT_CARD_RAIL_SIDE_PADDING }}
+      contentContainerStyle={{ paddingLeft: EXPLORE_RAIL_SIDE_PADDING, paddingRight: EXPLORE_RAIL_SIDE_PADDING }}
       snapToInterval={SPORT_CARD_SNAP_INTERVAL}
       snapToAlignment="start"
       disableIntervalMomentum
@@ -430,7 +453,7 @@ const StoryCardRail = memo(function StoryCardRail({ children }: { children: Reac
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0 }}
-      contentContainerStyle={{ paddingLeft: STORY_CARD_RAIL_SIDE_PADDING, paddingRight: STORY_CARD_RAIL_SIDE_PADDING }}
+      contentContainerStyle={{ paddingLeft: EXPLORE_RAIL_SIDE_PADDING, paddingRight: EXPLORE_RAIL_SIDE_PADDING }}
       snapToInterval={STORY_CARD_SNAP_INTERVAL}
       snapToAlignment="start"
       disableIntervalMomentum
@@ -442,7 +465,7 @@ const StoryCardRail = memo(function StoryCardRail({ children }: { children: Reac
 });
 
 const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress, onWarm }: { game: GameWithPrediction; tone: StoryTone; title: string; subtitle: string; onPress: () => void; onWarm?: () => void }) {
-  const live = game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
+  const live = isLiveGame(game);
   const accent = tone === 'live' ? LIVE_RED : tone === 'upset' ? MAROON : tone === 'soon' ? TEAL : tone === 'final' ? '#94a3b8' : tone === 'tossup' ? '#94a3b8' : TEAL;
   const sportMeta = SPORT_META[game.sport as Sport];
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
@@ -497,6 +520,7 @@ function storyRowKey(index: number, total: number): { marginRight: number } {
 // ─── MAIN ───
 export default function SearchExploreScreen() {
   const router = useRouter();
+  const exploreScrollPressGuard = useScrollPressGuard();
   const inputRef = useRef<TextInput>(null);
   const { data: allGames, isLoading: gamesLoading, isFetching: gamesFetching } = useGames();
   const prefetchGame = usePrefetchGame();
@@ -620,8 +644,7 @@ export default function SearchExploreScreen() {
 
   const liveGames = useMemo(() => {
     if (!allGames) return [];
-    return allGames
-      .filter(g => g.status === GameStatus.LIVE || (g.status as string) === 'in_progress' || (g.status as string) === 'halftime')
+    return sortSuspendedGamesLast(allGames.filter(isLiveGame))
       .slice(0, 6);
   }, [allGames]);
 
@@ -681,7 +704,7 @@ export default function SearchExploreScreen() {
 
   const filteredGames = useMemo(() => {
     if (statusFilter === 'all') return baseFilteredGames;
-    if (statusFilter === 'live') return baseFilteredGames.filter(g => g.status === GameStatus.LIVE || (g.status as string) === 'in_progress' || (g.status as string) === 'halftime');
+    if (statusFilter === 'live') return sortSuspendedGamesLast(baseFilteredGames.filter(isLiveGame), compareExploreGames);
     if (statusFilter === 'scheduled') return baseFilteredGames.filter(g => g.status === GameStatus.SCHEDULED);
     return baseFilteredGames.filter(g => g.status === GameStatus.FINAL);
   }, [baseFilteredGames, statusFilter]);
@@ -706,13 +729,14 @@ export default function SearchExploreScreen() {
   }, [prefetchGame]);
 
   const navGame = useCallback((game: GameWithPrediction) => {
+    if (!exploreScrollPressGuard.canPress()) return;
     if (!claimGameNavigation(game.id)) return;
     // Fire the navigation FIRST so the push animation starts immediately.
     // Seed the detail cache immediately; haptics and storage writes wait until
     // after the transition so the tap stays responsive.
     const recentTerm = query.trim() || `${game.awayTeam.name} vs ${game.homeTeam.name}`;
     warmGame(game);
-    router.push({ pathname: '/game/[id]', params: { id: game.id } });
+    guardedRouterPush(router, { pathname: '/game/[id]', params: { id: game.id } });
     afterFrame(() => {
       Keyboard.dismiss();
       fireLightHaptic();
@@ -720,10 +744,10 @@ export default function SearchExploreScreen() {
         void saveRecent(recentTerm);
       });
     });
-  }, [query, router, saveRecent, warmGame]);
+  }, [exploreScrollPressGuard.canPress, query, router, saveRecent, warmGame]);
 
   const goBack = useCallback(() => {
-    router.back();
+    guardedRouterBack(router);
     afterFrame(() => Keyboard.dismiss());
   }, [router]);
 
@@ -741,9 +765,9 @@ export default function SearchExploreScreen() {
 
   const renderResultGame = useCallback(({ item }: { item: GameWithPrediction }) => (
     <View style={{ paddingHorizontal: 20 }}>
-      <ResultGameRow game={item} showModelSignals={isPremium} onSelect={navGame} onWarm={warmGame} />
+      <ResultGameRow game={item} showModelSignals={isPremium} onSelect={navGame} onWarm={warmGame} canOpen={exploreScrollPressGuard.canPress} />
     </View>
-  ), [isPremium, navGame, warmGame]);
+  ), [exploreScrollPressGuard.canPress, isPremium, navGame, warmGame]);
 
   const resultKeyExtractor = useCallback((item: GameWithPrediction) => item.id, []);
   const resultSeparator = useCallback(() => <View style={{ height: 12 }} />, []);
@@ -942,6 +966,10 @@ export default function SearchExploreScreen() {
           updateCellsBatchingPeriod={40}
           windowSize={7}
           removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
+          onScrollBeginDrag={exploreScrollPressGuard.onScrollBeginDrag}
+          onScrollEndDrag={exploreScrollPressGuard.onScrollEndDrag}
+          onMomentumScrollBegin={exploreScrollPressGuard.onMomentumScrollBegin}
+          onMomentumScrollEnd={exploreScrollPressGuard.onMomentumScrollEnd}
         />
       ) : (
         <ScrollView
@@ -949,7 +977,11 @@ export default function SearchExploreScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-          contentContainerStyle={{ paddingBottom: 60 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 60 }}
+          onScrollBeginDrag={exploreScrollPressGuard.onScrollBeginDrag}
+          onScrollEndDrag={exploreScrollPressGuard.onScrollEndDrag}
+          onMomentumScrollBegin={exploreScrollPressGuard.onMomentumScrollBegin}
+          onMomentumScrollEnd={exploreScrollPressGuard.onMomentumScrollEnd}
         >
           <>
             {recentSearches.length > 0 ? (

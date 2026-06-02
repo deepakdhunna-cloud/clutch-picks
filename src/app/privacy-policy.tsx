@@ -2,6 +2,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function PrivacyPolicyScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => router.back()}
+            onPress={() => guardedRouterBack(router)}
             hitSlop={8}
             style={{ marginRight: 16, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >

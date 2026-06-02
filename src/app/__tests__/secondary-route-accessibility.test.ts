@@ -17,14 +17,6 @@ const sportSource = fs.readFileSync(
   path.join(process.cwd(), 'src/app/sport/[sport].tsx'),
   'utf8',
 );
-const followersSource = fs.readFileSync(
-  path.join(process.cwd(), 'src/app/followers/[userId].tsx'),
-  'utf8',
-);
-const userProfileSource = fs.readFileSync(
-  path.join(process.cwd(), 'src/app/user/[id].tsx'),
-  'utf8',
-);
 const privacySource = fs.readFileSync(
   path.join(process.cwd(), 'src/app/privacy-policy.tsx'),
   'utf8',
@@ -72,28 +64,6 @@ describe('secondary route accessibility', () => {
     expect(sportSource).toContain("accessibilityLabel={`${filter.label}, ${count} ${count === 1 ? 'game' : 'games'}`}");
     expect(sportSource).toContain('accessibilityHint="Filters this sport screen"');
     expect(sportSource).toContain('accessibilityState={{ selected: isSelected }}');
-  });
-
-  it('labels followers navigation, tabs, rows, and follow buttons', () => {
-    expect(followersSource).toContain('accessibilityLabel="Back"');
-    expect(followersSource).toContain("accessibilityRole=\"tab\"");
-    expect(followersSource).toContain("accessibilityLabel=\"Followers tab\"");
-    expect(followersSource).toContain("accessibilityLabel=\"Following tab\"");
-    expect(followersSource).toContain("accessibilityLabel={`Open ${user.name || 'User'} profile`}");
-    expect(followersSource).toContain("accessibilityLabel={isFollowing ? `Unfollow ${user.name || 'User'}` : `Follow ${user.name || 'User'}`}");
-    expect(followersSource).toContain('accessibilityState={{ disabled: isFollowLoading, busy: isFollowLoading }}');
-    expect(followersSource).toContain('minHeight: 44');
-  });
-
-  it('labels public profile social actions', () => {
-    expect(userProfileSource).toContain("accessibilityLabel={`${profile.followersCount ?? 0} followers`}");
-    expect(userProfileSource).toContain("accessibilityLabel={`${profile.followingCount ?? 0} following`}");
-    expect(userProfileSource).toContain("accessibilityLabel={isFollowing ? 'Unfollow user' : 'Follow user'}");
-    expect(userProfileSource).toContain('accessibilityState={{ disabled: isFollowLoading, busy: isFollowLoading }}');
-    expect(userProfileSource).toContain('accessibilityRole="button"');
-    expect(userProfileSource).toContain('accessibilityLabel="Report user"');
-    expect(userProfileSource).toContain('accessibilityLabel="Block user"');
-    expect(userProfileSource).toContain('minHeight: 44');
   });
 
   it('labels the game analysis Pro preview clearly', () => {

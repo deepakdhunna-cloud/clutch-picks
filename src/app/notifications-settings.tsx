@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Bell, Zap, TrendingUp, AlertTriangle, Activity } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   DEFAULT_NOTIFICATION_PREFS,
@@ -12,6 +12,7 @@ import {
   registerDeviceForPushNotifications,
   saveNotificationPreferences,
 } from '@/hooks/useNotifications';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 
 interface SettingItemProps {
   icon: any;
@@ -152,35 +153,43 @@ export default function NotificationsSettingsScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFS);
   const [savingKey, setSavingKey] = useState<keyof NotificationPreferences | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const savingKeyRef = useRef<keyof NotificationPreferences | null>(null);
 
   useEffect(() => {
     loadNotificationPreferences().then(setNotifPrefs).catch(() => {});
   }, []);
 
   const toggleNotif = useCallback(async (key: keyof NotificationPreferences) => {
-    if (savingKey) return;
+    if (savingKey || savingKeyRef.current) return;
+    savingKeyRef.current = key;
     const previous = notifPrefs;
     const next = { ...previous, [key]: !previous[key] };
     setNotifPrefs(next);
     setSavingKey(key);
     setStatusMessage(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-    const pushRegistered = next[key]
-      ? await registerDeviceForPushNotifications(true)
-      : true;
-    const prefsSaved = await saveNotificationPreferences(next);
+    try {
+      const pushRegistered = next[key]
+        ? await registerDeviceForPushNotifications(true)
+        : true;
+      const prefsSaved = await saveNotificationPreferences(next);
 
-    if (!pushRegistered || !prefsSaved) {
+      if (pushRegistered && prefsSaved) return;
       setNotifPrefs(previous);
       await saveNotificationPreferences(previous);
       setStatusMessage(pushRegistered
         ? 'Could not save that notification setting. Try again in a moment.'
         : 'Notifications were not enabled. Check device permissions and try again.');
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    } catch {
+      setNotifPrefs(previous);
+      setStatusMessage('Could not save that notification setting. Try again in a moment.');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    } finally {
+      savingKeyRef.current = null;
+      setSavingKey(null);
     }
-
-    setSavingKey(null);
   }, [notifPrefs, savingKey]);
 
   const renderSwitch = useCallback((key: keyof NotificationPreferences) => (
@@ -212,8 +221,8 @@ export default function NotificationsSettingsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              guardedRouterBack(router);
             }}
             style={{
               width: 44,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,13 +14,13 @@ import { Camera, Pencil } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { pickImage, takePhoto } from '@/lib/file-picker';
-import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
+import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
+import { guardedRouterReplace } from '@/lib/navigation-guard';
 
 const BG = '#040608';
 const CORAL = '#8B0A1F';
@@ -53,53 +53,27 @@ export default function ProfileSetupScreen() {
   const [displayName, setDisplayName] = useState('');
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
+  const saveInFlightRef = useRef(false);
 
   const hasDisplayName = displayName.trim().length > 0;
 
-  const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
-    if (!pickedFile || isUploading) return;
+  const profilePhotoUpload = useProfilePhotoUpload({
+    onUploaded: (imageUrl) => setProfileImage(imageUrl),
+    onFeedback: setFeedback,
+  });
 
-    setIsUploading(true);
-    try {
-      const uploadResult = await uploadFile(pickedFile.uri, pickedFile.filename, pickedFile.mimeType);
-      await api.put<UserProfile>('/api/profile/image', { imageUrl: uploadResult.url });
-      setProfileImage(uploadResult.url);
-    } catch (error) {
-      setFeedback({
-        title: 'Upload Failed',
-        message: 'There was an error uploading your photo. Please try again.',
-        variant: 'error',
-      });
-      if (__DEV__) console.error('Upload error:', error);
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  const isUploading = profilePhotoUpload.isBusy;
 
   const handlePhotoPress = () => {
     if (isUploading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPhotoSourceVisible(true);
-  };
-
-  const handleTakePhoto = async () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(false);
-    await handleImageUpload(await takePhoto());
-  };
-
-  const handleChooseLibrary = async () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(false);
-    await handleImageUpload(await pickImage());
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    profilePhotoUpload.openPhotoSource();
   };
 
   const toggleLeague = (leagueId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSelectedLeagues((prev) =>
       prev.includes(leagueId)
         ? prev.filter((id) => id !== leagueId)
@@ -108,7 +82,9 @@ export default function ProfileSetupScreen() {
   };
 
   const handleContinue = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsSaving(true);
 
     try {
@@ -128,13 +104,15 @@ export default function ProfileSetupScreen() {
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
 
       // Navigate to home
-      router.replace('/(tabs)');
-    } catch (error) {
-      if (__DEV__) console.error('Error saving profile:', error);
-      // Still navigate even if save fails
-      await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-      router.replace('/(tabs)');
+      guardedRouterReplace(router, '/(tabs)');
+    } catch {
+      setFeedback({
+        title: 'Profile Not Saved',
+        message: 'Please check your connection and try again before continuing.',
+        variant: 'error',
+      });
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   };
@@ -143,11 +121,11 @@ export default function ProfileSetupScreen() {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <PhotoSourceModal
-          visible={photoSourceVisible}
+          visible={profilePhotoUpload.photoSourceVisible}
           title="Profile Photo"
-          onTakePhoto={handleTakePhoto}
-          onChooseLibrary={handleChooseLibrary}
-          onCancel={() => setPhotoSourceVisible(false)}
+          onTakePhoto={profilePhotoUpload.takePhoto}
+          onChooseLibrary={profilePhotoUpload.chooseLibrary}
+          onCancel={profilePhotoUpload.closePhotoSource}
         />
         <FeedbackModal
           visible={!!feedback}
@@ -213,7 +191,14 @@ export default function ProfileSetupScreen() {
                 }}
               >
                 {isUploading ? (
-                  <ActivityIndicator size="large" color={TEAL} />
+                  <View style={{ alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="large" color={TEAL} />
+                    {profilePhotoUpload.uploadProgressLabel ? (
+                      <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '700' }}>
+                        {profilePhotoUpload.uploadProgressLabel}
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : (
                   <>
                     <ProfileAvatarImage

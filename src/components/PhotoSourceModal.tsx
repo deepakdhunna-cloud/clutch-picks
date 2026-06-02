@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { InteractionManager, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, Image as ImageIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { claimInteractionLock } from '@/lib/interaction-guard';
 
 interface PhotoSourceModalProps {
   visible: boolean;
@@ -34,6 +35,7 @@ export function PhotoSourceModal({
   }, [runPendingAction, visible]);
 
   const press = (action: () => void) => {
+    if (!claimInteractionLock('photo-source-option', 650)) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     action();
   };

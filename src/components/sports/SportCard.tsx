@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Sport, SPORT_META } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { guardedRouterPush } from '@/lib/navigation-guard';
 import Svg, { Path, Circle, Rect, Defs, Pattern, Line, Ellipse, RadialGradient, Stop, G } from 'react-native-svg';
 
 // ─── JUMBOTRON COLORS ──────────────────────────────────────────
@@ -1306,7 +1307,7 @@ export const SportCard = memo(function SportCard({
     if (onPress) {
       onPress();
     } else {
-      router.push(`/sport/${sport}` as any);
+      guardedRouterPush(router, `/sport/${sport}` as any);
     }
   }, [onPress, router, shouldHandlePress, sport]);
 
@@ -1363,7 +1364,7 @@ export const SportCard = memo(function SportCard({
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           scale.value = withTiming(0.94, { duration: 70, easing: Easing.out(Easing.cubic) });
         }}
         onPressOut={() => {
@@ -1413,7 +1414,7 @@ export const SportCard = memo(function SportCard({
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           scale.value = withSpring(0.9, { damping: 16, stiffness: 420 });
         }}
         onPressOut={() => {

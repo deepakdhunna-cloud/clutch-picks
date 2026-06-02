@@ -1,4 +1,5 @@
 import { Sport, type CricketScoreState, type Team } from '@/types/sports';
+import { isLiveGameStatus } from '@/lib/game-status';
 
 type Side = 'home' | 'away';
 type CricketGameLike = {
@@ -46,7 +47,7 @@ export function cricketTeamScoreText(game: CricketGameLike, side: Side): string 
 
   if (display?.includes('/')) return display;
   if (stateScore?.includes('/')) return stateScore;
-  if ((game.status === 'LIVE' || game.status === 'FINAL') && (numeric === undefined || numeric === 0)) {
+  if ((isLiveGameStatus(game.status ?? '') || game.status === 'FINAL') && (numeric === undefined || numeric === 0)) {
     return '0/0';
   }
   return wicketScore ?? display ?? stateScore ?? (typeof numeric === 'number' ? String(numeric) : '0');

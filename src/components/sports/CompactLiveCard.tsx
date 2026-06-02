@@ -12,12 +12,13 @@ interface CompactLiveCardProps {
   // fresh inline closure per render (which would defeat the content memo).
   onPress: (game: GameWithPrediction) => void;
   onPressIn?: (game: GameWithPrediction) => void;
+  canOpen?: () => boolean;
 }
 
 // The compact "Live Now" card now shares the My Arena game-day live-card design
 // (glass frame, jerseys, LED scoreboard, duration pill, LIVE badge) via the
 // shared rail variant — no stat tiles, no game pulse.
-export function CompactLiveCard({ game, onPress, onPressIn }: CompactLiveCardProps) {
+export function CompactLiveCard({ game, onPress, onPressIn, canOpen }: CompactLiveCardProps) {
   return (
     <LiveArenaCard
       game={game}
@@ -25,6 +26,7 @@ export function CompactLiveCard({ game, onPress, onPressIn }: CompactLiveCardPro
       variant="rail"
       onPress={onPress}
       onPressIn={onPressIn}
+      canOpen={canOpen}
     />
   );
 }

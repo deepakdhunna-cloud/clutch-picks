@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,6 +24,8 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 import { getAppVersionLabel } from '@/lib/app-version';
+import { claimInteractionLock } from '@/lib/interaction-guard';
+import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
 interface SettingItemProps {
   icon: any;
@@ -98,7 +100,8 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (!claimInteractionLock(`settings:${title}`, 700)) return;
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         onPress?.();
       }}
       style={({ pressed }) => ({
@@ -155,11 +158,13 @@ export default function SettingsScreen() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const signOutInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
   const { isPremium, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
 
   const handleRedeemPromo = async (code: string) => {
-    if (!code.trim()) return;
+    if (!code.trim() || promoLoading) return;
     setPromoLoading(true);
     try {
       const rcAppUserId = await getRevenueCatAppUserId();
@@ -167,14 +172,14 @@ export default function SettingsScreen() {
       const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: code.trim(), rcUserId });
       await invalidateCustomerInfoCache();
       await checkSubscription();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setFeedback({
         title: 'Code Applied',
         message: result.message ?? 'Lifetime access granted.',
         variant: 'success',
       });
     } catch (error: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setFeedback({
         title: 'Invalid Code',
         message: error?.message || 'This code could not be applied.',
@@ -188,7 +193,8 @@ export default function SettingsScreen() {
   };
 
   const handlePromoPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (promoLoading) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setPromoModalVisible(true);
   };
 
@@ -252,15 +258,16 @@ export default function SettingsScreen() {
   const isRestoringPurchases = restorePurchasesMutation.isPending;
 
   const handleRestorePurchases = () => {
+    if (restorePurchasesMutation.isPending) return;
     restorePurchasesMutation.mutate();
   };
 
   const handleTermsPress = () => {
-    router.push('/terms');
+    guardedRouterPush(router, '/terms');
   };
 
   const handlePrivacyPress = () => {
-    router.push('/privacy-policy');
+    guardedRouterPush(router, '/privacy-policy');
   };
 
   const handleSupportPress = openSupportEmail;
@@ -269,69 +276,67 @@ export default function SettingsScreen() {
     if (isPremium) {
       // Open subscription management in App Store / Play Store
       if (Platform.OS === 'ios') {
-        Linking.openURL('https://apps.apple.com/account/subscriptions');
+        void Linking.openURL('https://apps.apple.com/account/subscriptions');
       } else {
-        Linking.openURL('https://play.google.com/store/account/subscriptions');
+        void Linking.openURL('https://play.google.com/store/account/subscriptions');
       }
     } else {
       // Show paywall for non-subscribers
-      router.push('/paywall');
+      guardedRouterPush(router, '/paywall');
     }
   };
 
   const handleSignOut = async () => {
-    if (__DEV__) console.log('[Settings] Sign out button tapped!');
+    if (signOutInFlightRef.current) return;
+    signOutInFlightRef.current = true;
     setIsSigningOut(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     try {
       await unregisterCurrentDeviceForPushNotifications();
 
       // Sign out from Better Auth
       try {
-        if (__DEV__) console.log('[Settings] Calling authClient.signOut()...');
         await authClient.signOut();
-        if (__DEV__) console.log('[Settings] authClient.signOut() completed');
-      } catch (e) {
-        if (__DEV__) console.log('[Settings] Auth signOut error (ignored):', e);
+      } catch {
+        // Local auth storage is cleared below even if the server sign-out fails.
       }
 
       // Sign out from RevenueCat if enabled
       if (isRevenueCatEnabled()) {
         try {
           await logoutUser();
-        } catch (e) {
-          if (__DEV__) console.log('[Settings] RevenueCat logout error (ignored):', e);
+        } catch {
+          // RevenueCat logout should not trap the user in the account screen.
         }
       }
 
       await clearAuthStorage();
-      if (__DEV__) console.log('[Settings] Auth storage cleared');
 
       // Invalidate session cache
-      if (__DEV__) console.log('[Settings] Invalidating session cache...');
       await invalidateSession();
-      if (__DEV__) console.log('[Settings] Session invalidated');
 
       // Navigate to welcome
-      if (__DEV__) console.log('[Settings] Navigating to welcome...');
-      router.replace('/welcome');
+      guardedRouterReplace(router, '/welcome');
     } catch (error) {
-      if (__DEV__) console.log('[Settings] Sign out error:', error);
       setFeedback({
         title: 'Sign Out Failed',
         message: 'Failed to sign out. Please try again.',
         variant: 'error',
       });
       setIsSigningOut(false);
+      signOutInFlightRef.current = false;
     }
   };
 
   const handleDeleteAccount = () => {
+    if (deleteInFlightRef.current) return;
     setDeleteConfirmVisible(true);
   };
 
   const handleConfirmDeleteAccount = async () => {
+    if (deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
     setDeleteConfirmVisible(false);
     try {
       await unregisterCurrentDeviceForPushNotifications();
@@ -344,8 +349,9 @@ export default function SettingsScreen() {
       await AsyncStorage.removeItem('clutch_onboarding_complete').catch(() => {});
       await AsyncStorage.removeItem('clutch_onboarding_skip_profile').catch(() => {});
       await invalidateSession();
-      router.replace('/welcome');
+      guardedRouterReplace(router, '/welcome');
     } catch {
+      deleteInFlightRef.current = false;
       setFeedback({
         title: 'Delete Failed',
         message: 'Failed to delete account. Please try again or contact support.',
@@ -382,8 +388,8 @@ export default function SettingsScreen() {
             accessibilityLabel="Back"
             hitSlop={4}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              guardedRouterBack(router);
             }}
             style={{
               width: 44,
@@ -439,9 +445,9 @@ export default function SettingsScreen() {
                     subtitle="Manage billing in App Store"
                     onPress={() => {
                       if (Platform.OS === 'ios') {
-                        Linking.openURL('https://apps.apple.com/account/subscriptions');
+                        void Linking.openURL('https://apps.apple.com/account/subscriptions');
                       } else {
-                        Linking.openURL('https://play.google.com/store/account/subscriptions');
+                        void Linking.openURL('https://play.google.com/store/account/subscriptions');
                       }
                     }}
                   />
@@ -457,7 +463,7 @@ export default function SettingsScreen() {
                 icon={RefreshCw}
                 title="Model Performance"
                 subtitle="Accuracy, calibration, and drift"
-                onPress={() => router.push('/model-accuracy')}
+                onPress={() => guardedRouterPush(router, '/model-accuracy')}
               />
             </SettingSection>
           </Animated.View>
@@ -469,7 +475,7 @@ export default function SettingsScreen() {
                 icon={Bell}
                 title="Notifications"
                 subtitle="Manage alerts and preferences"
-                onPress={() => router.push('/notifications-settings')}
+                onPress={() => guardedRouterPush(router, '/notifications-settings')}
               />
             </SettingSection>
           </Animated.View>
@@ -528,9 +534,9 @@ export default function SettingsScreen() {
                 title="Replay Tutorial"
                 subtitle="Walk through the app intro again"
                 onPress={async () => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   await AsyncStorage.removeItem('clutch_onboarding_skip_profile');
-                  router.replace('/onboarding?replay=settings');
+                  guardedRouterReplace(router, '/onboarding?replay=settings');
                 }}
               />
             </SettingSection>

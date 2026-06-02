@@ -213,6 +213,7 @@ export interface LiveArenaCardProps {
   // (keeps the deep-equal content memo below from being defeated by fresh closures).
   onPress: (game: GameWithPrediction) => void;
   onPressIn?: (game: GameWithPrediction) => void;
+  canOpen?: () => boolean;
 }
 
 function propsEqual(prev: LiveArenaCardProps, next: LiveArenaCardProps): boolean {
@@ -221,6 +222,7 @@ function propsEqual(prev: LiveArenaCardProps, next: LiveArenaCardProps): boolean
     prev.variant === next.variant &&
     prev.onPress === next.onPress &&
     prev.onPressIn === next.onPressIn &&
+    prev.canOpen === next.canOpen &&
     deepEqual(prev.game, next.game)
   );
 }
@@ -231,6 +233,7 @@ export const LiveArenaCard = memo(function LiveArenaCard({
   variant = 'rail',
   onPress,
   onPressIn,
+  canOpen,
 }: LiveArenaCardProps) {
   const cfg = variant === 'rail' ? RAIL : FULL;
   const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
@@ -507,7 +510,6 @@ export const LiveArenaCard = memo(function LiveArenaCard({
         variant === 'rail'
           ? {
               width: cardWidth,
-              marginRight: 10,
               borderRadius: cfg.radius,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 13 },
@@ -525,6 +527,7 @@ export const LiveArenaCard = memo(function LiveArenaCard({
         onPressIn={onPressIn ? () => onPressIn(game) : undefined}
         onPress={() => {
           if (!shouldHandlePress()) return;
+          if (canOpen && !canOpen()) return;
           onPress(game);
         }}
         pressRetentionOffset={6}

@@ -1,4 +1,4 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, Platform } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
@@ -23,12 +23,15 @@ import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 import { LinearGradient } from 'expo-linear-gradient';
 import GridBackground from '@/components/GridBackground';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
+import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
 import { MAROON, TEAL, TEAL_DARK } from '@/lib/theme';
 import { teamScoreText } from '@/lib/cricket-score';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { guardedRouterPush } from '@/lib/navigation-guard';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import * as Haptics from 'expo-haptics';
 
@@ -40,6 +43,11 @@ const HOME_BOARD_SCROLL_OFFSET = 300;
 const SEARCH_RESULT_ITEM_HEIGHT = 88;
 const HOME_LIVE_CARD_WIDTH = 300;
 const HOME_LIVE_CARD_GAP = 10;
+const HOME_LIVE_CARD_SNAP_INTERVAL = HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP;
+
+const HomeLiveRailSeparator = memo(function HomeLiveRailSeparator() {
+  return <View style={{ width: HOME_LIVE_CARD_GAP }} />;
+});
 
 const RefreshPill = memo(function RefreshPill({ visible, label }: { visible: boolean; label: string }) {
   if (!visible) return null;
@@ -290,7 +298,6 @@ const SportTileCarousel = memo(function SportTileCarousel({
 });
 
 interface HomeHeaderProps {
-  liveGamesPreview: GameWithPrediction[];
   filteredLiveGames: GameWithPrediction[];
   availableLiveSports: Sport[];
   liveSportCounts: Map<Sport, number>;
@@ -299,16 +306,12 @@ interface HomeHeaderProps {
   selectedSportFilter: Sport | null;
   setSelectedSportFilter: (sport: Sport | null) => void;
   showAllLive: boolean;
-  setShowAllLive: (val: boolean) => void;
   onViewAll: () => void;
-  nonLiveGames: GameWithPrediction[];
   gameCounts: Partial<Record<Sport, number>>;
   isLoadingGames: boolean;
-  router: ReturnType<typeof useRouter>;
+  onOpenLiveGames: () => void;
   onOpenGame: (game: GameWithPrediction) => void;
   onWarmGame: (game: GameWithPrediction) => void;
-  horizontalPadding: number;
-  headerFontSize: number;
   responsive: ReturnType<typeof useResponsive>;
   statusFilter: 'all' | 'upcoming' | 'final';
 }
@@ -439,7 +442,6 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
 });
 
 const HomeHeader = React.memo(function HomeHeader({
-  liveGamesPreview,
   filteredLiveGames,
   availableLiveSports,
   liveSportCounts,
@@ -448,16 +450,12 @@ const HomeHeader = React.memo(function HomeHeader({
   selectedSportFilter,
   setSelectedSportFilter,
   showAllLive,
-  setShowAllLive,
   onViewAll,
-  nonLiveGames,
   gameCounts,
   isLoadingGames,
-  router,
+  onOpenLiveGames,
   onOpenGame,
   onWarmGame,
-  horizontalPadding,
-  headerFontSize,
   responsive,
   statusFilter,
 }: HomeHeaderProps) {
@@ -471,18 +469,21 @@ const HomeHeader = React.memo(function HomeHeader({
     onTouchCancel: onLiveChipTouchCancel,
     shouldHandlePress: shouldHandleLiveChipPress,
   } = useTapGestureGuard();
+  const liveRailPressGuard = useScrollPressGuard(500, 220);
   const liveCardSidePadding = Math.max(20, (responsive.width - HOME_LIVE_CARD_WIDTH) / 2);
   const liveRailGames = useMemo(
     () => (showAllLive ? filteredLiveGames : filteredLiveGames.slice(0, 5)),
     [filteredLiveGames, showAllLive],
   );
   const showLiveRailViewAll = !showAllLive && filteredLiveGames.length > 5;
+  const liveRailInitialRenderCount = Math.min(liveRailGames.length, showAllLive ? 4 : 5);
+  const canOpenLiveCard = liveRailPressGuard.canPress;
   const renderLiveRailGame = useCallback(({ item }: { item: GameWithPrediction }) => (
-    <CompactLiveCard game={item} onPressIn={onWarmGame} onPress={onOpenGame} />
-  ), [onOpenGame, onWarmGame]);
+    <CompactLiveCard game={item} onPressIn={onWarmGame} onPress={onOpenGame} canOpen={canOpenLiveCard} />
+  ), [canOpenLiveCard, onOpenGame, onWarmGame]);
   const getLiveRailItemLayout = useCallback((_: ArrayLike<GameWithPrediction> | null | undefined, index: number) => ({
-    length: HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP,
-    offset: (HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP) * index,
+    length: HOME_LIVE_CARD_SNAP_INTERVAL,
+    offset: HOME_LIVE_CARD_SNAP_INTERVAL * index,
     index,
   }), []);
 
@@ -629,16 +630,21 @@ const HomeHeader = React.memo(function HomeHeader({
             style={{ flexGrow: 0 }}
             scrollEventThrottle={16}
             removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
-            snapToInterval={HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP}
+            snapToInterval={HOME_LIVE_CARD_SNAP_INTERVAL}
             snapToAlignment="start"
             disableIntervalMomentum
             decelerationRate="fast"
-            initialNumToRender={2}
-            maxToRenderPerBatch={2}
-            windowSize={3}
+            initialNumToRender={liveRailInitialRenderCount}
+            maxToRenderPerBatch={4}
+            windowSize={5}
             keyExtractor={(item) => item.id}
             renderItem={renderLiveRailGame}
             getItemLayout={getLiveRailItemLayout}
+            ItemSeparatorComponent={HomeLiveRailSeparator}
+            onScrollBeginDrag={liveRailPressGuard.onScrollBeginDrag}
+            onScrollEndDrag={liveRailPressGuard.onScrollEndDrag}
+            onMomentumScrollBegin={liveRailPressGuard.onMomentumScrollBegin}
+            onMomentumScrollEnd={liveRailPressGuard.onMomentumScrollEnd}
             ListFooterComponent={showLiveRailViewAll ? (
               <Pressable
                 accessibilityRole="button"
@@ -646,7 +652,7 @@ const HomeHeader = React.memo(function HomeHeader({
                 accessibilityHint="Opens the live games screen"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
-                  router.push('/live-games' as any);
+                  onOpenLiveGames();
                 }}
                 pressRetentionOffset={6}
                 onTouchStart={onLiveChipTouchStart}
@@ -704,7 +710,7 @@ const SearchGameCard = memo(function SearchGameCard({
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport);
   const awayAccent = awayColors.accent;
   const homeAccent = homeColors.accent;
-  const isLive = game.status === GameStatus.LIVE;
+  const isLive = isLiveGameLike(game);
   const sportMeta = SPORT_META[game.sport];
   const awayScoreLabel = teamScoreText(game, 'away');
   const homeScoreLabel = teamScoreText(game, 'home');
@@ -863,8 +869,9 @@ export default function HomeScreen() {
   const isFocused = useIsFocused();
   const tabBarVisible = useTabBarVisible();
   const responsive = useResponsive();
-  const { isTablet, contentPadding: horizontalPadding, headerSize: headerFontSize, numColumns } = responsive;
+  const { isTablet, numColumns } = responsive;
   const flatListRef = useRef<any>(null);
+  const homePressGuard = useScrollPressGuard(500, 220);
   const lastDirection = useSharedValue(0);
   const directionAnchor = useSharedValue(0);
   const previousOffset = useSharedValue(0);
@@ -878,7 +885,7 @@ export default function HomeScreen() {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 200);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-  const [showAllLive, setShowAllLive] = useState(false);
+  const [showAllLive] = useState(false);
   const [selectedLiveSportFilter, setSelectedLiveSportFilter] = useState<Sport | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'upcoming' | 'final'>('all');
   const [visibleSportGameCounts, setVisibleSportGameCounts] = useState<Record<string, number>>({});
@@ -891,6 +898,12 @@ export default function HomeScreen() {
       flatListRef.current?.scrollToOffset({ offset: HOME_BOARD_SCROLL_OFFSET, animated: true });
     });
   }, []);
+
+  const handleOpenLiveGames = useCallback(() => {
+    guardedRouterPush(router, '/live-games' as any);
+  }, [router]);
+
+  const canOpenHomeCard = homePressGuard.canPress;
 
   const applySportFilter = useCallback((nextSport: Sport | null) => {
     const isChanging = nextSport !== selectedSportFilter;
@@ -982,7 +995,7 @@ export default function HomeScreen() {
   const handleOpenGame = useCallback((game: GameWithPrediction) => {
     if (!claimGameNavigation(game.id)) return;
     prefetchGame(game.id, game);
-    router.push(`/game/${game.id}` as any);
+    guardedRouterPush(router, `/game/${game.id}` as any);
   }, [prefetchGame, router]);
 
   const handleWarmGame = useCallback((game: GameWithPrediction) => {
@@ -991,7 +1004,7 @@ export default function HomeScreen() {
 
   // Derive live games from the same query (no double subscription)
   const liveGamesPreview = useMemo(
-    () => (todaysGames ?? []).filter((g: any) => g.status === 'in_progress' || g.status === 'halftime' || g.status === 'LIVE'),
+    () => sortSuspendedGamesLast((todaysGames ?? []).filter(isLiveGameLike)),
     [todaysGames]
   );
 
@@ -1123,7 +1136,7 @@ export default function HomeScreen() {
     endOfTomorrow.setHours(23, 59, 59, 999);
 
     return todaysGames.filter((game) => {
-      if (game.status === GameStatus.LIVE) return false;
+      if (isLiveGameLike(game)) return false;
       const gameTime = new Date(game.gameTime);
       return gameTime >= startOfYesterday && gameTime <= endOfTomorrow;
     });
@@ -1239,24 +1252,18 @@ export default function HomeScreen() {
   }, [todaysGames, deferredSelectedSportFilter, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr, getSportVisibilityKey, visibleSportGameCounts]);
 
 
-  // Tracks which game cards have already played their entrance animation, so a
-  // card that scrolls out of the virtualization window and back in does NOT
-  // re-fire FadeInDown (the "odd jump" while scrolling). Each game animates in
-  // exactly once — on first appearance — matching the first-paint look.
-  const animatedGameKeysRef = useRef<Set<string>>(new Set());
-
   // Render item for FlatList
   const renderGameListItem = useCallback(({ item }: { item: FlatListItem }) => {
     if (item.type === 'sport-header') {
       const sportLabel = displaySport(item.sport);
       return (
-        <Animated.View entering={FadeInDown.duration(180)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 20, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 20, marginBottom: 14 }}>
+        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 20, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 20, marginBottom: 14 }}>
           <LedBarPanel
             label={sportLabel}
             count={item.gameCount}
             leftSport={item.sport}
           />
-        </Animated.View>
+        </View>
       );
     }
 
@@ -1269,7 +1276,7 @@ export default function HomeScreen() {
         item.label === 'FINAL RESULTS' ? '#A1B3C9' :
         '#FFFFFF';
       return (
-        <Animated.View entering={FadeInDown.duration(180)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 }}>
+        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginTop: 24, marginBottom: 14 } : { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 }}>
           {/* Subtle divider above — fades from edges */}
           {!isLive ? (
             <LinearGradient colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1, marginBottom: 14 }} />
@@ -1290,7 +1297,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ width: 40, height: 2, borderRadius: 1, backgroundColor: accentColor, marginTop: 8, opacity: 0.6 }} />
           </View>
-        </Animated.View>
+        </View>
       );
     }
 
@@ -1300,7 +1307,7 @@ export default function HomeScreen() {
       const sportLabel = displaySport(item.sport);
       const DirectionIcon = hasMore ? ChevronDown : ChevronUp;
       return (
-        <Animated.View entering={FadeInDown.duration(190)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
+        <View style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={hasMore ? `View more ${sportLabel} games` : `Show fewer ${sportLabel} games`}
@@ -1364,25 +1371,20 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </Pressable>
-        </Animated.View>
+        </View>
       );
     }
 
     if (item.type === 'game') {
-      const hasAnimated = animatedGameKeysRef.current.has(item.key);
-      if (!hasAnimated) animatedGameKeysRef.current.add(item.key);
       return (
-        <Animated.View
-          entering={hasAnimated ? undefined : FadeInDown.duration(190).delay(Math.min(item.index * 18, 108))}
-          style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 14 }}
-        >
-          <GameCard game={item.game} index={item.index} />
-        </Animated.View>
+        <View style={numColumns > 1 ? { flex: 1, maxWidth: '50%' } : { paddingHorizontal: 20, marginBottom: 14 }}>
+          <GameCard game={item.game} index={item.index} canOpen={canOpenHomeCard} />
+        </View>
       );
     }
 
     return null;
-  }, [numColumns, responsive.contentPadding, showLessSportGames, showMoreSportGames]);
+  }, [canOpenHomeCard, numColumns, responsive.contentPadding, showLessSportGames, showMoreSportGames]);
 
   // Key items by their own stable id so the FlatList REUSES the cards that
   // persist across a filter/sport change instead of unmounting and rebuilding
@@ -1428,7 +1430,6 @@ export default function HomeScreen() {
   const homeListHeader = useMemo(() => (
     <>
       <HomeHeader
-        liveGamesPreview={liveGamesPreview}
         filteredLiveGames={filteredLiveGames}
         availableLiveSports={availableLiveSports}
         liveSportCounts={liveSportCounts}
@@ -1437,16 +1438,12 @@ export default function HomeScreen() {
         selectedSportFilter={selectedSportFilter}
         setSelectedSportFilter={applySportFilter}
         showAllLive={showAllLive}
-        setShowAllLive={setShowAllLive}
         onViewAll={scrollToHomeBoard}
-        nonLiveGames={nonLiveGames}
         gameCounts={gameCounts}
         isLoadingGames={isInitialHomeLoading}
-        router={router}
+        onOpenLiveGames={handleOpenLiveGames}
         onOpenGame={handleOpenGame}
         onWarmGame={handleWarmGame}
-        horizontalPadding={horizontalPadding}
-        headerFontSize={headerFontSize}
         responsive={responsive}
         statusFilter={statusFilter}
       />
@@ -1496,16 +1493,12 @@ export default function HomeScreen() {
     availableLiveSports,
     filteredLiveGames,
     gameCounts,
+    handleOpenLiveGames,
     handleOpenGame,
     handleWarmGame,
-    headerFontSize,
-    horizontalPadding,
     isInitialHomeLoading,
-    liveGamesPreview,
     liveSportCounts,
-    nonLiveGames,
     responsive,
-    router,
     scrollToHomeBoard,
     selectedLiveSportFilter,
     selectedSportFilter,
@@ -1570,6 +1563,10 @@ export default function HomeScreen() {
         renderItem={renderGameListItem}
         keyExtractor={getItemKey}
         onScroll={scrollHandler}
+        onScrollBeginDrag={homePressGuard.onScrollBeginDrag}
+        onScrollEndDrag={homePressGuard.onScrollEndDrag}
+        onMomentumScrollBegin={homePressGuard.onMomentumScrollBegin}
+        onMomentumScrollEnd={homePressGuard.onMomentumScrollEnd}
         scrollEventThrottle={16}
         removeClippedSubviews={SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS}
         maxToRenderPerBatch={6}
@@ -1674,6 +1671,8 @@ export default function HomeScreen() {
           {/* Results */}
           <FlatList
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
             contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
             data={searchData}
             keyExtractor={(item) => item.id}

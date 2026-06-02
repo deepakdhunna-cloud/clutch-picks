@@ -21,9 +21,12 @@ import { LiveArenaCard } from '@/components/sports/LiveArenaCard';
 import { Sport, SPORT_META, GameWithPrediction } from '@/types/sports';
 import { useGames } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { guardedRouterBack, guardedRouterPush } from '@/lib/navigation-guard';
 import { TEAL, MAROON, BG, LIVE_RED } from '@/lib/theme';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
+import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
 
 // Broadcast-style pulsing live indicator: a solid dot with a ring that
 // expands and fades on a loop. One shared value, UI thread, cleaned up.
@@ -53,6 +56,7 @@ function LivePulse() {
 export default function LiveGamesScreen() {
   const router = useRouter();
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
+  const liveListPressGuard = useScrollPressGuard();
   const {
     onTouchStart: onChipTouchStart,
     onTouchMove: onChipTouchMove,
@@ -70,15 +74,13 @@ export default function LiveGamesScreen() {
   }, [prefetchGame]);
 
   const onOpenGame = useCallback((game: GameWithPrediction) => {
+    if (!liveListPressGuard.canPress()) return;
     prefetchGame(game.id, game);
-    router.push(`/game/${game.id}` as any);
-  }, [prefetchGame, router]);
+    guardedRouterPush(router, `/game/${game.id}` as any);
+  }, [liveListPressGuard, prefetchGame, router]);
 
   const liveGames = useMemo<GameWithPrediction[]>(
-    () =>
-      (todaysGames ?? []).filter(
-        (g: any) => g.status === 'in_progress' || g.status === 'halftime' || g.status === 'LIVE'
-      ),
+    () => sortSuspendedGamesLast((todaysGames ?? []).filter(isLiveGameLike)),
     [todaysGames]
   );
 
@@ -108,9 +110,9 @@ export default function LiveGamesScreen() {
 
   const renderLiveGame = useCallback(
     ({ item }: { item: GameWithPrediction; index: number }) => (
-      <LiveArenaCard game={item} cardWidth={cardWidth} variant="full" onPress={onOpenGame} onPressIn={onWarmGame} />
+      <LiveArenaCard game={item} cardWidth={cardWidth} variant="full" onPress={onOpenGame} onPressIn={onWarmGame} canOpen={liveListPressGuard.canPress} />
     ),
-    [cardWidth, onOpenGame, onWarmGame]
+    [cardWidth, liveListPressGuard.canPress, onOpenGame, onWarmGame]
   );
   const keyExtractor = useCallback((g: GameWithPrediction) => g.id, []);
 
@@ -135,7 +137,7 @@ export default function LiveGamesScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back"
-              onPress={() => router.back()}
+              onPress={() => guardedRouterBack(router)}
               style={styles.backButton}
               hitSlop={10}
             >
@@ -206,6 +208,10 @@ export default function LiveGamesScreen() {
             initialNumToRender={6}
             maxToRenderPerBatch={6}
             windowSize={7}
+            onScrollBeginDrag={liveListPressGuard.onScrollBeginDrag}
+            onScrollEndDrag={liveListPressGuard.onScrollEndDrag}
+            onMomentumScrollBegin={liveListPressGuard.onMomentumScrollBegin}
+            onMomentumScrollEnd={liveListPressGuard.onMomentumScrollEnd}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
             }

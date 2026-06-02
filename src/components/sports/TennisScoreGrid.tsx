@@ -1,6 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Sport } from '@/types/sports';
+import { isLiveGameStatus } from '@/lib/game-status';
 
 type TennisScoreTeam = {
   id?: string;
@@ -88,7 +89,7 @@ function buildTennisScoreColumns(game: TennisScoreGame, includeTotal = false): T
   const setCount = Math.max(homeLine.length, awayLine.length);
   if (setCount === 0) return [];
 
-  const isLive = game.status === 'LIVE';
+  const isLive = isLiveGameStatus(game.status ?? '');
   const pointPair = isLive ? extractPointPair(game) : null;
   const activeSetIndex = isLive && !pointPair ? setCount - 1 : -1;
   const columns: TennisScoreColumn[] = [];
@@ -146,7 +147,8 @@ export const TennisHeroSetScores = memo(function TennisHeroSetScores({
   if (setCount === 0) return null;
 
   const line = side === 'home' ? homeLine : awayLine;
-  const activeIndex = game.status === 'LIVE' ? setCount - 1 : -1;
+  const isLive = isLiveGameStatus(game.status ?? '');
+  const activeIndex = isLive ? setCount - 1 : -1;
 
   return (
     <View style={styles.heroSetRow}>

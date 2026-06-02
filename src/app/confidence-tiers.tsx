@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { BG, MAROON, TEAL, TEXT_MUTED } from '@/lib/theme';
 import { CONFIDENCE_TIER_DEFINITIONS } from '@/lib/display-confidence';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 
 const TIER_ACCENTS = [
   'rgba(255,255,255,0.15)',
@@ -38,7 +39,7 @@ export default function ConfidenceTiersScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => router.back()}
+            onPress={() => guardedRouterBack(router)}
             hitSlop={8}
             style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
           >

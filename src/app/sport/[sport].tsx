@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useState, useCallback, useMemo, useEffect, useDeferredValue, memo } from 'react';
 import Animated, {
@@ -16,7 +17,11 @@ import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, type GameWithPrediction } from '@/types/sports';
 import { useWeekGamesBySport } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
+import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
+import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
 
 type FilterStatus = 'live' | 'today' | 'tomorrow' | 'results';
 
@@ -28,6 +33,10 @@ const FilterButton = memo(function FilterButton({
   index,
   sportColor,
   count,
+  onTouchStart,
+  onTouchMove,
+  onTouchCancel,
+  shouldHandlePress,
 }: {
   filter: { key: FilterStatus; label: string; icon: React.ReactNode };
   isSelected: boolean;
@@ -35,6 +44,10 @@ const FilterButton = memo(function FilterButton({
   index: number;
   sportColor: string;
   count: number;
+  onTouchStart: (event: GestureResponderEvent) => void;
+  onTouchMove: (event: GestureResponderEvent) => void;
+  onTouchCancel: (event: GestureResponderEvent) => void;
+  shouldHandlePress: () => boolean;
 }) {
   const scale = useSharedValue(isSelected ? 1.02 : 1);
 
@@ -50,9 +63,10 @@ const FilterButton = memo(function FilterButton({
   }));
 
   const handlePress = useCallback(() => {
+    if (!shouldHandlePress()) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onSelect();
-  }, [onSelect]);
+  }, [onSelect, shouldHandlePress]);
 
   // Different colors for each filter type
   const getFilterColors = () => {
@@ -82,6 +96,10 @@ const FilterButton = memo(function FilterButton({
     >
       <Pressable
         onPress={handlePress}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchCancel={onTouchCancel}
+        pressRetentionOffset={6}
         accessible
         accessibilityRole="button"
         accessibilityLabel={`${filter.label}, ${count} ${count === 1 ? 'game' : 'games'}`}
@@ -140,6 +158,13 @@ export default function SportDetailScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterStatus>('today');
   const deferredFilter = useDeferredValue(filter);
+  const gameListPressGuard = useScrollPressGuard();
+  const {
+    onTouchStart: onFilterTouchStart,
+    onTouchMove: onFilterTouchMove,
+    onTouchCancel: onFilterTouchCancel,
+    shouldHandlePress: shouldHandleFilterPress,
+  } = useTapGestureGuard();
 
   const sportEnum = sport as Sport;
   const sportMeta = SPORT_META[sportEnum];
@@ -168,7 +193,7 @@ export default function SportDetailScreen() {
     if (!allGames.length) return { live: 0, today: 0, tomorrow: 0, results: 0 };
     const counts = { live: 0, today: 0, tomorrow: 0, results: 0 };
     for (const game of allGames) {
-      if (game.status === 'LIVE') {
+      if (isLiveGameLike(game)) {
         counts.live += 1;
         continue;
       }
@@ -187,14 +212,19 @@ export default function SportDetailScreen() {
   // Filter games by status
   const filteredGames = useMemo(() => {
     if (!allGames.length) return [];
-    return allGames.filter(game => {
+    const compareGameTime = (a: GameWithPrediction, b: GameWithPrediction) =>
+      new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+    const filtered = allGames.filter(game => {
       const gameDate = new Date(game.gameTime).toDateString();
-      if (deferredFilter === 'live') return game.status === 'LIVE';
+      if (deferredFilter === 'live') return isLiveGameLike(game);
       if (deferredFilter === 'today') return game.status === 'SCHEDULED' && gameDate === todayStr;
       if (deferredFilter === 'tomorrow') return game.status === 'SCHEDULED' && gameDate === tomorrowStr;
       if (deferredFilter === 'results') return game.status === 'FINAL';
       return true;
-    }).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
+    });
+    return deferredFilter === 'live'
+      ? sortSuspendedGamesLast(filtered, compareGameTime)
+      : filtered.sort(compareGameTime);
   }, [allGames, deferredFilter, todayStr, tomorrowStr]);
 
   // Filters with icons
@@ -214,9 +244,9 @@ export default function SportDetailScreen() {
 
   const renderGame = useCallback(({ item, index }: { item: GameWithPrediction; index: number }) => (
     <View style={styles.gameItem}>
-      <GameCard game={item} index={index} />
+      <GameCard game={item} index={index} canOpen={gameListPressGuard.canPress} />
     </View>
-  ), []);
+  ), [gameListPressGuard.canPress]);
 
   const renderEmpty = useCallback(() => (
     <View style={styles.emptyState}>
@@ -251,7 +281,7 @@ export default function SportDetailScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back"
-              onPress={() => router.back()}
+              onPress={() => guardedRouterBack(router)}
               style={styles.backButton}
             >
               <ChevronLeft size={28} color="#fff" />
@@ -288,12 +318,16 @@ export default function SportDetailScreen() {
               index={index}
               sportColor={sportMeta.color}
               count={filterCounts[f.key]}
+              onTouchStart={onFilterTouchStart}
+              onTouchMove={onFilterTouchMove}
+              onTouchCancel={onFilterTouchCancel}
+              shouldHandlePress={shouldHandleFilterPress}
             />
           ))}
         </ScrollView>
       </>
     );
-  }, [allGames.length, filter, filterCounts, filters, handleFilterSelect, router, sportEnum, sportMeta]);
+  }, [allGames.length, filter, filterCounts, filters, handleFilterSelect, onFilterTouchCancel, onFilterTouchMove, onFilterTouchStart, router, shouldHandleFilterPress, sportEnum, sportMeta]);
 
   if (!sportMeta) {
     return (
@@ -327,6 +361,10 @@ export default function SportDetailScreen() {
           initialNumToRender={6}
           maxToRenderPerBatch={6}
           windowSize={7}
+          onScrollBeginDrag={gameListPressGuard.onScrollBeginDrag}
+          onScrollEndDrag={gameListPressGuard.onScrollEndDrag}
+          onMomentumScrollBegin={gameListPressGuard.onMomentumScrollBegin}
+          onMomentumScrollEnd={gameListPressGuard.onMomentumScrollEnd}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useMemo, useState, memo } from 'react';
+import React, { useCallback, useDeferredValue, useMemo, useState, memo } from 'react';
 import { View, Text, Pressable, SectionList, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,8 +13,10 @@ import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
 import { displaySport } from '@/lib/display-confidence';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { guardedRouterBack, guardedRouterPush } from '@/lib/navigation-guard';
 import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 
 // ─── PALETTE ───
 const C = {
@@ -89,7 +91,7 @@ function formatTime(dateStr: string): string {
 }
 
 // ─── PICK CARD ───
-const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index: number }) {
+const PickCard = memo(function PickCard({ item, index, canOpen }: { item: PickTile; index: number; canOpen: () => boolean }) {
   const router = useRouter();
   const prefetchGame = usePrefetchGame();
   const teamColors = getTeamColors(item.abbreviation, item.sport as Sport);
@@ -108,9 +110,10 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
         accessibilityHint="Opens game details"
         onPressIn={() => prefetchGame(item.gameId)}
         onPress={() => {
+          if (!canOpen()) return;
           if (!claimGameNavigation(item.gameId)) return;
-          router.push(`/game/${item.gameId}`);
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          guardedRouterPush(router, `/game/${item.gameId}` as any);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         }}
         style={({ pressed }) => [s.pickCard, {
           borderColor: isWin ? 'rgba(122,157,184,0.12)' : isLoss ? 'rgba(139,10,31,0.12)' : C.BORDER,
@@ -202,6 +205,7 @@ export default function PicksHistoryScreen() {
   const { data: allGames } = useGames();
   const [filter, setFilter] = useState<'all' | 'win' | 'loss' | 'pending'>('all');
   const deferredFilter = useDeferredValue(filter);
+  const listPressGuard = useScrollPressGuard();
 
   const gameMap = useMemo(
     () => new Map((allGames ?? []).map((g) => [g.id, g])),
@@ -278,6 +282,12 @@ export default function PicksHistoryScreen() {
     { key: 'pending', label: 'TBD', count: summary.pending, color: C.TEXT2 },
   ];
 
+  const handleFilterPress = useCallback((nextFilter: typeof filter) => {
+    if (nextFilter === filter) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setFilter(nextFilter);
+  }, [filter]);
+
   return (
     <View style={{ flex: 1, backgroundColor: C.BG }}>
       {/* Top gradient wash */}
@@ -300,7 +310,7 @@ export default function PicksHistoryScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => router.back()}
+            onPress={() => guardedRouterBack(router)}
             style={s.backBtn}
           >
             <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
@@ -352,7 +362,7 @@ export default function PicksHistoryScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${f.label} picks filter`}
                 accessibilityState={{ selected: active }}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter(f.key); }}
+                onPress={() => handleFilterPress(f.key)}
                 style={[s.filterPill, active && { borderColor: f.color, backgroundColor: `${f.color}10` }]}
               >
                 <Text style={[s.filterPillText, active && { color: f.color }]}>{f.label}</Text>
@@ -387,7 +397,7 @@ export default function PicksHistoryScreen() {
           <SectionList
             sections={sections}
             keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => <PickCard item={item} index={index} />}
+            renderItem={({ item, index }) => <PickCard item={item} index={index} canOpen={listPressGuard.canPress} />}
             renderSectionHeader={({ section }) => (
               <View style={s.sectionHeader}>
                 <View style={s.sectionHeaderLeft}>
@@ -413,6 +423,10 @@ export default function PicksHistoryScreen() {
             maxToRenderPerBatch={8}
             updateCellsBatchingPeriod={40}
             windowSize={7}
+            onScrollBeginDrag={listPressGuard.onScrollBeginDrag}
+            onScrollEndDrag={listPressGuard.onScrollEndDrag}
+            onMomentumScrollBegin={listPressGuard.onMomentumScrollBegin}
+            onMomentumScrollEnd={listPressGuard.onMomentumScrollEnd}
             contentContainerStyle={{ paddingBottom: 50 }}
           />
         )}

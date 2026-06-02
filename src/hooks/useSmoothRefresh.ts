@@ -81,9 +81,6 @@ export function useSmoothRefresh(
       .then(() => actionRef.current())
       .catch((error) => {
         didFail = true;
-        if (__DEV__) {
-          console.warn('[refresh] pull-to-refresh failed:', error);
-        }
       })
       .finally(() => {
         inFlightRef.current = false;

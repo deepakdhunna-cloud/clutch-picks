@@ -9,6 +9,7 @@ import { api } from '@/lib/api/api';
 import { MAROON, TEAL, GREEN_UP, LOSS, BG } from '@/lib/theme';
 import { getCalibrationBadge, type CalibrationBadgeTone } from '@/lib/model-calibration-display';
 import { useCalibration, type LeagueCalibration, type ReliabilityBucket } from '@/hooks/useCalibration';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 
 const AMBER = '#F59E0B'; // warning / mid-tier badge — not in theme exports
 
@@ -82,7 +83,7 @@ export default function ModelAccuracyScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => router.back()}
+            onPress={() => guardedRouterBack(router)}
             hitSlop={8}
             style={s.backBtn}
           >

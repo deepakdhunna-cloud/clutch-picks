@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ChevronLeft } from 'lucide-react-native';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 
 export default function TermsScreen() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function TermsScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Back"
-                onPress={() => router.back()}
+                onPress={() => guardedRouterBack(router)}
                 className="mr-4 p-2 -ml-2 active:opacity-60"
                 style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
               >

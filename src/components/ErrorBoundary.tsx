@@ -17,9 +17,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[ErrorBoundary] Caught render error:', error, info.componentStack);
-  }
+  componentDidCatch() {}
 
   reset = () => {
     this.setState({ error: null });

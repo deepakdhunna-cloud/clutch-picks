@@ -15,7 +15,6 @@ export const AUTH_STORAGE_KEYS = [
 ];
 
 const volatileAuthStorage = new Map<string, string>();
-const DEBUG_AUTH_STORAGE_LOGS = false;
 
 const errorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -31,20 +30,13 @@ export const isSecureStoreUnavailableError = (error: unknown) => {
   );
 };
 
-const logStorageFallback = (operation: string, key: string, error: unknown) => {
-  if (__DEV__ && DEBUG_AUTH_STORAGE_LOGS) {
-    console.log(`[auth-storage] SecureStore ${operation} failed for ${key}:`, error);
-  }
-};
-
 export const authStorage = {
   getItem(key: string): string | null {
     try {
       const value = SecureStore.getItem(key);
       if (value != null) volatileAuthStorage.set(key, value);
       return value ?? volatileAuthStorage.get(key) ?? null;
-    } catch (error) {
-      logStorageFallback('getItem', key, error);
+    } catch {
       return volatileAuthStorage.get(key) ?? null;
     }
   },
@@ -53,18 +45,14 @@ export const authStorage = {
     volatileAuthStorage.set(key, value);
     try {
       SecureStore.setItem(key, value);
-    } catch (error) {
-      logStorageFallback('setItem', key, error);
-    }
+    } catch {}
   },
 
   async deleteItemAsync(key: string): Promise<void> {
     volatileAuthStorage.delete(key);
     try {
       await SecureStore.deleteItemAsync(key);
-    } catch (error) {
-      logStorageFallback('deleteItemAsync', key, error);
-    }
+    } catch {}
   },
 };
 

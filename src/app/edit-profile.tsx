@@ -4,16 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, User, Camera, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
-import { pickImage, takePhoto } from '@/lib/file-picker';
-import { uploadFile } from '@/lib/upload';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
+import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
+import { guardedRouterBack } from '@/lib/navigation-guard';
 
 // Match profile card palette
 import {
@@ -36,9 +36,8 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
+  const saveInFlightRef = useRef(false);
 
   const user = session?.user;
 
@@ -67,9 +66,9 @@ export default function EditProfileScreen() {
         email: profile.email,
         displayName: profile.name,
       });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
       await invalidateSession();
-      router.back();
+      guardedRouterBack(router);
     },
     onError: () => {
       setFeedback({
@@ -78,9 +77,13 @@ export default function EditProfileScreen() {
         variant: 'error',
       });
     },
+    onSettled: () => {
+      saveInFlightRef.current = false;
+    },
   });
 
   const handleSave = () => {
+    if (saveInFlightRef.current || updateProfileMutation.isPending) return;
     if (!name.trim()) {
       setFeedback({
         title: 'Name Required',
@@ -89,49 +92,23 @@ export default function EditProfileScreen() {
       });
       return;
     }
+    saveInFlightRef.current = true;
     updateProfileMutation.mutate({
       name: name.trim(),
     });
   };
 
-  const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
-    if (!pickedFile || isUploading) return;
-
-    setIsUploading(true);
-    try {
-      const uploadResult = await uploadFile(pickedFile.uri, pickedFile.filename, pickedFile.mimeType);
-      await api.put<UserProfile>('/api/profile/image', { imageUrl: uploadResult.url });
-      setProfileImage(uploadResult.url);
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+  const profilePhotoUpload = useProfilePhotoUpload({
+    onUploaded: async (imageUrl) => {
+      setProfileImage(imageUrl);
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
       await invalidateSession();
-    } catch (error) {
-      setFeedback({
-        title: 'Upload Failed',
-        message: 'There was an error uploading your photo. Please try again.',
-        variant: 'error',
-      });
-      if (__DEV__) console.error('Upload error:', error);
-    } finally {
-      setIsUploading(false);
-    }
-  };
+    },
+    onFeedback: setFeedback,
+  });
 
-  const handleAvatarPress = () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(true);
-  };
-
-  const handleTakePhoto = async () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(false);
-    await handleImageUpload(await takePhoto());
-  };
-
-  const handleChooseLibrary = async () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(false);
-    await handleImageUpload(await pickImage());
-  };
+  const handleAvatarPress = profilePhotoUpload.openPhotoSource;
+  const isUploading = profilePhotoUpload.isBusy;
 
   const displayImage = profileImage || user?.image || null;
 
@@ -148,11 +125,11 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }} edges={['top']}>
       <PhotoSourceModal
-        visible={photoSourceVisible}
+        visible={profilePhotoUpload.photoSourceVisible}
         title="Profile Photo"
-        onTakePhoto={handleTakePhoto}
-        onChooseLibrary={handleChooseLibrary}
-        onCancel={() => setPhotoSourceVisible(false)}
+        onTakePhoto={profilePhotoUpload.takePhoto}
+        onChooseLibrary={profilePhotoUpload.chooseLibrary}
+        onCancel={profilePhotoUpload.closePhotoSource}
       />
       <FeedbackModal
         visible={!!feedback}
@@ -169,7 +146,7 @@ export default function EditProfileScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
-          onPress={() => router.back()}
+          onPress={() => guardedRouterBack(router)}
           style={{
             width: 44,
             height: 44,
@@ -244,7 +221,14 @@ export default function EditProfileScreen() {
               />
               <View style={{ flex: 1, borderRadius: 57, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {isUploading ? (
-                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <View style={{ alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="large" color="#FFFFFF" />
+                    {profilePhotoUpload.uploadProgressLabel ? (
+                      <Text style={{ color: TEXT_SECONDARY, fontSize: 11, fontWeight: '700' }}>
+                        {profilePhotoUpload.uploadProgressLabel}
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : (
                   <ProfileAvatarImage
                     uri={displayImage}

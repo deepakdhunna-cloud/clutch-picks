@@ -19,13 +19,16 @@ describe('scroll and avatar polish regressions', () => {
   });
 
   it('keeps horizontal card rails centered and one-card-at-a-time', () => {
-    expect(homeSource).toContain('snapToInterval={HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP}');
+    expect(homeSource).toContain('const HOME_LIVE_CARD_SNAP_INTERVAL = HOME_LIVE_CARD_WIDTH + HOME_LIVE_CARD_GAP;');
+    expect(homeSource).toContain('snapToInterval={HOME_LIVE_CARD_SNAP_INTERVAL}');
+    expect(homeSource).toContain('ItemSeparatorComponent={HomeLiveRailSeparator}');
     expect(homeSource).toContain('snapToAlignment="start"');
     expect(arenaSource).toContain('snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}');
     expect(arenaSource).toContain('const LIVE_CARD_SIDE_PEEK = 28;');
     expect(arenaSource).toContain('const liveVisibleRailWidth = Math.min(liveRailWidth, SW);');
     expect(arenaSource).toContain('contentContainerStyle={{ paddingHorizontal: liveRailSidePadding }}');
-    expect(arenaSource).toContain('snapToInterval={TOP_GRADE_CARD_SNAP_INTERVAL}');
+    expect(arenaSource).not.toContain('TOP_GRADE_CARD_SNAP_INTERVAL');
+    expect(arenaSource).not.toContain('TOP MODEL GRADES');
     expect(exploreSource).toContain('const StoryCardRail = memo');
     expect(exploreSource).toContain('snapToInterval={STORY_CARD_SNAP_INTERVAL}');
     expect(profileSource).toContain('snapToInterval={RECENT_PICK_SNAP_INTERVAL}');

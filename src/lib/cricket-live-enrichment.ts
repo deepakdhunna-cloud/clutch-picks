@@ -10,6 +10,7 @@ import {
   type CricketScoreState,
   type GameWithPrediction,
 } from '@/types/sports';
+import { isLiveGameLike } from '@/lib/game-status';
 
 const ESPN_IPL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/cricket/8048/scoreboard';
 const ESPN_IPL_SUMMARY_URL = (eventId: string) =>
@@ -487,7 +488,7 @@ function applyPatch(game: GameWithPrediction, patch: CricketLivePatch | undefine
 }
 
 export async function enrichCricketLiveGames<T extends GameWithPrediction>(games: T[]): Promise<T[]> {
-  if (!games.some((game) => game.sport === Sport.IPL && game.status === GameStatus.LIVE)) return games;
+  if (!games.some((game) => game.sport === Sport.IPL && isLiveGameLike(game))) return games;
 
   try {
     const patches = await fetchIplPatches();
@@ -504,7 +505,7 @@ export async function enrichCricketLiveGames<T extends GameWithPrediction>(games
 }
 
 export async function enrichCricketLiveGame<T extends GameWithPrediction | null>(game: T): Promise<T> {
-  if (!game || game.sport !== Sport.IPL || game.status !== GameStatus.LIVE) return game;
+  if (!game || game.sport !== Sport.IPL || !isLiveGameLike(game)) return game;
   const [enriched] = await enrichCricketLiveGames([game]);
   return (enriched ?? game) as T;
 }

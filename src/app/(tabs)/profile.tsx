@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, memo } from 'react';
+import React, { useState, useCallback, useMemo, memo, useRef } from 'react';
 import {
   View, Text, Pressable, ActivityIndicator, ScrollView, Share,
 } from 'react-native';
@@ -28,8 +28,11 @@ import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 import { getAppVersionLabel } from '@/lib/app-version';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { claimInteractionLock } from '@/lib/interaction-guard';
+import { guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 import { resolvePickResultForDisplay } from '@/lib/pick-resolution-display';
 import { profileDisplayName } from '@/lib/profile-presentation';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 import type { GameWithPrediction } from '@/types/sports';
@@ -294,7 +297,7 @@ const SignedOutState = memo(function SignedOutState() {
         <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 8, textAlign: 'center' }}>Sign in to see your card</Text>
         <Text style={{ fontSize: 14, color: C.TEXT_MUTED, textAlign: 'center', marginBottom: 28 }}>Track your picks, build your analyst record.</Text>
         <Pressable
-          onPress={() => router.replace('/sign-in')}
+          onPress={() => guardedRouterReplace(router, '/sign-in')}
           accessibilityRole="button"
           accessibilityLabel="Sign in to Clutch Picks"
           accessibilityHint="Opens sign in"
@@ -535,6 +538,8 @@ export default function ProfileScreen() {
   const scrollHandler = useHideOnScroll();
   const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
+  const recentPickRailPressGuard = useScrollPressGuard();
+  const signOutInFlightRef = useRef(false);
 
   const { data: profile } = useQuery({
     queryKey: ['profile'],
@@ -624,11 +629,12 @@ export default function ProfileScreen() {
   const hiddenPickCount = Math.max((picks?.length ?? 0) - recentPickTiles.length, 0);
 
   const handleRecentPickPress = useCallback((gameId: string, game?: GameWithPrediction) => {
+    if (!recentPickRailPressGuard.canPress()) return;
     if (!claimGameNavigation(gameId)) return;
     prefetchGame(gameId, game);
-    router.push(`/game/${gameId}` as any);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [prefetchGame, router]);
+    guardedRouterPush(router, `/game/${gameId}` as any);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, [prefetchGame, recentPickRailPressGuard.canPress, router]);
 
   // Warm the detail cache on press-in. prefetchGame tolerates an undefined
   // source game (older picks not in today's slate) and still seeds/loads by id.
@@ -739,6 +745,8 @@ export default function ProfileScreen() {
   }, []);
 
   const handleConfirmSignOut = useCallback(async () => {
+    if (signOutInFlightRef.current) return;
+    signOutInFlightRef.current = true;
     setSignOutConfirmVisible(false);
     try {
       await unregisterCurrentDeviceForPushNotifications();
@@ -746,8 +754,9 @@ export default function ProfileScreen() {
       if (isRevenueCatEnabled()) { try { await logoutUser(); } catch {} }
       await clearAuthStorage();
       await invalidateSession();
-      router.replace('/welcome');
+      guardedRouterReplace(router, '/welcome');
     } catch {
+      signOutInFlightRef.current = false;
       setFeedback({
         title: 'Sign Out Failed',
         message: 'Failed to sign out. Please try again.',
@@ -755,6 +764,32 @@ export default function ProfileScreen() {
       });
     }
   }, [invalidateSession, router]);
+
+  const handleOpenSettings = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    guardedRouterPush(router, '/settings');
+  }, [router]);
+
+  const handleOpenEditProfile = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    guardedRouterPush(router, '/edit-profile');
+  }, [router]);
+
+  const handleOpenPicksHistory = useCallback(() => {
+    if (!recentPickRailPressGuard.canPress()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    guardedRouterPush(router, '/picks-history');
+  }, [recentPickRailPressGuard.canPress, router]);
+
+  const handleShareCard = useCallback(async () => {
+    if (!claimInteractionLock('profile:share-card', 1200)) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      await Share.share({
+        message: `Check out my Clutch Picks analyst card!\n\n${userName} — ${accuracy}% accuracy\n${wins}W - ${losses}L | ${streak} streak\n\nDownload Clutch Picks to build yours.`,
+      });
+    } catch {}
+  }, [accuracy, losses, streak, userName, wins]);
 
   // Loading
   if (sessionLoading) {
@@ -803,7 +838,7 @@ export default function ProfileScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open settings"
-            onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            onPress={handleOpenSettings}
             hitSlop={10}
             style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
@@ -911,7 +946,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Edit profile"
             hitSlop={6}
-            onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            onPress={handleOpenEditProfile}
             style={{ flex: 1, minHeight: 44, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
           </Pressable>
@@ -919,14 +954,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share analyst card"
             hitSlop={6}
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              try {
-                await Share.share({
-                  message: `Check out my Clutch Picks analyst card!\n\n${userName} — ${accuracy}% accuracy\n${wins}W - ${losses}L | ${streak} streak\n\nDownload Clutch Picks to build yours.`,
-                });
-              } catch {}
-            }}
+            onPress={handleShareCard}
             style={{ flex: 1, minHeight: 44, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <ShareIcon size={14} color={C.TEXT_SECONDARY} />
             <Text style={{ fontSize: 13, fontWeight: '600', color: C.TEXT_SECONDARY }}>Share Card</Text>
@@ -938,7 +966,7 @@ export default function ProfileScreen() {
           <View style={{ height: 146, flexDirection: 'row', marginHorizontal: 16, overflow: 'visible' }}>
             <RecentPicksSummaryTile
               totalPicks={totalPicks}
-              onPress={() => { router.push('/picks-history'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              onPress={handleOpenPicksHistory}
             />
 
             <View style={{ flex: 1, height: 146, overflow: 'hidden', position: 'relative' }}>
@@ -951,6 +979,10 @@ export default function ProfileScreen() {
                 snapToAlignment="start"
                 disableIntervalMomentum
                 decelerationRate="fast"
+                onScrollBeginDrag={recentPickRailPressGuard.onScrollBeginDrag}
+                onScrollEndDrag={recentPickRailPressGuard.onScrollEndDrag}
+                onMomentumScrollBegin={recentPickRailPressGuard.onMomentumScrollBegin}
+                onMomentumScrollEnd={recentPickRailPressGuard.onMomentumScrollEnd}
               >
                 {recentPickTiles.map((p) => (
                   <RecentPickTile
@@ -968,7 +1000,7 @@ export default function ProfileScreen() {
                 ) : (
                   <RecentPicksViewAllTile
                     remainingCount={hiddenPickCount}
-                    onPress={() => { router.push('/picks-history'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    onPress={handleOpenPicksHistory}
                   />
                 )}
               </ScrollView>

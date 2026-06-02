@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -57,6 +57,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const confirmInFlightRef = useRef(false);
   const cardScale = useSharedValue(0.96);
   const cardOpacity = useSharedValue(0);
   const jerseyScale = useSharedValue(1);
@@ -95,6 +96,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
         false
       );
       successScale.value = 0;
+      confirmInFlightRef.current = false;
       setIsConfirming(false);
       setShowSuccess(false);
       setErrorMessage(null);
@@ -151,11 +153,12 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
   }));
 
   const handleConfirm = useCallback(async () => {
-    if (isConfirming) return;
+    if (isConfirming || confirmInFlightRef.current) return;
+    confirmInFlightRef.current = true;
     setIsConfirming(true);
     setShowSuccess(false);
     setErrorMessage(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     jerseyScale.value = withSequence(
       withTiming(1.12, { duration: 260, easing: Easing.out(Easing.ease) }),
@@ -172,16 +175,17 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
       }
       setShowSuccess(true);
       successScale.value = withSpring(1, { damping: 12, stiffness: 180 });
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setTimeout(() => {
         onCancel();
       }, 560);
     } catch {
+      confirmInFlightRef.current = false;
       setIsConfirming(false);
       setShowSuccess(false);
       successScale.value = 0;
       setErrorMessage('Pick not saved. Check your connection and try again.');
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     }
   }, [isConfirming, jerseyScale, onCancel, onConfirm, successScale]);
 

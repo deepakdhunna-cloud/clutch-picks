@@ -10,11 +10,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
 import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { verificationCodeErrorMessage } from '@/lib/auth/auth-errors';
-import { authUserIdentityFromPayload } from '@/lib/auth/auth-user';
-import { useInvalidateSession } from '@/lib/auth/use-session';
+import { authUserIdentityFromPayload, sessionTokenFromAuthPayload } from '@/lib/auth/auth-user';
+import { useFinalizeAuthSession } from '@/lib/auth/use-session';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
 import { BG, TEAL, MAROON } from '@/lib/theme';
+import { guardedRouterBack, guardedRouterReplace } from '@/lib/navigation-guard';
 
 const CODE_LENGTH = 6;
 
@@ -44,7 +45,7 @@ function ShieldCheckIcon({ size = 36 }: { size?: number }) {
 export default function VerifyOTP() {
   const router = useRouter();
   const { email, otp: initialOtp, mode } = useLocalSearchParams<{ email: string; otp?: string; mode?: string }>();
-  const invalidateSession = useInvalidateSession();
+  const finalizeAuthSession = useFinalizeAuthSession();
   const isSignIn = mode === 'signin';
 
   const [code, setCode] = useState(initialOtp ?? '');
@@ -55,11 +56,13 @@ export default function VerifyOTP() {
   const inputRef = useRef<TextInput>(null);
   const initialOtpHandledRef = useRef(false);
   const lastAutoSubmittedCodeRef = useRef<string | null>(null);
+  const verifyInFlightRef = useRef(false);
 
   const isComplete = code.length === CODE_LENGTH;
 
   const handleVerifyCode = useCallback(async (otpCode: string) => {
-    if (otpCode.length !== CODE_LENGTH || !email || isLoading) return;
+    if (otpCode.length !== CODE_LENGTH || !email || isLoading || verifyInFlightRef.current) return;
+    verifyInFlightRef.current = true;
     setIsLoading(true);
     setError(null);
 
@@ -79,8 +82,7 @@ export default function VerifyOTP() {
       // the auth-client also captures `set-auth-token` from the response
       // headers, but storing this directly removes any chance of a missed
       // header on iOS native fetch.
-      const sessionToken = (result.data as any)?.token;
-      if (__DEV__) console.log('[auth] otp verify result.data keys:', Object.keys(result.data || {}), 'token?', !!sessionToken);
+      const sessionToken = sessionTokenFromAuthPayload(result.data);
       if (sessionToken) setBearerToken(sessionToken);
 
       try {
@@ -89,14 +91,12 @@ export default function VerifyOTP() {
           ...identity,
           email: identity.email ?? email.trim(),
         });
-      } catch (identityError) {
-        if (__DEV__) console.log('[auth] RevenueCat identity sync failed:', identityError);
-      }
+      } catch {}
 
-      try {
-        await invalidateSession();
-      } catch (sessionError) {
-        if (__DEV__) console.log('[auth] Session cache invalidation failed:', sessionError);
+      const finalizedSession = await finalizeAuthSession(result.data, { fallbackEmail: email.trim() });
+      if (!(finalizedSession as any)?.user) {
+        setError('Your code worked, but we could not open your session. Please try signing in again.');
+        return;
       }
 
       const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
@@ -105,9 +105,9 @@ export default function VerifyOTP() {
       // account walks through the intro even on a device where a previous
       // user had completed it.
       if (isSignIn && onboarded === 'true') {
-        router.replace('/(tabs)');
+        guardedRouterReplace(router, '/(tabs)');
       } else {
-        router.replace('/onboarding');
+        guardedRouterReplace(router, '/onboarding');
       }
     } catch (requestError) {
       setError(authRequestErrorMessage(
@@ -117,9 +117,10 @@ export default function VerifyOTP() {
       setCode('');
       setTimeout(() => inputRef.current?.focus(), 100);
     } finally {
+      verifyInFlightRef.current = false;
       setIsLoading(false);
     }
-  }, [email, invalidateSession, isLoading, isSignIn, router]);
+  }, [email, finalizeAuthSession, isLoading, isSignIn, router]);
 
   useEffect(() => {
     if (initialOtpHandledRef.current) return;
@@ -192,7 +193,7 @@ export default function VerifyOTP() {
         <View style={s.content}>
           {/* Back button */}
           <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32, alignSelf: 'flex-start' }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={16} style={s.backBtn}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={16} style={s.backBtn}>
               <BackArrow />
             </Pressable>
           </Animated.View>

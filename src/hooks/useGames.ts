@@ -11,6 +11,7 @@ import { prepareHomeGamesFirstPaint } from '@/lib/home-games-first-paint';
 import { HOME_GAMES_CACHE_KEY, selectPersistableHomeGames } from '@/lib/home-games-cache';
 import { GAME_DETAIL_STALE_TIME_MS, shouldRefetchGameDetailOnMount } from '@/lib/game-detail-load-stability';
 import { mergeGameData, mergeGameLists } from '@/lib/game-cache-merge';
+import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
 
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 3000; // fast fallback when SSE drops, without hammering JS/network
@@ -183,7 +184,7 @@ function shouldBurstForMissingPrediction(game: GameWithPrediction): boolean {
     return false;
   }
   // LIVE games keep their cadence regardless of the wall-clock cap.
-  if (game.status === GameStatus.LIVE) return true;
+  if (isLiveGameLike(game)) return true;
   if (game.status !== GameStatus.SCHEDULED) {
     missingPredictionFirstSeen.delete(game.id);
     return false;
@@ -305,7 +306,7 @@ export function useGames(options: QueryActivityOptions = {}) {
       // so no need for aggressive polling.
       // Fall back to fast polling only when SSE is disconnected and there are live games.
       if (sseConnectedRef.current) return DEFAULT_POLLING_INTERVAL;
-      const hasLive = games?.some((g) => g.status === GameStatus.LIVE);
+      const hasLive = games?.some(isLiveGameLike);
       return hasLive ? LIVE_POLLING_INTERVAL : DEFAULT_POLLING_INTERVAL;
     },
     refetchIntervalInBackground: false,
@@ -349,7 +350,7 @@ export function useGames(options: QueryActivityOptions = {}) {
 function liveAwareInterval(games: GameWithPrediction[] | undefined): number {
   if (games?.some(shouldBurstForMissingPrediction)) return PREDICTION_BURST_INTERVAL;
   if (sseConnectedRef.current) return DEFAULT_POLLING_INTERVAL;
-  if (games?.some((g) => g.status === GameStatus.LIVE)) return LIVE_POLLING_INTERVAL;
+  if (games?.some(isLiveGameLike)) return LIVE_POLLING_INTERVAL;
   return DEFAULT_POLLING_INTERVAL;
 }
 
@@ -439,7 +440,7 @@ export function useLiveGames() {
   } = gamesQuery;
 
   const liveGames = useMemo(() =>
-    games?.filter((game) => game.status === GameStatus.LIVE) ?? [],
+    sortSuspendedGamesLast(games?.filter(isLiveGameLike) ?? []),
     [games]
   );
 
@@ -507,7 +508,7 @@ export function useGame(gameId: string) {
         missingPredictionFirstSeen.delete(game.id);
       }
       // LIVE games keep their cadence regardless of the wall-clock cap.
-      if (game?.status === GameStatus.LIVE) {
+      if (game && isLiveGameLike(game)) {
         // SSE pushes live updates into detail caches, so avoid duplicate
         // polling churn unless the stream is disconnected.
         return sseConnectedRef.current ? DEFAULT_POLLING_INTERVAL : LIVE_POLLING_INTERVAL;

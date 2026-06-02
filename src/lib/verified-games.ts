@@ -1,4 +1,5 @@
 import { Sport } from '@/types/sports';
+import { isLiveGameStatus } from '@/lib/game-status';
 
 type GameIdentity = {
   id?: string | number | null;
@@ -24,7 +25,7 @@ function isTrustedTennisSupplementalGame(game: GameIdentity): boolean {
     sport === Sport.TENNIS &&
     source === 'tennis-explorer' &&
     /^tennis-explorer-\d+$/.test(String(game.id ?? '')) &&
-    (status === 'LIVE' || status === 'SCHEDULED')
+    (isLiveGameStatus(status) || status === 'SCHEDULED')
   );
 }
 

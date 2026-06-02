@@ -5,6 +5,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '@/lib/api/api';
+import { guardedRouterPush } from '@/lib/navigation-guard';
 
 export const NOTIFICATION_PREFS_KEY = 'clutch_notif_prefs';
 const PUSH_TOKEN_STORAGE_KEY = 'clutch_expo_push_token';
@@ -95,8 +96,7 @@ export async function saveNotificationPreferences(
   try {
     await api.put('/api/notifications/preferences', prefs);
     return true;
-  } catch (error) {
-    if (__DEV__) console.log('[Notifications] Failed to sync preferences:', error);
+  } catch {
     return false;
   }
 }
@@ -106,7 +106,6 @@ async function registerForPushNotifications(
 ): Promise<string | null> {
   // Push notifications only work on physical devices
   if (!Device.isDevice) {
-    if (__DEV__) console.log('[Notifications] Not a physical device, skipping');
     return null;
   }
 
@@ -132,14 +131,12 @@ async function registerForPushNotifications(
     }
 
     if (finalStatus !== 'granted') {
-      if (__DEV__) console.log('[Notifications] Permission not granted');
       return null;
     }
 
     // Get the Expo push token
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
     if (!projectId) {
-      if (__DEV__) console.log('[Notifications] EAS project ID missing');
       return null;
     }
 
@@ -147,11 +144,8 @@ async function registerForPushNotifications(
       projectId,
     });
 
-    if (__DEV__) console.log('[Notifications] Expo push token acquired');
-
     return tokenData.data;
-  } catch (error) {
-    if (__DEV__) console.log('[Notifications] Registration error:', error);
+  } catch {
     return null;
   }
 }
@@ -168,10 +162,8 @@ export async function registerDeviceForPushNotifications(
       platform: Platform.OS,
     });
     await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
-    if (__DEV__) console.log('[Notifications] Token saved to backend');
     return true;
-  } catch (error) {
-    if (__DEV__) console.log('[Notifications] Failed to save token:', error);
+  } catch {
     return false;
   }
 }
@@ -189,8 +181,7 @@ export async function unregisterCurrentDeviceForPushNotifications(): Promise<voi
 
   try {
     await api.post('/api/notifications/unregister', { token });
-  } catch (error) {
-    if (__DEV__) console.log('[Notifications] Failed to unregister token:', error);
+  } catch {
   } finally {
     await AsyncStorage.removeItem(PUSH_TOKEN_STORAGE_KEY).catch(() => {});
   }
@@ -260,11 +251,11 @@ export function useNotificationNavigation(router: any) {
       if (!isMounted) return;
       const data = notification.request.content.data;
       if (data?.gameId) {
-        router.push({ pathname: '/game/[id]', params: { id: String(data.gameId) } });
+        guardedRouterPush(router, { pathname: '/game/[id]', params: { id: String(data.gameId) } });
       } else if (data?.screen === 'picks') {
-        router.push('/(tabs)/clutch-picks');
+        guardedRouterPush(router, '/(tabs)/clutch-picks');
       } else if (data?.screen === 'profile') {
-        router.push('/(tabs)/profile');
+        guardedRouterPush(router, '/(tabs)/profile');
       }
     };
 

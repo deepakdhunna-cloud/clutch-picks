@@ -1,4 +1,5 @@
 import { GameStatus, Sport } from '@/types/sports';
+import { isLiveGameStatus } from '@/lib/game-status';
 
 export const GAME_DETAIL_STALE_TIME_MS = 10_000;
 
@@ -13,7 +14,7 @@ export function shouldRefetchGameDetailOnMount(
   now = Date.now(),
 ): boolean {
   if (!game) return true;
-  if (game.sport === Sport.IPL && game.status === GameStatus.LIVE) return true;
+  if (game.sport === Sport.IPL && isLiveGameStatus(game.status)) return true;
   if (!dataUpdatedAt) return true;
   return now - dataUpdatedAt >= GAME_DETAIL_STALE_TIME_MS;
 }

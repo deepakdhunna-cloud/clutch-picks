@@ -64,8 +64,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setStatus('unsubscribed');
         setCustomerInfo(null);
       }
-    } catch (error) {
-      if (__DEV__) console.log('[Subscription] Error checking subscription:', error);
+    } catch {
       setIsPremium(false);
       setStatus('unsubscribed');
       setCustomerInfo(null);

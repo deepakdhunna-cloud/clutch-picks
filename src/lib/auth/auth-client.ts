@@ -15,7 +15,6 @@ import { authStorage } from "./auth-storage";
 // dependencies, and changing them would force existing users to sign in again.
 const TOKEN_KEY = "vibecode_bearer_token";
 const LEGACY_TOKEN_KEYS = ["clutchpicks_bearer_token"];
-const DEBUG_AUTH_LOGS = false;
 let cachedToken: string | null | undefined;
 
 function readToken(): string | null {
@@ -31,11 +30,9 @@ function readToken(): string | null {
         if (v) break;
       }
     }
-    if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] readToken', v ? `present (len=${v.length})` : 'null');
     cachedToken = v ?? null;
     return v;
-  } catch (e) {
-    if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] readToken threw', e);
+  } catch {
     cachedToken = null;
     return null;
   }
@@ -45,18 +42,14 @@ function writeToken(token: string | null) {
   cachedToken = token;
   try {
     if (token) {
-      if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] writeToken: storing token len=', token.length);
       authStorage.setItem(TOKEN_KEY, token);
     } else {
-      if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] writeToken: clearing');
       void authStorage.deleteItemAsync(TOKEN_KEY).catch(() => {});
       for (const key of LEGACY_TOKEN_KEYS) {
         void authStorage.deleteItemAsync(key).catch(() => {});
       }
     }
-  } catch (e) {
-    if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] writeToken threw', e);
-  }
+  } catch {}
 }
 
 export const setBearerToken = (token: string | null) => writeToken(token);
@@ -77,20 +70,12 @@ export const authClient = createAuthClient({
       if (token && !context.headers.has("authorization")) {
         context.headers.set("authorization", `Bearer ${token}`);
         context.headers.delete("cookie");
-        if (__DEV__ && DEBUG_AUTH_LOGS) console.log('[auth] onRequest', url, 'sending Bearer');
-      } else if (__DEV__ && DEBUG_AUTH_LOGS) {
-        console.log('[auth] onRequest', url, 'no token');
       }
       return context;
     },
     onSuccess: (context) => {
       const url = context.request?.url?.toString() ?? "";
       const setAuthToken = context.response.headers.get("set-auth-token");
-      if (__DEV__ && DEBUG_AUTH_LOGS) {
-        const headerNames: string[] = [];
-        context.response.headers.forEach((_v, k) => headerNames.push(k));
-        console.log('[auth] onSuccess', url, 'status', context.response.status, 'set-auth-token?', !!setAuthToken, 'headers:', headerNames.join(','));
-      }
       if (setAuthToken) {
         writeToken(setAuthToken);
       }

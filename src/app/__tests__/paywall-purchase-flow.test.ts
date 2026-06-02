@@ -19,7 +19,7 @@ describe('paywall purchase flow', () => {
     expect(paywallSource).toContain('const { checkSubscription, isPremium } = useSubscription();');
     expect(paywallSource).toContain('const didRedirectForPremiumRef = useRef(false);');
     expect(paywallSource).toContain('if (!isPremium || didRedirectForPremiumRef.current) return;');
-    expect(paywallSource).toContain("router.replace('/(tabs)');");
+    expect(paywallSource).toContain("guardedRouterReplace(router, '/(tabs)');");
   });
 
   it('unlocks only after RevenueCat reports active premium access from purchase or restore', () => {

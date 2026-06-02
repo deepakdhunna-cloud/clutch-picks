@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, StatusBar, Pressable, Dimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Image, StyleSheet, StatusBar, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,24 +12,29 @@ import {
   isAppleSignInCancel,
   WELCOME_LEAGUE_PILLS,
 } from '@/lib/auth/auth-presentation';
-import { authUserIdentityFromPayload, sessionTokenFromAuthPayload } from '@/lib/auth/auth-user';
-import { useInvalidateSession } from '@/lib/auth/use-session';
+import {
+  authPayloadHasSession,
+  authUserIdentityFromPayload,
+  sessionTokenFromAuthPayload,
+} from '@/lib/auth/auth-user';
+import { useFinalizeAuthSession } from '@/lib/auth/use-session';
 import { withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
-
-const { width: W } = Dimensions.get('window');
+import { guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
 const BG = '#040608';
 
 export default function WelcomeScreen() {
-  const invalidateSession = useInvalidateSession();
+  const finalizeAuthSession = useFinalizeAuthSession();
+  const { width } = useWindowDimensions();
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleAvailable, setIsAppleAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const appleInFlightRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -47,43 +52,31 @@ export default function WelcomeScreen() {
 
   const onGetStarted = () => {
     if (isLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/sign-up' as any);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    guardedRouterPush(router, '/sign-up' as any);
   };
 
   const onSignIn = () => {
     if (isLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/sign-in' as any);
-  };
-
-  const authPayloadHasSession = (authData: unknown): boolean => {
-    return Boolean(
-      sessionTokenFromAuthPayload(authData) ||
-      authUserIdentityFromPayload(authData).userId
-    );
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    guardedRouterPush(router, '/sign-in' as any);
   };
 
   const finishAuthenticatedSession = async (authData: unknown) => {
-    const payload = authData as Record<string, unknown> | null;
     const sessionToken = sessionTokenFromAuthPayload(authData);
-    if (__DEV__) {
-      console.log('[auth] Apple sign-in payload keys:', Object.keys(payload || {}), 'token?', !!sessionToken);
-    }
     if (sessionToken) setBearerToken(sessionToken);
 
     try {
       await syncSubscriberInfo(authUserIdentityFromPayload(authData));
-    } catch (identityError) {
-      if (__DEV__) console.log('[auth] RevenueCat Apple identity sync failed:', identityError);
+    } catch {
+      // RevenueCat attribute sync must not block an otherwise valid login.
     }
-    try {
-      await invalidateSession();
-    } catch (sessionError) {
-      if (__DEV__) console.log('[auth] Session cache invalidation failed:', sessionError);
+    const finalizedSession = await finalizeAuthSession(authData);
+    if (!(finalizedSession as any)?.user) {
+      throw appleSignInIncompleteError();
     }
     const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
-    router.replace(onboarded === 'true' ? '/(tabs)' : '/onboarding');
+    guardedRouterReplace(router, onboarded === 'true' ? '/(tabs)' : '/onboarding');
   };
 
   const appleFullName = (fullName: AppleAuthentication.AppleAuthenticationFullName | null): string | null => {
@@ -126,7 +119,6 @@ export default function WelcomeScreen() {
       { label: 'Apple backend sign in' },
     );
     if (result.error) {
-      if (__DEV__) console.log('[auth] Apple backend sign-in failed:', result.error);
       throw result.error;
     }
 
@@ -142,9 +134,7 @@ export default function WelcomeScreen() {
     void withAuthRequestTimeout(
       storeNativeAppleTokens(credential.identityToken, credential.authorizationCode),
       { timeoutMs: 8_000, label: 'Apple token persistence' },
-    ).catch((tokenError) => {
-      if (__DEV__) console.log('[auth] Apple token persistence failed:', tokenError);
-    });
+    ).catch(() => {});
 
     if (name) {
       if (!existingIdentity.displayName) {
@@ -153,9 +143,7 @@ export default function WelcomeScreen() {
           { timeoutMs: 8_000, label: 'Apple profile name persistence' },
         ).then(() => {
           if ((result.data as any)?.user) (result.data as any).user.name = name;
-        }).catch((profileError) => {
-          if (__DEV__) console.log('[auth] Apple profile name persistence failed:', profileError);
-        });
+        }).catch(() => {});
       }
     }
 
@@ -168,14 +156,14 @@ export default function WelcomeScreen() {
       callbackURL: '/(tabs)',
     });
     if (result.error) {
-      if (__DEV__) console.log('[auth] Apple OAuth fallback failed:', result.error);
       throw result.error;
     }
     return result.data;
   };
 
   const onApple = async () => {
-    if (isLoading) return;
+    if (isLoading || appleInFlightRef.current) return;
+    appleInFlightRef.current = true;
     try {
       setIsLoading(true);
       setError(null);
@@ -184,7 +172,6 @@ export default function WelcomeScreen() {
         authData = await signInWithNativeApple();
       } catch (nativeError) {
         if (isAppleSignInCancel(nativeError)) return;
-        if (__DEV__) console.log('[auth] Apple native sign-in failed, trying OAuth fallback:', nativeError);
         authData = await signInWithAppleOAuthFallback();
       }
 
@@ -202,23 +189,15 @@ export default function WelcomeScreen() {
         return;
       }
 
-      if (__DEV__) {
-        const authPayload = authData as Record<string, unknown> | null;
-        const sessionPayload = sessionResult.data as Record<string, unknown> | null;
-        console.log('[auth] Apple sign-in completed without a session', {
-          authKeys: Object.keys(authPayload || {}),
-          sessionKeys: Object.keys(sessionPayload || {}),
-        });
-      }
       throw appleSignInIncompleteError();
     } catch (e: any) {
-      if (__DEV__) console.log('[auth] Apple sign-in failed:', e);
       const message = appleSignInFallbackMessage(e);
       if (message) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         setError(message);
       }
     } finally {
+      appleInFlightRef.current = false;
       setIsLoading(false);
     }
   };
@@ -232,7 +211,7 @@ export default function WelcomeScreen() {
         <View style={s.logoSection}>
           <Image
             source={require('@/assets/clutch-logo.png')}
-            style={s.logoImage}
+            style={[s.logoImage, { width: width * 0.6, height: width * 0.6 * (1275 / 2017) }]}
             resizeMode="contain"
           />
           <Text style={s.tagline}>AI-powered predictions{'\n'}across 11 leagues</Text>
@@ -313,9 +292,9 @@ export default function WelcomeScreen() {
         <View style={s.termsWrap}>
           <Text style={s.terms}>
             By continuing, you agree to our{' '}
-            <Text accessibilityRole="link" accessibilityLabel="Terms" style={s.termsLink} onPress={() => router.push('/terms' as any)}>Terms</Text>
+            <Text accessibilityRole="link" accessibilityLabel="Terms" style={s.termsLink} onPress={() => guardedRouterPush(router, '/terms' as any)}>Terms</Text>
             {' & '}
-            <Text accessibilityRole="link" accessibilityLabel="Privacy Policy" style={s.termsLink} onPress={() => router.push('/privacy-policy' as any)}>Privacy Policy</Text>
+            <Text accessibilityRole="link" accessibilityLabel="Privacy Policy" style={s.termsLink} onPress={() => guardedRouterPush(router, '/privacy-policy' as any)}>Privacy Policy</Text>
           </Text>
         </View>
       </SafeAreaView>
@@ -332,10 +311,7 @@ const s = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
   },
-  logoImage: {
-    width: W * 0.6,
-    height: W * 0.6 * (1275 / 2017),
-  },
+  logoImage: {},
   tagline: {
     fontSize: 16,
     color: '#FFFFFF',

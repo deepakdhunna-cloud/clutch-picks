@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -69,13 +69,14 @@ import {
   cricketStatusText,
   teamScoreText,
 } from '@/lib/cricket-score';
-import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { isLiveGameLike, isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceAppUrl, getWatchSourceUrl } from '@/lib/watch-url';
 import { readFollowedGameIds, toggleFollowedGame } from '@/lib/followed-games';
 import { firstRouteParam } from '@/lib/route-params';
 import { ExternalLink, Globe, Smartphone, Tv } from 'lucide-react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { guardedRouterBack, guardedRouterPush } from '@/lib/navigation-guard';
 
 function openWatchInWeb(source: string) {
   void Linking.openURL(getWatchSourceUrl(source)).catch(() => undefined);
@@ -108,7 +109,7 @@ function WhereToWatchRow({
 
   const handleOpenPress = useCallback(() => {
     if (!watchOption) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     // If we don't have an app deep link, skip the chooser and open the web URL directly.
     if (!hasAppUrl) {
       openWatchInWeb(watchOption.name);
@@ -119,14 +120,14 @@ function WhereToWatchRow({
 
   const handleRouteApp = useCallback(() => {
     if (!watchOption) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRoutePickerOpen(false);
     openWatchInApp(watchOption.name);
   }, [watchOption]);
 
   const handleRouteWeb = useCallback(() => {
     if (!watchOption) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRoutePickerOpen(false);
     openWatchInWeb(watchOption.name);
   }, [watchOption]);
@@ -303,7 +304,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
 
   const handlePress = useCallback(() => {
     if (isDisabled) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     scale.value = withSequence(
       withTiming(0.92, { duration: 90, easing: Easing.out(Easing.ease) }),
       withSpring(1.06, { damping: 12, stiffness: 260 }),
@@ -1264,7 +1265,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
             accessibilityHint="Opens confidence explanation"
             onPress={(e) => {
               e.stopPropagation();
-              router.push({
+              guardedRouterPush(router, {
                 pathname: '/confidence-explained',
                 params: {
                   id: gameId,
@@ -1279,7 +1280,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                   marketType: predictionDisplay.marketType ?? 'moneyline',
                 },
               });
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             }}
             hitSlop={8}
             style={{ minHeight: 44, flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
@@ -1381,8 +1382,8 @@ function ProjectionEngineBlock({ game }: { game: Game }) {
 
   const homeColors = getTeamColors(homeTeam.abbreviation, sport as Sport, homeTeam.color);
   const awayColors = getTeamColors(awayTeam.abbreviation, sport as Sport, awayTeam.color);
-  const isLive = game.status === 'LIVE';
-  const hasActualTotals = game.status === 'LIVE' || game.status === 'FINAL';
+  const isLive = isLiveGameLike(game);
+  const hasActualTotals = isLive || game.status === 'FINAL';
   const liveHome = game.homeScore ?? 0;
   const liveAway = game.awayScore ?? 0;
   const liveTotal = liveHome + liveAway;
@@ -1698,6 +1699,7 @@ function GameDetailContent() {
   const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
   const [followed, setFollowed] = useState(false);
+  const followInFlightRef = useRef(false);
 
   // Load follow state from AsyncStorage on mount
   useEffect(() => {
@@ -1712,12 +1714,16 @@ function GameDetailContent() {
 
   // Toggle follow with persistence
   const toggleFollow = useCallback(async () => {
-    if (!gameId) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!gameId || followInFlightRef.current) return;
+    followInFlightRef.current = true;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       const updated = await toggleFollowedGame(gameId);
       setFollowed(updated.includes(gameId));
-    } catch {}
+    } catch {
+    } finally {
+      followInFlightRef.current = false;
+    }
   }, [gameId]);
   const [pendingPick, setPendingPick] = useState<'home' | 'away' | null>(null);
   const [pendingPickAction, setPendingPickAction] = useState<'pick' | 'remove'>('pick');
@@ -1745,12 +1751,12 @@ function GameDetailContent() {
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={{ marginTop: 16, minHeight: 44, justifyContent: 'center' }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} style={{ marginTop: 16, minHeight: 44, justifyContent: 'center' }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
   const predictionContextSubtitle = formatAnalysisLinkSubtitle(prediction as Prediction | undefined);
-  const isLive = game.status === 'LIVE';
+  const isLive = isLiveGameLike(game);
   const suspended = isSuspendedGame(game);
   const suspensionStatus = suspendedLabel(game);
   const suspensionTime = suspendedResumeText(game);
@@ -1764,7 +1770,7 @@ function GameDetailContent() {
   const cricketLedScore = !suspended && isLiveCricket ? cricketLedScoreText(game) : null;
   const cricketContext = !suspended && isLiveCricket ? cricketInningsContext(game) : null;
   const cricketClockText = cricketOvers;
-  const gameStarted = game.status === 'LIVE' || game.status === 'FINAL';
+  const gameStarted = isLive || game.status === 'FINAL';
   const hasLinescore = (game.homeLinescores?.length ?? 0) > 0 || (game.awayLinescores?.length ?? 0) > 0;
   const hasCricketLinescore =
     game.sport === 'IPL' &&
@@ -1797,7 +1803,7 @@ function GameDetailContent() {
       </View>
       <View pointerEvents="box-none" style={[styles.floatingDetailControls, { top: detailFloatingTop }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => guardedRouterBack(router)}
           accessibilityRole="button"
           accessibilityLabel="Back"
           hitSlop={12}
@@ -1897,7 +1903,7 @@ function GameDetailContent() {
                 statusReason={suspended ? suspensionReason : undefined}
                 statusDetail={suspended ? suspensionTime : undefined}
               />
-            ) : isTennis && (game.status === 'LIVE' || game.status === 'FINAL') && !isCountingDown && !suspended ? (
+            ) : isTennis && (isLive || game.status === 'FINAL') && !isCountingDown && !suspended ? (
               <View style={styles.tennisHeroRow}>
                 <View style={styles.tennisHeroSide}>
                   <TappableJerseyHero
@@ -1972,7 +1978,7 @@ function GameDetailContent() {
               <View style={styles.scorePanelOuter}>
                 <View style={[
                   styles.scorePanel,
-                  (game.status === 'LIVE' || game.status === 'FINAL') ? styles.scorePanelBoard : null,
+                  (isLive || game.status === 'FINAL') ? styles.scorePanelBoard : null,
                 ]}>
                   {isLive && !suspended && cricketRequired ? (
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.cricketRequiredLineAbove}>
@@ -1981,7 +1987,7 @@ function GameDetailContent() {
                   ) : null}
                   {isCountingDown ? (
                     <PreGameCountdown secondsLeft={secondsUntilStart} sport={game.sport} />
-                  ) : (game.status === 'LIVE' || game.status === 'FINAL') ? (
+                  ) : (isLive || game.status === 'FINAL') ? (
                     <>
                       <ArenaScoreboard
                         homeScore={game.homeScore ?? 0}
@@ -2097,7 +2103,7 @@ function GameDetailContent() {
               <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
               <Pressable
-                onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })}
+                onPress={() => guardedRouterPush(router, { pathname: '/game-analysis', params: { id: game.id } })}
                 accessibilityRole="button"
                 accessibilityLabel="Open full pick analysis"
                 style={styles.analysisLink}
@@ -2117,15 +2123,15 @@ function GameDetailContent() {
               {/* ═══ OUR PREDICTION ═══ */}
               <View style={{ marginBottom: 28 }}>
                 <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text>
-                <RedactedPrediction homeTeam={homeTeam} awayTeam={awayTeam} prediction={prediction} onUnlock={() => router.push('/paywall')} />
+                <RedactedPrediction homeTeam={homeTeam} awayTeam={awayTeam} prediction={prediction} onUnlock={() => guardedRouterPush(router, '/paywall')} />
               </View>
 
               {/* ═══ RECENT PERFORMANCE ═══ */}
-              <RedactedSection title="Recent Performance" height={160} onUnlock={() => router.push('/paywall')} />
+              <RedactedSection title="Recent Performance" height={160} onUnlock={() => guardedRouterPush(router, '/paywall')} />
 
               {/* ═══ WHY WE MADE THIS PICK ═══ */}
               <Pressable
-                onPress={() => router.push('/paywall')}
+                onPress={() => guardedRouterPush(router, '/paywall')}
                 accessibilityRole="button"
                 accessibilityLabel="Preview Pro: Why We Made This Pick"
                 accessibilityHint="Opens Clutch Picks Pro"
@@ -2194,7 +2200,7 @@ export default function GameDetailScreen() {
   const router = useRouter();
   if (!gameId) return <GameDetailLoading />;
   return (
-    <ErrorBoundary key={gameId} onGoBack={() => router.back()}>
+    <ErrorBoundary key={gameId} onGoBack={() => guardedRouterBack(router)}>
       <GameDetailContent />
     </ErrorBoundary>
   );

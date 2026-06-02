@@ -30,10 +30,11 @@ describe('auth accessibility', () => {
     expect(welcomeSource).toContain('const signInWithAppleOAuthFallback = async () => {');
     expect(welcomeSource).toContain("provider: 'apple'");
     expect(welcomeSource).toContain("callbackURL: '/(tabs)'");
-    expect(welcomeSource).toContain('Apple native sign-in failed, trying OAuth fallback');
     expect(welcomeSource).toContain('if (isAppleSignInCancel(nativeError)) return;');
+    expect(welcomeSource).toContain('authData = await signInWithAppleOAuthFallback();');
+    expect(welcomeSource).toContain('if (isLoading || appleInFlightRef.current) return;');
     expect(welcomeSource).toContain('if (authPayloadHasSession(authData)) {');
-    expect(welcomeSource).toContain('Apple sign-in completed without a session');
+    expect(welcomeSource).toContain('throw appleSignInIncompleteError();');
   });
 
   it('names email auth form controls and links', () => {

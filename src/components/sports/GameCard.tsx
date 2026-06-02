@@ -13,14 +13,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, GameStatus, SPORT_META, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displaySport, formatGameTime } from '@/lib/display-confidence';
-import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { isLiveGameLike, isLiveGameStatus, isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { displayPredictionAnalysis } from '@/lib/narrative-display';
 import { getProjectionDisplay, getProjectionRiskTier } from '@/lib/projection-display';
 import { getDisplayProjection } from '@/lib/stored-pregame-display';
 import {
   getCanonicalConfidence,
   getCanonicalResult,
-  traceCanonicalUiConsumption,
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { cricketRequiredText, cricketRoleText, cricketStatusText, scorePairText, teamScoreText } from '@/lib/cricket-score';
@@ -37,10 +36,12 @@ import { usePrefetchGame } from '@/hooks/useGames';
 import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { deepEqual } from '@/lib/deep-equal';
+import { guardedRouterPush } from '@/lib/navigation-guard';
 
 interface GameCardProps {
   game: GameWithPrediction;
   index?: number;
+  canOpen?: () => boolean;
 }
 
 // Skip re-rendering the (expensive) card subtree — gradients + SVG jerseys —
@@ -48,7 +49,7 @@ interface GameCardProps {
 // objects every poll tick, so a shallow memo would re-render on a timer; a
 // content compare only updates on a real change (score, clock, status, etc.).
 function gameCardPropsEqual(prev: GameCardProps, next: GameCardProps): boolean {
-  return prev.index === next.index && deepEqual(prev.game, next.game);
+  return prev.index === next.index && prev.canOpen === next.canOpen && deepEqual(prev.game, next.game);
 }
 
 const GAME_CARD_JERSEY_SIZE = 60;
@@ -101,10 +102,11 @@ function formatScheduledTime(dateString: string): { date: string; time: string }
   return { date: dateStr, time: timeStr };
 }
 
-function getStatusBadge(status: GameStatus) {
+function getStatusBadge(status: GameStatus | string) {
+  if (isLiveGameStatus(status)) {
+    return { text: 'LIVE', colors: ['#FFFFFF', '#FFFFFF'] as const, textColor: 'text-red-600' };
+  }
   switch (status) {
-    case GameStatus.LIVE:
-      return { text: 'LIVE', colors: ['#FFFFFF', '#FFFFFF'] as const, textColor: 'text-red-600' };
     case GameStatus.FINAL:
       return { text: 'FINAL', colors: ['#3F3F46', '#27272A'] as const, textColor: 'text-zinc-300' };
     case GameStatus.POSTPONED:
@@ -118,9 +120,9 @@ function getStatusBadge(status: GameStatus) {
 
 // Handle TV channel press
 function handleWatchSourcePress(channel: string) {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   const url = getWatchSourceUrl(channel);
-  Linking.openURL(url);
+  void Linking.openURL(url).catch(() => {});
 }
 
 // Animated tappable jersey component with premium feel
@@ -178,7 +180,7 @@ const TappableJersey = memo(function TappableJersey({
   const handlePress = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
     if (isDisabled || !shouldHandlePress()) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     scale.value = withTiming(0.95, { duration: 150, easing: Easing.out(Easing.ease) }, () => {
       scale.value = withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) });
     });
@@ -292,7 +294,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
     if (!claimGameNavigation(game.id)) return;
     isNavigatingRef.current = true;
     warmGame();
-    router.push(`/game/${game.id}` as any);
+    guardedRouterPush(router, `/game/${game.id}` as any);
     setTimeout(() => {
       isNavigatingRef.current = false;
     }, 700);
@@ -619,7 +621,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
 });
 
 // Main GameCard component with performance optimizations
-export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProps) {
+export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: GameCardProps) {
   const router = useRouter();
   const prefetchGame = usePrefetchGame();
   const isNavigatingRef = useRef(false);
@@ -628,9 +630,9 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
     onTouchMove: onCardTouchMove,
     onTouchCancel: onCardTouchCancel,
     shouldHandlePress: shouldHandleCardPress,
-  } = useTapGestureGuard();
+  } = useTapGestureGuard(6, 500);
   const { isPremium } = useSubscription();
-  const isLive = game.status === GameStatus.LIVE;
+  const isLive = isLiveGameLike(game);
 
   // Memoize derived values
   const sportMeta = useMemo(() => SPORT_META[game.sport], [game.sport]);
@@ -670,7 +672,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   }, [pickStatsData]);
 
   // Check if game has already started (can't predict)
-  const gameStarted = game.status === GameStatus.LIVE || game.status === GameStatus.FINAL;
+  const gameStarted = isLive || game.status === GameStatus.FINAL;
 
   // Check if game is upcoming (for faded team colors)
   const isUpcoming = game.status === GameStatus.SCHEDULED;
@@ -746,15 +748,16 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
   const handlePress = useCallback(() => {
     if (!shouldHandleCardPress()) return;
+    if (canOpen && !canOpen()) return;
     if (isNavigatingRef.current) return;
     if (!claimGameNavigation(game.id)) return;
     isNavigatingRef.current = true;
     warmGame();
-    router.push(`/game/${game.id}` as any);
+    guardedRouterPush(router, `/game/${game.id}` as any);
     setTimeout(() => {
       isNavigatingRef.current = false;
     }, 700);
-  }, [game.id, router, shouldHandleCardPress, warmGame]);
+  }, [canOpen, game.id, router, shouldHandleCardPress, warmGame]);
 
   const handleJerseyTap = useCallback((selectedTeam: 'home' | 'away') => {
     if (userPrediction?.pickedTeam === selectedTeam) {
@@ -805,10 +808,6 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const predictionDisplay = useMemo(() => getGamePredictionDisplay(game), [game]);
   const hasPrediction = Boolean(game.prediction);
   const displayProjection = useMemo(() => getDisplayProjection(game), [game]);
-
-  useEffect(() => {
-    traceCanonicalUiConsumption('GameCard', game);
-  }, [game]);
 
   const projectionDisplay = useMemo(() => {
     const prediction = game.prediction;
@@ -1093,7 +1092,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     </Text>
                   ) : null}
                 </View>
-              ) : game.status === GameStatus.LIVE ? (
+              ) : isLive ? (
                 <View style={{ alignItems: 'center', backgroundColor: 'rgba(2,3,8,0.88)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(220,38,38,0.3)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 8 }}>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF' }}>
                     {scorePairText(game)}
@@ -1340,7 +1339,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                 accessibilityRole="button"
                 accessibilityLabel={`Preview Pro: ${game.awayTeam.name} at ${game.homeTeam.name}`}
                 accessibilityHint="Opens Clutch Picks Pro"
-                onPress={() => router.push('/paywall')}
+                onPress={() => guardedRouterPush(router, '/paywall')}
                 style={{
                   position: 'relative',
                   zIndex: 2,

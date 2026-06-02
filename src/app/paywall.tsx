@@ -29,10 +29,10 @@ import {
 import { useSubscription } from '@/lib/subscription-context';
 import { useGames } from '@/hooks/useGames';
 import { GameStatus } from '@/types/sports';
+import { isLiveGameLike } from '@/lib/game-status';
 import type { PurchasesPackage } from 'react-native-purchases';
 import {
   PRO_MONTHLY_HAS_THREE_DAY_TRIAL,
-  PRO_MONTHLY_PRICE_FALLBACK,
   resolvePaywallPriceString,
 } from '@/lib/subscription-pricing';
 import {
@@ -40,6 +40,7 @@ import {
   REVENUECAT_PACKAGE_IDS,
 } from '@/lib/subscription-config';
 import { FeedbackModal } from '@/components/FeedbackModal';
+import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
 import { BG, MAROON, TEAL } from '@/lib/theme';
 
@@ -219,6 +220,10 @@ export default function PaywallScreen() {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const { checkSubscription, isPremium } = useSubscription();
   const didRedirectForPremiumRef = useRef(false);
+  const purchaseInFlightRef = useRef(false);
+  const restoreInFlightRef = useRef(false);
+  const promoInFlightRef = useRef(false);
+  const loadOfferingsInFlightRef = useRef(false);
   const { data: allGames } = useGames();
 
   const dismissFeedback = () => {
@@ -243,12 +248,12 @@ export default function PaywallScreen() {
   const previewPicks = useMemo(() => {
     if (!allGames || allGames.length === 0) return null;
     const withPred = allGames.filter(
-      (g) => g.prediction && (g.status === GameStatus.SCHEDULED || g.status === GameStatus.LIVE)
+      (g) => g.prediction && (g.status === GameStatus.SCHEDULED || isLiveGameLike(g))
     );
     return withPred.slice(0, 3).map((g) => ({
       teams: `${g.awayTeam.name} vs ${g.homeTeam.name}`,
       league: g.sport,
-      time: g.status === GameStatus.LIVE
+      time: isLiveGameLike(g)
         ? 'LIVE'
         : new Date(g.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
     }));
@@ -256,7 +261,7 @@ export default function PaywallScreen() {
 
   const remainingCount = useMemo(() => {
     if (!allGames) return 0;
-    return Math.max(0, allGames.filter((g) => g.prediction && (g.status === GameStatus.SCHEDULED || g.status === GameStatus.LIVE)).length - 3);
+    return Math.max(0, allGames.filter((g) => g.prediction && (g.status === GameStatus.SCHEDULED || isLiveGameLike(g))).length - 3);
   }, [allGames]);
 
   // Breathing glow on CTA
@@ -282,73 +287,70 @@ export default function PaywallScreen() {
     }
     // RevenueCat can deliver entitlement updates through its listener before
     // the purchase promise resolves, especially on the simulator App Store sheet.
-    router.replace('/(tabs)');
+    guardedRouterReplace(router, '/(tabs)');
   }, [isPremium, isPurchasing, isRestoring, promoLoading]);
 
   const loadOfferings = async (): Promise<PurchasesPackage | null> => {
+    if (loadOfferingsInFlightRef.current) return monthlyPackage;
+    loadOfferingsInFlightRef.current = true;
     setLoadError(false);
 
     const enabled = isRevenueCatEnabled();
-    if (__DEV__) console.log('[Paywall] isRevenueCatEnabled:', enabled);
 
     if (!enabled) {
-      if (__DEV__) console.log('[Paywall] RevenueCat not enabled');
       setIsLoading(false);
       setLoadError(true);
+      loadOfferingsInFlightRef.current = false;
       return null;
     }
 
     try {
-      if (__DEV__) console.log('[Paywall] Calling getOfferings...');
       const result = await getOfferings();
-      if (__DEV__) console.log('[Paywall] Result ok:', result.ok);
 
       if (!result.ok) {
-        if (__DEV__) console.log('[Paywall] Failed reason:', result.reason, 'error:', result.error);
         setLoadError(true);
         setIsLoading(false);
+        loadOfferingsInFlightRef.current = false;
         return null;
       }
 
-      if (__DEV__) console.log('[Paywall] Has current offering:', !!result.data.current);
-
       if (!result.data.current) {
-        if (__DEV__) console.log('[Paywall] No current offering found');
         setLoadError(true);
         setIsLoading(false);
+        loadOfferingsInFlightRef.current = false;
         return null;
       }
 
       const packages = result.data.current.availablePackages;
-      if (__DEV__) console.log('[Paywall] Available packages:', packages.map(p => p.identifier));
 
       const monthly = packages.find((pkg) => pkg.identifier === REVENUECAT_PACKAGE_IDS.monthly);
-      if (__DEV__) console.log('[Paywall] Found $rc_monthly:', !!monthly);
 
       if (!monthly) {
         setLoadError(true);
         setIsLoading(false);
+        loadOfferingsInFlightRef.current = false;
         return null;
       }
 
       const metadataWarnings = packageMetadataWarnings(monthly);
-      if (__DEV__ && metadataWarnings.length > 0) {
-        metadataWarnings.forEach((warning) => console.warn(`[Paywall] ${warning}`));
-      }
+      void metadataWarnings;
 
       setMonthlyPackage(monthly);
       setLoadError(false);
       setIsLoading(false);
+      loadOfferingsInFlightRef.current = false;
       return monthly;
-    } catch (error: any) {
-      if (__DEV__) console.log('[Paywall] Exception:', error?.message || error);
+    } catch {
       setLoadError(true);
     }
     setIsLoading(false);
+    loadOfferingsInFlightRef.current = false;
     return null;
   };
 
   const handlePurchase = async () => {
+    if (purchaseInFlightRef.current || isPurchasing || isRestoring || promoLoading) return;
+    purchaseInFlightRef.current = true;
     let packageToPurchase = monthlyPackage;
     if (!packageToPurchase) {
       setIsLoading(true);
@@ -360,78 +362,95 @@ export default function PaywallScreen() {
           variant: 'error',
         });
         setIsLoading(false);
+        purchaseInFlightRef.current = false;
         return;
       }
     }
     setIsPurchasing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const result = await purchasePackage(packageToPurchase);
-    if (result.ok) {
-      await checkSubscription();
-      if (customerInfoHasPremium(result.data)) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // router.replace (not router.back) — onboarding+paywall users would
-        // otherwise pop back to onboarding and re-trigger the paywall, looping.
-        router.replace('/(tabs)');
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      const result = await purchasePackage(packageToPurchase);
+      if (result.ok) {
+        await checkSubscription();
+        if (customerInfoHasPremium(result.data)) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          // router.replace (not router.back) — onboarding+paywall users would
+          // otherwise pop back to onboarding and re-trigger the paywall, looping.
+          guardedRouterReplace(router, '/(tabs)');
+        } else {
+          setFeedback({
+            title: 'Purchase Pending',
+            message: 'Your purchase is still being confirmed. If Pro does not unlock, tap Restore Purchases.',
+            variant: 'info',
+          });
+        }
+      } else if (result.reason === 'sdk_error') {
+        const error = result.error as any;
+        if (error?.userCancelled) {
+          setFeedback({
+            title: 'Purchase Not Completed',
+            message: __DEV__ ? SANDBOX_PURCHASE_CANCEL_MESSAGE : PURCHASE_CANCEL_MESSAGE,
+            variant: 'info',
+          });
+        } else {
+          setFeedback({
+            title: 'Purchase Failed',
+            message: 'Please try again later.',
+            variant: 'error',
+          });
+        }
       } else {
         setFeedback({
-          title: 'Purchase Pending',
-          message: 'Your purchase is still being confirmed. If Pro does not unlock, tap Restore Purchases.',
-          variant: 'info',
+          title: 'Purchase Unavailable',
+          message: 'Subscriptions are not available on this device right now.',
+          variant: 'error',
         });
       }
-    } else if (result.reason === 'sdk_error') {
-      const error = result.error as any;
-      if (error?.userCancelled) {
-        setFeedback({
-          title: 'Purchase Not Completed',
-          message: __DEV__ ? SANDBOX_PURCHASE_CANCEL_MESSAGE : PURCHASE_CANCEL_MESSAGE,
-          variant: 'info',
-        });
+    } finally {
+      purchaseInFlightRef.current = false;
+      setIsPurchasing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (restoreInFlightRef.current || isRestoring || isPurchasing || promoLoading) return;
+    restoreInFlightRef.current = true;
+    setIsRestoring(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const result = await restorePurchases();
+      if (result.ok) {
+        await checkSubscription({ restored: true });
+        const hasActive = customerInfoHasPremium(result.data);
+        if (hasActive) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          setFeedback({
+            title: 'Restored',
+            message: 'Your subscription has been restored.',
+            variant: 'success',
+            onDismiss: () => guardedRouterReplace(router, '/(tabs)'),
+          });
+        } else {
+          setFeedback({
+            title: 'No Subscription Found',
+            message: 'No App Store subscription was found for this account. If you already had Pro, contact support and we will help recover access.',
+            variant: 'info',
+            actionLabel: 'Contact Support',
+            secondaryActionLabel: 'OK',
+            onActionPress: () => { void openSupportEmail(); },
+          });
+        }
       } else {
         setFeedback({
-          title: 'Purchase Failed',
+          title: 'Restore Failed',
           message: 'Please try again later.',
           variant: 'error',
         });
       }
+    } finally {
+      restoreInFlightRef.current = false;
+      setIsRestoring(false);
     }
-    setIsPurchasing(false);
-  };
-
-  const handleRestore = async () => {
-    setIsRestoring(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const result = await restorePurchases();
-    if (result.ok) {
-      await checkSubscription({ restored: true });
-      const hasActive = customerInfoHasPremium(result.data);
-      if (hasActive) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setFeedback({
-          title: 'Restored',
-          message: 'Your subscription has been restored.',
-          variant: 'success',
-          onDismiss: () => router.replace('/(tabs)'),
-        });
-      } else {
-        setFeedback({
-          title: 'No Subscription Found',
-          message: 'No App Store subscription was found for this account. If you already had Pro, contact support and we will help recover access.',
-          variant: 'info',
-          actionLabel: 'Contact Support',
-          secondaryActionLabel: 'OK',
-          onActionPress: () => { void openSupportEmail(); },
-        });
-      }
-    } else {
-      setFeedback({
-        title: 'Restore Failed',
-        message: 'Please try again later.',
-        variant: 'error',
-      });
-    }
-    setIsRestoring(false);
   };
 
   const storePriceString = monthlyPackage?.product?.priceString?.trim();
@@ -441,14 +460,6 @@ export default function PaywallScreen() {
   const priceWithMonthlyPeriod = priceHasBillingPeriod ? priceString : `${priceString}/month`;
   const priceWithShortPeriod = priceHasBillingPeriod ? priceString : `${priceString}/mo`;
 
-  useEffect(() => {
-    if (__DEV__ && monthlyPackage && !storePriceString) {
-      console.warn(`[Paywall] RevenueCat/App Store did not return a price string. Using fallback ${PRO_MONTHLY_PRICE_FALLBACK}.`);
-    }
-    if (__DEV__ && useRevenueCatTestStore && storePriceString && storePriceString !== PRO_MONTHLY_PRICE_FALLBACK) {
-      console.warn(`[Paywall] RevenueCat Test Store returned ${storePriceString}; displaying canonical app price ${PRO_MONTHLY_PRICE_FALLBACK}.`);
-    }
-  }, [monthlyPackage, storePriceString, useRevenueCatTestStore]);
   const monthlyPackageHasTrial = shouldAdvertiseThreeDayTrial(monthlyPackage);
   const trialDisclosure = monthlyPackageHasTrial
     ? PAYWALL_COPY.trialDisclosure(priceWithMonthlyPeriod)
@@ -466,6 +477,38 @@ export default function PaywallScreen() {
     { IconComponent: IconBoxScores, label: 'Box Scores & Stats', desc: 'Full game breakdowns', accent: MAROON, bgColor: MAROON_DIM, borderColor: 'rgba(139,10,31,0.15)' },
     { IconComponent: IconWatch, label: 'Where to Watch', desc: 'TV & streaming info', accent: TEAL, bgColor: TEAL_DIM, borderColor: 'rgba(122,157,184,0.12)' },
   ] as const;
+
+  const handleApplyPromoCode = async () => {
+    const code = promoCode.trim();
+    if (!code || promoLoading || promoInFlightRef.current) return;
+    promoInFlightRef.current = true;
+    setPromoLoading(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const rcAppUserId = await getRevenueCatAppUserId();
+      const rcUserId = rcAppUserId.ok ? rcAppUserId.data : undefined;
+      const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code, rcUserId });
+      await invalidateCustomerInfoCache();
+      await checkSubscription();
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setFeedback({
+        title: 'Code Applied',
+        message: result.message,
+        variant: 'success',
+        onDismiss: () => guardedRouterReplace(router, '/(tabs)'),
+      });
+    } catch (error: any) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      setFeedback({
+        title: 'Invalid Code',
+        message: error?.message || 'This code could not be applied.',
+        variant: 'error',
+      });
+    } finally {
+      promoInFlightRef.current = false;
+      setPromoLoading(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -501,7 +544,7 @@ export default function PaywallScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close paywall" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
+          <Pressable accessibilityRole="button" accessibilityLabel="Close paywall" onPress={() => guardedRouterBack(router, { fallback: '/(tabs)' })} style={{
             width: 44, height: 44, borderRadius: 14,
             backgroundColor: 'rgba(255,255,255,0.04)',
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
@@ -711,34 +754,7 @@ export default function PaywallScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Apply promo code"
                       accessibilityState={{ disabled: !promoCode.trim() || promoLoading, busy: promoLoading }}
-                      onPress={async () => {
-                        if (!promoCode.trim() || promoLoading) return;
-                        setPromoLoading(true);
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        try {
-                          const rcAppUserId = await getRevenueCatAppUserId();
-                          const rcUserId = rcAppUserId.ok ? rcAppUserId.data : undefined;
-                          const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: promoCode.trim(), rcUserId });
-                          await invalidateCustomerInfoCache();
-                          await checkSubscription();
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                          setFeedback({
-                            title: 'Code Applied',
-                            message: result.message,
-                            variant: 'success',
-                            onDismiss: () => router.replace('/(tabs)'),
-                          });
-                        } catch (error: any) {
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                          setFeedback({
-                            title: 'Invalid Code',
-                            message: error?.message || 'This code could not be applied.',
-                            variant: 'error',
-                          });
-                        } finally {
-                          setPromoLoading(false);
-                        }
-                      }}
+                      onPress={handleApplyPromoCode}
                       disabled={!promoCode.trim() || promoLoading}
                       style={{
                         backgroundColor: promoCode.trim() ? TEAL : 'rgba(122,157,184,0.2)',
@@ -814,7 +830,7 @@ export default function PaywallScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
+              onPress={() => { void Linking.openURL('https://apps.apple.com/account/subscriptions'); }}
               accessibilityRole="button"
               accessibilityLabel="Manage subscription"
               style={{ minHeight: 44, marginTop: 6, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' }}>
@@ -823,7 +839,7 @@ export default function PaywallScreen() {
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
               <Pressable
-                onPress={() => router.push('/terms' as any)}
+                onPress={() => guardedRouterPush(router, '/terms' as any)}
                 accessibilityRole="button"
                 accessibilityLabel="Terms of service"
                 style={{ minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}>
@@ -831,7 +847,7 @@ export default function PaywallScreen() {
               </Pressable>
               <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>·</Text>
               <Pressable
-                onPress={() => router.push('/privacy-policy' as any)}
+                onPress={() => guardedRouterPush(router, '/privacy-policy' as any)}
                 accessibilityRole="button"
                 accessibilityLabel="Privacy policy"
                 style={{ minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}>

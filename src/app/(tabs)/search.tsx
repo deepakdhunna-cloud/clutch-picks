@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from 'react';
 import {
-  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, InteractionManager, FlatList,
+  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, InteractionManager, FlatList, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
@@ -25,7 +25,7 @@ import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displayConfidence, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
-import { isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { isLiveGameLike, isSuspendedGame, sortSuspendedGamesLast, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
 import { generateTonightNarrative } from '@/lib/tonight-narrative';
 import { cricketLedScoreText, cricketOversText, cricketPlayersCompactText, cricketRequiredText, cricketRoleText, teamScoreText } from '@/lib/cricket-score';
 import {
@@ -36,6 +36,8 @@ import {
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { pruneFollowedGamesForReset, readFollowedGameIds } from '@/lib/followed-games';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
+import { guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
+import { useScrollPressGuard } from '@/hooks/useScrollPressGuard';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import {
@@ -63,6 +65,8 @@ const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENN
 const ARENA_SIDE_PADDING = 20;
 const ARENA_SECTION_GAP = 28;
 const ARENA_CARD_GAP = 18;
+const LIVE_INTEL_CARD_GAP = 16;
+const INTEL_BODY_COLLAPSE_THRESHOLD = 220;
 const MODE_SEGMENT_GAP = 8;
 const MODES = ['Game Day', 'Prep Mode', 'Review'] as const;
 type LiveIntelType = 'alert' | 'shift' | 'trend' | 'pulse';
@@ -98,7 +102,7 @@ function useGameDetailActions() {
   const openGame = useCallback((game: GameWithPrediction) => {
     if (!claimGameNavigation(game.id)) return;
     warmGame(game);
-    router.push({ pathname: '/game/[id]', params: { id: game.id } });
+    guardedRouterPush(router, { pathname: '/game/[id]', params: { id: game.id } });
     fireLightHaptic();
   }, [router, warmGame]);
 
@@ -213,21 +217,170 @@ const ArenaHeader = memo(function ArenaHeader({
   );
 });
 
+function ArenaTitlePulse({ color }: { color: string }) {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1500, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+    return () => cancelAnimation(pulse);
+  }, [pulse]);
+
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 * (1 - pulse.value),
+    transform: [{ scale: 0.8 + pulse.value * 1.75 }],
+  }));
+
+  return (
+    <View style={{ width: 15, height: 15, alignItems: 'center', justifyContent: 'center', marginRight: 9 }}>
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            width: 13,
+            height: 13,
+            borderRadius: 6.5,
+            backgroundColor: color,
+          },
+          ringStyle,
+        ]}
+      />
+      <View
+        style={{
+          width: 9,
+          height: 9,
+          borderRadius: 4.5,
+          backgroundColor: color,
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.9,
+          shadowRadius: 6,
+        }}
+      />
+    </View>
+  );
+}
+
+const ARENA_MODE_BANNER_TOP_LINE_ALPHA = 0.58;
+const ARENA_MODE_BANNER_BOTTOM_LINE_ALPHA = 0.36;
+const ARENA_MODE_BANNER_TOP_LINE_HEIGHT = 1.5;
+const ARENA_MODE_BANNER_BOTTOM_LINE_HEIGHT = 1.25;
+
+const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
+  title,
+  subtitle,
+  accent,
+  showPulse = false,
+  subtitleOpacity = 0.78,
+}: {
+  title: string;
+  subtitle: string;
+  accent: string;
+  showPulse?: boolean;
+  subtitleOpacity?: number;
+}) {
+  return (
+    <View
+      style={{
+        marginHorizontal: ARENA_SIDE_PADDING,
+        marginTop: 2,
+        marginBottom: 18,
+        paddingVertical: 13,
+        alignItems: 'center',
+        overflow: 'hidden',
+      }}
+    >
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0)', hexWithAlpha(accent, ARENA_MODE_BANNER_TOP_LINE_ALPHA), 'rgba(255,255,255,0)']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: ARENA_MODE_BANNER_TOP_LINE_HEIGHT }}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0)', hexWithAlpha(accent, ARENA_MODE_BANNER_BOTTOM_LINE_ALPHA), 'rgba(255,255,255,0)']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ position: 'absolute', left: 18, right: 18, bottom: 0, height: ARENA_MODE_BANNER_BOTTOM_LINE_HEIGHT }}
+      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+        {showPulse ? <ArenaTitlePulse color={accent} /> : null}
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.82}
+          numberOfLines={1}
+          style={{
+            color: WHITE,
+            fontFamily: 'BebasNeue_400Regular',
+            fontSize: 38,
+            lineHeight: 40,
+            letterSpacing: 1.4,
+            includeFontPadding: false,
+          }}
+        >
+          {title.toUpperCase()}
+        </Text>
+      </View>
+      <Text
+        numberOfLines={1}
+        style={{
+          color: hexWithAlpha(accent, subtitleOpacity),
+          fontSize: 10,
+          lineHeight: 13,
+          fontWeight: '900',
+          letterSpacing: 1.7,
+          marginTop: 3,
+          includeFontPadding: false,
+        }}
+      >
+        {subtitle}
+      </Text>
+    </View>
+  );
+});
+
+const GameDayTitleBanner = memo(function GameDayTitleBanner({ liveCount }: { liveCount: number }) {
+  const accent = liveCount > 0 ? LIVE_RED : TEAL;
+  const subtitle = 'TODAY\'S SLATE COMMAND CENTER';
+
+  return (
+    <ArenaModeTitleBanner
+      title="Game Day"
+      subtitle={subtitle}
+      accent={accent}
+      showPulse={liveCount > 0}
+      subtitleOpacity={liveCount > 0 ? 0.92 : 0.78}
+    />
+  );
+});
+
 // ─── SEARCH BAR ───
+const ARENA_CHROME_ACCENT = TEAL;
+const ARENA_TITLE_FONT_SIZE = 24;
+const ARENA_TITLE_LINE_HEIGHT = 28;
+const SEARCH_BAR_ICON_SIZE = 26;
+const SEARCH_BAR_ICON_RADIUS = 9;
+const SEARCH_BAR_TEXT_SIZE = 12.8;
 const searchBarOuter = {
   paddingHorizontal: ARENA_SIDE_PADDING,
-  paddingTop: 12,
-  marginBottom: 12,
+  paddingTop: 8,
+  marginBottom: 9,
 } as const;
 const searchBarInner = {
   flexDirection: 'row' as const,
   alignItems: 'center' as const,
   backgroundColor: 'rgba(5,8,13,0.96)',
   borderWidth: 1.5,
-  borderColor: 'rgba(180,211,235,0.32)',
-  borderRadius: 15,
-  paddingVertical: 9,
-  paddingHorizontal: 13,
+  borderColor: hexWithAlpha(ARENA_CHROME_ACCENT, 0.26),
+  borderRadius: 13,
+  paddingVertical: 7,
+  paddingHorizontal: 11,
 } as const;
 const SearchBar = memo(function SearchBar() {
   const router = useRouter();
@@ -237,25 +390,22 @@ const SearchBar = memo(function SearchBar() {
   );
   return (
     <View style={searchBarOuter}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(180,211,235,0.54)', letterSpacing: 2.2, marginBottom: 5 }}>
-            Clutch Picks
-          </Text>
-          <Text adjustsFontSizeToFit minimumFontScale={0.86} numberOfLines={1} style={{ color: WHITE, fontSize: 30, lineHeight: 34, fontWeight: '900', letterSpacing: 0 }}>
+          <Text adjustsFontSizeToFit minimumFontScale={0.88} numberOfLines={1} style={{ color: WHITE, fontSize: ARENA_TITLE_FONT_SIZE, lineHeight: ARENA_TITLE_LINE_HEIGHT, fontWeight: '900', letterSpacing: 0 }}>
             My Arena
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end', paddingBottom: 2 }}>
-          <View style={{ borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: 'rgba(122,157,184,0.10)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.18)' }}>
-            <Text style={{ color: TEAL, fontSize: 9, fontWeight: '900', letterSpacing: 1.4 }}>{dateLabel}</Text>
+          <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: hexWithAlpha(ARENA_CHROME_ACCENT, 0.10), borderWidth: 1, borderColor: hexWithAlpha(ARENA_CHROME_ACCENT, 0.18) }}>
+            <Text style={{ color: ARENA_CHROME_ACCENT, fontSize: 8.8, fontWeight: '900', letterSpacing: 1.35 }}>{dateLabel}</Text>
           </View>
         </View>
       </View>
       <Pressable
         onPress={() => {
           fireLightHaptic();
-          router.push('/search-explore');
+          guardedRouterPush(router, '/search-explore');
         }}
         accessibilityRole="button"
         accessibilityLabel="Open arena search"
@@ -266,30 +416,27 @@ const SearchBar = memo(function SearchBar() {
         })}
       >
         <LinearGradient
-          colors={['rgba(180,211,235,0.24)', 'rgba(122,157,184,0.10)', 'rgba(122,157,184,0.10)', 'rgba(139,10,31,0.16)']}
+          colors={[hexWithAlpha(ARENA_CHROME_ACCENT, 0.30), hexWithAlpha(ARENA_CHROME_ACCENT, 0.12), 'rgba(255,255,255,0.045)', hexWithAlpha(ARENA_CHROME_ACCENT, 0.18)]}
           locations={[0, 0.44, 0.58, 1]}
           start={{ x: 0.05, y: 0 }}
           end={{ x: 0.95, y: 1 }}
           style={{
-            borderRadius: 16,
+            borderRadius: 14,
             padding: 1.25,
             shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.3,
-            shadowRadius: 18,
-            elevation: 10,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.26,
+            shadowRadius: 15,
+            elevation: 8,
           }}
         >
           <View style={searchBarInner}>
-            <View style={{ width: 30, height: 30, borderRadius: 11, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1.5, borderColor: 'rgba(122,157,184,0.34)', alignItems: 'center', justifyContent: 'center' }}>
-              <Search size={15} color={TEAL} strokeWidth={2.4} />
+            <View style={{ width: SEARCH_BAR_ICON_SIZE, height: SEARCH_BAR_ICON_SIZE, borderRadius: SEARCH_BAR_ICON_RADIUS, backgroundColor: hexWithAlpha(ARENA_CHROME_ACCENT, 0.11), borderWidth: 1.5, borderColor: hexWithAlpha(ARENA_CHROME_ACCENT, 0.34), alignItems: 'center', justifyContent: 'center' }}>
+              <Search size={14} color={ARENA_CHROME_ACCENT} strokeWidth={2.4} />
             </View>
             <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
-              <Text style={{ fontSize: 12.5, color: 'rgba(248,250,252,0.92)', fontWeight: '800' }}>
+              <Text style={{ fontSize: SEARCH_BAR_TEXT_SIZE, color: 'rgba(248,250,252,0.92)', fontWeight: '800' }}>
                 Search the slate
-              </Text>
-              <Text style={{ fontSize: 10, color: 'rgba(180,211,235,0.46)', fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
-                Games, teams, sports, and live matchups
               </Text>
             </View>
           </View>
@@ -300,6 +447,10 @@ const SearchBar = memo(function SearchBar() {
 });
 
 // ─── SPORT PILLS ───
+const SPORT_PILL_COMPACT_HEIGHT = 25;
+const SPORT_PILL_DEFAULT_HEIGHT = 28;
+const SPORT_PILL_COMPACT_MARGIN = 8;
+const SPORT_PILL_DEFAULT_MARGIN = 10;
 const SportPills = memo(function SportPills({
   selected,
   onSelect,
@@ -331,6 +482,12 @@ const SportPills = memo(function SportPills({
       : SPORTS,
     [alwaysShowSpecialSports, available]
   );
+  const {
+    onTouchStart: onPillTouchStart,
+    onTouchMove: onPillTouchMove,
+    onTouchCancel: onPillTouchCancel,
+    shouldHandlePress: shouldHandlePillPress,
+  } = useTapGestureGuard(6, 500);
   return (
     <ScrollView
       horizontal
@@ -352,46 +509,61 @@ const SportPills = memo(function SportPills({
         return (
           <Pressable
             key={s}
-            onPress={() => { if (!on) fireSelectionHaptic(); onSelect(s); }}
+            onPress={() => {
+              if (!shouldHandlePillPress()) return;
+              if (!on) fireSelectionHaptic();
+              onSelect(s);
+            }}
+            onTouchStart={(event) => {
+              onPillTouchStart(event);
+              onHorizontalGestureStart?.();
+            }}
+            onTouchMove={onPillTouchMove}
+            onTouchCancel={() => {
+              onPillTouchCancel();
+              onHorizontalGestureEnd?.();
+            }}
+            onTouchEnd={onHorizontalGestureEnd}
+            pressRetentionOffset={6}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             accessibilityLabel={`${SPORT_DISPLAY[s] ?? s}${count !== undefined && counts ? `, ${count} games` : ''} filter`}
             style={{
               minHeight: 44,
               justifyContent: 'center',
-              marginRight: index === visible.length - 1 ? 0 : 12,
+              marginRight: index === visible.length - 1 ? 0 : (compact ? SPORT_PILL_COMPACT_MARGIN : SPORT_PILL_DEFAULT_MARGIN),
             }}
           >
             <LinearGradient
               colors={on
-                ? [hexWithAlpha(MAROON, 0.72), 'rgba(180,211,235,0.26)', 'rgba(180,211,235,0.26)', hexWithAlpha(MAROON, 0.40)]
-                : ['rgba(122,157,184,0.40)', 'rgba(122,157,184,0.18)']}
+                ? [hexWithAlpha(ARENA_CHROME_ACCENT, 0.58), hexWithAlpha(ARENA_CHROME_ACCENT, 0.24), 'rgba(255,255,255,0.065)', hexWithAlpha(ARENA_CHROME_ACCENT, 0.32)]
+                : [hexWithAlpha(ARENA_CHROME_ACCENT, 0.34), hexWithAlpha(ARENA_CHROME_ACCENT, 0.14)]}
               locations={on ? [0, 0.42, 0.6, 1] : undefined}
               start={{ x: 0.05, y: 0 }}
               end={{ x: 0.95, y: 1 }}
               style={{
-                borderRadius: 17,
-                height: compact ? 29 : 31,
-                minWidth: compact ? (s === 'All' ? 46 : s === 'TENNIS' ? 78 : 58) : (s === 'All' ? 46 : s === 'TENNIS' ? 82 : 62),
-                padding: 2,
+                borderRadius: 15,
+                height: compact ? SPORT_PILL_COMPACT_HEIGHT : SPORT_PILL_DEFAULT_HEIGHT,
+                minWidth: compact ? (s === 'All' ? 40 : s === 'TENNIS' ? 64 : 50) : (s === 'All' ? 44 : s === 'TENNIS' ? 74 : 56),
+                padding: 1.5,
                 shadowColor: '#000000',
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.26,
-                shadowRadius: 10,
-                elevation: 6,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 4,
               }}
             >
               <View
                 style={{
                   flex: 1,
-                  borderRadius: 15,
+                  borderRadius: 13,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: on ? 'rgba(7,10,16,0.52)' : 'rgba(7,10,16,0.88)',
-                  paddingHorizontal: compact ? 11 : 13,
+                  backgroundColor: on ? 'rgba(7,10,16,0.58)' : 'rgba(7,10,16,0.88)',
+                  paddingHorizontal: compact ? 8 : 10,
                 }}
               >
-                <Text numberOfLines={1} style={{ fontSize: compact ? 11 : 11.5, lineHeight: compact ? 13 : 14, fontWeight: on ? '800' : '600', color: on ? WHITE : TEAL, letterSpacing: on ? 0 : 0.4, includeFontPadding: false }}>{label}</Text>
+                <Text numberOfLines={1} style={{ fontSize: compact ? 10.2 : 11, lineHeight: compact ? 12.5 : 13.5, fontWeight: on ? '800' : '600', color: on ? WHITE : ARENA_CHROME_ACCENT, letterSpacing: on ? 0 : 0.25, includeFontPadding: false }}>{label}</Text>
               </View>
             </LinearGradient>
           </Pressable>
@@ -402,32 +574,37 @@ const SportPills = memo(function SportPills({
 });
 
 // ─── SEGMENTED PILL ───
-// Vertical footprint of the segmented mode pill: raised gradient rim (2.5 top +
-// 2.5 bottom) + inner minHeight (48) + tightened gap below (16) = 69px. Reserved
+// Vertical footprint of the segmented mode pill: raised gradient rim (2 top +
+// 2 bottom) + inner minHeight (44) + tightened gap below (8) = 52px. Reserved
 // in the loading state so the page does not jump up when modes appear after data
 // resolves. Kept as a constant so the loading spacer always tracks the pill.
-const SEG_PILL_INNER_MIN_HEIGHT = 48;
-const SEG_PILL_BOTTOM_MARGIN = 16;
-const SEG_PILL_RESERVED_HEIGHT = SEG_PILL_INNER_MIN_HEIGHT + 5 + SEG_PILL_BOTTOM_MARGIN;
+const SEG_PILL_INNER_MIN_HEIGHT = 44;
+const SEG_PILL_BOTTOM_MARGIN = 8;
+const SEG_PILL_RESERVED_HEIGHT = SEG_PILL_INNER_MIN_HEIGHT + 4 + SEG_PILL_BOTTOM_MARGIN;
+const ARENA_SEGMENT_ACTIVE_GRADIENT = [hexWithAlpha(ARENA_CHROME_ACCENT, 0.52), hexWithAlpha(ARENA_CHROME_ACCENT, 0.17), 'rgba(255,255,255,0.055)', hexWithAlpha(ARENA_CHROME_ACCENT, 0.28)] as const;
+const ARENA_SEGMENT_INACTIVE_GRADIENT = [hexWithAlpha(ARENA_CHROME_ACCENT, 0.11), hexWithAlpha(ARENA_CHROME_ACCENT, 0.035)] as const;
+const ARENA_SEGMENT_ACTIVE_LOCATIONS = [0, 0.42, 0.6, 1] as const;
+const ARENA_SEGMENT_ACTIVE_BACKGROUND = 'rgba(7,10,16,0.54)';
+const ARENA_SEGMENT_INACTIVE_BACKGROUND = 'rgba(7,10,16,0.70)';
 const SegPill = memo(function SegPill({ active, onChange }: { active: number; onChange: (n: number) => void; hasLive: boolean }) {
   return (
     <View style={{ paddingHorizontal: ARENA_SIDE_PADDING, marginBottom: SEG_PILL_BOTTOM_MARGIN }}>
       <LinearGradient
-        colors={['rgba(122,157,184,0.18)', 'rgba(255,255,255,0.055)', 'rgba(255,255,255,0.055)', 'rgba(139,10,31,0.16)']}
+        colors={[hexWithAlpha(ARENA_CHROME_ACCENT, 0.24), 'rgba(255,255,255,0.055)', 'rgba(255,255,255,0.055)', hexWithAlpha(ARENA_CHROME_ACCENT, 0.16)]}
         locations={[0, 0.44, 0.58, 1]}
         start={{ x: 0.05, y: 0 }}
         end={{ x: 0.95, y: 1 }}
         style={{
-          borderRadius: 22,
-          padding: 2.5,
+          borderRadius: 20,
+          padding: 2,
           shadowColor: '#000000',
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.3,
-          shadowRadius: 18,
-          elevation: 10,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.24,
+          shadowRadius: 14,
+          elevation: 8,
         }}
       >
-        <View style={{ minHeight: SEG_PILL_INNER_MIN_HEIGHT, backgroundColor: 'rgba(5,8,13,0.78)', borderRadius: 19.5, padding: 5, flexDirection: 'row', alignItems: 'stretch', overflow: 'hidden' }}>
+        <View style={{ minHeight: SEG_PILL_INNER_MIN_HEIGHT, backgroundColor: 'rgba(5,8,13,0.78)', borderRadius: 18, padding: 4, flexDirection: 'row', alignItems: 'stretch', overflow: 'hidden' }}>
           {MODES.map((l, i) => {
             const isActive = active === i;
             return (
@@ -446,27 +623,25 @@ const SegPill = memo(function SegPill({ active, onChange }: { active: number; on
                 }}
               >
                 <LinearGradient
-                  colors={isActive
-                    ? [hexWithAlpha(MAROON, 0.52), 'rgba(180,211,235,0.14)', 'rgba(180,211,235,0.14)', hexWithAlpha(MAROON, 0.30)]
-                    : ['rgba(122,157,184,0.11)', 'rgba(122,157,184,0.035)']}
-                  locations={isActive ? [0, 0.42, 0.6, 1] : undefined}
+                  colors={isActive ? ARENA_SEGMENT_ACTIVE_GRADIENT : ARENA_SEGMENT_INACTIVE_GRADIENT}
+                  locations={isActive ? ARENA_SEGMENT_ACTIVE_LOCATIONS : undefined}
                   start={{ x: 0.05, y: 0 }}
                   end={{ x: 0.95, y: 1 }}
-                  style={{ minHeight: 38, borderRadius: 16, padding: 1.5 }}
+                  style={{ minHeight: 34, borderRadius: 15, padding: 1 }}
                 >
                   <View
                     style={{
                       flex: 1,
-                      borderRadius: 14.5,
+                      borderRadius: 14,
                       alignItems: 'center',
                       justifyContent: 'center',
                       flexDirection: 'row',
                       overflow: 'hidden',
-                      backgroundColor: isActive ? 'rgba(7,10,16,0.48)' : 'rgba(7,10,16,0.70)',
-                      paddingHorizontal: 8,
+                      backgroundColor: isActive ? ARENA_SEGMENT_ACTIVE_BACKGROUND : ARENA_SEGMENT_INACTIVE_BACKGROUND,
+                      paddingHorizontal: 6,
                     }}
                   >
-                    <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={{ flexShrink: 1, fontSize: 12.5, lineHeight: 16, fontWeight: isActive ? '900' : '800', color: isActive ? WHITE : 'rgba(180,211,235,0.72)', letterSpacing: 0, includeFontPadding: false }}>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={{ flexShrink: 1, fontSize: 11.8, lineHeight: 15, fontWeight: isActive ? '900' : '800', color: isActive ? WHITE : hexWithAlpha(ARENA_CHROME_ACCENT, 0.84), letterSpacing: 0, includeFontPadding: false }}>
                       {l}
                     </Text>
                   </View>
@@ -502,14 +677,16 @@ const ArenaChrome = memo(function ArenaChrome({
   return (
     <>
       <SearchBar />
+      {showModes ? <SegPill active={active} onChange={onChange} hasLive={hasLive} /> : null}
       <SportPills
         selected={selected}
         onSelect={onSelect}
         available={available}
+        compact={showModes}
+        bottomMargin={showModes ? 10 : 14}
         onHorizontalGestureStart={onHorizontalGestureStart}
         onHorizontalGestureEnd={onHorizontalGestureEnd}
       />
-      {showModes ? <SegPill active={active} onChange={onChange} hasLive={hasLive} /> : null}
     </>
   );
 });
@@ -610,19 +787,36 @@ const ArenaScrollView = memo(function ArenaScrollView({
   onR,
   isR,
   bottomPadding,
+  resetSignal,
   children,
 }: {
   sh: any;
   onR: () => void;
   isR: boolean;
   bottomPadding: number;
+  resetSignal?: number;
   children: React.ReactNode;
 }) {
+  const scrollRef = useRef<ScrollView | null>(null);
+  const animatedScrollRef = scrollRef as unknown as React.Ref<React.ElementRef<typeof Animated.ScrollView>>;
+
+  useEffect(() => {
+    if (typeof resetSignal !== 'number') return undefined;
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo?.({ y: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [resetSignal]);
+
   return (
     <Animated.ScrollView
+      ref={animatedScrollRef}
       onScroll={sh}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       contentContainerStyle={{ paddingBottom: bottomPadding }}
       scrollIndicatorInsets={{ bottom: bottomPadding }}
       refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}
@@ -641,7 +835,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   // Per-item guard: this card lives in a horizontal FlatList, so a swipe across
   // it must not fire a tap and open the wrong game.
   const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
-  const live = game.status === GameStatus.LIVE || (game.status as string) === 'in_progress' || (game.status as string) === 'halftime';
+  const live = isLiveGameLike(game);
   const final = game.status === GameStatus.FINAL;
   const awayScore = typeof game.awayScore === 'number' ? game.awayScore : null;
   const homeScore = typeof game.homeScore === 'number' ? game.homeScore : null;
@@ -819,9 +1013,9 @@ const YourGames = memo(function YourGames({
   const router = useRouter();
   const orderedGames = useMemo(() => {
     const priority = (game: GameWithPrediction) =>
-      game.status === GameStatus.LIVE ? 0 :
-      game.status === GameStatus.SCHEDULED ? 1 :
-      game.status === GameStatus.FINAL ? 2 :
+      isLiveGameLike(game) ? (isSuspendedGame(game) ? 1 : 0) :
+      game.status === GameStatus.SCHEDULED ? 2 :
+      game.status === GameStatus.FINAL ? 3 :
       3;
     return [...games].sort((a, b) => {
       const p = priority(a) - priority(b);
@@ -832,14 +1026,8 @@ const YourGames = memo(function YourGames({
 
   if (games.length === 0) return (
     <View style={{ marginHorizontal: 20, marginBottom: ARENA_SECTION_GAP }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 }}>
-        <View>
-          <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2, marginBottom: 4 }}>WATCHLIST</Text>
-          <Text style={{ fontSize: 20, fontWeight: '900', color: WHITE, letterSpacing: 0 }}>Tracked Games</Text>
-        </View>
-      </View>
       <Pressable
-        onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
+        onPress={() => { fireLightHaptic(); guardedRouterReplace(router, '/(tabs)'); }}
         accessibilityRole="button"
         accessibilityLabel="Track games"
         accessibilityHint="Opens the main slate to add games to your arena"
@@ -861,10 +1049,10 @@ const YourGames = memo(function YourGames({
             <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                 <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: TEAL }} />
-                <Text style={{ color: 'rgba(224,234,240,0.46)', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.8, marginLeft: 7 }}>PRIVATE BOARD</Text>
+                <Text style={{ color: 'rgba(224,234,240,0.46)', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.8, marginLeft: 7 }}>WATCHLIST</Text>
               </View>
               <Text style={{ color: WHITE, fontSize: 20, fontWeight: '900', letterSpacing: 0 }}>Track your games</Text>
-              <Text style={{ color: TEXT_SECONDARY, fontSize: 12.5, lineHeight: 18, marginTop: 4 }}>Add games or teams to keep live scores, starts, and recaps in one focused view.</Text>
+              <Text style={{ color: TEXT_SECONDARY, fontSize: 12.5, lineHeight: 18, marginTop: 4 }}>Add games or teams to keep scores, starts, and recaps in one focused view.</Text>
             </View>
             <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.2)', flexShrink: 0 }}>
               <Plus size={20} color={TEAL} strokeWidth={2.7} />
@@ -876,18 +1064,10 @@ const YourGames = memo(function YourGames({
   );
   return (
     <View style={{ marginBottom: ARENA_SECTION_GAP }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginHorizontal: 20, marginBottom: 12 }}>
-        <View>
-          <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2, marginBottom: 4 }}>WATCHLIST</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: WHITE, letterSpacing: 0 }}>Tracked Games</Text>
-            <View style={{ minWidth: 24, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, backgroundColor: 'rgba(122,157,184,0.1)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.16)', marginLeft: 8 }}>
-              <Text style={{ fontSize: 10, fontWeight: '900', color: TEAL }}>{orderedGames.length}</Text>
-            </View>
-          </View>
-        </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginBottom: 8 }}>
+        <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2 }}>WATCHLIST {orderedGames.length}</Text>
         <Pressable
-          onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
+          onPress={() => { fireLightHaptic(); guardedRouterReplace(router, '/(tabs)'); }}
           accessibilityRole="button"
           accessibilityLabel="Browse games"
           accessibilityHint="Opens the main slate to add games to your arena"
@@ -1380,7 +1560,7 @@ const LiveCard = memo(function LiveCard({
             <View style={{ marginRight: 8 }}>
               <LiveDot />
             </View>
-            <Text style={{ color: '#ff5a52', fontSize: 10, fontWeight: '900', letterSpacing: 1.7 }}>LIVE</Text>
+            <Text style={{ color: '#ff5a52', fontSize: 10, fontWeight: '900', letterSpacing: 1.7 }}>IN PLAY</Text>
           </View>
           <View style={{ alignSelf: 'center', alignItems: 'center', minWidth: 94, backgroundColor: 'rgba(0,0,0,0.34)', borderRadius: 13, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
             <Text style={{ color: 'rgba(255,255,255,0.42)', fontSize: 8, fontWeight: '900', letterSpacing: 1.8 }}>GAME PULSE</Text>
@@ -1717,7 +1897,10 @@ function modelWatchBody(game: GameWithPrediction, leader: GameWithPrediction['ho
   }
 
   if (leader && predictedTeam && leader.abbreviation === predictedTeam.abbreviation) {
-    return `${predictedTeam.name} was the ${tier} at ${conf}%, and the live score is backing the pregame read. Keep an eye on whether they control the next pressure moment too.`;
+    if (game.sport === Sport.TENNIS) {
+      return `${predictedTeam.name} was the ${tier} at ${conf}%, and the live score is backing the pregame read. Watch whether the next service game keeps that edge intact.`;
+    }
+    return `${predictedTeam.name} was the ${tier} at ${conf}%, and the live score is backing the pregame read. Watch whether the next pressure moment keeps that edge intact.`;
   }
 
   return `${predictedTeam?.name ?? 'The model side'} was the ${tier} at ${conf}%, but ${leader?.name ?? 'the opponent'} is pushing against it. This is where the model read gets stress-tested.`;
@@ -1838,11 +2021,11 @@ function generateLiveIntel(game: GameWithPrediction | null): LiveIntelItem[] {
 // ─── INTEL CARD ───
 const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) {
   const [expanded, setExpanded] = useState(false);
-  const isLong = body.length > 140;
+  const isLong = body.length > INTEL_BODY_COLLAPSE_THRESHOLD;
   // Truncate on a word boundary (never mid-word) and use the ellipsis glyph, so the
   // collapsed preview never strands a fragment like "…the current tie." mid-word.
   const truncated = useMemo(() => {
-    const slice = body.substring(0, 140);
+    const slice = body.substring(0, INTEL_BODY_COLLAPSE_THRESHOLD);
     const lastSpace = slice.lastIndexOf(' ');
     return (lastSpace > 0 ? slice.substring(0, lastSpace) : slice).replace(/[\s.,;:]+$/, '') + '…';
   }, [body]);
@@ -1857,8 +2040,8 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
       accessibilityLabel={isLong ? (expanded ? `Collapse ${title} live intel` : `Read full ${title} live intel`) : undefined}
       accessibilityState={isLong ? { expanded } : undefined}
       style={({ pressed }) => ({
-        marginBottom: ARENA_CARD_GAP,
-        borderRadius: 16,
+        marginBottom: LIVE_INTEL_CARD_GAP,
+        borderRadius: 14,
         opacity: pressed && isLong ? 0.9 : 1,
         transform: [{ scale: pressed && isLong ? 0.992 : 1 }],
       })}
@@ -1868,16 +2051,16 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
-          borderRadius: 16,
-          padding: 2,
+          borderRadius: 14,
+          padding: 1.5,
           shadowColor: '#000000',
-          shadowOffset: { width: 0, height: 9 },
-          shadowOpacity: 0.28,
-          shadowRadius: 16,
-          elevation: 8,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.18,
+          shadowRadius: 12,
+          elevation: 5,
         }}
       >
-        <View style={{ backgroundColor: 'rgba(5,6,12,0.94)', borderRadius: 14, padding: 13, paddingLeft: 15, overflow: 'hidden' }}>
+        <View style={{ backgroundColor: 'rgba(5,6,12,0.94)', borderRadius: 12.5, padding: 12, paddingLeft: 14, overflow: 'hidden' }}>
           <LinearGradient
             colors={[hexWithAlpha(bc, 0.17), 'rgba(5,6,12,0)', 'rgba(122,157,184,0.05)']}
             start={{ x: 0, y: 0 }}
@@ -1898,21 +2081,20 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
             end={{ x: 0.5, y: 1 }}
             style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 52 }}
           />
-          <View style={{ position: 'absolute', left: 0, top: 12, bottom: 12, width: 4, backgroundColor: bc, borderTopRightRadius: 4, borderBottomRightRadius: 4 }} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+          <View style={{ position: 'absolute', left: 0, top: 11, bottom: 11, width: 3.5, backgroundColor: bc, borderTopRightRadius: 4, borderBottomRightRadius: 4 }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: hexWithAlpha(bc, 0.18), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: hexWithAlpha(bc, 0.28) }}>
-                <Zap size={12} color={bc} fill={hexWithAlpha(bc, 0.28)} />
+              <View style={{ width: 23, height: 23, borderRadius: 8, backgroundColor: hexWithAlpha(bc, 0.16), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: hexWithAlpha(bc, 0.26) }}>
+                <Zap size={11} color={bc} fill={hexWithAlpha(bc, 0.26)} />
               </View>
-              <View style={{ backgroundColor: hexWithAlpha(bc, 0.18), borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, marginLeft: 8 }}>
+              <View style={{ backgroundColor: hexWithAlpha(bc, 0.16), borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, marginLeft: 8 }}>
                 <Text style={{ fontSize: 8, fontWeight: '900', color: bc, letterSpacing: 1 }}>{bl}</Text>
               </View>
             </View>
-            <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.32)', fontWeight: '800', letterSpacing: 1.4 }}>LIVE INTEL</Text>
           </View>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: WHITE, marginBottom: 6 }}>{title}</Text>
-          <Text style={{ fontSize: 12, color: TEXT_SECONDARY, lineHeight: 18 }}>{displayBody}</Text>
-          {isLong && !expanded ? <Text style={{ fontSize: 11, color: bc, fontWeight: '800', marginTop: 8 }}>Tap to read more</Text> : null}
+          <Text style={{ fontSize: 14.5, lineHeight: 18, fontWeight: '800', color: WHITE, marginBottom: 5 }}>{title}</Text>
+          <Text style={{ fontSize: 12.3, color: TEXT_SECONDARY, lineHeight: 18.5 }}>{displayBody}</Text>
+          {isLong && !expanded ? <Text style={{ fontSize: 11, color: bc, fontWeight: '800', marginTop: 7 }}>Tap to read more</Text> : null}
         </View>
       </LinearGradient>
     </Pressable>
@@ -1981,11 +2163,11 @@ const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress 
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 8.5, lineHeight: 11, fontWeight: '900', color: '#7A9DB8', letterSpacing: 1.7 }}>LIVE INTELLIGENCE</Text>
-                <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '900', color: WHITE, marginTop: 2 }}>Read the live game like a pro</Text>
+                <Text style={{ fontSize: 17, lineHeight: 22, fontWeight: '900', color: WHITE, marginTop: 2 }}>Read the game like a pro</Text>
               </View>
             </View>
             <Text style={{ fontSize: 12.5, lineHeight: 19, fontWeight: '700', color: TEXT_SECONDARY, marginBottom: 13 }}>
-              The full read on every live game — real-time pulse, the pressure point that decides it, how the model line is holding, upset alerts, and injury & ejection news. All updating as it plays.
+              The full read on every game in progress — real-time pulse, the pressure point that decides it, how the model line is holding, upset alerts, and injury & ejection news. All updating as it plays.
             </Text>
             <View style={{ marginBottom: 14 }}>
               {[
@@ -2213,74 +2395,107 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
 }
 
 // ─── MATCHUP CARD (collapsible) ───
-const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, defaultExpanded }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; defaultExpanded?: boolean }) {
-  const { openGame, warmGame } = useGameDetailActions(); const isFirst = rank === 1;
-  const [expanded, setExpanded] = useState(defaultExpanded ?? false);
+const MATCHUP_CARD_BACKGROUND = '#0D131B';
+const MATCHUP_CARD_BORDER = 'rgba(152,185,211,0.17)';
+const MATCHUP_RANK_BACKGROUND = 'rgba(122,157,184,0.10)';
+const MATCHUP_RANK_BORDER = 'rgba(122,157,184,0.16)';
+const MATCHUP_CHIP_BACKGROUND = 'rgba(5,9,14,0.42)';
+const MATCHUP_CHIP_BORDER = 'rgba(152,185,211,0.14)';
+const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.08)';
+const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.16)';
+const MATCHUP_CARD_CONTENT_PADDING_X = 20;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
+const MATCHUP_CARD_MIN_HEIGHT = 148;
+const MATCHUP_RANK_SIZE = 30;
+const MATCHUP_RANK_GAP = 12;
+const MATCHUP_ACTION_SIZE = 30;
+const MATCHUP_ACTION_GAP = 10;
+const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;
+
+const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, resetSignal }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; resetSignal?: number }) {
+  const { openGame, warmGame } = useGameDetailActions();
+  const [expanded, setExpanded] = useState(false);
   // Start time differentiates same-team games (e.g. an MLB doubleheader = two game
   // IDs that would otherwise render identical titles). Always-truthful tip-off meta.
   const startTime = useMemo(() => new Date(game.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), [game.gameTime]);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [game.id, resetSignal]);
+
   return (
-    <View style={{ backgroundColor: 'rgba(5,8,13,0.96)', borderRadius: 16, borderWidth: 2, borderColor: isFirst ? hexWithAlpha(MAROON, 0.24) : 'rgba(180,211,235,0.12)', borderLeftWidth: 3.5, borderLeftColor: isFirst ? MAROON : TEAL, marginBottom: ARENA_CARD_GAP, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 11 }, shadowOpacity: 0.28, shadowRadius: 20, elevation: 10 }}>
-      <LinearGradient pointerEvents="none" colors={[isFirst ? hexWithAlpha(MAROON, 0.13) : hexWithAlpha(TEAL, 0.08), 'rgba(5,8,13,0)', 'rgba(255,255,255,0.025)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 18, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', minHeight: MATCHUP_CARD_MIN_HEIGHT, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 14, elevation: 5 }}>
       <Pressable
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
         accessibilityRole="button"
         accessibilityLabel={expanded ? `Collapse matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}` : `Expand matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}
         accessibilityState={{ expanded }}
         style={({ pressed }) => ({
-          padding: 16,
-          paddingBottom: expanded ? 8 : 16,
+          paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X,
+          paddingVertical: MATCHUP_CARD_CONTENT_PADDING_Y,
+          minHeight: expanded ? undefined : MATCHUP_CARD_MIN_HEIGHT,
           opacity: pressed ? 0.92 : 1,
         })}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: isFirst ? hexWithAlpha(MAROON, 0.16) : hexWithAlpha(TEAL, 0.13), borderWidth: 1, borderColor: isFirst ? hexWithAlpha(MAROON, 0.26) : hexWithAlpha(TEAL, 0.22), alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
-            <Text style={{ fontSize: 10.5, lineHeight: 13, fontWeight: '900', color: isFirst ? MAROON : TEAL, includeFontPadding: false }}>{rank}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 999, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
+            <Text style={{ fontSize: 10.2, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
-          <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={2} style={{ fontSize: 14, lineHeight: 18, fontWeight: '800', color: WHITE, flex: 1, minWidth: 0 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-          {tags.length > 0 ? <View style={{ backgroundColor: hexWithAlpha(MAROON, 0.12), borderRadius: 7, borderWidth: 1, borderColor: hexWithAlpha(MAROON, 0.18), paddingHorizontal: 7, paddingVertical: 2, marginRight: 8, maxWidth: 108, flexShrink: 0 }}><Text adjustsFontSizeToFit minimumFontScale={0.74} numberOfLines={1} style={{ fontSize: 9, fontWeight: '800', color: MAROON, letterSpacing: 0.3 }}>{tags[0]}</Text></View> : null}
-          <Text style={{ width: 16, textAlign: 'center', fontSize: 17, lineHeight: 18, color: TEXT_MUTED, includeFontPadding: false }}>{expanded ? '−' : '+'}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 15.8, lineHeight: 20.8, fontWeight: '800', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 12.8, lineHeight: 19, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 10 }} numberOfLines={expanded ? undefined : 2}>
+              <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
+              <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
+              {headline}
+            </Text>
+            {tags.length > 0 ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 13 }}>
+                {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
+                  <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 8, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 5 }}>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 8.8, lineHeight: 11.5, fontWeight: '800', color: i === 0 ? MATCHUP_ACCENT_COLOR : TEXT_MUTED, letterSpacing: 0.35, includeFontPadding: false }}>{tg}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+          <View style={{ width: MATCHUP_ACTION_SIZE, height: MATCHUP_ACTION_SIZE, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.06)', borderWidth: 1, borderColor: 'rgba(152,185,211,0.12)', flexShrink: 0, marginLeft: MATCHUP_ACTION_GAP }}>
+            <ChevronRight size={14} color={TEXT_MUTED} strokeWidth={2.5} />
+          </View>
         </View>
-        <Text style={{ fontSize: 12.5, lineHeight: 18, fontWeight: '600', color: TEXT_SECONDARY, marginLeft: 40 }} numberOfLines={expanded ? undefined : 2}>
-          <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
-          <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
-          {headline}
-        </Text>
       </Pressable>
       {expanded ? (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-          {tags.length > 1 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
-            {tags.slice(1).map((tg, i) => <View key={tg+i} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginRight: 4, marginBottom: 4 }}><Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 0.3, includeFontPadding: false }}>{tg}</Text></View>)}
-          </View> : null}
-          <Text style={{ fontSize: 11.5, color: TEXT_SECONDARY, lineHeight: 18 }}>{detail}</Text>
-          <Pressable
-            onPressIn={() => warmGame(game)}
-            onPress={() => openGame(game)}
-            accessibilityRole="button"
-            accessibilityLabel={`Open game details for ${game.awayTeam.name} at ${game.homeTeam.name}`}
-            accessibilityHint="Opens game details"
-            style={({ pressed }) => ({
-              marginTop: 12,
-              opacity: pressed ? 0.88 : 1,
-              transform: [{ scale: pressed ? 0.992 : 1 }],
-            })}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: hexWithAlpha(MAROON, 0.1),
-                borderWidth: 1,
-                borderColor: hexWithAlpha(MAROON, 0.18),
-                borderRadius: 10,
-                paddingVertical: 12,
-              }}
+        <View style={{ paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X, paddingBottom: MATCHUP_CARD_CONTENT_PADDING_Y }}>
+          <View style={{ marginLeft: MATCHUP_RANK_SIZE + MATCHUP_RANK_GAP, marginRight: MATCHUP_ACTION_SIZE + MATCHUP_ACTION_GAP }}>
+            <Text style={{ fontSize: 11.8, color: TEXT_SECONDARY, lineHeight: 18.5 }}>{detail}</Text>
+            <Pressable
+              onPressIn={() => warmGame(game)}
+              onPress={() => openGame(game)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open game details for ${game.awayTeam.name} at ${game.homeTeam.name}`}
+              accessibilityHint="Opens game details"
+              style={({ pressed }) => ({
+                marginTop: 12,
+                opacity: pressed ? 0.88 : 1,
+                transform: [{ scale: pressed ? 0.992 : 1 }],
+              })}
             >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: MAROON, marginRight: 4 }}>Open Game</Text>
-              <ChevronRight size={12} color={MAROON} />
-            </View>
-          </Pressable>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: MATCHUP_CTA_BACKGROUND,
+                  borderWidth: 1,
+                  borderColor: MATCHUP_CTA_BORDER,
+                  borderRadius: 11,
+                  height: MATCHUP_CARD_CTA_HEIGHT,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: TEXT_SECONDARY, marginRight: 4 }}>Open Game</Text>
+                <ChevronRight size={12} color={TEXT_MUTED} />
+              </View>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -2314,15 +2529,62 @@ const StreakCard = memo(function StreakCard({ stats }: { stats: UserStats|undefi
 });
 
 // ─── RESULT CARD ───
+const REVIEW_RESULT_CARD_GAP = 10;
+const REVIEW_PROGRESS_SEGMENT_GAP = 3;
+
 const ResultCard = memo(function ResultCard({ game, pick }: { game: GameWithPrediction; pick?: UserPick }) {
   const w = pick?.result === 'win'; const hs = game.homeScore??0; const as2 = game.awayScore??0;
+  const pickedTeam = pick?.pickedTeam === 'home' ? game.homeTeam.name : game.awayTeam.name;
   return (
-    <View style={{backgroundColor:PANEL_DARK, borderRadius:14, borderWidth:2, borderColor:BORDER_MED, padding:14, marginBottom:ARENA_CARD_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:9 }, shadowOpacity:0.26, shadowRadius:16, elevation:8}}>
-      <View style={{flexDirection:'row', alignItems:'center', justifyContent:'space-between'}}>
-        <Text style={{fontSize:14, fontWeight:'700', color:WHITE}}>{game.awayTeam.abbreviation} {as2} - {hs} {game.homeTeam.abbreviation}</Text>
-        {pick?<View style={{backgroundColor:w?TEAL_DIM:ERROR_DIM, borderRadius:8, paddingHorizontal:8, paddingVertical:3}}><Text style={{fontSize:9, fontWeight:'700', color:w?TEAL:LOSS}}>{w?'CORRECT':'MISSED'}</Text></View>:null}
+    <View style={{backgroundColor:PANEL_DARK, borderRadius:13, borderWidth:1.5, borderColor:BORDER_MED, padding:12, marginBottom: REVIEW_RESULT_CARD_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:7 }, shadowOpacity:0.22, shadowRadius:13, elevation:6}}>
+      <View style={{flexDirection:'row', alignItems:'flex-start'}}>
+        <View style={{flex:1, minWidth:0, paddingRight:pick ? 10 : 0}}>
+          <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{fontSize:13.2, lineHeight:17, fontWeight:'800', color:WHITE, fontVariant: ['tabular-nums']}}>{game.awayTeam.abbreviation} {as2} - {hs} {game.homeTeam.abbreviation}</Text>
+          {pick?<Text style={{fontSize:10.8, color:TEXT_SECONDARY, marginTop:5, lineHeight:15}} numberOfLines={2}>{w?`Picked ${pickedTeam} · Closed by ${Math.abs(hs-as2)}`:`Picked ${pickedTeam} · Closed against the pick`}</Text>:null}
+        </View>
+        {pick?<View style={{backgroundColor:w?TEAL_DIM:ERROR_DIM, borderRadius:8, paddingHorizontal:8, paddingVertical:4, borderWidth:1, borderColor:w?hexWithAlpha(TEAL, 0.18):hexWithAlpha(LOSS, 0.18), flexShrink:0}}><Text style={{fontSize:8.5, lineHeight:11, fontWeight:'900', color:w?TEAL:LOSS, letterSpacing:0.65, includeFontPadding:false}}>{w?'CORRECT':'MISSED'}</Text></View>:null}
       </View>
-      {pick?<Text style={{fontSize:11, color:TEXT_SECONDARY, marginTop:6}}>{w?`Picked ${pick.pickedTeam==='home'?game.homeTeam.name:game.awayTeam.name} · Closed by ${Math.abs(hs-as2)}`:`Picked ${pick.pickedTeam==='home'?game.homeTeam.name:game.awayTeam.name} · Closed against the pick`}</Text>:null}
+    </View>
+  );
+});
+
+const ReviewSummaryCard = memo(function ReviewSummaryCard({
+  wins,
+  losses,
+  accuracy,
+  games,
+  picks,
+}: {
+  wins: number;
+  losses: number;
+  accuracy: number;
+  games: GameWithPrediction[];
+  picks: Map<string, UserPick>;
+}) {
+  const progressGames = games.slice(0, 8);
+  return (
+    <View style={{backgroundColor:PANEL_DARK, borderRadius:18, borderWidth:1.5, borderColor:'rgba(180,211,235,0.12)', padding:15, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:18, overflow:'hidden', shadowColor:'#000000', shadowOffset:{ width:0, height:10 }, shadowOpacity:0.26, shadowRadius:18, elevation:9}}>
+      <LinearGradient pointerEvents="none" colors={['rgba(122,157,184,0.12)', 'rgba(5,8,13,0)', 'rgba(139,10,31,0.08)']} start={{x:0, y:0}} end={{x:1, y:1}} style={StyleSheet.absoluteFillObject} />
+      <View style={{flexDirection:'row', alignItems:'center', justifyContent:'space-between'}}>
+        <View style={{flex:1, minWidth:0}}>
+          <Text style={{fontSize:9, lineHeight:12, fontWeight:'900', color:TEAL, letterSpacing:1.6, marginBottom:5, includeFontPadding:false}}>SETTLED PICKS</Text>
+          <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={1} style={{fontSize:34, lineHeight:38, fontWeight:'900', color:WHITE, includeFontPadding:false, fontVariant: ['tabular-nums']}}>{wins}-{losses}</Text>
+        </View>
+        <View style={{minWidth:84, borderRadius:14, paddingHorizontal:11, paddingVertical:9, backgroundColor:hexWithAlpha(MAROON, 0.12), borderWidth:1, borderColor:hexWithAlpha(MAROON, 0.22), alignItems:'center', marginLeft:12}}>
+          <Text style={{fontSize:18, lineHeight:22, fontWeight:'900', color:MAROON, includeFontPadding:false, fontVariant: ['tabular-nums']}}>{accuracy}%</Text>
+          <Text style={{fontSize:8.5, lineHeight:11, fontWeight:'900', color:TEXT_MUTED, letterSpacing:1.05, marginTop:2, includeFontPadding:false}}>ACCURACY</Text>
+        </View>
+      </View>
+      {progressGames.length > 0 ? (
+        <View style={{flexDirection:'row', marginTop:13}}>
+          {progressGames.map((game, index) => {
+            const won = picks.get(game.id)?.result === 'win';
+            return (
+              <View key={game.id} style={{flex:1, height:4, borderRadius:2, backgroundColor:won?TEAL:LOSS, opacity:won?0.88:0.42, marginRight:index===progressGames.length-1?0:REVIEW_PROGRESS_SEGMENT_GAP}} />
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -2347,6 +2609,7 @@ const GameDay = memo(function GameDay({
   liveIntelLocked = false,
   onProPress,
   horizontalGestureGuard,
+  resetSignal,
 }: {
   live: GameWithPrediction[];
   sched: GameWithPrediction[];
@@ -2361,10 +2624,11 @@ const GameDay = memo(function GameDay({
   liveIntelLocked?: boolean;
   onProPress?: () => void;
   horizontalGestureGuard?: ArenaHorizontalGestureGuard;
+  resetSignal?: number;
 }) {
   const pm = useMemo(() => { const m = new Map<string, UserPick>(); picks.forEach(p => m.set(p.gameId, p)); return m; }, [picks]);
   const liveRailRef = useRef<FlatList<GameWithPrediction> | null>(null);
-  const liveRailBlockOpenUntilRef = useRef(0);
+  const liveRailPressGuard = useScrollPressGuard();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [liveSearch, setLiveSearch] = useState('');
   const [liveSportFilter, setLiveSportFilter] = useState('All');
@@ -2380,12 +2644,12 @@ const GameDay = memo(function GameDay({
   const filteredLive = useMemo(() => {
     const q = liveSearch.toLowerCase().trim();
     const sportScoped = liveSportFilter === 'All' ? live : live.filter(g => g.sport === liveSportFilter);
-    if (!q) return sportScoped;
-    return sportScoped.filter(g =>
+    const matches = !q ? sportScoped : sportScoped.filter(g =>
       g.homeTeam.name.toLowerCase().includes(q) || g.homeTeam.abbreviation.toLowerCase().includes(q) ||
       g.awayTeam.name.toLowerCase().includes(q) || g.awayTeam.abbreviation.toLowerCase().includes(q) ||
       g.sport.toLowerCase().includes(q)
     );
+    return sortSuspendedGamesLast(matches);
   }, [live, liveSearch, liveSportFilter]);
   const focusedGame = filteredLive[focusedIdx] ?? filteredLive[0] ?? null;
   const focusedIntel = useMemo(() => liveIntelLocked ? [] : generateLiveIntel(focusedGame), [focusedGame, liveIntelLocked]);
@@ -2404,15 +2668,15 @@ const GameDay = memo(function GameDay({
     if (width <= 0) return;
     setLiveRailWidth((current) => current === width ? current : width);
   }, []);
-  const canOpenLiveCard = useCallback(() => Date.now() > liveRailBlockOpenUntilRef.current, []);
+  const canOpenLiveCard = liveRailPressGuard.canPress;
   const markLiveRailScrollStart = useCallback(() => {
-    liveRailBlockOpenUntilRef.current = Date.now() + 500;
+    liveRailPressGuard.onScrollBeginDrag();
     horizontalGestureGuard?.onHorizontalGestureStart?.();
-  }, [horizontalGestureGuard]);
+  }, [horizontalGestureGuard, liveRailPressGuard.onScrollBeginDrag]);
   const markLiveRailScrollEnd = useCallback(() => {
-    liveRailBlockOpenUntilRef.current = Date.now() + 220;
+    liveRailPressGuard.onScrollEndDrag();
     horizontalGestureGuard?.onHorizontalGestureEnd?.();
-  }, [horizontalGestureGuard]);
+  }, [horizontalGestureGuard, liveRailPressGuard.onScrollEndDrag]);
   useEffect(() => {
     if (liveSportFilter !== 'All' && !liveSports.has(liveSportFilter)) setLiveSportFilter('All');
   }, [liveSportFilter, liveSports]);
@@ -2451,11 +2715,11 @@ const GameDay = memo(function GameDay({
 
   // No live games
   if (!live.length) return (
-    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding}>
+    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding} resetSignal={resetSignal}>
       {top}
-      <ArenaHeader title="Game Day" subtitle="Followed games, upcoming starts, and live state in one slate view." accent={TEAL} />
+      <GameDayTitleBanner liveCount={live.length} />
       <YourGames games={followed} {...horizontalGestureGuard} />
-      <View style={{alignItems:'center', paddingTop:28, paddingBottom:24}}><Text style={{fontSize:14, color:TEXT_MUTED}}>No live games on the board</Text></View>
+      <View style={{alignItems:'center', paddingTop:28, paddingBottom:24}}><Text style={{fontSize:14, color:TEXT_MUTED}}>No games on the board right now</Text></View>
       {afterContent}
       <Disclaimer />
     </ArenaScrollView>
@@ -2463,28 +2727,19 @@ const GameDay = memo(function GameDay({
 
   // Has live games
   return (
-    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding}>
+    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding} resetSignal={resetSignal}>
       {top}
       {/* 1. Header */}
-      <ArenaHeader title="Game Day" subtitle="Monitor followed games and live state as the board changes." accent={LIVE_RED} />
+      <GameDayTitleBanner liveCount={live.length} />
 
       {/* 2. Your Games */}
       <YourGames games={followed} {...horizontalGestureGuard} />
 
       {/* 3. Live intelligence search */}
       <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginTop:0, marginBottom:14}}>
-        <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'flex-end', marginBottom:10}}>
-          <View style={{flexDirection:'row', alignItems:'stretch', flex:1, minWidth:0, paddingRight:12}}>
-            <View style={{width:3, borderRadius:2, backgroundColor:LIVE_RED, marginRight:11}} />
-            <View style={{flex:1, minWidth:0}}>
-              <Text style={{fontSize:9.5, fontWeight:'900', color:LIVE_RED, letterSpacing:2.2, marginBottom:4}}>LIVE</Text>
-              <Text style={{fontSize:18, lineHeight:22, fontWeight:'900', color:WHITE}} numberOfLines={1}>Live intelligence</Text>
-            </View>
-          </View>
-          <View style={{borderRadius:999, paddingHorizontal:10, paddingVertical:6, backgroundColor:'rgba(239,68,68,0.10)', borderWidth:1, borderColor:'rgba(239,68,68,0.20)', flexDirection:'row', alignItems:'center'}}>
-            <View style={{width:6, height:6, borderRadius:3, backgroundColor:LIVE_RED, marginRight:6}} />
-            <Text style={{fontSize:9, fontWeight:'900', color:LIVE_RED, letterSpacing:1.1}}>{liveSearch.trim() || liveSportFilter !== 'All' ? `${filteredLive.length} MATCH` : `${live.length} LIVE`}</Text>
-          </View>
+        <View style={{flexDirection:'row', alignItems:'center', marginBottom:10}}>
+          <View style={{width:3, height:24, borderRadius:2, backgroundColor:LIVE_RED, marginRight:11}} />
+          <Text style={{fontSize:18, lineHeight:22, fontWeight:'900', color:WHITE}} numberOfLines={1}>Live intelligence</Text>
         </View>
         {live.length > 0 ? (
           <LinearGradient
@@ -2515,14 +2770,14 @@ const GameDay = memo(function GameDay({
               <TextInput
                 value={liveSearch}
                 onChangeText={setLiveSearch}
-                placeholder="Find a live game or team"
+                placeholder="Find a game or team"
                 placeholderTextColor='rgba(180,211,235,0.42)'
                 style={{flex:1, fontSize:13.5, lineHeight:18, fontWeight:'800', color:WHITE, padding:0}}
                 keyboardAppearance="dark"
                 selectionColor={LIVE_RED}
                 cursorColor={LIVE_RED}
                 returnKeyType="done"
-                accessibilityLabel="Search live teams or matchups"
+                accessibilityLabel="Search teams or matchups"
               />
               {liveSearch.length > 0 ? (
                 <Pressable
@@ -2565,7 +2820,7 @@ const GameDay = memo(function GameDay({
       {/* 4. Scrollable live cards */}
       {filteredLive.length === 0 && (liveSearch.trim() || liveSportFilter !== 'All') ? (
         <View style={{alignItems:'center', paddingVertical:20}}>
-          <Text style={{fontSize:13, color:TEXT_MUTED}}>{liveSearch.trim() ? `No live games match "${liveSearch}"` : 'No live games match this sport'}</Text>
+          <Text style={{fontSize:13, color:TEXT_MUTED}}>{liveSearch.trim() ? `No games match "${liveSearch}"` : 'No games match this sport'}</Text>
         </View>
       ) : filteredLive.length === 1 ? (
         <View onLayout={onLiveRailLayout} style={{paddingHorizontal:liveRailSidePadding, marginBottom:ARENA_CARD_GAP}}>
@@ -2652,72 +2907,12 @@ const GameDay = memo(function GameDay({
 // ─── PREP SUB-TABS ───
 const PREP_TABS = ['Ranked', 'Upsets'] as const;
 const PREP_MATCHUP_LIMIT = 16;
-
-// One "TOP MODEL GRADES" tile. Extracted so each tile owns its own
-// useTapGestureGuard — these sit in a horizontal ScrollView, so a single
-// shared guard across the .map() siblings would race and a swipe could open
-// the wrong matchup.
-const TOP_GRADE_CARD_W = 156;
-const TOP_GRADE_CARD_SNAP_INTERVAL = TOP_GRADE_CARD_W + ARENA_CARD_GAP;
-const TOP_GRADE_CARD_SIDE_PADDING = Math.max(ARENA_SIDE_PADDING, (SW - TOP_GRADE_CARD_W) / 2);
-
-const Top3Card = memo(function Top3Card({
-  game,
-  isFirst,
-  isLast,
-}: {
-  game: GameWithPrediction;
-  isFirst: boolean;
-  isLast: boolean;
-}) {
-  const { openGame, warmGame } = useGameDetailActions();
-  const { onTouchStart, onTouchMove, onTouchCancel, shouldHandlePress } = useTapGestureGuard(6, 500);
-  const conf = Math.round(getCanonicalConfidence(game.prediction));
-  const predictionDisplay = getGamePredictionDisplay(game);
-  return (
-    <Pressable
-      onPressIn={() => warmGame(game)}
-      onPress={() => { if (!shouldHandlePress()) return; openGame(game); }}
-      accessibilityRole="button"
-      accessibilityLabel={`Open model grade for ${game.awayTeam.name} at ${game.homeTeam.name}`}
-      accessibilityHint="Opens game details"
-      pressRetentionOffset={6}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchCancel={onTouchCancel}
-      style={({ pressed }) => ({
-        width: TOP_GRADE_CARD_W,
-        marginRight: isLast ? 0 : ARENA_CARD_GAP,
-        opacity: pressed ? 0.9 : 1,
-        transform: [{ scale: pressed ? 0.992 : 1 }],
-      })}
-    >
-      <View
-        style={{
-          width: TOP_GRADE_CARD_W,
-          minHeight: 104,
-          backgroundColor: PANEL_DARK,
-          borderRadius: 14,
-          borderWidth: 2,
-          borderColor: isFirst ? 'rgba(139,10,31,0.25)' : BORDER_MED,
-          padding: 14,
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.26,
-          shadowRadius: 14,
-          elevation: 8,
-        }}
-      >
-        <View style={{flexDirection:'row', alignItems:'center', marginBottom:8}}>
-          <Text numberOfLines={1} style={{fontSize:10, lineHeight:13, fontWeight:'600', color:TEXT_MUTED}}>{displaySport(game.sport)}</Text>
-        </View>
-        <Text adjustsFontSizeToFit minimumFontScale={0.7} numberOfLines={2} style={{fontSize:13, lineHeight:17, fontWeight:'800', color:WHITE, marginBottom:6}}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-        <Text numberOfLines={1} style={{fontSize:10.5, lineHeight:14, fontWeight:'600', color:TEAL, marginBottom:3}}>Model: {predictionDisplay.badgeLabel}</Text>
-        <Text numberOfLines={1} style={{fontSize:10.5, lineHeight:14, color:TEXT_MUTED}}>{conf}% confidence</Text>
-      </View>
-    </Pressable>
-  );
-});
+const PREP_SUBTAB_MIN_HEIGHT = 34;
+const PREP_SUBTAB_GAP = 4;
+const PREP_SUBTAB_TRACK_INNER_PADDING = 3;
+const MATCHUP_CARD_CTA_HEIGHT = 40;
+const MATCHUP_TAG_ROW_GAP = 5;
+const PREP_MATCHUP_CARD_GAP = 10;
 
 // ─── PREP MODE ───
 const Prep = memo(function Prep({
@@ -2730,6 +2925,7 @@ const Prep = memo(function Prep({
   bottomPadding,
   top,
   horizontalGestureGuard,
+  resetSignal,
 }: {
   sched: GameWithPrediction[];
   picks: UserPick[];
@@ -2740,6 +2936,7 @@ const Prep = memo(function Prep({
   bottomPadding: number;
   top?: React.ReactNode;
   horizontalGestureGuard?: ArenaHorizontalGestureGuard;
+  resetSignal?: number;
 }) {
   const [prepTab, setPrepTab] = useState<0|1>(0);
   const tonightNarrative = useMemo(() => generateTonightNarrative(sched), [sched]);
@@ -2791,103 +2988,63 @@ const Prep = memo(function Prep({
       });
   }, [ranked]);
 
-  const top3 = ranked.slice(0, 3);
-
   return (
-    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding}>
+    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding} resetSignal={resetSignal}>
       {top}
       {/* Header */}
-      <ArenaHeader title="Prep Mode" subtitle="Rank matchups by conviction, edge, and value before the slate opens." accent={MAROON} />
-
-      {/* Slate context card */}
-      <View style={{backgroundColor:PANEL_DARK, borderRadius:18, borderWidth:2, borderColor:BORDER_MED, padding:18, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:11 }, shadowOpacity:0.28, shadowRadius:20, elevation:10}}>
-        <Text style={{fontSize:9, fontWeight:'700', color:MAROON, letterSpacing:1.5, marginBottom:8}}>SLATE CONTEXT</Text>
-        <Text style={{fontSize:15, fontWeight:'600', color:WHITE, lineHeight:23}}>{tonightNarrative}</Text>
-      </View>
-
-      {/* Top 3 quick-glance strip */}
-      {top3.length > 0 ? (
-        <View style={{marginBottom:ARENA_SECTION_GAP}}>
-          <Text style={{fontSize:10, fontWeight:'700', color:TEXT_MUTED, letterSpacing:1.5, paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:12}}>TOP MODEL GRADES</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{paddingLeft:TOP_GRADE_CARD_SIDE_PADDING, paddingRight:TOP_GRADE_CARD_SIDE_PADDING, paddingBottom:2, flexDirection:'row'}}
-            style={{flexGrow:0}}
-            snapToInterval={TOP_GRADE_CARD_SNAP_INTERVAL}
-            snapToAlignment="start"
-            disableIntervalMomentum
-            decelerationRate="fast"
-            onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
-            onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
-            onScrollEndDrag={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
-            onMomentumScrollEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
-          >
-            {top3.map((r, i) => (
-              <Top3Card
-                key={r.game.id}
-                game={r.game}
-                isFirst={i === 0}
-                isLast={i === top3.length - 1}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
+      <ArenaModeTitleBanner title="Prep Mode" subtitle="MODEL BOARD" accent={MAROON} />
 
       {/* Sub-tab toggle: Ranked / Upsets */}
-      <View style={{minHeight:54, flexDirection:'row', marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, backgroundColor:'rgba(255,255,255,0.04)', borderRadius:18, padding:4, borderWidth:2, borderColor:'rgba(180,211,235,0.10)', shadowColor:'#000000', shadowOffset:{ width:0, height:10 }, shadowOpacity:0.3, shadowRadius:18, elevation:10}}>
-        {PREP_TABS.map((label, idx) => {
-          const active = prepTab === idx;
-          const count = idx === 0 ? ranked.length : upsetPlays.length;
-          return (
-            <Pressable
-              key={label}
-              onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }}
-              accessibilityRole="button"
-              accessibilityLabel={`${label} prep tab, ${count} matchup${count === 1 ? '': 's'}`}
-              accessibilityState={{ selected: active }}
-              style={({ pressed }) => ({
-                flex: 1,
-                minWidth: 0,
-                marginRight: idx === PREP_TABS.length - 1 ? 0 : 6,
-                opacity: pressed && !active ? 0.9 : 1,
-              })}
-            >
-              <LinearGradient
-                colors={active
-                  ? [hexWithAlpha(MAROON, 0.48), 'rgba(180,211,235,0.12)', 'rgba(180,211,235,0.12)', hexWithAlpha(MAROON, 0.26)]
-                  : ['rgba(122,157,184,0.09)', 'rgba(122,157,184,0.025)']}
-                locations={active ? [0, 0.42, 0.6, 1] : undefined}
-                start={{x:0.05, y:0}}
-                end={{x:0.95, y:1}}
-                style={{minHeight:46, borderRadius:14, padding:1.5}}
-              >
-                <View style={{flex:1, borderRadius:12.5, alignItems:'center', justifyContent:'center', paddingHorizontal:8, backgroundColor:active?'rgba(7,10,16,0.50)':'rgba(7,10,16,0.46)'}}>
-                  <View style={{flexDirection:'row', alignItems:'center', justifyContent:'center', minWidth:0, maxWidth:'100%'}}>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{fontSize:12.5, lineHeight:16, fontWeight:'900', color:active?WHITE:TEXT_MUTED, includeFontPadding:false, flexShrink:1}}>{label}</Text>
-                  {count > 0 ? (
-                    <View style={{minWidth:22, height:20, borderRadius:10, alignItems:'center', justifyContent:'center', paddingHorizontal:6, backgroundColor:active?hexWithAlpha(MAROON, 0.20):'rgba(122,157,184,0.10)', borderWidth:1, borderColor:active?hexWithAlpha(MAROON, 0.26):'rgba(122,157,184,0.12)', flexShrink:0, marginLeft:8}}>
-                      <Text style={{fontSize:9.5, lineHeight:12, fontWeight:'900', color:active?WHITE:TEAL, includeFontPadding:false}}>{count}</Text>
+      <View style={{marginHorizontal:ARENA_SIDE_PADDING, marginBottom:12}}>
+        <View style={{flexDirection:'row', backgroundColor:'rgba(255,255,255,0.035)', borderRadius:16, padding:PREP_SUBTAB_TRACK_INNER_PADDING, borderWidth:1.5, borderColor:'rgba(180,211,235,0.10)', shadowColor:'#000000', shadowOffset:{ width:0, height:7 }, shadowOpacity:0.22, shadowRadius:12, elevation:6}}>
+          {PREP_TABS.map((label, idx) => {
+            const active = prepTab === idx;
+            const count = idx === 0 ? ranked.length : upsetPlays.length;
+            return (
+              <View key={label} style={{flex:1, marginRight: idx === PREP_TABS.length - 1 ? 0 : PREP_SUBTAB_GAP}}>
+                <Pressable
+                  onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} prep tab, ${count} matchup${count === 1 ? '': 's'}`}
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => ({
+                    width: '100%',
+                    minHeight: 44,
+                    minWidth: 0,
+                    justifyContent: 'center',
+                    opacity: pressed && !active ? 0.9 : 1,
+                  })}
+                >
+                  <LinearGradient
+                    colors={active ? ARENA_SEGMENT_ACTIVE_GRADIENT : ARENA_SEGMENT_INACTIVE_GRADIENT}
+                    locations={active ? ARENA_SEGMENT_ACTIVE_LOCATIONS : undefined}
+                    start={{x:0.05, y:0}}
+                    end={{x:0.95, y:1}}
+                    style={{width:'100%', flex:1, minHeight:PREP_SUBTAB_MIN_HEIGHT, borderRadius:13, padding:1}}
+                  >
+                    <View style={{flex:1, borderRadius:12, alignItems:'center', justifyContent:'center', paddingHorizontal:9, backgroundColor:active?ARENA_SEGMENT_ACTIVE_BACKGROUND:ARENA_SEGMENT_INACTIVE_BACKGROUND, overflow:'hidden'}}>
+                      <View style={{flexDirection:'row', alignItems:'center', justifyContent:'center', minWidth:0, maxWidth:'100%'}}>
+                      <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{fontSize:12.2, lineHeight:15, fontWeight:active?'900':'800', color:active?WHITE:hexWithAlpha(ARENA_CHROME_ACCENT, 0.84), includeFontPadding:false, flexShrink:1}}>{label}</Text>
+                      {count > 0 ? (
+                        <View style={{minWidth:20, height:20, borderRadius:10, alignItems:'center', justifyContent:'center', paddingHorizontal:6, backgroundColor:active?hexWithAlpha(ARENA_CHROME_ACCENT, 0.16):'rgba(122,157,184,0.10)', borderWidth:1, borderColor:active?hexWithAlpha(ARENA_CHROME_ACCENT, 0.28):'rgba(122,157,184,0.12)', flexShrink:0, marginLeft:7}}>
+                          <Text style={{fontSize:9.2, lineHeight:12, fontWeight:'900', color:active?WHITE:hexWithAlpha(ARENA_CHROME_ACCENT, 0.84), includeFontPadding:false}}>{count}</Text>
+                        </View>
+                      ) : null}
+                      </View>
                     </View>
-                  ) : null}
-                  </View>
-                </View>
-              </LinearGradient>
-            </Pressable>
-          );
-        })}
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
       </View>
 
       {/* Ranked tab content */}
       {prepTab === 0 ? (
         ranked.length > 0 ? (
           <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}>
-            <Text style={{fontSize:10, fontWeight:'600', color:TEXT_MUTED, letterSpacing:1, marginBottom:12}}>Open a matchup for factors and context</Text>
-            {ranked.map((r, i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} defaultExpanded={i === 0} />)}
+            {ranked.map((r, i)=><MatchupCard key={r.game.id} game={r.game} rank={i+1} headline={r.headline} tags={r.tags} detail={r.detail} resetSignal={resetSignal} />)}
           </View>
         ) : (
           <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}><Text style={{fontSize:12, color:TEXT_MUTED}}>No model-ready scheduled games.</Text></View>
@@ -2899,10 +3056,16 @@ const Prep = memo(function Prep({
         <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}>
           <Text style={{fontSize:11, color:TEXT_MUTED, lineHeight:16, marginBottom:12}}>Model-flagged volatility and upset-risk profiles.</Text>
           {upsetPlays.length > 0
-            ? upsetPlays.map((r, i)=><MatchupCard key={`upset-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} defaultExpanded={i === 0} />)
+            ? upsetPlays.map((r, i)=><MatchupCard key={`upset-${r.game.id}`} game={r.game} rank={i+1} headline={r.udHeadline} tags={[...r.udTags, ...r.tags]} detail={r.detail} resetSignal={resetSignal} />)
             : <View style={{backgroundColor:PANEL_DARK, borderRadius:14, borderWidth:2, borderColor:BORDER_MED, padding:14, shadowColor:'#000000', shadowOffset:{ width:0, height:9 }, shadowOpacity:0.26, shadowRadius:16, elevation:8}}><Text style={{fontSize:11, color:TEXT_MUTED, lineHeight:16}}>No model upset profiles on this slate.</Text></View>}
         </View>
       ) : null}
+
+      {/* Slate context card */}
+      <View style={{backgroundColor:PANEL_DARK, borderRadius:15, borderWidth:1.5, borderColor:BORDER_MED, padding:14, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:8 }, shadowOpacity:0.22, shadowRadius:14, elevation:7}}>
+        <Text style={{fontSize:8.8, fontWeight:'800', color:MAROON, letterSpacing:1.4, marginBottom:7}}>SLATE CONTEXT</Text>
+        <Text style={{fontSize:12.5, fontWeight:'600', color:TEXT_SECONDARY, lineHeight:18}}>{tonightNarrative}</Text>
+      </View>
 
       <AccBySport picks={picks} />
       <StreakCard stats={stats} />
@@ -2912,23 +3075,18 @@ const Prep = memo(function Prep({
 });
 
 // ─── REVIEW ───
-const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR, bottomPadding, top }: { final: GameWithPrediction[]; picks: UserPick[]; stats: UserStats|undefined; sh: any; onR: ()=>void; isR: boolean; bottomPadding: number; top?: React.ReactNode }) {
+const Review = memo(function Review({ final: fg, picks, stats, sh, onR, isR, bottomPadding, top, resetSignal }: { final: GameWithPrediction[]; picks: UserPick[]; stats: UserStats|undefined; sh: any; onR: ()=>void; isR: boolean; bottomPadding: number; top?: React.ReactNode; resetSignal?: number }) {
   const pm = useMemo(() => { const m = new Map<string, UserPick>(); picks.forEach(p => m.set(p.gameId, p)); return m; }, [picks]);
   const pfg = useMemo(() => fg.filter(g => pm.has(g.id)), [fg, pm]);
   const w = pfg.filter(g => pm.get(g.id)?.result==='win').length;
   const l = pfg.filter(g => pm.get(g.id)?.result==='loss').length;
   const t = w+l; const a = t>0?Math.round((w/t)*100):0;
   return (
-    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding}>
+    <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding} resetSignal={resetSignal}>
       {top}
-      <ArenaHeader title="Review" subtitle="Audit settled picks, sport trends, and model calls after final scores." accent={SILVER} />
+      <ArenaModeTitleBanner title="Review" subtitle="POSTGAME AUDIT" accent={SILVER} />
       {t>0?(
-        <View style={{backgroundColor:PANEL_DARK, borderRadius:22, borderWidth:2, borderColor:'rgba(139,10,31,0.12)', paddingVertical:26, paddingHorizontal:20, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, alignItems:'center', shadowColor:'#000000', shadowOffset:{ width:0, height:13 }, shadowOpacity:0.3, shadowRadius:24, elevation:12}}>
-          <Text style={{fontSize:9.5, lineHeight:13, fontWeight:'700', color:MAROON, letterSpacing:1.5, marginBottom:8, includeFontPadding:false}}>SETTLED PICKS</Text>
-          <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{fontSize:50, lineHeight:56, fontWeight:'800', color:WHITE, includeFontPadding:false}}>{w}-{l}</Text>
-          <Text style={{fontSize:14, lineHeight:18, fontWeight:'700', color:MAROON, marginTop:5}}>{a}% accuracy</Text>
-          <View style={{flexDirection:'row', marginTop:14}}>{pfg.map((g, index)=><View key={g.id} style={{width:48, height:5, borderRadius:2.5, backgroundColor:pm.get(g.id)?.result==='win'?TEAL:LOSS, opacity:pm.get(g.id)?.result==='win'?0.9:0.4, marginRight:index===pfg.length-1?0:3}} />)}</View>
-        </View>
+        <ReviewSummaryCard wins={w} losses={l} accuracy={a} games={pfg} picks={pm} />
       ):<View style={{alignItems:'center', paddingVertical:32, paddingHorizontal:18, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}><Text style={{fontSize:13, lineHeight:19, color:TEXT_MUTED, textAlign:'center'}}>Settled picks will appear after final scores.</Text></View>}
       {pfg.length>0?<View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP}}><ArenaSectionHeading eyebrow="POSTGAME" title="Results" accent={MAROON} />{pfg.map(g=><ResultCard key={g.id} game={g} pick={pm.get(g.id)} />)}</View>:null}
       {fg.length>0?<View style={{backgroundColor:PANEL_DARK, borderRadius:18, borderWidth:2, borderColor:BORDER_MED, padding:18, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:11 }, shadowOpacity:0.28, shadowRadius:20, elevation:10}}>
@@ -3084,13 +3242,13 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed, bottomP
     return games.filter(g => g.sport === sportFilter);
   }, [games, sportFilter]);
 
-  const live = useMemo(() => filtered.filter(g => g.status === GameStatus.LIVE || (g.status as string) === 'in_progress' || (g.status as string) === 'halftime'), [filtered]);
+  const live = useMemo(() => sortSuspendedGamesLast(filtered.filter(isLiveGameLike)), [filtered]);
   const sched = useMemo(() => filtered.filter(g => g.status === GameStatus.SCHEDULED).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()), [filtered]);
   const final = useMemo(() => filtered.filter(g => g.status === GameStatus.FINAL).slice(0, 5), [filtered]);
 
   const openPaywall = useCallback(() => {
     fireLightHaptic();
-    router.push('/paywall');
+    guardedRouterPush(router, '/paywall');
   }, [router]);
 
   return (
@@ -3121,6 +3279,7 @@ export default function MyArenaScreen() {
   const pagerUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sf, setSf] = useState('All');
   const [am, setAm] = useState(0);
+  const [arenaPageResetKey, setArenaPageResetKey] = useState<number>(0);
   const [arenaPagerEnabled, setArenaPagerEnabled] = useState(true);
   const [contentReady, setContentReady] = useState(false);
   const [fgi, setFgi] = useState<Set<string>>(new Set());
@@ -3193,7 +3352,7 @@ export default function MyArenaScreen() {
   const games = useMemo(() => { if (!allGames) return []; return sf==='All'?allGames:allGames.filter(g=>g.sport===sf); }, [allGames, sf]);
   const availableSports = useMemo(() => new Set((allGames ?? []).map(g => g.sport)), [allGames]);
   const followed = useMemo(() => { if (!allGames) return []; const ta = new Set((teamFollows??[]).map(t=>t.teamAbbreviation.toUpperCase())); return allGames.filter(g=>fgi.has(g.id)||ta.has(g.homeTeam.abbreviation.toUpperCase())||ta.has(g.awayTeam.abbreviation.toUpperCase())); }, [allGames, fgi, teamFollows]);
-  const live = useMemo(() => games.filter(g=>g.status===GameStatus.LIVE), [games]);
+  const live = useMemo(() => sortSuspendedGamesLast(games.filter(isLiveGameLike)), [games]);
   const sched = useMemo(() => games.filter(g=>g.status===GameStatus.SCHEDULED), [games]);
   const final = useMemo(() => games.filter(g=>g.status===GameStatus.FINAL), [games]);
 
@@ -3214,24 +3373,35 @@ export default function MyArenaScreen() {
     onHorizontalGestureEnd: unlockArenaPager,
   }), [lockArenaPager, unlockArenaPager]);
 
+  const resetArenaPagePlacement = useCallback(() => {
+    setArenaPageResetKey((key) => key + 1);
+  }, []);
+
+  const handleSportSelect = useCallback((sport: string) => {
+    setSf(sport);
+    resetArenaPagePlacement();
+  }, [resetArenaPagePlacement]);
+
   const hmc = useCallback((m:number) => {
     if (m === am) return;
     fireSelectionHaptic();
+    resetArenaPagePlacement();
     pagerRef.current?.setPage(m);
     setAm(m);
-  }, [am]);
+  }, [am, resetArenaPagePlacement]);
 
   const onArenaPageSelected = useCallback((event: any) => {
     const next = event.nativeEvent.position;
     if (typeof next !== 'number' || next === am) return;
     fireSelectionHaptic();
+    resetArenaPagePlacement();
     setAm(next);
-  }, [am]);
+  }, [am, resetArenaPagePlacement]);
 
   const renderPremiumArenaChrome = useCallback(() => (
     <ArenaChrome
       selected={sf}
-      onSelect={setSf}
+      onSelect={handleSportSelect}
       available={availableSports}
       showModes
       active={am}
@@ -3239,7 +3409,7 @@ export default function MyArenaScreen() {
       hasLive={live.length>0}
       {...horizontalGestureGuard}
     />
-  ), [am, availableSports, hmc, horizontalGestureGuard, live.length, sf]);
+  ), [am, availableSports, handleSportSelect, hmc, horizontalGestureGuard, live.length, sf]);
   const isInitialArenaLoading = isLoading && !(allGames?.length);
 
   if (isInitialArenaLoading || !contentReady) {
@@ -3247,7 +3417,7 @@ export default function MyArenaScreen() {
       <TopInsetView style={{flex:1, backgroundColor:BG}}>
         <ErrorBoundary>
           <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ minHeight: '100%', paddingBottom: arenaBottomPadding }} scrollIndicatorInsets={{ bottom: arenaBottomPadding }}>
-            <ArenaChrome selected={sf} onSelect={setSf} available={availableSports} showModes={false} active={am} onChange={hmc} hasLive={live.length>0} />
+            <ArenaChrome selected={sf} onSelect={handleSportSelect} available={availableSports} showModes={false} active={am} onChange={hmc} hasLive={live.length>0} />
             {/* Reserve the segmented mode pill's exact footprint while loading so
                 premium content does not jump up 88px when modes appear. Inert
                 spacer (no visible controls) to keep the loading state honest. */}
@@ -3272,7 +3442,7 @@ export default function MyArenaScreen() {
             scrollIndicatorInsets={{ bottom: arenaBottomPadding }}
             refreshControl={<RefreshControl refreshing={isR} onRefresh={onR} tintColor={TEAL} />}
           >
-            <ArenaChrome selected={sf} onSelect={setSf} available={availableSports} showModes={false} active={am} onChange={hmc} hasLive={false} />
+            <ArenaChrome selected={sf} onSelect={handleSportSelect} available={availableSports} showModes={false} active={am} onChange={hmc} hasLive={false} />
             <ArenaErrorState onRetry={onR} isRetrying={isR} />
           </Animated.ScrollView>
         </ErrorBoundary>
@@ -3293,7 +3463,7 @@ export default function MyArenaScreen() {
           isR={isR}
           followed={followed}
           bottomPadding={arenaBottomPadding}
-          top={<ArenaChrome selected={sf} onSelect={setSf} available={availableSports} showModes={false} active={am} onChange={hmc} hasLive={live.length>0} />}
+          top={<ArenaChrome selected={sf} onSelect={handleSportSelect} available={availableSports} showModes={false} active={am} onChange={hmc} hasLive={live.length>0} />}
         />
         </ErrorBoundary>
       </TopInsetView>
@@ -3327,6 +3497,7 @@ export default function MyArenaScreen() {
               isR={isR}
               bottomPadding={arenaBottomPadding}
               horizontalGestureGuard={horizontalGestureGuard}
+              resetSignal={am === 0 ? arenaPageResetKey : undefined}
             />
           </View>
           <View key="arena-prep" style={{ width: '100%', flex: 1 }}>
@@ -3339,6 +3510,7 @@ export default function MyArenaScreen() {
               isR={isR}
               bottomPadding={arenaBottomPadding}
               horizontalGestureGuard={horizontalGestureGuard}
+              resetSignal={am === 1 ? arenaPageResetKey : undefined}
             />
           </View>
           <View key="arena-review" style={{ width: '100%', flex: 1 }}>
@@ -3350,6 +3522,7 @@ export default function MyArenaScreen() {
               onR={onR}
               isR={isR}
               bottomPadding={arenaBottomPadding}
+              resetSignal={am === 2 ? arenaPageResetKey : undefined}
             />
           </View>
         </PagerView>

@@ -18,6 +18,7 @@ import type { CanonicalPredictionResult, Prediction } from '@/types/sports';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useSubscription } from '@/lib/subscription-context';
+import { guardedRouterBack, guardedRouterPush } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
 const MAROON_DIM = 'rgba(139,10,31,0.12)';
@@ -273,7 +274,7 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
@@ -291,7 +292,7 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
@@ -310,7 +311,7 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={12} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
             </Pressable>
           </View>
@@ -361,7 +362,7 @@ export default function GameAnalysisScreen() {
                   ))}
                 </View>
                 <Pressable
-                  onPress={() => router.push('/paywall')}
+                  onPress={() => guardedRouterPush(router, '/paywall')}
                   accessibilityRole="button"
                   accessibilityLabel="Preview Pro analysis"
                   accessibilityHint="Opens Clutch Picks Pro"
@@ -428,7 +429,7 @@ export default function GameAnalysisScreen() {
       {/* Header */}
       <View style={[s.headerWrap, { paddingTop: insets.top }]}>
         <View style={s.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={12} style={s.backBtn}>
             <Text style={{ fontSize: 22, color: '#FFF', lineHeight: 24 }}>‹</Text>
           </Pressable>
           <View style={{ flex: 1 }}>

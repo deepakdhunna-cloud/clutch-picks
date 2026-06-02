@@ -4,6 +4,7 @@ import EventSource, { CustomEvent } from 'react-native-sse';
 import { notifyManager, useQueryClient } from '@tanstack/react-query';
 import { GameStatus, type GameWithPrediction } from '@/types/sports';
 import { filterVerifiedGames, isUnverifiedScoreboardGame } from '@/lib/verified-games';
+import { isLiveGameStatus } from '@/lib/game-status';
 
 type SSEEvents = 'scores';
 
@@ -214,7 +215,7 @@ function dataHasLiveGame(data: unknown): boolean {
     game?: unknown;
   };
 
-  if (record.status === GameStatus.LIVE) return true;
+  if (typeof record.status === 'string' && isLiveGameStatus(record.status)) return true;
   return dataHasLiveGame(record.games) || dataHasLiveGame(record.game);
 }
 

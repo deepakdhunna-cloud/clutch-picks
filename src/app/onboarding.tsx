@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, Pressable, Dimensions, TextInput, Image,
   ActivityIndicator, StyleSheet,
@@ -20,8 +20,6 @@ import { Sport } from '@/types/sports';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInvalidateSession } from '@/lib/auth/use-session';
-import { pickImage, takePhoto } from '@/lib/file-picker';
-import { uploadFile } from '@/lib/upload';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { ArenaScoreboard } from '@/components/sports/ArenaScoreboard';
@@ -35,6 +33,8 @@ import {
 } from '@/lib/onboarding-replay-intro';
 import { arenaStepButtonLabel } from '@/lib/onboarding-presentation';
 import { PAYWALL_COPY } from '@/lib/subscription-config';
+import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
+import { guardedRouterReplace } from '@/lib/navigation-guard';
 
 const { width: W } = Dimensions.get('window');
 
@@ -239,7 +239,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
 
   const doPick = useCallback((team: 'home' | 'away') => {
     setPicked(team);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     const target = team === 'home' ? homeScale : awayScale;
     const other = team === 'home' ? awayScale : homeScale;
     target.value = withSequence(withSpring(0.88, { damping: 15 }), withSpring(1.05, { damping: 12 }), withSpring(1, { damping: 10 }));
@@ -1009,8 +1009,8 @@ function ArenaReview() {
 }
 
 // ─── STEP 4: BUILD YOUR CARD ──────────────────────────────────
-function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, isSavingProfile, onPhotoPress, onContinue, onBack }: {
-  displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; isSavingProfile: boolean; onPhotoPress: () => void; onContinue: () => void; onBack: () => void;
+function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, uploadProgressLabel, isSavingProfile, onPhotoPress, onContinue, onBack }: {
+  displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; uploadProgressLabel: string | null; isSavingProfile: boolean; onPhotoPress: () => void; onContinue: () => void; onBack: () => void;
 }) {
   const canContinue = Boolean(displayName.trim()) && !isSavingProfile && !isUploading;
 
@@ -1058,7 +1058,14 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, i
                     <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                     <View style={{ flex: 1, borderRadius: 33, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       {isUploading ? (
-                        <ActivityIndicator color={TEAL} />
+                        <View style={{ alignItems: 'center', gap: 6 }}>
+                          <ActivityIndicator color={TEAL} />
+                          {uploadProgressLabel ? (
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: TEXT_MUT }}>
+                              {uploadProgressLabel}
+                            </Text>
+                          ) : null}
+                        </View>
                       ) : (
                         <ProfileAvatarImage uri={profileImage} style={{ width: '100%', height: '100%' }}>
                           <Text style={{ fontSize: 24, fontWeight: '800', color: WHITE }}>?</Text>
@@ -1250,15 +1257,23 @@ export default function OnboardingScreen() {
   const [picked, setPicked] = useState<'home' | 'away' | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
   const [tutorialReplay, setTutorialReplay] = useState(false);
   const queryClient = useQueryClient();
   const invalidateSession = useInvalidateSession();
+  const saveProfileInFlightRef = useRef(false);
   const replayRequested = shouldUseReplayIntroGate(replay);
   const [replayIntroGateVisible, setReplayIntroGateVisible] = useState<boolean>(replayRequested);
+  const profilePhotoUpload = useProfilePhotoUpload({
+    onUploaded: async (imageUrl) => {
+      setProfileImage(imageUrl);
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+    onFeedback: setFeedback,
+  });
+
+  const isUploading = profilePhotoUpload.isBusy;
 
   // Settings replay is a help tour only. It should not show profile setup or paywall.
   useEffect(() => {
@@ -1295,7 +1310,7 @@ export default function OnboardingScreen() {
     if (step === 5) return;
     if (step === 3 && tutorialReplay) {
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-      router.replace('/(tabs)');
+      guardedRouterReplace(router, '/(tabs)');
     } else {
       if (step === 3) setArenaSubPage(0);
       setStep(step + 1);
@@ -1319,12 +1334,13 @@ export default function OnboardingScreen() {
 
   const skip = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    router.replace('/(tabs)');
+    guardedRouterReplace(router, '/(tabs)');
   }, [router]);
 
   const saveProfile = async () => {
-    if (isSavingProfile) return;
+    if (isSavingProfile || saveProfileInFlightRef.current) return;
 
+    saveProfileInFlightRef.current = true;
     setIsSavingProfile(true);
     try {
       const name = displayName.trim();
@@ -1342,55 +1358,25 @@ export default function OnboardingScreen() {
         variant: 'error',
       });
     } finally {
+      saveProfileInFlightRef.current = false;
       setIsSavingProfile(false);
     }
   };
 
   const goToPaywall = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    router.replace('/paywall');
+    guardedRouterReplace(router, '/paywall');
   }, [router]);
 
   const skipPaywall = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    router.replace('/(tabs)');
+    guardedRouterReplace(router, '/(tabs)');
   }, [router]);
-
-  const handleImageUpload = async (pickedFile: { uri: string; filename: string; mimeType: string } | null) => {
-    if (!pickedFile || isUploading) return;
-    setIsUploading(true);
-    try {
-      const uploadResult = await uploadFile(pickedFile.uri, pickedFile.filename, pickedFile.mimeType);
-      await api.put('/api/profile/image', { imageUrl: uploadResult.url });
-      setProfileImage(uploadResult.url);
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-    } catch {
-      setFeedback({
-        title: 'Upload Failed',
-        message: 'Please try again.',
-        variant: 'error',
-      });
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   const handlePhotoPress = () => {
     if (isUploading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPhotoSourceVisible(true);
-  };
-
-  const handleTakePhoto = async () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(false);
-    await handleImageUpload(await takePhoto());
-  };
-
-  const handleChooseLibrary = async () => {
-    if (isUploading) return;
-    setPhotoSourceVisible(false);
-    await handleImageUpload(await pickImage());
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    profilePhotoUpload.openPhotoSource();
   };
 
   if (replayIntroGateVisible) {
@@ -1401,11 +1387,11 @@ export default function OnboardingScreen() {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <PhotoSourceModal
-          visible={photoSourceVisible}
+          visible={profilePhotoUpload.photoSourceVisible}
           title="Profile Photo"
-          onTakePhoto={handleTakePhoto}
-          onChooseLibrary={handleChooseLibrary}
-          onCancel={() => setPhotoSourceVisible(false)}
+          onTakePhoto={profilePhotoUpload.takePhoto}
+          onChooseLibrary={profilePhotoUpload.chooseLibrary}
+          onCancel={profilePhotoUpload.closePhotoSource}
         />
         <FeedbackModal
           visible={!!feedback}
@@ -1418,7 +1404,7 @@ export default function OnboardingScreen() {
         {step === 1 ? <PickStep picked={picked} setPicked={setPicked} onContinue={() => setStep(2)} onSkip={skip} onBack={goBack} /> : null}
         {step === 2 ? <AIPredictionsStep onContinue={() => setStep(3)} onSkip={skip} onBack={goBack} picked={picked} /> : null}
         {step === 3 ? <ArenaStep subPage={arenaSubPage} onContinue={goNext} onSkip={skip} onBack={goBack} /> : null}
-        {step === 4 ? <ProfileStep displayName={displayName} setDisplayName={setDisplayName} profileImage={profileImage} isUploading={isUploading} isSavingProfile={isSavingProfile} onPhotoPress={handlePhotoPress} onContinue={saveProfile} onBack={goBack} /> : null}
+        {step === 4 ? <ProfileStep displayName={displayName} setDisplayName={setDisplayName} profileImage={profileImage} isUploading={isUploading} uploadProgressLabel={profilePhotoUpload.uploadProgressLabel} isSavingProfile={isSavingProfile} onPhotoPress={handlePhotoPress} onContinue={saveProfile} onBack={goBack} /> : null}
         {step === 5 ? <PaywallStep onSubscribe={goToPaywall} onSkip={skipPaywall} onBack={goBack} /> : null}
       </SafeAreaView>
     </View>

@@ -10,6 +10,7 @@ import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { AuthBackground } from '@/components/AuthBackground';
+import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
@@ -42,7 +43,7 @@ export default function SignInScreen() {
 
     setIsLoading(true);
     setError(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     try {
       const result = await withAuthRequestTimeout(
@@ -54,17 +55,17 @@ export default function SignInScreen() {
       );
 
       if (result.error) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         setError(result.error.message || 'Failed to send verification code');
         return;
       }
 
-      router.push({
+      guardedRouterPush(router, {
         pathname: '/verify-otp' as any,
         params: { email: trimmed, mode: 'signin' },
       });
     } catch (requestError) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setError(authRequestErrorMessage(
         requestError,
         'Could not send a code. Check your connection and try again.',
@@ -86,7 +87,7 @@ export default function SignInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => router.back()}
+            onPress={() => guardedRouterBack(router)}
             hitSlop={16}
             style={s.backBtn}
           >
@@ -143,7 +144,7 @@ export default function SignInScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Create an account"
                 style={s.disclaimerLink}
-                onPress={() => router.replace('/sign-up' as any)}
+                onPress={() => guardedRouterReplace(router, '/sign-up' as any)}
               >
                 Sign Up
               </Text>

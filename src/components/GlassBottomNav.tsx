@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 import { MAROON } from '@/lib/theme';
+import { guardedNavigationNavigate } from '@/lib/navigation-guard';
 
 // Apple HIG standard tab-bar content height (49pt), sitting above the safe-area
 // inset. Internal spacing below is tuned so the 22px icon + label + active pip
@@ -83,14 +84,14 @@ export function GlassBottomNav({
             if ((options as { href?: string | null }).href === null) return null;
 
             const onPress = () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               const event = navigation.emit({
                 type: 'tabPress',
                 target: route.key,
                 canPreventDefault: true,
               });
               if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name, route.params);
+                guardedNavigationNavigate(navigation, [route.name, route.params]);
               }
             };
 

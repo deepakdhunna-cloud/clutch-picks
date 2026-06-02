@@ -134,23 +134,3 @@ export function getCanonicalTeam(game: GameWithPrediction): Team | null {
   if (pick === 'away') return game.awayTeam;
   return null;
 }
-
-export function traceCanonicalUiConsumption(surface: string, game: GameWithPrediction): void {
-  const traceFlag = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env?.['EXPO_PUBLIC_PREDICTION_TRACE'];
-  if (!__DEV__ || traceFlag !== '1') return;
-  const canonical = getCanonicalResult(game.prediction);
-  if (!canonical) return;
-  console.log('[prediction-ui-trace]', {
-    surface,
-    eventId: game.id,
-    consumedCanonical: {
-      finalPick: canonical.finalPick,
-      finalProbability: canonical.finalProbability,
-      confidence: canonical.confidence,
-      probabilities: canonical.probabilities,
-      dataVersion: canonical.dataVersion,
-      timestamp: canonical.timestamp,
-    },
-  });
-}

@@ -37,6 +37,7 @@ import {
 import { MAROON, TEAL } from '@/lib/theme';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { deepEqual } from '@/lib/deep-equal';
+import { guardedRouterBack, guardedRouterPush } from '@/lib/navigation-guard';
 
 function getClutchPicksBottomPadding(bottomInset: number) {
   return GLASS_BOTTOM_NAV_HEIGHT
@@ -602,7 +603,7 @@ const TopPickCard = memo(function TopPickCard({
                   <Pressable
                     onPress={(e) => {
                       e.stopPropagation();
-                      router.push({ pathname: '/confidence-explained', params: confidenceParams });
+                      guardedRouterPush(router, { pathname: '/confidence-explained', params: confidenceParams });
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={`Explain pick strength: ${tier.label}`}
@@ -767,12 +768,12 @@ export default function ClutchPicksScreen() {
   const handleGamePress = useCallback((game: GameWithPrediction) => {
     if (!claimGameNavigation(game.id)) return;
     handleGameWarm(game);
-    router.push(`/game/${game.id}` as any);
+    guardedRouterPush(router, `/game/${game.id}` as any);
   }, [handleGameWarm, router]);
 
   const openPaywall = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/paywall');
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    guardedRouterPush(router, '/paywall');
   }, [router]);
 
   const headerComponent = useMemo(() => (
@@ -830,7 +831,7 @@ export default function ClutchPicksScreen() {
       {/* transparent so the decorative ClutchPicksBackground behind it stays visible;
           the outer View is already #010101, so there is no white-flash risk. */}
       <TopInsetView style={{ flex: 1 }} backgroundColor="transparent">
-        <ErrorBoundary onGoBack={() => router.back()}>
+        <ErrorBoundary onGoBack={() => guardedRouterBack(router)}>
 
         {/* Content */}
         {shouldShowPicksSkeleton ? (

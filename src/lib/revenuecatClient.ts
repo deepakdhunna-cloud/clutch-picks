@@ -63,7 +63,6 @@ const apiKey = selectRevenueCatApiKey({
 // Track if RevenueCat is enabled
 const isEnabled = !!apiKey && !isWeb;
 
-const LOG_PREFIX = "[RevenueCat]";
 export const REVENUECAT_MONTHLY_PACKAGE_ID = REVENUECAT_PACKAGE_IDS.monthly;
 
 export type RevenueCatGuardReason =
@@ -81,14 +80,10 @@ const guardRevenueCatUsage = async <T>(
   operation: () => Promise<T>,
 ): Promise<RevenueCatResult<T>> => {
   if (isWeb) {
-    if (__DEV__) console.log(
-      `${LOG_PREFIX} ${action} skipped: payments are not supported on web.`,
-    );
     return { ok: false, reason: "web_not_supported" };
   }
 
   if (!isEnabled) {
-    if (__DEV__) console.log(`${LOG_PREFIX} ${action} skipped: RevenueCat not configured`);
     return { ok: false, reason: "not_configured" };
   }
 
@@ -96,7 +91,6 @@ const guardRevenueCatUsage = async <T>(
     const data = await operation();
     return { ok: true, data };
   } catch (error) {
-    if (__DEV__) console.log(`${LOG_PREFIX} ${action} failed:`, error);
     return { ok: false, reason: "sdk_error", error };
   }
 };
@@ -104,18 +98,8 @@ const guardRevenueCatUsage = async <T>(
 // Initialize RevenueCat if key exists
 if (isEnabled) {
   try {
-    // Set up custom log handler to suppress Test Store and expected errors
-    // These are non-errors thrown as errors by the SDK, and will be confusing to the user.
-    Purchases.setLogHandler((logLevel, message) => {
-      // Log ALL messages to diagnose issues
-      if (__DEV__) console.log(LOG_PREFIX, `[${logLevel}]`, message);
-    });
-
     Purchases.configure({ apiKey: apiKey! });
-    if (__DEV__) console.log(`${LOG_PREFIX} SDK initialized successfully`);
-  } catch (error) {
-    if (__DEV__) console.error(`${LOG_PREFIX} Failed to initialize:`, error);
-  }
+  } catch {}
 }
 
 /**
