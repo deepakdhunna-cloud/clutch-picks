@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
@@ -20,12 +21,12 @@ export default function PrivacyPolicyScreen() {
           borderBottomWidth: 1,
           borderBottomColor: 'rgba(255,255,255,0.06)',
         }}>
-          <Pressable
+          <HapticPressable hapticStyle="light"
             onPress={() => router.back()}
             style={{ marginRight: 16, padding: 4 }}
           >
             <ChevronLeft size={28} color="#fff" />
-          </Pressable>
+          </HapticPressable>
           <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>
             Privacy Policy
           </Text>

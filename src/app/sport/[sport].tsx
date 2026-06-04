@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, FlatList, RefreshControl, ActivityIndicator, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useState, useCallback, useMemo, useEffect, useDeferredValue, memo } from 'react';
 import Animated, {
@@ -79,7 +80,7 @@ const FilterButton = memo(function FilterButton({
       entering={FadeInRight.delay(index * 60).duration(300)}
       style={animatedStyle}
     >
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPress={handlePress}
         style={({ pressed }) => [
           styles.filterButton,
@@ -124,7 +125,7 @@ const FilterButton = memo(function FilterButton({
             <View style={styles.filterSelectedDot} />
           ) : null}
         </View>
-      </Pressable>
+      </HapticPressable>
     </Animated.View>
   );
 });
@@ -242,12 +243,12 @@ export default function SportDetailScreen() {
           style={styles.header}
         >
           <View style={styles.headerRow}>
-            <Pressable
+            <HapticPressable hapticStyle="none"
               onPress={() => router.back()}
               style={styles.backButton}
             >
               <ChevronLeft size={28} color="#fff" />
-            </Pressable>
+            </HapticPressable>
             <View
               style={[styles.sportIcon, { backgroundColor: sportMeta.color }]}
             >

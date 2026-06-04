@@ -1,5 +1,6 @@
 import React, { useDeferredValue, useMemo, useState, memo } from 'react';
-import { View, Text, Pressable, SectionList, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, SectionList, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -101,7 +102,7 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
 
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(Math.min(index * 40, 200))}>
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPressIn={() => prefetchGame(item.gameId)}
         onPress={() => {
           if (!claimGameNavigation(item.gameId)) return;
@@ -161,7 +162,7 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
             )}
           </View>
         </View>
-      </Pressable>
+      </HapticPressable>
     </Animated.View>
   );
 });
@@ -278,14 +279,14 @@ export default function PicksHistoryScreen() {
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
         {/* ── HEADER ── */}
         <View style={s.header}>
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={() => router.back()}
             style={s.backBtn}
           >
             <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
               <Path d="M15 18l-6-6 6-6" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-          </Pressable>
+          </HapticPressable>
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Pick History</Text>
             <Text style={s.headerSub}>{summary.total} picks  {summary.rate}% win rate</Text>
@@ -326,7 +327,7 @@ export default function PicksHistoryScreen() {
           {filters.map((f) => {
             const active = filter === f.key;
             return (
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 key={f.key}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter(f.key); }}
                 style={[s.filterPill, active && { borderColor: f.color, backgroundColor: `${f.color}10` }]}
@@ -335,7 +336,7 @@ export default function PicksHistoryScreen() {
                 <View style={[s.filterPillCount, active && { backgroundColor: `${f.color}20` }]}>
                   <Text style={[s.filterPillCountText, active && { color: f.color }]}>{f.count}</Text>
                 </View>
-              </Pressable>
+              </HapticPressable>
             );
           })}
         </Animated.View>

@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, Switch } from 'react-native';
+import { View, Text, ScrollView, Switch } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Bell, Zap, TrendingUp, AlertTriangle, Activity } from 'lucide-react-native';
@@ -147,7 +148,7 @@ export default function NotificationsSettingsScreen() {
             paddingVertical: 16,
           }}
         >
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -164,7 +165,7 @@ export default function NotificationsSettingsScreen() {
             }}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
-          </Pressable>
+          </HapticPressable>
           <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginLeft: 16 }}>
             Notifications
           </Text>

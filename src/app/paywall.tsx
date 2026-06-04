@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
+  View, Text, ActivityIndicator, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
 } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { api } from '@/lib/api/api';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -100,7 +101,7 @@ function ShimmerButton({ onPress, loading, label }: {
   }));
 
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPress={onPress}
       disabled={loading}
       style={({ pressed }) => ({
@@ -130,7 +131,7 @@ function ShimmerButton({ onPress, loading, label }: {
           <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 }}>{label}</Text>
         )}
       </LinearGradient>
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -407,14 +408,14 @@ export default function PaywallScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <Pressable onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
+          <HapticPressable hapticStyle="none" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
             width: 34, height: 34, borderRadius: 12,
             backgroundColor: 'rgba(255,255,255,0.04)',
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
             alignItems: 'center', justifyContent: 'center',
           }} hitSlop={12}>
             <X size={18} color="rgba(255,255,255,0.4)" />
-          </Pressable>
+          </HapticPressable>
         </Animated.View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -600,12 +601,12 @@ export default function PaywallScreen() {
                         autoCorrect={false}
                       />
                       {promoCode.length > 0 ? (
-                        <Pressable onPress={() => setPromoCode('')} hitSlop={8}>
+                        <HapticPressable hapticStyle="none" onPress={() => setPromoCode('')} hitSlop={8}>
                           <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>×</Text>
-                        </Pressable>
+                        </HapticPressable>
                       ) : null}
                     </View>
-                    <Pressable
+                    <HapticPressable hapticStyle="none"
                       onPress={async () => {
                         if (!promoCode.trim() || promoLoading) return;
                         setPromoLoading(true);
@@ -646,10 +647,10 @@ export default function PaywallScreen() {
                       ) : (
                         <Text style={{ fontSize: 12, fontWeight: '700', color: promoCode.trim() ? BG : 'rgba(122,157,184,0.5)' }}>Apply</Text>
                       )}
-                    </Pressable>
+                    </HapticPressable>
                   </View>
                 ) : (
-                  <Pressable
+                  <HapticPressable hapticStyle="none"
                     onPress={() => setPromoOpen(true)}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
                   >
@@ -657,7 +658,7 @@ export default function PaywallScreen() {
                       <Path d="M12 4v16M4 12h16" stroke={TEAL} strokeWidth={2} strokeLinecap="round" />
                     </Svg>
                     <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>Have a promo code?</Text>
-                  </Pressable>
+                  </HapticPressable>
                 )}
 
                 {/* CTA button */}
@@ -683,26 +684,26 @@ export default function PaywallScreen() {
 
           {/* ═══ RESTORE + LEGAL ═══ */}
           <Animated.View entering={FadeIn.delay(440)} style={{ alignItems: 'center', paddingTop: 20 }}>
-            <Pressable onPress={handleRestore} disabled={isRestoring} style={{ paddingVertical: 12 }}>
+            <HapticPressable hapticStyle="none" onPress={handleRestore} disabled={isRestoring} style={{ paddingVertical: 12 }}>
               {isRestoring ? (
                 <ActivityIndicator color={TEAL} size="small" />
               ) : (
                 <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Restore Purchases</Text>
               )}
-            </Pressable>
+            </HapticPressable>
 
-            <Pressable onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')} style={{ marginTop: 10 }}>
+            <HapticPressable hapticStyle="none" onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')} style={{ marginTop: 10 }}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: TEAL, textDecorationLine: 'underline' }}>Manage Subscription</Text>
-            </Pressable>
+            </HapticPressable>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
-              <Pressable onPress={() => router.push('/terms' as any)}>
+              <HapticPressable hapticStyle="none" onPress={() => router.push('/terms' as any)}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Terms</Text>
-              </Pressable>
+              </HapticPressable>
               <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>·</Text>
-              <Pressable onPress={() => router.push('/privacy-policy' as any)}>
+              <HapticPressable hapticStyle="none" onPress={() => router.push('/privacy-policy' as any)}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Privacy</Text>
-              </Pressable>
+              </HapticPressable>
             </View>
 
             <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', marginTop: 14, paddingHorizontal: 28, lineHeight: 16 }}>

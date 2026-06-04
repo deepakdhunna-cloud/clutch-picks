@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameWithPrediction, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
@@ -66,7 +67,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
       shadowRadius: 24,
       elevation: 20,
     }}>
-    <Pressable
+    <HapticPressable hapticStyle="light"
       onPressIn={onPressIn}
       onPress={() => {
         if (!shouldHandlePress()) return;
@@ -355,7 +356,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
         </View>
         </View>
       </View>
-    </Pressable>
+    </HapticPressable>
     </View>
   );
 });

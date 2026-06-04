@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useDeferredValue, memo, useRef } from 'react';
 import {
-  View, Text, Pressable, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, Platform, InteractionManager,
+  View, Text, Dimensions, ActivityIndicator, RefreshControl, ScrollView, TextInput, StyleSheet, Platform, InteractionManager,
 } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Animated, {
@@ -219,7 +220,7 @@ const SearchBar = memo(function SearchBar() {
           </View>
         </View>
       </View>
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPress={() => {
           fireLightHaptic();
           router.push('/search-explore');
@@ -249,7 +250,7 @@ const SearchBar = memo(function SearchBar() {
             </View>
           </View>
         </LinearGradient>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 });
@@ -305,7 +306,7 @@ const SportPills = memo(function SportPills({
         const count = counts?.get(s);
         const label = count !== undefined && counts ? `${SPORT_DISPLAY[s] ?? s} ${count}` : (SPORT_DISPLAY[s] ?? s);
         return (
-          <Pressable
+          <HapticPressable hapticStyle="none"
             key={s}
             onPress={() => { if (!on) fireSelectionHaptic(); onSelect(s); }}
             style={{
@@ -338,7 +339,7 @@ const SportPills = memo(function SportPills({
                 <Text numberOfLines={1} style={{ fontSize: compact ? 12 : 13, lineHeight: compact ? 15 : 16, fontWeight: on ? '800' : '600', color: on ? WHITE : TEAL, letterSpacing: on ? 0 : 0.4, includeFontPadding: false }}>{label}</Text>
               </View>
             </LinearGradient>
-          </Pressable>
+          </HapticPressable>
         );
       })}
     </ScrollView>
@@ -359,7 +360,7 @@ const SegPill = memo(function SegPill({ active, onChange }: { active: number; on
           {MODES.map((l, i) => {
             const isActive = active === i;
             return (
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 key={l}
                 onPress={() => onChange(i)}
                 style={{
@@ -393,7 +394,7 @@ const SegPill = memo(function SegPill({ active, onChange }: { active: number; on
                     </Text>
                   </View>
                 </LinearGradient>
-              </Pressable>
+              </HapticPressable>
             );
           })}
         </View>
@@ -592,7 +593,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   };
 
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPressIn={() => warmGame(game)}
       onPress={() => openGame(game)}
       style={{
@@ -645,7 +646,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
           )}
         </View>
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -677,7 +678,7 @@ const YourGames = memo(function YourGames({
           <Text style={{ fontSize: 20, fontWeight: '900', color: WHITE, letterSpacing: 0 }}>Tracked Games</Text>
         </View>
       </View>
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
         style={{
           borderRadius: 30,
@@ -707,7 +708,7 @@ const YourGames = memo(function YourGames({
             </View>
           </View>
         </View>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
   return (
@@ -722,7 +723,7 @@ const YourGames = memo(function YourGames({
             </View>
           </View>
         </View>
-        <Pressable
+        <HapticPressable hapticStyle="none"
           onPress={() => { fireLightHaptic(); router.replace('/(tabs)'); }}
           style={{
             flexDirection: 'row',
@@ -739,7 +740,7 @@ const YourGames = memo(function YourGames({
           <View style={{ marginLeft: 5 }}>
             <Plus size={12} color={TEAL} strokeWidth={2.8} />
           </View>
-        </Pressable>
+        </HapticPressable>
       </View>
       <Animated.FlatList
         data={orderedGames}
@@ -1237,7 +1238,7 @@ const LiveCard = memo(function LiveCard({
   };
 
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPressIn={() => warmGame(game)}
       onPress={() => openGame(game)}
       style={{
@@ -1550,7 +1551,7 @@ const LiveCard = memo(function LiveCard({
           </View>
         </LinearGradient>
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -1777,7 +1778,7 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
   const bc = type === 'pulse' ? '#8B0A1F' : type === 'alert' ? LIVE_RED : type === 'shift' ? TEAL_DARK : SILVER;
   const bl = type === 'pulse' ? 'PULSE' : type === 'alert' ? 'ALERT' : type === 'shift' ? 'SHIFT' : 'TREND';
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPress={() => { if (isLong) { fireSelectionHaptic(); setExpanded(!expanded); } }}
       style={{
         marginBottom: ARENA_CARD_GAP,
@@ -1828,7 +1829,7 @@ const IntelCard = memo(function IntelCard({ type, title, body }: LiveIntelItem) 
           {isLong && !expanded ? <Text style={{ fontSize: 11, color: bc, fontWeight: '800', marginTop: 8 }}>Tap to read more</Text> : null}
         </View>
       </LinearGradient>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -1882,7 +1883,7 @@ const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress 
           <Text style={{ color: 'rgba(255,255,255,0.82)', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 }}>PRO</Text>
         </View>
       </View>
-      <Pressable onPress={onPress}>
+      <HapticPressable hapticStyle="none" onPress={onPress}>
         <LinearGradient
           colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
           start={{ x: 0, y: 0 }}
@@ -1938,7 +1939,7 @@ const LockedLiveIntelStage = memo(function LockedLiveIntelStage({ game, onPress 
             </LinearGradient>
           </View>
         </LinearGradient>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 });
@@ -1951,7 +1952,7 @@ const HorizonCard = memo(function HorizonCard({ game, index }: { game: GameWithP
   const ts = `${dh}:${m.toString().padStart(2, '0')}`;
   const ic = game.prediction ? [game.prediction.isTossUp, (game.prediction.edgeRating??0) >= 7, (game.prediction.homeStreak??0) >= 3||(game.prediction.awayStreak??0) >= 3, game.prediction.ensembleDivergence].filter(Boolean).length : 0;
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPressIn={() => warmGame(game)}
       onPress={() => openGame(game)}
       style={{
@@ -1978,7 +1979,7 @@ const HorizonCard = memo(function HorizonCard({ game, index }: { game: GameWithP
           <ChevronRight size={15} color={TEXT_MUTED} />
         </View>
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -2219,7 +2220,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
   return (
     <View style={{ backgroundColor: 'rgba(5,8,13,0.96)', borderRadius: 16, borderWidth: 1, borderColor: isFirst ? hexWithAlpha(MAROON, 0.24) : 'rgba(180,211,235,0.12)', borderLeftWidth: 3, borderLeftColor: isFirst ? MAROON : TEAL, marginBottom: ARENA_CARD_GAP, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 4 }}>
       <LinearGradient pointerEvents="none" colors={[isFirst ? hexWithAlpha(MAROON, 0.13) : hexWithAlpha(TEAL, 0.08), 'rgba(5,8,13,0)', 'rgba(255,255,255,0.025)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
         style={{
           padding: 16,
@@ -2235,14 +2236,14 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
           <Text style={{ width: 16, textAlign: 'center', fontSize: 17, lineHeight: 18, color: TEXT_MUTED, includeFontPadding: false }}>{expanded ? '−' : '+'}</Text>
         </View>
         <Text style={{ fontSize: 12.5, lineHeight: 18, fontWeight: '600', color: TEXT_SECONDARY, marginLeft: 38 }} numberOfLines={expanded ? undefined : 1}>{headline}</Text>
-      </Pressable>
+      </HapticPressable>
       {expanded ? (
         <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
           {tags.length > 1 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 5 }}>
             {tags.slice(1).map((tg, i) => <View key={tg+i} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginRight: 5, marginBottom: 5 }}><Text style={{ fontSize: 9, lineHeight: 12, fontWeight: '700', color: TEXT_MUTED, letterSpacing: 0.3, includeFontPadding: false }}>{tg}</Text></View>)}
           </View> : null}
           <Text style={{ fontSize: 11.5, color: TEXT_SECONDARY, lineHeight: 18 }}>{detail}</Text>
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPressIn={() => warmGame(game)}
             onPress={() => openGame(game)}
             style={{
@@ -2264,7 +2265,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
               <Text style={{ fontSize: 12, fontWeight: '700', color: MAROON, marginRight: 4 }}>Open Game</Text>
               <ChevronRight size={12} color={MAROON} />
             </View>
-          </Pressable>
+          </HapticPressable>
         </View>
       ) : null}
     </View>
@@ -2457,7 +2458,7 @@ const GameDay = memo(function GameDay({
                 returnKeyType="done"
               />
               {liveSearch.length > 0 ? (
-                <Pressable
+                <HapticPressable hapticStyle="none"
                   onPress={() => setLiveSearch('')}
                   hitSlop={8}
                   style={{
@@ -2470,7 +2471,7 @@ const GameDay = memo(function GameDay({
                   }}
                 >
                   <Text style={{fontSize:15, fontWeight:'900', color:'rgba(224,234,240,0.56)'}}>×</Text>
-                </Pressable>
+                </HapticPressable>
               ) : null}
             </View>
           </LinearGradient>
@@ -2672,7 +2673,7 @@ const Prep = memo(function Prep({
               const conf = Math.round(getCanonicalConfidence(r.game.prediction));
               const predictionDisplay = getGamePredictionDisplay(r.game);
               return (
-                <Pressable
+                <HapticPressable hapticStyle="none"
                   key={r.game.id}
                   onPressIn={() => warmGame(r.game)}
                   onPress={() => openGame(r.game)}
@@ -2698,7 +2699,7 @@ const Prep = memo(function Prep({
                     <Text numberOfLines={1} style={{fontSize:10.5, lineHeight:14, fontWeight:'600', color:TEAL, marginBottom:3}}>Model: {predictionDisplay.badgeLabel}</Text>
                     <Text numberOfLines={1} style={{fontSize:10.5, lineHeight:14, color:TEXT_MUTED}}>{conf}% confidence</Text>
                   </View>
-                </Pressable>
+                </HapticPressable>
               );
             })}
           </ScrollView>
@@ -2711,7 +2712,7 @@ const Prep = memo(function Prep({
           const active = prepTab === idx;
           const count = idx === 0 ? ranked.length : upsetPlays.length;
           return (
-            <Pressable key={label} onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }} style={{flex:1, minWidth:0, marginRight: idx === PREP_TABS.length - 1 ? 0 : 6}}>
+            <HapticPressable hapticStyle="none" key={label} onPress={() => { if (!active) fireSelectionHaptic(); setPrepTab(idx as 0|1); }} style={{flex:1, minWidth:0, marginRight: idx === PREP_TABS.length - 1 ? 0 : 6}}>
               <LinearGradient
                 colors={active
                   ? [hexWithAlpha(MAROON, 0.48), 'rgba(180,211,235,0.12)', hexWithAlpha(MAROON, 0.26)]
@@ -2731,7 +2732,7 @@ const Prep = memo(function Prep({
                   </View>
                 </View>
               </LinearGradient>
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -2826,7 +2827,7 @@ const ProFeatureGate = memo(function ProFeatureGate({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={{ marginHorizontal: ARENA_SIDE_PADDING, marginBottom: ARENA_CARD_GAP }}>
+    <HapticPressable hapticStyle="none" onPress={onPress} style={{ marginHorizontal: ARENA_SIDE_PADDING, marginBottom: ARENA_CARD_GAP }}>
       <LinearGradient
         colors={['rgba(122,157,184,0.24)', 'rgba(224,234,240,0.10)', 'rgba(139,10,31,0.18)']}
         start={{ x: 0, y: 0 }}
@@ -2882,7 +2883,7 @@ const ProFeatureGate = memo(function ProFeatureGate({
           </LinearGradient>
         </View>
       </LinearGradient>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -2951,7 +2952,7 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed, bottomP
 // ─── MAIN ───
 export default function MyArenaScreen() {
   const router = useRouter();
-  const { isPremium } = useSubscription();
+  const { isPremium, isLoading: isSubscriptionLoading } = useSubscription();
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<React.ElementRef<typeof PagerView>>(null);
   const pagerUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3065,7 +3066,7 @@ export default function MyArenaScreen() {
       {...horizontalGestureGuard}
     />
   ), [am, availableSports, hmc, horizontalGestureGuard, live.length, sf]);
-  const isInitialArenaLoading = isLoading && !(allGames?.length);
+  const isInitialArenaLoading = (isLoading && !(allGames?.length)) || isSubscriptionLoading;
 
   if (isInitialArenaLoading || !contentReady) {
     return (

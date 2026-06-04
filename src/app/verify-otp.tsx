@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  View, Text, TextInput, StyleSheet,
   StatusBar, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { HapticPressable } from '@/components/HapticPressable';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
@@ -172,9 +173,9 @@ export default function VerifyOTP() {
         <View style={s.content}>
           {/* Back button */}
           <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32, alignSelf: 'flex-start' }}>
-            <Pressable onPress={() => router.back()} hitSlop={16} style={s.backBtn}>
+            <HapticPressable onPress={() => router.back()} hitSlop={16} style={s.backBtn} hapticStyle="light">
               <BackArrow />
-            </Pressable>
+            </HapticPressable>
           </Animated.View>
 
           {/* Header */}
@@ -251,11 +252,11 @@ export default function VerifyOTP() {
 
           {/* Resend */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.resendRow}>
-            <Pressable onPress={handleResend} disabled={isResending}>
+            <HapticPressable onPress={handleResend} disabled={isResending} hapticStyle="light">
               <Text style={[s.resendText, isResending && { color: 'rgba(255,255,255,0.25)' }]}>
                 {isResending ? 'Sending...' : 'Resend Code'}
               </Text>
-            </Pressable>
+            </HapticPressable>
             <Text style={s.timerText}>· {timerDisplay}</Text>
           </Animated.View>
 
@@ -263,10 +264,10 @@ export default function VerifyOTP() {
 
           {/* Verify button */}
           <Animated.View entering={FadeInDown.delay(400).duration(400)} style={{ width: '100%' }}>
-            <Pressable
+            <HapticPressable hapticStyle="medium"
               onPress={handleVerify}
               disabled={!isComplete || isLoading}
-              style={({ pressed }) => ({ opacity: pressed ? 0.85 : !isComplete ? 0.4 : 1 })}
+              style={{ opacity: !isComplete ? 0.4 : 1 }}
             >
               <View style={s.submitBtn}>
                 {isLoading ? (
@@ -275,7 +276,7 @@ export default function VerifyOTP() {
                   <Text style={s.submitBtnText}>Verify My Account</Text>
                 )}
               </View>
-            </Pressable>
+            </HapticPressable>
           </Animated.View>
 
           <View style={{ height: 36 }} />

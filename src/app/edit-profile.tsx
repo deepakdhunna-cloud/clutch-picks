@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -159,7 +160,7 @@ export default function EditProfileScreen() {
         entering={FadeInDown.duration(400)}
         style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <Pressable
+        <HapticPressable hapticStyle="light"
           onPress={() => router.back()}
           style={{
             width: 40,
@@ -173,9 +174,9 @@ export default function EditProfileScreen() {
           }}
         >
           <ArrowLeft size={24} color="#FFFFFF" />
-        </Pressable>
+        </HapticPressable>
         <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>Edit Profile</Text>
-        <Pressable
+        <HapticPressable hapticStyle="light"
           onPress={handleSave}
           disabled={updateProfileMutation.isPending}
           style={{
@@ -192,7 +193,7 @@ export default function EditProfileScreen() {
           ) : (
             <Check size={24} color="#FFFFFF" />
           )}
-        </Pressable>
+        </HapticPressable>
       </Animated.View>
 
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -201,7 +202,7 @@ export default function EditProfileScreen() {
           entering={FadeInDown.delay(100).duration(500)}
           style={{ alignItems: 'center', paddingVertical: 32 }}
         >
-          <Pressable onPress={handleAvatarPress} disabled={isUploading}>
+          <HapticPressable hapticStyle="light" onPress={handleAvatarPress} disabled={isUploading}>
             <View
               style={{
                 width: 120,
@@ -248,12 +249,12 @@ export default function EditProfileScreen() {
             >
               <Camera size={18} color="#FFFFFF" />
             </View>
-          </Pressable>
-          <Pressable onPress={handleAvatarPress} style={{ marginTop: 12 }}>
+          </HapticPressable>
+          <HapticPressable hapticStyle="light" onPress={handleAvatarPress} style={{ marginTop: 12 }}>
             <Text style={{ color: TEAL, fontWeight: '600', fontSize: 14 }}>
               Change Photo
             </Text>
-          </Pressable>
+          </HapticPressable>
         </Animated.View>
 
         {/* Form Section */}

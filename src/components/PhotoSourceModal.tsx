@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Text, View } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { Camera, Image as ImageIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -25,7 +26,7 @@ export function PhotoSourceModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable
+      <HapticPressable hapticStyle="light"
         onPress={onCancel}
         style={{
           flex: 1,
@@ -35,7 +36,7 @@ export function PhotoSourceModal({
           padding: 18,
         }}
       >
-        <Pressable
+        <HapticPressable hapticStyle="light"
           onPress={() => {}}
           style={{
             width: '100%',
@@ -54,7 +55,7 @@ export function PhotoSourceModal({
           <Text style={{ color: '#6B7C94', fontSize: 13, lineHeight: 18, marginBottom: 14 }}>
             Add a photo from your camera or library.
           </Text>
-          <Pressable
+          <HapticPressable hapticStyle="light"
             onPress={() => press(onTakePhoto)}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -71,8 +72,8 @@ export function PhotoSourceModal({
           >
             <Camera size={19} color="#7A9DB8" />
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginLeft: 12 }}>Take Photo</Text>
-          </Pressable>
-          <Pressable
+          </HapticPressable>
+          <HapticPressable hapticStyle="light"
             onPress={() => press(onChooseLibrary)}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -89,8 +90,8 @@ export function PhotoSourceModal({
           >
             <ImageIcon size={19} color="#8B0A1F" />
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginLeft: 12 }}>Choose from Library</Text>
-          </Pressable>
-          <Pressable
+          </HapticPressable>
+          <HapticPressable hapticStyle="light"
             onPress={onCancel}
             style={({ pressed }) => ({
               height: 46,
@@ -102,9 +103,9 @@ export function PhotoSourceModal({
             })}
           >
             <Text style={{ color: '#A1B3C9', fontSize: 14, fontWeight: '700' }}>Cancel</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+          </HapticPressable>
+        </HapticPressable>
+      </HapticPressable>
     </Modal>
   );
 }

@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   Easing,
@@ -211,7 +212,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <Pressable style={StyleSheet.absoluteFill} onPress={isConfirming ? undefined : onCancel} />
+        <HapticPressable hapticStyle="medium" style={StyleSheet.absoluteFill} onPress={isConfirming ? undefined : onCancel} />
 
         <Animated.View style={[cardStyle, { width: cardWidth }]}>
           <LinearGradient
@@ -231,13 +232,13 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                   <Sparkles size={12} color="rgba(218,238,251,0.88)" strokeWidth={2.3} />
                   <Text style={styles.eyebrowText}>Pick Moment</Text>
                 </View>
-                <Pressable
+                <HapticPressable hapticStyle="medium"
                   onPress={isConfirming ? undefined : onCancel}
                   hitSlop={10}
                   style={({ pressed }) => [styles.closeButton, pressed && !isConfirming ? styles.pressed : null]}
                 >
                   <X size={18} color="rgba(226,240,249,0.78)" strokeWidth={2.8} />
-                </Pressable>
+                </HapticPressable>
               </View>
 
               <View style={[styles.jerseyStage, isCompactHeight ? styles.jerseyStageCompact : null]}>
@@ -286,7 +287,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
 
               {!isConfirming ? (
                 <View style={styles.actionsRow}>
-                  <Pressable
+                  <HapticPressable hapticStyle="medium"
                     onPress={handleConfirm}
                     style={({ pressed }) => [styles.lockButtonWrap, pressed ? styles.pressed : null]}
                   >
@@ -305,7 +306,7 @@ export const PickConfirmationModal = memo(function PickConfirmationModal({
                         <Text style={styles.lockText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>{primaryLabel}</Text>
                       </View>
                     </LinearGradient>
-                  </Pressable>
+                  </HapticPressable>
                 </View>
               ) : (
                 <View style={styles.lockedState}>

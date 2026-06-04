@@ -1,4 +1,5 @@
-import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, Image, ScrollView, FlatList, RefreshControl, Modal, TextInput } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -319,7 +320,7 @@ const StatusFilterRail = memo(function StatusFilterRail({
         const hasFilter = statusFilter !== 'all';
         const dimmed = hasFilter && !active;
         return (
-          <Pressable
+          <HapticPressable hapticStyle="none"
             key={f.key}
             onPress={() => {
               if (!shouldHandlePress()) return;
@@ -345,7 +346,7 @@ const StatusFilterRail = memo(function StatusFilterRail({
                 <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{f.label}</Text>
               </View>
             )}
-          </Pressable>
+          </HapticPressable>
         );
       })}
     </ScrollView>
@@ -370,7 +371,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
   return (
     <View style={{ paddingTop: 0 }}>
       <View style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, marginTop: 0, marginBottom: 12 }}>
-        <Pressable
+        <HapticPressable hapticStyle="none"
           onPress={() => {
             if (selectedSportFilter) {
               setSelectedSportFilter(null);
@@ -401,7 +402,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
               />
             );
           })()}
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );
@@ -504,7 +505,7 @@ const HomeHeader = React.memo(function HomeHeader({
               decelerationRate="fast"
             >
               {/* All pill */}
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
                   setSelectedLiveSportFilter(null);
@@ -528,7 +529,7 @@ const HomeHeader = React.memo(function HomeHeader({
                     <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>All ({filteredLiveGames.length})</Text>
                   </View>
                 )}
-              </Pressable>
+              </HapticPressable>
 
               {/* Per-sport pills */}
               {availableLiveSports.map((sport) => {
@@ -536,7 +537,7 @@ const HomeHeader = React.memo(function HomeHeader({
                 const count = liveSportCounts.get(sport) ?? 0;
                 const displayName = displaySport(sport);
                 return (
-                  <Pressable
+                  <HapticPressable hapticStyle="none"
                     key={sport}
                     onPress={() => {
                       if (!shouldHandleLiveChipPress()) return;
@@ -561,7 +562,7 @@ const HomeHeader = React.memo(function HomeHeader({
                         <Text style={{ fontSize: 12, fontWeight: '600', color: TEAL }}>{displayName} ({count})</Text>
                       </View>
                     )}
-                  </Pressable>
+                  </HapticPressable>
                 );
               })}
             </ScrollView>
@@ -583,7 +584,7 @@ const HomeHeader = React.memo(function HomeHeader({
 
             {/* View All button — only show when there are more than 5 and not yet expanded */}
             {!showAllLive && filteredLiveGames.length > 5 ? (
-            <Pressable
+            <HapticPressable hapticStyle="none"
               onPress={() => {
                 if (!shouldHandleLiveChipPress()) return;
                 router.push('/live-games' as any);
@@ -611,7 +612,7 @@ const HomeHeader = React.memo(function HomeHeader({
             >
               <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>View All</Text>
               <ChevronRight size={14} color="#FFFFFF" />
-            </Pressable>
+            </HapticPressable>
             ) : null}
           </ScrollView>
         </View>
@@ -660,7 +661,7 @@ const SearchGameCard = memo(function SearchGameCard({
 
   return (
     <View>
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPressIn={onPressIn}
         onPress={onPress}
         className="active:opacity-75"
@@ -790,7 +791,7 @@ const SearchGameCard = memo(function SearchGameCard({
             </View>
           )}
         </View>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 });
@@ -1229,7 +1230,7 @@ export default function HomeScreen() {
       const DirectionIcon = hasMore ? ChevronDown : ChevronUp;
       return (
         <Animated.View entering={FadeInDown.duration(190)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={() => {
               if (hasMore) {
                 showMoreSportGames(item.sport, item.total);
@@ -1289,7 +1290,7 @@ export default function HomeScreen() {
                 </LinearGradient>
               </View>
             </LinearGradient>
-          </Pressable>
+          </HapticPressable>
         </Animated.View>
       );
     }
@@ -1395,7 +1396,7 @@ export default function HomeScreen() {
               sideRail
             />
             {/* Clear button — separate jumbotron tile */}
-            <Pressable
+            <HapticPressable hapticStyle="none"
               onPress={() => applySportFilter(null)}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.84 : 1,
@@ -1403,7 +1404,7 @@ export default function HomeScreen() {
               })}
             >
               <LedMiniPanel label="CLEAR" />
-            </Pressable>
+            </HapticPressable>
           </View>
         );
       })() : null}
@@ -1569,19 +1570,19 @@ export default function HomeScreen() {
                 autoCorrect={false}
               />
               {searchQuery.length > 0 ? (
-                <Pressable onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }}>
+                <HapticPressable hapticStyle="none" onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }}>
                   <X size={14} color="rgba(255,255,255,0.4)" />
-                </Pressable>
+                </HapticPressable>
               ) : null}
             </View>
 
             {/* Cancel button */}
-            <Pressable
+            <HapticPressable hapticStyle="none"
               onPress={handleCloseSearchModal}
               className="active:opacity-60"
             >
               <Text style={{ color: '#5A7A8A', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
 
           {/* Results */}

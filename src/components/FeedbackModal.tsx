@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Text, View } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import * as Haptics from 'expo-haptics';
 
 type FeedbackVariant = 'success' | 'error' | 'info';
@@ -69,7 +70,7 @@ export function FeedbackModal({
           <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 22 }}>
             {message}
           </Text>
-          <Pressable
+          <HapticPressable hapticStyle="medium"
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onDismiss();
@@ -84,7 +85,7 @@ export function FeedbackModal({
             })}
           >
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>{actionLabel}</Text>
-          </Pressable>
+          </HapticPressable>
         </View>
       </View>
     </Modal>

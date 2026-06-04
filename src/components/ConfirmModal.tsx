@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, Text, Pressable } from 'react-native';
+import { Modal, View, Text } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import * as Haptics from 'expo-haptics';
 
 interface ConfirmModalProps {
@@ -82,7 +83,7 @@ export function ConfirmModal({
             {message}
           </Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Pressable
+            <HapticPressable hapticStyle="medium"
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onCancel();
@@ -106,8 +107,8 @@ export function ConfirmModal({
               >
                 {cancelLabel}
               </Text>
-            </Pressable>
-            <Pressable
+            </HapticPressable>
+            <HapticPressable hapticStyle="medium"
               onPress={() => {
                 Haptics.notificationAsync(
                   destructive
@@ -135,7 +136,7 @@ export function ConfirmModal({
               >
                 {confirmLabel}
               </Text>
-            </Pressable>
+            </HapticPressable>
           </View>
         </View>
       </View>

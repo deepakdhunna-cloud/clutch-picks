@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useRouter, Stack } from 'expo-router';
 import { useState, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import Animated, {
@@ -224,9 +225,9 @@ export default function LiveGamesScreen() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(180)} style={styles.header}>
             <View style={styles.headerRow}>
-              <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <HapticPressable hapticStyle="none" onPress={() => router.back()} style={styles.backButton}>
                 <ChevronLeft size={28} color="#fff" />
-              </Pressable>
+              </HapticPressable>
               <View style={styles.titleWrap}>
                 <View style={styles.titleRow}>
                   <View style={styles.liveDot} />
@@ -247,7 +248,7 @@ export default function LiveGamesScreen() {
               style={styles.chipScroll}
               contentContainerStyle={styles.chipScrollContent}
             >
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 onPress={() => {
                   if (!shouldHandleChipPress()) return;
                   handleChipPress(null);
@@ -272,14 +273,14 @@ export default function LiveGamesScreen() {
                     All ({liveGames.length})
                   </Text>
                 </View>
-              </Pressable>
+              </HapticPressable>
               {availableSports.map((sport) => {
                 const isSelected = selectedSport === sport;
                 const count = gamesBySport.get(sport)?.length ?? 0;
                 const meta = SPORT_META[sport];
                 const bg = meta?.color ?? TEAL;
                 return (
-                  <Pressable
+                  <HapticPressable hapticStyle="none"
                     key={sport}
                     onPress={() => {
                       if (!shouldHandleChipPress()) return;
@@ -305,7 +306,7 @@ export default function LiveGamesScreen() {
                         {sport} ({count})
                       </Text>
                     </View>
-                  </Pressable>
+                  </HapticPressable>
                 );
               })}
             </ScrollView>

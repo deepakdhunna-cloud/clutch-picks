@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, Image, ScrollView, Share,
+  View, Text, ActivityIndicator, Image, ScrollView, Share,
 } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -290,11 +291,11 @@ const SignedOutState = memo(function SignedOutState() {
         </View>
         <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 8, textAlign: 'center' }}>Sign in to see your card</Text>
         <Text style={{ fontSize: 14, color: C.TEXT_MUTED, textAlign: 'center', marginBottom: 28 }}>Track your picks, build your analyst record.</Text>
-        <Pressable onPress={() => router.replace('/sign-in')} style={{ width: '100%', borderRadius: 14, overflow: 'hidden' }}>
+        <HapticPressable hapticStyle="none" onPress={() => router.replace('/sign-in')} style={{ width: '100%', borderRadius: 14, overflow: 'hidden' }}>
           <LinearGradient colors={[C.TEAL, C.TEAL_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 16, alignItems: 'center', borderRadius: 14 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: C.TEXT_PRIMARY }}>Sign In</Text>
           </LinearGradient>
-        </Pressable>
+        </HapticPressable>
       </View>
     </SafeAreaView>
   );
@@ -308,7 +309,7 @@ const RecentPicksSummaryTile = memo(function RecentPicksSummaryTile({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${totalPicks} predictions`}
@@ -348,7 +349,7 @@ const RecentPicksSummaryTile = memo(function RecentPicksSummaryTile({
           </View>
         </View>
       </LinearGradient>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -360,7 +361,7 @@ const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="View all predictions"
@@ -399,7 +400,7 @@ const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
           </View>
         </View>
       </LinearGradient>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -683,10 +684,10 @@ export default function ProfileScreen() {
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
-          <Pressable onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          <HapticPressable hapticStyle="none" onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
-          </Pressable>
+          </HapticPressable>
         </View>
 
         {/* ── 1. ANALYST CARD HERO ── */}
@@ -784,11 +785,11 @@ export default function ProfileScreen() {
 
         {/* ── 2. EDIT PROFILE + SHARE BUTTONS ── */}
         <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 20 }}>
-          <Pressable onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          <HapticPressable hapticStyle="none" onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={{ flex: 1, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
-          </Pressable>
-          <Pressable onPress={async () => {
+          </HapticPressable>
+          <HapticPressable hapticStyle="none" onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               try {
                 await Share.share({
@@ -799,7 +800,7 @@ export default function ProfileScreen() {
             style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <ShareIcon size={14} color={C.TEXT_SECONDARY} />
             <Text style={{ fontSize: 13, fontWeight: '600', color: C.TEXT_SECONDARY }}>Share Card</Text>
-          </Pressable>
+          </HapticPressable>
         </Animated.View>
 
         {/* ── 3. PREDICTIONS + RECENT PICKS ROW ── */}
@@ -825,7 +826,7 @@ export default function ProfileScreen() {
                   const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
                   const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
                   return (
-                    <Pressable
+                    <HapticPressable hapticStyle="none"
                       key={p.id}
                       onPress={() => handleRecentPickPress(p.gameId, p.game)}
                       onPressIn={() => p.game ? prefetchGame(p.gameId, p.game) : undefined}
@@ -870,7 +871,7 @@ export default function ProfileScreen() {
                           </View>
                         </View>
                       </LinearGradient>
-                    </Pressable>
+                    </HapticPressable>
                   );
                 })}
 
@@ -959,9 +960,9 @@ export default function ProfileScreen() {
 
         {/* ── 7. SIGN OUT + VERSION ── */}
         <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 28 }}>
-          <Pressable onPress={handleSignOut}>
+          <HapticPressable hapticStyle="none" onPress={handleSignOut}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
-          </Pressable>
+          </HapticPressable>
           <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>{appVersionLabel}</Text>
         </View>
 

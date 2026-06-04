@@ -3,13 +3,13 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
   ActivityIndicator,
   Linking,
   Modal,
   StyleSheet,
   RefreshControl,
 } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '@/hooks/useGames';
@@ -123,7 +123,7 @@ function WhereToWatchRow({
   return (
     <View style={styles.watchStrip}>
       <View style={styles.watchHubBorder}>
-        <Pressable
+        <HapticPressable hapticStyle="none"
           accessibilityRole="button"
           accessibilityLabel={hasWatchInfo ? `Open ${primaryText}` : 'Watch source not listed'}
           disabled={!watchOption}
@@ -147,7 +147,7 @@ function WhereToWatchRow({
               {hasWatchInfo ? <ExternalLink size={13} color="rgba(226,240,249,0.72)" strokeWidth={2.6} /> : null}
             </View>
           </View>
-        </Pressable>
+        </HapticPressable>
       </View>
 
       <Modal
@@ -157,11 +157,11 @@ function WhereToWatchRow({
         onRequestClose={() => setRoutePickerOpen(false)}
         statusBarTranslucent
       >
-        <Pressable
+        <HapticPressable hapticStyle="none"
           onPress={() => setRoutePickerOpen(false)}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' }}
         >
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={() => {}}
             style={{
               backgroundColor: '#0B1119',
@@ -178,7 +178,7 @@ function WhereToWatchRow({
             <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(180,211,235,0.62)', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 4 }}>Open {primaryText}</Text>
             <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', marginBottom: 18 }}>How would you like to watch?</Text>
 
-            <Pressable
+            <HapticPressable hapticStyle="none"
               accessibilityRole="button"
               accessibilityLabel={`Open ${primaryText} in the app`}
               onPress={handleRouteApp}
@@ -200,9 +200,9 @@ function WhereToWatchRow({
                 <Text style={{ fontSize: 15, fontWeight: '900', color: '#0B1119' }}>Open in App</Text>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(11,17,25,0.62)', marginTop: 2 }}>Launches the native app if installed</Text>
               </View>
-            </Pressable>
+            </HapticPressable>
 
-            <Pressable
+            <HapticPressable hapticStyle="none"
               accessibilityRole="button"
               accessibilityLabel={`Open ${primaryText} in the browser`}
               onPress={handleRouteWeb}
@@ -226,18 +226,18 @@ function WhereToWatchRow({
                 <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF' }}>Open in Browser</Text>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(218,238,251,0.55)', marginTop: 2 }}>Opens the website in Safari</Text>
               </View>
-            </Pressable>
+            </HapticPressable>
 
-            <Pressable
+            <HapticPressable hapticStyle="none"
               accessibilityRole="button"
               accessibilityLabel="Cancel"
               onPress={() => setRoutePickerOpen(false)}
               style={({ pressed }) => ({ height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 6, opacity: pressed ? 0.86 : 1 })}
             >
               <Text style={{ fontSize: 13, fontWeight: '800', color: 'rgba(218,238,251,0.62)' }}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
+            </HapticPressable>
+          </HapticPressable>
+        </HapticPressable>
       </Modal>
     </View>
   );
@@ -305,7 +305,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
   }), []);
 
   return (
-    <Pressable onPress={handlePress} disabled={isDisabled}>
+    <HapticPressable hapticStyle="none" onPress={handlePress} disabled={isDisabled}>
       <Animated.View style={[containerStyle, { alignItems: 'center', justifyContent: 'center' }]}>
         <View style={{ position: 'relative', alignItems: 'center' }}>
           <Animated.View style={[shadowStyle, jerseyLiftStyle]}>
@@ -334,7 +334,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
           ) : null}
         </View>
       </Animated.View>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -815,7 +815,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
   homeTeam: GameTeam; awayTeam: GameTeam; prediction: GamePrediction; onUnlock: () => void;
 }) {
   return (
-    <Pressable onPress={onUnlock}>
+    <HapticPressable hapticStyle="none" onPress={onUnlock}>
       <View style={{
         borderRadius: 22,
         padding: 1.2,
@@ -913,7 +913,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
           </View>
         </View>
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -924,7 +924,7 @@ function RedactedSection({ title, height, onUnlock }: {
   return (
     <View style={{ marginBottom: 22 }}>
       <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>{title}</Text>
-      <Pressable onPress={onUnlock}>
+      <HapticPressable hapticStyle="none" onPress={onUnlock}>
         <View style={{
           height,
           borderRadius: 18,
@@ -976,7 +976,7 @@ function RedactedSection({ title, height, onUnlock }: {
             </View>
           </View>
         </View>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }
@@ -1205,7 +1205,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
           </View>
 
           {/* Pick Strength */}
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={(e) => {
               e.stopPropagation();
               router.push({
@@ -1236,7 +1236,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
               </View>
               <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)' }}>›</Text>
             </View>
-          </Pressable>
+          </HapticPressable>
 
           {/* Confidence bar */}
           <View style={{ flexDirection: 'row' as const, gap: 3, marginBottom: 18 }}>
@@ -1684,7 +1684,7 @@ function GameDetailContent() {
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
-      <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
+      <HapticPressable hapticStyle="none" onPress={() => router.back()} style={{ marginTop: 16 }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></HapticPressable>
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
@@ -1732,7 +1732,7 @@ function GameDetailContent() {
           <View style={{ height: detailHeaderTopSpacer }} />
           {/* Top bar — back (absolute left) + centered combined pill */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginBottom: 10, position: 'relative' }}>
-            <Pressable onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></Pressable>
+            <HapticPressable hapticStyle="none" onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></HapticPressable>
             {/* Combined pill: LIVE indicator (if live) | sport badge | follow toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
               {isLive ? (<><LivePulseDot /><Text style={{ fontSize: suspended ? 10 : 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>{suspended ? suspensionStatus.toUpperCase() : 'LIVE'}</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
@@ -1740,7 +1740,7 @@ function GameDetailContent() {
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
               </View>
               <View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 onPress={toggleFollow}
                 hitSlop={8}
               >
@@ -1751,7 +1751,7 @@ function GameDetailContent() {
                   </View>
                   <Text style={{ fontSize: 16, fontWeight: '900', color: followed ? '#7A9DB8' : '#FFFFFF', lineHeight: 18 }}>{followed ? '✓' : '+'}</Text>
                 </View>
-              </Pressable>
+              </HapticPressable>
             </View>
           </View>
           {/* Pre-game wrapper — when the game is in the 10-min countdown
@@ -1947,7 +1947,7 @@ function GameDetailContent() {
               ) : null}
               <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} isLocked={game.status === 'LIVE' || game.status === 'FINAL'} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
-              <Pressable onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
+              <HapticPressable hapticStyle="none" onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
                   <AnalysisIcon size={20} color="#FFFFFF" />
                 </View>
@@ -1956,7 +1956,7 @@ function GameDetailContent() {
                   <Text style={styles.analysisLinkSub}>{predictionFactors.length} factors · {predictionFactors.filter(f => Math.abs(f.homeScore - f.awayScore) > 0.3).length} edges identified</Text>
                 </View>
                 <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', fontWeight: '600' }}>›</Text>
-              </Pressable>
+              </HapticPressable>
             </>
           ) : prediction && !isPremium ? (
             <>
@@ -1970,7 +1970,7 @@ function GameDetailContent() {
               <RedactedSection title="Recent Performance" height={160} onUnlock={() => router.push('/paywall')} />
 
               {/* ═══ WHY WE MADE THIS PICK ═══ */}
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 onPress={() => router.push('/paywall')}
                 style={styles.analysisLink}
               >
@@ -1984,7 +1984,7 @@ function GameDetailContent() {
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
                   <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
                 </View>
-              </Pressable>
+              </HapticPressable>
             </>
           ) : null}
           <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>

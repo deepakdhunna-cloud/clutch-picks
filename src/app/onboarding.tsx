@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, Pressable, Dimensions, TextInput, Image,
+  View, Text, Dimensions, TextInput, Image,
   ActivityIndicator, StyleSheet,
 } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -211,11 +212,11 @@ function WelcomeStep({ onContinue }: { onContinue: () => void }) {
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40, paddingTop: 28 }}>
         <Animated.View entering={FadeInDown.delay(1000).duration(500)}>
-          <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+          <HapticPressable hapticStyle="none" onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
             <LinearGradient colors={[TEAL, '#5A7A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: TEAL, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Let's Get Started</Text>
             </LinearGradient>
-          </Pressable>
+          </HapticPressable>
         </Animated.View>
       </View>
     </View>
@@ -248,12 +249,12 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
     <View style={{ flex: 1 }}>
       <ProgressBar step={1} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <HapticPressable hapticStyle="none" onPress={onBack} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
-        <Pressable onPress={onSkip} style={{ padding: 8 }}>
+        </HapticPressable>
+        <HapticPressable hapticStyle="none" onPress={onSkip} style={{ padding: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
-        </Pressable>
+        </HapticPressable>
       </View>
 
       <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 20 }}>
@@ -274,7 +275,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 }}>
-            <Pressable onPress={() => doPick('home')}>
+            <HapticPressable hapticStyle="none" onPress={() => doPick('home')}>
               <Animated.View style={[homeStyle, { alignItems: 'center', opacity: picked === 'away' ? 0.35 : 1 }]}>
                 <View style={picked === 'home' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
                   <JerseyIcon teamCode="CHI" teamName="Chicago Bulls" primaryColor={homeColors.primary} secondaryColor={homeColors.secondary} size={86} sport={jerseyType} />
@@ -287,7 +288,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
                 <Text style={{ fontSize: 13, fontWeight: '700', color: picked === 'away' ? 'rgba(255,255,255,0.3)' : WHITE, marginTop: 6 }}>Bulls</Text>
                 <Text style={{ fontSize: 10, color: TEXT_MUT }}>30-34</Text>
               </Animated.View>
-            </Pressable>
+            </HapticPressable>
 
             <View style={{ alignItems: 'center', paddingBottom: 16 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -298,7 +299,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
               <Text style={{ fontSize: 11, fontFamily: 'VT323_400Regular', color: 'rgba(255,255,255,0.30)', letterSpacing: 3, marginTop: 4 }}>SCHEDULED</Text>
             </View>
 
-            <Pressable onPress={() => doPick('away')}>
+            <HapticPressable hapticStyle="none" onPress={() => doPick('away')}>
               <Animated.View style={[awayStyle, { alignItems: 'center', opacity: picked === 'home' ? 0.35 : 1 }]}>
                 <View style={picked === 'away' ? { shadowColor: MAROON, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } } : {}}>
                   <JerseyIcon teamCode="MIN" teamName="Minnesota Timberwolves" primaryColor={awayColors.primary} secondaryColor={awayColors.secondary} size={86} sport={jerseyType} />
@@ -311,7 +312,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
                 <Text style={{ fontSize: 13, fontWeight: '700', color: picked === 'home' ? 'rgba(255,255,255,0.3)' : WHITE, marginTop: 6 }}>T-Wolves</Text>
                 <Text style={{ fontSize: 10, color: TEXT_MUT }}>40-24</Text>
               </Animated.View>
-            </Pressable>
+            </HapticPressable>
           </View>
 
           <View style={{ flexDirection: 'row', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 16, paddingVertical: 12 }}>
@@ -333,14 +334,14 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} disabled={!picked} style={({ pressed }) => ({ opacity: !picked ? 0.3 : pressed ? 0.9 : 1, transform: [{ scale: pressed && picked ? 0.98 : 1 }] })}>
+        <HapticPressable hapticStyle="none" onPress={onContinue} disabled={!picked} style={({ pressed }) => ({ opacity: !picked ? 0.3 : pressed ? 0.9 : 1, transform: [{ scale: pressed && picked ? 0.98 : 1 }] })}>
           <LinearGradient
             colors={picked ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']}
             style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ fontSize: 16, fontWeight: '800', color: picked ? WHITE : 'rgba(255,255,255,0.15)', letterSpacing: 0.5 }}>Continue</Text>
           </LinearGradient>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );
@@ -372,12 +373,12 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
     <View style={{ flex: 1 }}>
       <ProgressBar step={2} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <HapticPressable hapticStyle="none" onPress={onBack} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
-        <Pressable onPress={onSkip} style={{ padding: 8 }}>
+        </HapticPressable>
+        <HapticPressable hapticStyle="none" onPress={onSkip} style={{ padding: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
-        </Pressable>
+        </HapticPressable>
       </View>
 
       <Animated.ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24 }} style={{ flex: 1 }}>
@@ -519,11 +520,11 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
       </Animated.ScrollView>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <HapticPressable hapticStyle="none" onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <LinearGradient colors={[MAROON, '#6A0818']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
           </LinearGradient>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );
@@ -545,12 +546,12 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
     <View style={{ flex: 1 }}>
       <ProgressBar step={3} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <HapticPressable hapticStyle="none" onPress={onBack} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
-        <Pressable onPress={onSkip} style={{ padding: 8 }}>
+        </HapticPressable>
+        <HapticPressable hapticStyle="none" onPress={onSkip} style={{ padding: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.25)' }}>Skip</Text>
-        </Pressable>
+        </HapticPressable>
       </View>
 
       <View style={{ flex: 1, paddingTop: 12 }}>
@@ -590,7 +591,7 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <HapticPressable hapticStyle="none" onPress={onContinue} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <LinearGradient
             colors={subPage === 2 ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.06)']}
             style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: subPage < 2 ? 1 : 0, borderColor: BORDER }}
@@ -599,7 +600,7 @@ function ArenaStep({ subPage, onContinue, onSkip, onBack }: { subPage: number; o
               {subPage < 2 ? 'Swipe to see more →' : 'Continue'}
             </Text>
           </LinearGradient>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );
@@ -871,9 +872,9 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
     <View style={{ flex: 1 }}>
       <ProgressBar step={4} />
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 4 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <HapticPressable hapticStyle="none" onPress={onBack} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
+        </HapticPressable>
       </View>
 
       <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 12 }}>
@@ -894,7 +895,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
             <View style={{ padding: 22, paddingTop: 16 }}>
               {/* Avatar + Name row */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                <Pressable onPress={onPhotoPress}>
+                <HapticPressable hapticStyle="none" onPress={onPhotoPress}>
                   <View style={{ width: 72, height: 72, borderRadius: 36, padding: 3, overflow: 'hidden' }}>
                     <LinearGradient colors={[MAROON, TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                     <View style={{ flex: 1, borderRadius: 33, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -907,7 +908,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
                       )}
                     </View>
                   </View>
-                </Pressable>
+                </HapticPressable>
                 <View style={{ flex: 1 }}>
                   <TextInput
                     value={displayName}
@@ -971,11 +972,11 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
       </View>
 
       <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
-        <Pressable onPress={onContinue} disabled={!displayName.trim()} style={({ pressed }) => ({ opacity: !displayName.trim() ? 0.35 : pressed ? 0.9 : 1, transform: [{ scale: pressed && displayName.trim() ? 0.98 : 1 }] })}>
+        <HapticPressable hapticStyle="none" onPress={onContinue} disabled={!displayName.trim()} style={({ pressed }) => ({ opacity: !displayName.trim() ? 0.35 : pressed ? 0.9 : 1, transform: [{ scale: pressed && displayName.trim() ? 0.98 : 1 }] })}>
           <LinearGradient colors={displayName.trim() ? [MAROON, '#6A0818'] : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']} style={{ height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: displayName.trim() ? 0 : 1, borderColor: BORDER }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Continue</Text>
           </LinearGradient>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );
@@ -992,9 +993,9 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 16 }}>
-        <Pressable onPress={onBack} style={{ padding: 8 }}>
+        <HapticPressable hapticStyle="none" onPress={onBack} style={{ padding: 8 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"><Path d="M15 18l-6-6 6-6" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></Svg>
-        </Pressable>
+        </HapticPressable>
       </View>
 
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
@@ -1036,15 +1037,15 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
 
       {/* CTA — matches paywall shimmer button style */}
       <View style={{ paddingHorizontal: 28, paddingBottom: 20 }}>
-        <Pressable onPress={onSubscribe} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+        <HapticPressable hapticStyle="none" onPress={onSubscribe} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
           <LinearGradient colors={[MAROON, '#6A0818', '#5A0614']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: MAROON, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>Start Pro</Text>
           </LinearGradient>
-        </Pressable>
+        </HapticPressable>
         <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>3-day free trial for eligible users. Price shown before purchase.</Text>
-        <Pressable onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 14 }}>
+        <HapticPressable hapticStyle="none" onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 14 }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>Continue free</Text>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );

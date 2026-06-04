@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -75,9 +76,9 @@ export default function ModelAccuracyScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={s.header}>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
+          <HapticPressable hapticStyle="light" onPress={() => router.back()} style={s.backBtn}>
             <ArrowLeft size={20} color="#FFFFFF" />
-          </Pressable>
+          </HapticPressable>
           <Text style={s.headerTitle}>Model Performance</Text>
         </View>
 

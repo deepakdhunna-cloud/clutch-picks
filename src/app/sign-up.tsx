@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, StatusBar,
+  View, Text, TextInput, StyleSheet, StatusBar,
   KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { HapticPressable } from '@/components/HapticPressable';
 import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { AuthBackground } from '@/components/AuthBackground';
@@ -79,13 +80,13 @@ export default function SignUpScreen() {
           style={{ flex: 1 }}
         >
           {/* Back arrow */}
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={() => router.back()}
             hitSlop={16}
             style={s.backBtn}
           >
             <BackArrow />
-          </Pressable>
+          </HapticPressable>
 
           {/* Hero */}
           <View style={s.hero}>
@@ -116,7 +117,7 @@ export default function SignUpScreen() {
 
           {/* Continue button */}
           <View style={s.buttonWrap}>
-            <Pressable
+            <HapticPressable hapticStyle="none"
               onPress={handleContinue}
               disabled={isLoading || !email.trim()}
               style={[s.continueBtn, (isLoading || !email.trim()) && { opacity: 0.4 }]}
@@ -126,7 +127,7 @@ export default function SignUpScreen() {
               ) : (
                 <Text style={s.continueText}>Continue</Text>
               )}
-            </Pressable>
+            </HapticPressable>
             <Text style={s.disclaimer}>
               Already have an account?{' '}
               <Text

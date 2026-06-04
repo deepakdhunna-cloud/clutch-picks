@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, Linking, Platform } from 'react-native';
+import { View, Text, ScrollView, Linking, Platform } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -32,7 +33,7 @@ interface SettingItemProps {
 
 function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, rightElement, isDestructive, disabled }: SettingItemProps) {
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPress={() => {
         if (disabled) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -75,7 +76,7 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
         </View>
         {rightElement ?? (showArrow ? <ChevronRight size={16} color="rgba(255,255,255,0.2)" /> : null)}
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -329,7 +330,7 @@ export default function SettingsScreen() {
             paddingVertical: 16,
           }}
         >
-          <Pressable
+          <HapticPressable hapticStyle="none"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -346,7 +347,7 @@ export default function SettingsScreen() {
             }}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
-          </Pressable>
+          </HapticPressable>
           <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginLeft: 16 }}>
             Settings
           </Text>
@@ -518,8 +519,8 @@ export default function SettingsScreen() {
         </ScrollView>
 
         <Modal visible={promoModalVisible} transparent animationType="fade" onRequestClose={() => setPromoModalVisible(false)}>
-          <Pressable onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
-            <Pressable onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+          <HapticPressable hapticStyle="none" onPress={() => setPromoModalVisible(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+            <HapticPressable hapticStyle="none" onPress={() => {}} style={{ width: '85%', backgroundColor: '#0A0E14', borderRadius: 18, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>Promo Code</Text>
               <Text style={{ fontSize: 13, color: '#6B7C94', marginBottom: 16 }}>Enter your code</Text>
               <TextInput
@@ -533,15 +534,15 @@ export default function SettingsScreen() {
                 keyboardAppearance="dark"
               />
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Pressable onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                <HapticPressable hapticStyle="none" onPress={() => { setPromoModalVisible(false); setPromoInput(''); }} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#6B7C94' }}>Cancel</Text>
-                </Pressable>
-                <Pressable onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
+                </HapticPressable>
+                <HapticPressable hapticStyle="none" onPress={() => handleRedeemPromo(promoInput)} disabled={!promoInput.trim() || promoLoading} style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#8B0A1F', opacity: !promoInput.trim() || promoLoading ? 0.5 : 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{promoLoading ? 'Redeeming...' : 'Redeem'}</Text>
-                </Pressable>
+                </HapticPressable>
               </View>
-            </Pressable>
-          </Pressable>
+            </HapticPressable>
+          </HapticPressable>
         </Modal>
 
         <ConfirmModal

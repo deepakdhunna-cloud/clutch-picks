@@ -33,6 +33,12 @@ export function GlassBottomNav({
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, GLASS_BOTTOM_NAV_MIN_BOTTOM_PADDING);
   const tabBarVisible = useTabBarVisible();
+  const [optimisticIndex, setOptimisticIndex] = React.useState(state.index);
+
+  // Sync optimistic index when navigation state confirms
+  React.useEffect(() => {
+    setOptimisticIndex(state.index);
+  }, [state.index]);
 
   const animatedContainerStyle = useAnimatedStyle(() => {
     const translateY = interpolate(tabBarVisible.value, [0, 1], [120, 0], Extrapolation.CLAMP);
@@ -81,6 +87,8 @@ export function GlassBottomNav({
 
             const onPress = () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // Optimistic: update visual focus immediately
+              setOptimisticIndex(index);
               const event = navigation.emit({
                 type: 'tabPress',
                 target: route.key,
@@ -103,17 +111,19 @@ export function GlassBottomNav({
             });
             const labelValue = typeof label === 'string' ? label : route.name;
 
+            const isOptimisticallyFocused = optimisticIndex === index;
+
             return (
               <TabButton
                 key={route.key}
-                isFocused={isFocused}
+                isFocused={isOptimisticallyFocused}
                 onPress={onPress}
                 onLongPress={onLongPress}
                 icon={icon}
                 label={labelValue}
                 accessibilityLabel={options.tabBarAccessibilityLabel ?? labelValue}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isFocused }}
+                accessibilityState={{ selected: isOptimisticallyFocused }}
               />
             );
           })}

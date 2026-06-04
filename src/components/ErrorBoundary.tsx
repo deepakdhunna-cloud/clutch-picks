@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 
 interface Props {
   children: React.ReactNode;
@@ -41,19 +42,19 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </Text>
           )}
           <View style={styles.buttonRow}>
-            <Pressable
+            <HapticPressable hapticStyle="light"
               style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
               onPress={this.reset}
             >
               <Text style={styles.buttonText}>Try Again</Text>
-            </Pressable>
+            </HapticPressable>
             {onGoBack ? (
-              <Pressable
+              <HapticPressable hapticStyle="light"
                 style={({ pressed }) => [styles.button, styles.buttonSecondary, pressed && styles.buttonPressed]}
                 onPress={onGoBack}
               >
                 <Text style={styles.buttonText}>Go Back</Text>
-              </Pressable>
+              </HapticPressable>
             ) : null}
           </View>
         </View>

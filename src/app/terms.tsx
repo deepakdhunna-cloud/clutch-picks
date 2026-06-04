@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,12 +30,12 @@ export default function TermsScreen() {
             className="px-5 pt-4 pb-4"
           >
             <View className="flex-row items-center">
-              <Pressable
+              <HapticPressable hapticStyle="light"
                 onPress={() => router.back()}
                 className="mr-4 p-2 -ml-2 active:opacity-60"
               >
                 <ChevronLeft size={28} color="#fff" />
-              </Pressable>
+              </HapticPressable>
               <Text className="text-white text-xl font-bold">Terms & Conditions</Text>
             </View>
           </Animated.View>

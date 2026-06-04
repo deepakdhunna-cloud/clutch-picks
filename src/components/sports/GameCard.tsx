@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Linking, StyleSheet } from 'react-native';
+import { View, Text, Linking, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -181,7 +182,7 @@ const TappableJersey = memo(function TappableJersey({
   }), []);
 
   return (
-    <Pressable
+    <HapticPressable hapticStyle="none"
       onPress={handlePress}
       disabled={isDisabled}
       pressRetentionOffset={4}
@@ -225,7 +226,7 @@ const TappableJersey = memo(function TappableJersey({
           ) : null}
         </View>
       </Animated.View>
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -289,7 +290,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
 
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPress={handlePress}
         onPressIn={warmGame}
         className="active:opacity-85"
@@ -412,7 +413,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
               </View>
 
               {watchOption ? (
-                <Pressable
+                <HapticPressable hapticStyle="none"
                   onPress={(e) => {
                     e.stopPropagation();
                     handleWatchSourcePress(watchOption.name);
@@ -433,7 +434,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
                   <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4, maxWidth: 104 }}>
                     {watchOption.name}
                   </Text>
-                </Pressable>
+                </HapticPressable>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7 }}>
                   <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '600' }}>IN PROGRESS</Text>
@@ -582,7 +583,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
         </View>
         </View>
         </View>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 });
@@ -824,7 +825,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         />
       )}
 
-      <Pressable
+      <HapticPressable hapticStyle="none"
         onPress={handlePress}
         onPressIn={warmGame}
         style={{ flex: 1 }}
@@ -1207,7 +1208,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     {watchOption ? (
-                      <Pressable
+                      <HapticPressable hapticStyle="none"
                         onPress={(e) => {
                           e.stopPropagation();
                           handleWatchSourcePress(watchOption.name);
@@ -1217,7 +1218,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                       >
                         <Tv size={10} color="#FFFFFF" />
                         <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600', marginLeft: 4, maxWidth: 112 }}>{watchOption.name}</Text>
-                      </Pressable>
+                      </HapticPressable>
                     ) : null}
                   </View>
                 </View>
@@ -1275,7 +1276,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
               </View>
             ) : (
               /* Locked prediction bar for free users */
-              <Pressable
+              <HapticPressable hapticStyle="none"
                 onPress={() => router.push('/paywall')}
                 style={{
                   position: 'relative',
@@ -1339,7 +1340,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
                     </View>
                   </View>
                 </LinearGradient>
-              </Pressable>
+              </HapticPressable>
             )
           ) : null}
 
@@ -1357,7 +1358,7 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
         </View>
         </View>
       </View>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 });

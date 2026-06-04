@@ -1,4 +1,5 @@
-import { View, Text, Pressable, FlatList, Image, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Image, ActivityIndicator } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -46,7 +47,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
   };
 
   return (
-    <Pressable
+    <HapticPressable hapticStyle="light"
       onPress={() => onNavigateToProfile(user.id)}
       className="active:opacity-80"
       style={{
@@ -95,7 +96,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
 
       {/* Follow Button */}
       {!isOwnProfile ? (
-        <Pressable
+        <HapticPressable hapticStyle="light"
           onPress={handleFollowToggle}
           disabled={isFollowLoading}
           className="active:opacity-80"
@@ -128,9 +129,9 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
               </Text>
             </>
           )}
-        </Pressable>
+        </HapticPressable>
       ) : null}
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -203,7 +204,7 @@ export default function FollowersScreen() {
         entering={FadeInDown.duration(400)}
         className="px-5 pt-4 pb-3 flex-row items-center"
       >
-        <Pressable
+        <HapticPressable hapticStyle="light"
           onPress={() => router.back()}
           className="active:opacity-70"
           style={{
@@ -216,7 +217,7 @@ export default function FollowersScreen() {
           }}
         >
           <ArrowLeft size={24} color="#FFFFFF" />
-        </Pressable>
+        </HapticPressable>
         <Text className="text-white text-xl font-bold ml-4" numberOfLines={1}>
           {profile?.name || 'User'}
         </Text>
@@ -235,7 +236,7 @@ export default function FollowersScreen() {
             padding: 4,
           }}
         >
-          <Pressable
+          <HapticPressable hapticStyle="light"
             onPress={() => setActiveTab('followers')}
             className="flex-1"
             style={{
@@ -254,8 +255,8 @@ export default function FollowersScreen() {
             >
               Followers
             </Text>
-          </Pressable>
-          <Pressable
+          </HapticPressable>
+          <HapticPressable hapticStyle="light"
             onPress={() => setActiveTab('following')}
             className="flex-1"
             style={{
@@ -274,7 +275,7 @@ export default function FollowersScreen() {
             >
               Following
             </Text>
-          </Pressable>
+          </HapticPressable>
         </View>
       </Animated.View>
 

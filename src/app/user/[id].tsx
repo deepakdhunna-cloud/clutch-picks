@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -198,12 +199,12 @@ export default function UserProfileScreen() {
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
         <SafeAreaView edges={['top']}>
           <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-            <Pressable
+            <HapticPressable hapticStyle="light"
               onPress={() => router.back()}
               style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER }}
             >
               <ArrowLeft size={20} color="#FFFFFF" />
-            </Pressable>
+            </HapticPressable>
           </View>
         </SafeAreaView>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
@@ -240,12 +241,12 @@ export default function UserProfileScreen() {
       <SafeAreaView edges={['top']} style={{ backgroundColor: '#000000' }}>
         <Animated.View entering={FadeInDown.duration(350)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 }}>
-            <Pressable
+            <HapticPressable hapticStyle="light"
               onPress={() => router.back()}
               style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER, marginRight: 12 }}
             >
               <ArrowLeft size={18} color="rgba(255,255,255,0.7)" />
-            </Pressable>
+            </HapticPressable>
             <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '800', letterSpacing: -0.5 }}>Profile</Text>
           </View>
         </Animated.View>
@@ -319,21 +320,21 @@ export default function UserProfileScreen() {
 
               {/* Follower stats */}
               <View style={{ flexDirection: 'row', marginTop: 18, alignItems: 'center' }}>
-                <Pressable onPress={handleNavigateToFollowers} style={{ alignItems: 'center', paddingRight: 24 }}>
+                <HapticPressable hapticStyle="light" onPress={handleNavigateToFollowers} style={{ alignItems: 'center', paddingRight: 24 }}>
                   <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{profile.followersCount ?? 0}</Text>
                   <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, marginTop: 1, fontWeight: '500' }}>Followers</Text>
-                </Pressable>
+                </HapticPressable>
                 <View style={{ width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.09)' }} />
-                <Pressable onPress={handleNavigateToFollowing} style={{ alignItems: 'center', paddingHorizontal: 24 }}>
+                <HapticPressable hapticStyle="light" onPress={handleNavigateToFollowing} style={{ alignItems: 'center', paddingHorizontal: 24 }}>
                   <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{profile.followingCount ?? 0}</Text>
                   <Text style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, marginTop: 1, fontWeight: '500' }}>Following</Text>
-                </Pressable>
+                </HapticPressable>
               </View>
 
               {/* Action buttons */}
               {!isOwnProfile ? (
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-                  <Pressable
+                  <HapticPressable hapticStyle="light"
                     onPress={handleFollowToggle}
                     disabled={isFollowLoading}
                     style={{
@@ -359,9 +360,9 @@ export default function UserProfileScreen() {
                         </Text>
                       </>
                     )}
-                  </Pressable>
+                  </HapticPressable>
 
-                  <Pressable
+                  <HapticPressable hapticStyle="light"
                     onPress={handleReportUser}
                     disabled={reportMutation.isPending}
                     accessibilityLabel="Report user"
@@ -380,9 +381,9 @@ export default function UserProfileScreen() {
                   >
                     <Flag size={13} color="rgba(255,255,255,0.7)" />
                     <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '700' }}>Report</Text>
-                  </Pressable>
+                  </HapticPressable>
 
-                  <Pressable
+                  <HapticPressable hapticStyle="light"
                     onPress={handleBlockUser}
                     disabled={blockMutation.isPending}
                     accessibilityLabel="Block user"
@@ -401,7 +402,7 @@ export default function UserProfileScreen() {
                   >
                     <Ban size={13} color="rgba(255,255,255,0.7)" />
                     <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '700' }}>Block</Text>
-                  </Pressable>
+                  </HapticPressable>
                 </View>
               ) : null}
             </View>

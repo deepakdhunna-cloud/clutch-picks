@@ -1,4 +1,5 @@
-import { View, Text, RefreshControl, Pressable, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, RefreshControl, ActivityIndicator, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
@@ -47,7 +48,7 @@ function getClutchPicksBottomPadding(bottomInset: number) {
 const ExpandableText = memo(function ExpandableText({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Pressable onPress={() => setExpanded(!expanded)}>
+    <HapticPressable hapticStyle="light" onPress={() => setExpanded(!expanded)}>
       <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 20 }} numberOfLines={expanded ? undefined : 3}>
         {text}
       </Text>
@@ -56,7 +57,7 @@ const ExpandableText = memo(function ExpandableText({ text }: { text: string }) 
       ) : expanded ? (
         <Text style={{ fontSize: 11, fontWeight: '600', color: '#7A9DB8', marginTop: 4 }}>Show less</Text>
       ) : null}
-    </Pressable>
+    </HapticPressable>
   );
 });
 
@@ -424,7 +425,7 @@ const TopPickCard = memo(function TopPickCard({
                 {/* Pick strength row — tier label only, no raw % (matches the rest of the app) */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>PICK STRENGTH</Text>
-                  <Pressable
+                  <HapticPressable hapticStyle="light"
                     onPress={(e) => {
                       e.stopPropagation();
                       router.push({ pathname: '/confidence-explained', params: confidenceParams });
@@ -434,7 +435,7 @@ const TopPickCard = memo(function TopPickCard({
                   >
                     <Text style={{ fontSize: 18, fontWeight: '800', color: tier.color, letterSpacing: 0.3 }}>{tier.label}</Text>
                     <Text style={{ fontSize: 12, color: `${tier.color}99` }}>›</Text>
-                  </Pressable>
+                  </HapticPressable>
                 </View>
 
                 {/* Win probability */}
@@ -514,7 +515,7 @@ export default function ClutchPicksScreen() {
   const isFocused = useIsFocused();
   const scrollHandler = useHideOnScroll();
   const responsive = useResponsive();
-  const { isPremium } = useSubscription();
+  const { isPremium, isLoading: isSubscriptionLoading } = useSubscription();
   const insets = useSafeAreaInsets();
   const bottomPadding = getClutchPicksBottomPadding(insets.bottom);
   const prefetchGame = usePrefetchGame();
@@ -523,7 +524,7 @@ export default function ClutchPicksScreen() {
   const { data: topPicks, isLoading: isLoadingPicks, refetch: refetchPicks } = useTopPicks();
   const { refreshing, onRefresh } = useSmoothRefresh(refetchPicks);
   const hasTopPicksData = (topPicks?.length ?? 0) > 0;
-  const isInitialPicksLoading = isLoadingPicks && !hasTopPicksData;
+  const isInitialPicksLoading = (isLoadingPicks && !hasTopPicksData) || isSubscriptionLoading;
 
   // Filter out games with missing/TBD team names — these have no valid prediction
   const validPicks = useMemo(() => {
@@ -764,7 +765,7 @@ export default function ClutchPicksScreen() {
                   ))}
                 </View>
 
-                <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                <HapticPressable hapticStyle="light" onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
                   <LinearGradient
                     colors={['rgba(122,157,184,0.24)', 'rgba(139,10,31,0.18)']}
                     start={{ x: 0, y: 0 }}
@@ -778,7 +779,7 @@ export default function ClutchPicksScreen() {
                       </Svg>
                     </View>
                   </LinearGradient>
-                </Pressable>
+                </HapticPressable>
               </View>
             </View>
           </ScrollView>

@@ -1,4 +1,5 @@
-import { ActivityIndicator, FlatList, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, FlatList, View, Text, StyleSheet } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { memo } from 'react';
@@ -271,9 +272,9 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <HapticPressable hapticStyle="light" onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 80 }}>
             <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>Analysis unavailable</Text>
@@ -289,9 +290,9 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <HapticPressable hapticStyle="light" onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 80 }}>
             {isFetching ? <ActivityIndicator color={TEAL} /> : null}
@@ -308,9 +309,9 @@ export default function GameAnalysisScreen() {
       <View style={{ flex: 1, backgroundColor: BG }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
+            <HapticPressable hapticStyle="light" onPress={() => router.back()} hitSlop={12} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>‹</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
           <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
             <LinearGradient
@@ -358,13 +359,13 @@ export default function GameAnalysisScreen() {
                     </View>
                   ))}
                 </View>
-                <Pressable onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
+                <HapticPressable hapticStyle="light" onPress={() => router.push('/paywall')} style={{ width: '100%' }}>
                   <LinearGradient colors={['rgba(122,157,184,0.24)', 'rgba(139,10,31,0.18)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 52, borderRadius: 15, padding: 1 }}>
                     <View style={{ flex: 1, borderRadius: 14, backgroundColor: 'rgba(5,8,13,0.78)', alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: 15, fontWeight: '900', color: '#FFFFFF' }}>Preview Pro</Text>
                     </View>
                   </LinearGradient>
-                </Pressable>
+                </HapticPressable>
               </View>
             </LinearGradient>
           </View>
@@ -418,9 +419,9 @@ export default function GameAnalysisScreen() {
       {/* Header */}
       <View style={[s.headerWrap, { paddingTop: insets.top }]}>
         <View style={s.header}>
-          <Pressable onPress={() => router.back()} style={s.backBtn}>
+          <HapticPressable hapticStyle="light" onPress={() => router.back()} style={s.backBtn}>
             <Text style={{ fontSize: 22, color: '#FFF', lineHeight: 24 }}>‹</Text>
-          </Pressable>
+          </HapticPressable>
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Analysis Breakdown</Text>
             <Text style={s.headerSub}>

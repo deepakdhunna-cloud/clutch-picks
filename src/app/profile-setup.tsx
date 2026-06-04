@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Pressable,
   TextInput,
   ScrollView,
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -189,7 +189,7 @@ export default function ProfileSetupScreen() {
             entering={FadeInDown.delay(100).duration(500)}
             style={{ alignItems: 'center', marginBottom: 40 }}
           >
-            <Pressable onPress={handlePhotoPress} disabled={isUploading}>
+            <HapticPressable hapticStyle="none" onPress={handlePhotoPress} disabled={isUploading}>
               <View
                 style={{
                   width: 100,
@@ -232,9 +232,9 @@ export default function ProfileSetupScreen() {
                   <Camera size={32} color={TEAL} />
                 )}
               </View>
-            </Pressable>
+            </HapticPressable>
             {!profileImage && (
-              <Pressable onPress={handlePhotoPress} disabled={isUploading}>
+              <HapticPressable hapticStyle="none" onPress={handlePhotoPress} disabled={isUploading}>
                 <Text
                   style={{
                     color: TEAL,
@@ -245,7 +245,7 @@ export default function ProfileSetupScreen() {
                 >
                   Add Photo
                 </Text>
-              </Pressable>
+              </HapticPressable>
             )}
           </Animated.View>
 
@@ -330,7 +330,7 @@ export default function ProfileSetupScreen() {
               {LEAGUES.map((league) => {
                 const isSelected = selectedLeagues.includes(league.id);
                 return (
-                  <Pressable
+                  <HapticPressable hapticStyle="none"
                     key={league.id}
                     onPress={() => toggleLeague(league.id)}
                     style={{
@@ -361,7 +361,7 @@ export default function ProfileSetupScreen() {
                     >
                       {league.name}
                     </Text>
-                  </Pressable>
+                  </HapticPressable>
                 );
               })}
             </View>
@@ -383,7 +383,7 @@ export default function ProfileSetupScreen() {
           }}
         >
           <SafeAreaView edges={['bottom']} style={{ paddingBottom: 0 }}>
-            <Pressable
+            <HapticPressable hapticStyle="none"
               onPress={handleContinue}
               disabled={isSaving}
               style={({ pressed }) => ({
@@ -442,7 +442,7 @@ export default function ProfileSetupScreen() {
                   )}
                 </View>
               )}
-            </Pressable>
+            </HapticPressable>
           </SafeAreaView>
         </Animated.View>
       </SafeAreaView>

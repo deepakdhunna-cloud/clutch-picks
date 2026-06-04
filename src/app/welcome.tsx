@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, StatusBar, Pressable, Dimensions } from 'react-native';
+import { View, Text, Image, StyleSheet, StatusBar, Dimensions } from 'react-native';
+import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,13 +34,13 @@ export default function WelcomeScreen() {
 
   const onGetStarted = () => {
     if (isLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     router.push('/sign-up' as any);
   };
 
   const onSignIn = () => {
     if (isLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     router.push('/sign-in' as any);
   };
 
@@ -137,30 +138,30 @@ export default function WelcomeScreen() {
             </View>
           ) : null}
 
-          <Pressable
+          <HapticPressable hapticStyle="medium"
             onPress={onGetStarted}
             disabled={isLoading}
             style={s.getStartedBtn}
           >
             <Text style={s.getStartedText}>Get Started</Text>
-          </Pressable>
+          </HapticPressable>
 
-          <Pressable
+          <HapticPressable hapticStyle="medium"
             onPress={onSignIn}
             disabled={isLoading}
             style={s.signInBtn}
           >
             <Text style={s.signInText}>Sign In</Text>
-          </Pressable>
+          </HapticPressable>
 
-          <Pressable
+          <HapticPressable hapticStyle="medium"
             onPress={onApple}
             disabled={isLoading}
             style={s.appleBtn}
           >
             <AppleLogo size={20} color={TEAL_DARK} />
             <Text style={s.appleText}>Continue with Apple</Text>
-          </Pressable>
+          </HapticPressable>
         </View>
 
         {/* Terms */}
