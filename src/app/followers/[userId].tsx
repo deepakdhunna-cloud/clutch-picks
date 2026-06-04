@@ -6,6 +6,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, User, UserPlus, UserMinus } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useGuardedPush } from '@/hooks/useGuardedPush';
 import { useState, useEffect } from 'react';
 import { useSession } from '@/lib/auth/use-session';
 import {
@@ -139,6 +140,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
 
 export default function FollowersScreen() {
   const router = useRouter();
+  const guardedPush = useGuardedPush();
   const { userId, tab } = useLocalSearchParams<{ userId: string; tab?: string }>();
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
@@ -171,7 +173,7 @@ export default function FollowersScreen() {
     if (id === currentUserId) {
       router.replace('/(tabs)/profile' as any);
     } else {
-      router.push(`/user/${id}` as any);
+      guardedPush(`/user/${id}` as any);
     }
   };
 

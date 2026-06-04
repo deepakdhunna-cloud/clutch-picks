@@ -6,6 +6,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift, Bell } from 'lucide-react-native';
 import { Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useGuardedPush } from '@/hooks/useGuardedPush';
 import { useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
@@ -125,6 +126,7 @@ type FeedbackState = {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const guardedPush = useGuardedPush();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const appVersionLabel = getAppVersionLabel();
   const [promoModalVisible, setPromoModalVisible] = useState(false);
@@ -204,11 +206,11 @@ export default function SettingsScreen() {
   };
 
   const handleTermsPress = () => {
-    router.push('/terms');
+    guardedPush('/terms');
   };
 
   const handlePrivacyPress = () => {
-    router.push('/privacy-policy');
+    guardedPush('/privacy-policy');
   };
 
   const handleManageSubscription = () => {
@@ -221,7 +223,7 @@ export default function SettingsScreen() {
       }
     } else {
       // Show paywall for non-subscribers
-      router.push('/paywall');
+      guardedPush('/paywall');
     }
   };
 
@@ -399,7 +401,7 @@ export default function SettingsScreen() {
                 icon={RefreshCw}
                 title="Model Performance"
                 subtitle="Accuracy, calibration, and drift"
-                onPress={() => router.push('/model-accuracy')}
+                onPress={() => guardedPush('/model-accuracy')}
               />
             </SettingSection>
           </Animated.View>
@@ -411,7 +413,7 @@ export default function SettingsScreen() {
                 icon={Bell}
                 title="Notifications"
                 subtitle="Manage alerts and preferences"
-                onPress={() => router.push('/notifications-settings')}
+                onPress={() => guardedPush('/notifications-settings')}
               />
             </SettingSection>
           </Animated.View>

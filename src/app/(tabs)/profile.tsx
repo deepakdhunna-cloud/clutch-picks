@@ -5,6 +5,7 @@ import {
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useGuardedPush } from '@/hooks/useGuardedPush';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from 'react-native-svg';
@@ -408,6 +409,7 @@ const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
 // ─── MAIN SCREEN ───
 export default function ProfileScreen() {
   const router = useRouter();
+  const guardedPush = useGuardedPush();
   const appVersionLabel = getAppVersionLabel();
   const { data: session, isLoading: sessionLoading } = useSession();
   const userId = session?.user?.id;
@@ -690,7 +692,7 @@ export default function ProfileScreen() {
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
-          <HapticPressable hapticStyle="none" onPress={() => { router.push('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          <HapticPressable hapticStyle="none" onPress={() => { guardedPush('/settings'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
           </HapticPressable>
@@ -791,7 +793,7 @@ export default function ProfileScreen() {
 
         {/* ── 2. EDIT PROFILE + SHARE BUTTONS ── */}
         <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 20 }}>
-          <HapticPressable hapticStyle="none" onPress={() => { router.push('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          <HapticPressable hapticStyle="none" onPress={() => { guardedPush('/edit-profile'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={{ flex: 1, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
           </HapticPressable>
@@ -814,7 +816,7 @@ export default function ProfileScreen() {
           <View style={{ height: 146, flexDirection: 'row', marginHorizontal: 16, overflow: 'visible' }}>
             <RecentPicksSummaryTile
               totalPicks={totalPicks}
-              onPress={() => router.push('/picks-history')}
+              onPress={() => guardedPush('/picks-history')}
             />
 
             <View style={{ flex: 1, height: 146, overflow: 'hidden', position: 'relative' }}>
@@ -888,7 +890,7 @@ export default function ProfileScreen() {
                 ) : (
                   <RecentPicksViewAllTile
                     remainingCount={hiddenPickCount}
-                    onPress={() => router.push('/picks-history')}
+                    onPress={() => guardedPush('/picks-history')}
                   />
                 )}
               </ScrollView>

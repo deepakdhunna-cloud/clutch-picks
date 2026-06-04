@@ -7,6 +7,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { User, ArrowLeft, Lock, UserPlus, UserMinus, Trophy, Target, Flame, CheckCircle2, XCircle, Activity, Flag, Ban } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useGuardedPush } from '@/hooks/useGuardedPush';
 import { useSession } from '@/lib/auth/use-session';
 import { useUserProfile, useIsFollowing, useFollowUser, useUnfollowUser, useUserPickStats, useBlockUser, useReportUser } from '@/hooks/useSocial';
 import { useQuery } from '@tanstack/react-query';
@@ -96,6 +97,7 @@ function PublicPickItem({ pick, index }: { pick: Pick; index: number }) {
 
 export default function UserProfileScreen() {
   const router = useRouter();
+  const guardedPush = useGuardedPush();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
@@ -182,8 +184,8 @@ export default function UserProfileScreen() {
     onDismiss?.();
   };
 
-  const handleNavigateToFollowers = () => { router.push(`/followers/${id}?tab=followers` as any); };
-  const handleNavigateToFollowing = () => { router.push(`/followers/${id}?tab=following` as any); };
+  const handleNavigateToFollowers = () => { guardedPush(`/followers/${id}?tab=followers` as any); };
+  const handleNavigateToFollowing = () => { guardedPush(`/followers/${id}?tab=following` as any); };
 
   if (profileLoading || isFollowingLoading) {
     return (

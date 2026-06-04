@@ -2,6 +2,7 @@ import { View, Text, Image, ScrollView, FlatList, RefreshControl, Modal, TextInp
 import { HapticPressable } from '@/components/HapticPressable';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRouter } from 'expo-router';
+import { useGuardedPush } from '@/hooks/useGuardedPush';
 import Animated, {
   FadeInDown,
   FadeOut,
@@ -281,7 +282,6 @@ interface HomeHeaderProps {
   nonLiveGames: GameWithPrediction[];
   gameCounts: Partial<Record<Sport, number>>;
   isLoadingGames: boolean;
-  router: ReturnType<typeof useRouter>;
   onOpenGame: (game: GameWithPrediction) => void;
   onWarmGame: (game: GameWithPrediction) => void;
   horizontalPadding: number;
@@ -423,7 +423,6 @@ const HomeHeader = React.memo(function HomeHeader({
   nonLiveGames,
   gameCounts,
   isLoadingGames,
-  router,
   onOpenGame,
   onWarmGame,
   horizontalPadding,
@@ -431,6 +430,7 @@ const HomeHeader = React.memo(function HomeHeader({
   responsive,
   statusFilter,
 }: HomeHeaderProps) {
+  const guardedPush = useGuardedPush();
   const sortedSports = useMemo(
     () => [...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0)),
     [gameCounts]
@@ -587,7 +587,7 @@ const HomeHeader = React.memo(function HomeHeader({
             <HapticPressable hapticStyle="light"
               onPress={() => {
                 if (!shouldHandleLiveChipPress()) return;
-                router.push('/live-games' as any);
+                guardedPush('/live-games' as any);
               }}
               pressRetentionOffset={6}
               onTouchStart={onLiveChipTouchStart}
@@ -798,6 +798,7 @@ const SearchGameCard = memo(function SearchGameCard({
 
 export default function HomeScreen() {
   const router = useRouter();
+  const guardedPush = useGuardedPush();
   const tabBarVisible = useTabBarVisible();
   const responsive = useResponsive();
   const { isTablet, contentPadding: horizontalPadding, headerSize: headerFontSize, numColumns } = responsive;
@@ -1363,7 +1364,6 @@ export default function HomeScreen() {
         nonLiveGames={nonLiveGames}
         gameCounts={gameCounts}
         isLoadingGames={isInitialHomeLoading}
-        router={router}
         onOpenGame={handleOpenGame}
         onWarmGame={handleWarmGame}
         horizontalPadding={horizontalPadding}

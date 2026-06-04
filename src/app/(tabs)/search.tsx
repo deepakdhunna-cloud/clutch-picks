@@ -5,6 +5,7 @@ import {
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useGuardedPush } from '@/hooks/useGuardedPush';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withRepeat, Easing, cancelAnimation,
 } from 'react-native-reanimated';
@@ -198,7 +199,7 @@ const searchBarInner = {
   paddingHorizontal: 14,
 } as const;
 const SearchBar = memo(function SearchBar() {
-  const router = useRouter();
+  const guardedPush = useGuardedPush();
   const dateLabel = useMemo(
     () => new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase(),
     []
@@ -223,7 +224,7 @@ const SearchBar = memo(function SearchBar() {
       <HapticPressable hapticStyle="none"
         onPress={() => {
           fireLightHaptic();
-          router.push('/search-explore');
+          guardedPush('/search-explore');
         }}
         style={({ pressed }) => ({
           opacity: pressed ? 0.86 : 1,
@@ -2920,7 +2921,8 @@ const FreeProPreviewStack = memo(function FreeProPreviewStack({ final, onPress }
 });
 
 // ─── FREE ARENA — Game Day lite + locked Prep/Review previews ───
-function FreeArena({ games, sportFilter, router, sh, onR, isR, followed, bottomPadding, top }: { games: GameWithPrediction[]; sportFilter: string; router: ReturnType<typeof useRouter>; sh: any; onR: () => void; isR: boolean; followed: GameWithPrediction[]; bottomPadding: number; top?: React.ReactNode }) {
+function FreeArena({ games, sportFilter, sh, onR, isR, followed, bottomPadding, top }: { games: GameWithPrediction[]; sportFilter: string; sh: any; onR: () => void; isR: boolean; followed: GameWithPrediction[]; bottomPadding: number; top?: React.ReactNode }) {
+  const guardedPush = useGuardedPush();
   const filtered = useMemo(() => {
     if (sportFilter === 'All') return games;
     return games.filter(g => g.sport === sportFilter);
@@ -2932,8 +2934,8 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed, bottomP
 
   const openPaywall = useCallback(() => {
     fireLightHaptic();
-    router.push('/paywall');
-  }, [router]);
+    guardedPush('/paywall');
+  }, [guardedPush]);
 
   return (
     <GameDay
@@ -3094,7 +3096,6 @@ export default function MyArenaScreen() {
         <FreeArena
           games={allGames ?? []}
           sportFilter={deferredSf}
-          router={router}
           sh={sh}
           onR={onR}
           isR={isR}
