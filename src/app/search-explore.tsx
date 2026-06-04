@@ -496,7 +496,6 @@ export default function SearchExploreScreen() {
     setStatusFilter('all');
     setQuery('');
     setDebouncedQuery('');
-    afterFrame(fireSelectionHaptic);
   }, []);
 
   const sportCounts = useMemo(() => {
@@ -686,7 +685,6 @@ export default function SearchExploreScreen() {
                   onPress={() => {
                     if (active) return;
                     setStatusFilter(key);
-                    afterFrame(fireSelectionHaptic);
                   }}
                   style={{
                     minHeight: 36,

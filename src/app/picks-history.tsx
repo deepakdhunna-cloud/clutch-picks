@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { useUserPicks } from '@/hooks/usePicks';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
@@ -107,7 +106,6 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
         onPress={() => {
           if (!claimGameNavigation(item.gameId)) return;
           router.push(`/game/${item.gameId}`);
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
         style={({ pressed }) => [s.pickCard, {
           borderColor: isWin ? 'rgba(122,157,184,0.12)' : isLoss ? 'rgba(139,10,31,0.12)' : C.BORDER,
@@ -329,7 +327,7 @@ export default function PicksHistoryScreen() {
             return (
               <HapticPressable hapticStyle="light"
                 key={f.key}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter(f.key); }}
+                onPress={() => setFilter(f.key)}
                 style={[s.filterPill, active && { borderColor: f.color, backgroundColor: `${f.color}10` }]}
               >
                 <Text style={[s.filterPillText, active && { color: f.color }]}>{f.label}</Text>

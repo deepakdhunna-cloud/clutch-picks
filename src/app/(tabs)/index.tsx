@@ -832,7 +832,6 @@ export default function HomeScreen() {
   const applySportFilter = useCallback((nextSport: Sport | null) => {
     const isChanging = nextSport !== selectedSportFilter;
     if (isChanging) {
-      void Haptics.selectionAsync().catch(() => {});
     }
     setSelectedSportFilter(nextSport);
     if (isChanging && nextSport) {

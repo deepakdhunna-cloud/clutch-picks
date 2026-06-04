@@ -232,10 +232,8 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
   const homeColors = getTeamColors('CHI', Sport.NBA);
   const awayColors = getTeamColors('MIN', Sport.NBA);
   const jerseyType = sportEnumToJersey('NBA');
-
   const doPick = useCallback((team: 'home' | 'away') => {
     setPicked(team);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const target = team === 'home' ? homeScale : awayScale;
     const other = team === 'home' ? awayScale : homeScale;
     target.value = withSequence(withSpring(0.88, { damping: 15 }), withSpring(1.05, { damping: 12 }), withSpring(1, { damping: 10 }));
@@ -1160,7 +1158,6 @@ export default function OnboardingScreen() {
   };
 
   const handlePhotoPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPhotoSourceVisible(true);
   };
 

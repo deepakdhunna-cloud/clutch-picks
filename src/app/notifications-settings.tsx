@@ -150,7 +150,6 @@ export default function NotificationsSettingsScreen() {
         >
           <HapticPressable hapticStyle="light" hitSlop={12}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             }}
             style={{

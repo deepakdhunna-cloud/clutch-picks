@@ -503,7 +503,6 @@ export default function ProfileScreen() {
     if (!claimGameNavigation(gameId)) return;
     prefetchGame(gameId, game);
     router.push(`/game/${gameId}` as any);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [prefetchGame, router]);
 
   const formLine = useMemo(() => {
@@ -815,7 +814,7 @@ export default function ProfileScreen() {
           <View style={{ height: 146, flexDirection: 'row', marginHorizontal: 16, overflow: 'visible' }}>
             <RecentPicksSummaryTile
               totalPicks={totalPicks}
-              onPress={() => { router.push('/picks-history'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              onPress={() => router.push('/picks-history')}
             />
 
             <View style={{ flex: 1, height: 146, overflow: 'hidden', position: 'relative' }}>
@@ -889,7 +888,7 @@ export default function ProfileScreen() {
                 ) : (
                   <RecentPicksViewAllTile
                     remainingCount={hiddenPickCount}
-                    onPress={() => { router.push('/picks-history'); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    onPress={() => router.push('/picks-history')}
                   />
                 )}
               </ScrollView>

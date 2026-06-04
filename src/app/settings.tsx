@@ -36,7 +36,6 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
     <HapticPressable hapticStyle="light"
       onPress={() => {
         if (disabled) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress?.();
       }}
       style={({ pressed }) => ({
@@ -166,7 +165,6 @@ export default function SettingsScreen() {
   };
 
   const handlePromoPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPromoModalVisible(true);
   };
 
@@ -230,7 +228,6 @@ export default function SettingsScreen() {
   const handleSignOut = async () => {
     if (__DEV__) console.log('[Settings] Sign out button tapped!');
     setIsSigningOut(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       await unregisterCurrentDeviceForPushNotifications();
@@ -331,10 +328,7 @@ export default function SettingsScreen() {
           }}
         >
           <HapticPressable hapticStyle="light" hitSlop={12}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
-            }}
+            onPress={() => router.back()}
             style={{
               width: 40,
               height: 40,
@@ -364,8 +358,8 @@ export default function SettingsScreen() {
               <SettingSection title="SUBSCRIPTION">
                 <SettingItem
                   icon={Crown}
-                  title={isPremium ? "Premium Active" : "Upgrade to Premium"}
-                  subtitle={isPremium ? "Manage your subscription" : "Unlock all features"}
+                  title={isSubscriptionLoading ? "Subscription" : isPremium ? "Premium Active" : "Upgrade to Premium"}
+                  subtitle={isSubscriptionLoading ? "Checking status…" : isPremium ? "Manage your subscription" : "Unlock all features"}
                   onPress={handleManageSubscription}
                 />
                 <SettingItem
@@ -476,7 +470,6 @@ export default function SettingsScreen() {
                 title="Replay Tutorial"
                 subtitle="Walk through the app intro again"
                 onPress={async () => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   await AsyncStorage.setItem('clutch_onboarding_complete', 'false');
                   await AsyncStorage.setItem('clutch_onboarding_skip_profile', 'true');
                   router.replace('/onboarding');

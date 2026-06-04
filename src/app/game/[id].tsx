@@ -1226,7 +1226,6 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                   isTossUp: predictionDisplay.isTossUp ? '1' : '0',
                 },
               });
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
             hitSlop={8}
             style={{ flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
@@ -1648,7 +1647,6 @@ function GameDetailContent() {
   // Toggle follow with persistence
   const toggleFollow = useCallback(async () => {
     if (!id) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const updated = await toggleFollowedGame(id);
       setFollowed(updated.includes(id));
@@ -1665,9 +1663,7 @@ function GameDetailContent() {
     return refetch();
   }, { minVisibleMs: 320, maxVisibleMs: 850 });
   const hasGameData = !!game;
-
   const openPickAction = useCallback((side: 'home' | 'away') => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setPendingPickAction(userPick?.pickedTeam === side ? 'remove' : 'pick');
     setPendingPick(side);
   }, [userPick?.pickedTeam]);

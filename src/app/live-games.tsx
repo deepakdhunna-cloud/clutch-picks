@@ -131,7 +131,6 @@ export default function LiveGamesScreen() {
     const currentIdx = filterOrder.findIndex((s) => s === selectedSport);
     const nextIdx = filterOrder.findIndex((s) => s === sport);
     const direction: 1 | -1 = nextIdx > currentIdx ? 1 : -1;
-    Haptics.selectionAsync();
     isAnimating.current = true;
     translateX.value = withTiming(
       direction === 1 ? -SCREEN_WIDTH : SCREEN_WIDTH,
@@ -248,7 +247,7 @@ export default function LiveGamesScreen() {
               style={styles.chipScroll}
               contentContainerStyle={styles.chipScrollContent}
             >
-              <HapticPressable hapticStyle="light"
+              <HapticPressable hapticStyle="none"
                 onPress={() => {
                   if (!shouldHandleChipPress()) return;
                   handleChipPress(null);
@@ -280,7 +279,7 @@ export default function LiveGamesScreen() {
                 const meta = SPORT_META[sport];
                 const bg = meta?.color ?? TEAL;
                 return (
-                  <HapticPressable hapticStyle="light"
+                  <HapticPressable hapticStyle="none"
                     key={sport}
                     onPress={() => {
                       if (!shouldHandleChipPress()) return;

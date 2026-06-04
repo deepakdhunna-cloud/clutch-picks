@@ -44,7 +44,6 @@ export default function SignInScreen() {
 
     setIsLoading(true);
     setError(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const result = await authClient.emailOtp.sendVerificationOtp({

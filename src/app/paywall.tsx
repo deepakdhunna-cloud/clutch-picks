@@ -323,7 +323,6 @@ export default function PaywallScreen() {
 
   const handleRestore = async () => {
     setIsRestoring(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = await restorePurchases();
     if (result.ok) {
       await checkSubscription();
@@ -611,7 +610,6 @@ export default function PaywallScreen() {
                       onPress={async () => {
                         if (!promoCode.trim() || promoLoading) return;
                         setPromoLoading(true);
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         try {
                           const rcAppUserId = await getRevenueCatAppUserId();
                           const rcUserId = rcAppUserId.ok ? rcAppUserId.data : undefined;

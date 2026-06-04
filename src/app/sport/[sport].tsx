@@ -12,7 +12,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Filter, Calendar, Trophy, Zap } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { GameCard } from '@/components/sports';
 import { Sport, SPORT_META, type GameWithPrediction } from '@/types/sports';
 import { useWeekGamesBySport } from '@/hooks/useGames';
@@ -48,9 +47,7 @@ const FilterButton = memo(function FilterButton({
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
-
   const handlePress = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onSelect();
   }, [onSelect]);
 

@@ -250,7 +250,7 @@ export default function GameAnalysisScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isPremium } = useSubscription();
+  const { isPremium, isLoading: isSubLoading } = useSubscription();
 
   const { data: game, isLoading, isFetching, error } = useGame(id ?? '') as {
     data: Game | null | undefined;
@@ -301,6 +301,16 @@ export default function GameAnalysisScreen() {
             <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginTop: isFetching ? 14 : 0, textAlign: 'center' }}>{isFetching ? 'Analysis is warming up' : 'Analysis unavailable'}</Text>
             <Text style={{ color: '#6B7C94', fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: 'center' }}>{isFetching ? 'The pick is still being prepared for this game.' : 'There is no prediction available for this game yet.'}</Text>
           </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (isSubLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+          <CardSkeleton cards={4} />
         </SafeAreaView>
       </View>
     );
