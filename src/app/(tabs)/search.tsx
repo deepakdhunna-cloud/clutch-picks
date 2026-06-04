@@ -290,6 +290,7 @@ const SportPills = memo(function SportPills({
   return (
     <ScrollView
       horizontal
+      nestedScrollEnabled
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0, marginBottom: bottomMargin }}
       contentContainerStyle={{ paddingLeft: sidePadding, paddingRight: sidePadding, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
@@ -745,6 +746,7 @@ const YourGames = memo(function YourGames({
       <Animated.FlatList
         data={orderedGames}
         horizontal
+        nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
         snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}
@@ -2511,6 +2513,7 @@ const GameDay = memo(function GameDay({
         <Animated.FlatList
           data={filteredLive}
           horizontal
+          nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           snapToOffsets={liveCardSnapOffsets}
           snapToAlignment="start"
@@ -2658,6 +2661,7 @@ const Prep = memo(function Prep({
           <Text style={{fontSize:10, fontWeight:'700', color:TEXT_MUTED, letterSpacing:1.5, paddingHorizontal:ARENA_SIDE_PADDING, marginBottom:12}}>TOP MODEL GRADES</Text>
           <ScrollView
             horizontal
+            nestedScrollEnabled
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{paddingLeft:ARENA_SIDE_PADDING, paddingRight:ARENA_SIDE_PADDING, paddingBottom:2, flexDirection:'row'}}
             style={{flexGrow:0}}
@@ -3025,14 +3029,16 @@ export default function MyArenaScreen() {
 
   const lockArenaPager = useCallback(() => {
     if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
-    setArenaPagerEnabled((current) => current ? false : current);
+    setArenaPagerEnabled(false);
+    pagerRef.current?.setScrollEnabled(false);
   }, []);
 
   const unlockArenaPager = useCallback(() => {
     if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
     pagerUnlockTimer.current = setTimeout(() => {
-      setArenaPagerEnabled((current) => current ? current : true);
-    }, 120);
+      setArenaPagerEnabled(true);
+      pagerRef.current?.setScrollEnabled(true);
+    }, 150);
   }, []);
 
   const horizontalGestureGuard = useMemo<ArenaHorizontalGestureGuard>(() => ({
