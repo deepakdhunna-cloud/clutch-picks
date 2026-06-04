@@ -197,7 +197,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                 fontSize: 13,
                 fontWeight: awayWinning || awayBatting ? '800' : '500',
                 letterSpacing: 0.4,
-              }} numberOfLines={1}>
+              }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
                 {game.awayTeam.city || game.awayTeam.abbreviation}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
@@ -263,7 +263,7 @@ export const CompactLiveCard = React.memo(function CompactLiveCard({ game, onPre
                 fontSize: 13,
                 fontWeight: homeWinning || homeBatting ? '800' : '500',
                 letterSpacing: 0.4,
-              }} numberOfLines={1}>
+              }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
                 {game.homeTeam.city || game.homeTeam.abbreviation}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>

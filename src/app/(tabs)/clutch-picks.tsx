@@ -376,7 +376,7 @@ const TopPickCard = memo(function TopPickCard({
                     sport={game.sport}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFF' }} numberOfLines={1}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFF' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
                       {game.awayTeam.name}
                     </Text>
                     <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{game.awayTeam.record}</Text>
@@ -407,7 +407,7 @@ const TopPickCard = memo(function TopPickCard({
                     sport={game.sport}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFF' }} numberOfLines={1}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFF' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
                       {game.homeTeam.name}
                     </Text>
                     <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{game.homeTeam.record}</Text>

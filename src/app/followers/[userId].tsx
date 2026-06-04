@@ -19,6 +19,7 @@ import {
 import { theme } from '@/lib/theme';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
+import { InlineError } from '@/components/InlineError';
 
 type TabType = 'followers' | 'following';
 
@@ -150,8 +151,8 @@ export default function FollowersScreen() {
     }
   }, [tab]);
 
-  const { data: followers, isLoading: followersLoading } = useFollowers(userId);
-  const { data: following, isLoading: followingLoading } = useFollowing(userId);
+  const { data: followers, isLoading: followersLoading, isError: followersError, refetch: refetchFollowers } = useFollowers(userId);
+  const { data: following, isLoading: followingLoading, isError: followingError, refetch: refetchFollowing } = useFollowing(userId);
 
   // Fetch user name for header
   const { data: profile } = useQuery({
@@ -161,6 +162,8 @@ export default function FollowersScreen() {
   });
 
   const isLoading = activeTab === 'followers' ? followersLoading : followingLoading;
+  const isError = activeTab === 'followers' ? followersError : followingError;
+  const refetch = activeTab === 'followers' ? refetchFollowers : refetchFollowing;
   const data = activeTab === 'followers' ? followers : following;
 
   const handleNavigateToProfile = (id: string) => {
@@ -307,6 +310,8 @@ export default function FollowersScreen() {
             <View className="flex-1 items-center justify-center">
               <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
+          ) : isError ? (
+            <InlineError message="Unable to load. Check your connection." onRetry={() => refetch()} />
           ) : (
             <FlatList
               data={data || []}

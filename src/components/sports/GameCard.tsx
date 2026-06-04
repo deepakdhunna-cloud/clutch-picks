@@ -463,6 +463,8 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     letterSpacing: 0.3,
                   }}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
                 >
                   {game.awayTeam.name}
                 </Text>
@@ -516,6 +518,8 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     letterSpacing: 0.3,
                   }}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
                 >
                   {game.homeTeam.name}
                 </Text>

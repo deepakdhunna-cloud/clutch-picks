@@ -9,6 +9,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { api } from '@/lib/api/api';
 import { MAROON, TEAL, GREEN_UP, LOSS, BG } from '@/lib/theme';
 import { useCalibration, type LeagueCalibration, type ReliabilityBucket } from '@/hooks/useCalibration';
+import { InlineError } from '@/components/InlineError';
 
 const AMBER = '#F59E0B'; // warning / mid-tier badge — not in theme exports
 
@@ -54,21 +55,19 @@ interface DriftData {
 export default function ModelAccuracyScreen() {
   const router = useRouter();
 
-  const { data: accuracy, isLoading: loadingAcc } = useQuery<AccuracyData>({
+    const { data: accuracy, isLoading: loadingAcc, isError: errorAcc, refetch: refetchAcc } = useQuery<AccuracyData>({
     queryKey: ['model-accuracy'],
     queryFn: () => api.get<AccuracyData>('/api/predictions/accuracy'),
     staleTime: 60_000,
   });
-
-  const { data: drift, isLoading: loadingDrift } = useQuery<DriftData>({
+  const { data: drift, isLoading: loadingDrift, isError: errorDrift, refetch: refetchDrift } = useQuery<DriftData>({
     queryKey: ['model-drift'],
     queryFn: () => api.get<DriftData>('/api/predictions/drift'),
     staleTime: 60_000,
   });
-
   const { data: calibration, isLoading: loadingCalibration } = useCalibration();
-
   const isLoading = loadingAcc || loadingDrift || loadingCalibration;
+  const isError = errorAcc || errorDrift;
   const hasEnoughData = (accuracy?.overall?.totalResolved ?? 0) >= 50;
 
   return (
@@ -86,6 +85,8 @@ export default function ModelAccuracyScreen() {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator size="large" color={TEAL} />
           </View>
+        ) : isError ? (
+          <InlineError message="Unable to load accuracy data." onRetry={() => { refetchAcc(); refetchDrift(); }} />
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
             {/* Overall Accuracy */}
