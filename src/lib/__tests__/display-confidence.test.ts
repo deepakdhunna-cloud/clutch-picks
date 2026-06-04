@@ -9,7 +9,7 @@ describe('confidence tier display', () => {
   it('reserves solid, strong, and lock labels for wider separation', () => {
     expect(getConfidenceTier(60).label).toBe('Solid Pick');
     expect(getConfidenceTier(67).label).toBe('Strong Pick');
-    expect(getConfidenceTier(75).label).toBe('Lock');
+    expect(getConfidenceTier(75).label).toBe('Elite');
   });
 
   it('keeps toss-up flags above numeric confidence tiers', () => {

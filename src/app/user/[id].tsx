@@ -304,7 +304,7 @@ export default function UserProfileScreen() {
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }}>{profile.name || 'Clutch User'}</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }} numberOfLines={1}>{profile.name || 'Clutch User'}</Text>
                   {profile.bio ? (
                     <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 4, lineHeight: 18 }} numberOfLines={2}>{profile.bio}</Text>
                   ) : null}

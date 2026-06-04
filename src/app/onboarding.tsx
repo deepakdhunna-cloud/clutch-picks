@@ -484,7 +484,7 @@ function AIPredictionsStep({ onContinue, onSkip, onBack, picked }: { onContinue:
               { range: '53–59%', label: 'Considered a Lean Pick', desc: 'Narrow edge detected by the model', accent: 'rgba(122,157,184,0.22)' },
               { range: '60–66%', label: 'Considered a Solid Pick', desc: 'Usable separation across core factors', accent: 'rgba(122,157,184,0.32)' },
               { range: '67–74%', label: 'Considered a Strong Pick', desc: 'Strong model agreement and data depth', accent: 'rgba(139,10,31,0.25)' },
-              { range: '75%+', label: 'Considered a Lock', desc: 'Dominant edge across all factors', accent: 'rgba(139,10,31,0.35)' },
+              { range: '75%+', label: 'Elite edge', desc: 'Dominant edge across all factors', accent: 'rgba(139,10,31,0.35)' },
             ].map((tier, i) => (
               <Animated.View key={i} entering={FadeInDown.delay(550 + i * 60).duration(400)}>
                 <View style={{

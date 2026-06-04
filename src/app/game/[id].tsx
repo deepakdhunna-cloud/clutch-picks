@@ -1203,7 +1203,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
             </View>
             {isLocked ? (
               <View style={{ borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.24)' }}>
-                <Text style={{ color: '#9AB8CC', fontSize: 8, fontWeight: '900', letterSpacing: 0.9 }}>PREGAME LOCK</Text>
+                <Text style={{ color: '#9AB8CC', fontSize: 8, fontWeight: '900', letterSpacing: 0.9 }}>PRE-GAME</Text>
               </View>
             ) : null}
           </View>

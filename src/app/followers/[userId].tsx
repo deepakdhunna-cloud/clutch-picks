@@ -85,7 +85,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
 
       {/* User Info */}
       <View className="flex-1 ml-3">
-        <Text className="text-white font-semibold text-base">
+        <Text className="text-white font-semibold text-base" numberOfLines={1}>
           {user.name || 'User'}
         </Text>
         {user.bio ? (

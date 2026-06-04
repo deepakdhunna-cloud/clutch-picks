@@ -112,7 +112,7 @@ export const CONFIDENCE_TIER_DEFINITIONS = [
     filled: 8,
   },
   {
-    label: 'Lock',
+    label: 'Elite',
     color: '#F1F5F9',
     range: '75%+',
     desc: 'A dominant edge across the model stack with strong agreement and data coverage.',

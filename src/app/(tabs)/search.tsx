@@ -784,7 +784,7 @@ function getPickStrengthDisplay(confidence: number, isTossUp?: boolean): { label
   if (confidence < 60)             return { label: 'Lean',   color: '#facc15' };
   if (confidence < 67)             return { label: 'Solid',  color: '#4ade80' };
   if (confidence < 75)             return { label: 'Strong', color: '#86efac' };
-  return                                  { label: 'Lock',   color: '#f8fafc' };
+  return                                  { label: 'Elite',   color: '#f8fafc' };
 }
 
 // Pulsing red dot used in the live card header.

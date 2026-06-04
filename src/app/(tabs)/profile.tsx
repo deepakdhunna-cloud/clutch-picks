@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, ActivityIndicator, Image, ScrollView, Share,
+  View, Text, ActivityIndicator, Image, ScrollView, Share, RefreshControl,
 } from 'react-native';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
 import { useUserStats, useUserPicks } from '@/hooks/usePicks';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
+import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
 import { getSignatureCalls, type SignatureCall, type SignatureCallReason } from '@/lib/signature-calls';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
 import { api } from '@/lib/api/api';
@@ -412,7 +413,7 @@ export default function ProfileScreen() {
   const userId = session?.user?.id;
   const hasUser = Boolean(userId);
   const { data: stats, refetch: refetchStats } = useUserStats(hasUser);
-  const { data: picks } = useUserPicks(hasUser);
+  const { data: picks, refetch: refetchPicks } = useUserPicks(hasUser);
   const { data: allGames } = useGames();
   const prefetchGame = usePrefetchGame();
   const invalidateSession = useInvalidateSession();
@@ -420,10 +421,14 @@ export default function ProfileScreen() {
   const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ title: string; message: string; variant?: 'success' | 'error' | 'info' } | null>(null);
 
-  const { data: profile } = useQuery({
+  const { data: profile, refetch: refetchProfile } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<{ id: string; name: string; email: string | null; image: string | null; bio: string | null }>('/api/profile'),
     enabled: !!userId,
+  });
+
+  const { refreshing, onRefresh } = useSmoothRefresh(async () => {
+    await Promise.all([refetchStats(), refetchPicks(), refetchProfile()]);
   });
 
   useFocusEffect(useCallback(() => {
@@ -668,7 +673,9 @@ export default function ProfileScreen() {
         variant={feedback?.variant}
         onDismiss={() => setFeedback(null)}
       />
-      <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+      <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5A7A8A" />}
+      >
 
         {/* ── PAGE HEADER ── */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 28, paddingBottom: 20 }}>
@@ -713,7 +720,7 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, letterSpacing: -0.3 }}>{userName}</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, letterSpacing: -0.3 }} numberOfLines={1}>{userName}</Text>
                   <Text style={{ fontSize: 12, color: C.TEXT_MUTED, marginTop: 2 }}>{handle}</Text>
                   {totalPicks >= 10 ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.MAROON_DIM, borderRadius: 8, paddingVertical: 3, paddingHorizontal: 10, alignSelf: 'flex-start', marginTop: 6 }}>
