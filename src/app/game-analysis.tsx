@@ -1,5 +1,6 @@
-import { ActivityIndicator, FlatList, View, Text, StyleSheet } from 'react-native';
+import { FlatList, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { HapticPressable } from '@/components/HapticPressable';
+import { CardSkeleton } from '@/components/Shimmer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { memo } from 'react';
@@ -260,9 +261,10 @@ export default function GameAnalysisScreen() {
 
   if (isLoading && !game) {
     return (
-      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={TEAL} />
-        <Text style={{ color: '#6B7C94', fontSize: 14, marginTop: 12 }}>Loading analysis...</Text>
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+          <CardSkeleton cards={4} />
+        </SafeAreaView>
       </View>
     );
   }

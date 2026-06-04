@@ -6,6 +6,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { HapticPressable } from '@/components/HapticPressable';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
@@ -161,6 +162,7 @@ export default function VerifyOTP() {
   };
 
   const codeDigits = code.split('').concat(Array(CODE_LENGTH - code.length).fill(''));
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={s.root}>
@@ -172,7 +174,7 @@ export default function VerifyOTP() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={s.content}>
           {/* Back button */}
-          <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32, alignSelf: 'flex-start' }}>
+          <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: insets.top + 12, marginBottom: 32, alignSelf: 'flex-start' }}>
             <HapticPressable onPress={() => router.back()} hitSlop={16} style={s.backBtn} hapticStyle="light">
               <BackArrow />
             </HapticPressable>

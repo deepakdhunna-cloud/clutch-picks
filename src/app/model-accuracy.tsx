@@ -10,6 +10,7 @@ import { api } from '@/lib/api/api';
 import { MAROON, TEAL, GREEN_UP, LOSS, BG } from '@/lib/theme';
 import { useCalibration, type LeagueCalibration, type ReliabilityBucket } from '@/hooks/useCalibration';
 import { InlineError } from '@/components/InlineError';
+import { CardSkeleton } from '@/components/Shimmer';
 
 const AMBER = '#F59E0B'; // warning / mid-tier badge — not in theme exports
 
@@ -82,9 +83,7 @@ export default function ModelAccuracyScreen() {
         </View>
 
         {isLoading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={TEAL} />
-          </View>
+          <CardSkeleton cards={4} />
         ) : isError ? (
           <InlineError message="Unable to load accuracy data." onRetry={() => { refetchAcc(); refetchDrift(); }} />
         ) : (

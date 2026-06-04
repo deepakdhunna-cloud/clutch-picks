@@ -18,7 +18,7 @@ const TIER_ACCENTS = [
 
 const TIERS = CONFIDENCE_TIER_DEFINITIONS.map((tier, index) => ({
   ...tier,
-  label: `Considered a ${tier.label}`,
+  label: tier.label === 'Elite' ? 'Elite pick' : `Considered a ${tier.label}`,
   accent: TIER_ACCENTS[index] ?? 'rgba(255,255,255,0.15)',
 }));
 

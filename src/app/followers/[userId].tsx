@@ -20,6 +20,7 @@ import { theme } from '@/lib/theme';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
 import { InlineError } from '@/components/InlineError';
+import { ListSkeleton } from '@/components/Shimmer';
 
 type TabType = 'followers' | 'following';
 
@@ -307,9 +308,7 @@ export default function FollowersScreen() {
           />
 
           {isLoading ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-            </View>
+            <ListSkeleton rows={8} />
           ) : isError ? (
             <InlineError message="Unable to load. Check your connection." onRetry={() => refetch()} />
           ) : (
