@@ -752,7 +752,9 @@ const YourGames = memo(function YourGames({
         decelerationRate="fast"
         snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}
         snapToAlignment="start"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
+        contentInset={{left: 20, right: 20}}
+        contentOffset={{x: -20, y: 0}}
+        contentContainerStyle={{paddingHorizontal: Platform.OS === 'android' ? 20 : 0, paddingBottom: 4}}
         ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
@@ -2372,10 +2374,6 @@ const GameDay = memo(function GameDay({
   }, [live, liveSearch, liveSportFilter]);
   const focusedGame = filteredLive[focusedIdx] ?? filteredLive[0] ?? null;
   const focusedIntel = useMemo(() => liveIntelLocked ? [] : generateLiveIntel(focusedGame), [focusedGame, liveIntelLocked]);
-  const liveCardSnapOffsets = useMemo<number[]>(
-    () => filteredLive.map((_, index) => index * LIVE_CARD_SNAP_INTERVAL),
-    [filteredLive.length],
-  );
   const liveInitialRenderCount = Math.min(filteredLive.length, 3);
 
   useEffect(() => {
@@ -2391,7 +2389,8 @@ const GameDay = memo(function GameDay({
   }, [focusedIdx, filteredLive.length]);
 
   const onLiveScroll = useCallback((e: any) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / LIVE_CARD_SNAP_INTERVAL);
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(offsetX / LIVE_CARD_SNAP_INTERVAL);
     if (idx >= 0 && idx < filteredLive.length) {
       setFocusedIdx((current) => idx === current ? current : idx);
     }
@@ -2516,11 +2515,13 @@ const GameDay = memo(function GameDay({
           horizontal
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
-          snapToOffsets={liveCardSnapOffsets}
+          snapToInterval={LIVE_CARD_SNAP_INTERVAL}
           snapToAlignment="start"
           disableIntervalMomentum
           decelerationRate="fast"
-          contentContainerStyle={{paddingHorizontal:ARENA_SIDE_PADDING}}
+          contentInset={{left: ARENA_SIDE_PADDING, right: ARENA_SIDE_PADDING}}
+          contentOffset={{x: -ARENA_SIDE_PADDING, y: 0}}
+          contentContainerStyle={{paddingHorizontal: Platform.OS === 'android' ? ARENA_SIDE_PADDING : 0}}
           ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
           initialNumToRender={liveInitialRenderCount}
           maxToRenderPerBatch={3}
@@ -2538,16 +2539,15 @@ const GameDay = memo(function GameDay({
           )}
           getItemLayout={(_, index) => ({ length: LIVE_CARD_SNAP_INTERVAL, offset: LIVE_CARD_SNAP_INTERVAL * index, index })}
           style={{flexGrow:0}}
+          onScroll={onLiveScroll}
+          scrollEventThrottle={16}
           onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
           onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
           onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
           onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
           onScrollEndDrag={horizontalGestureGuard?.onHorizontalGestureEnd}
           onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
-          onMomentumScrollEnd={(event) => {
-            onLiveScroll(event);
-            horizontalGestureGuard?.onHorizontalGestureEnd?.();
-          }}
+          onMomentumScrollEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
         />
       )}
 
