@@ -243,7 +243,7 @@ export default function SportDetailScreen() {
           style={styles.header}
         >
           <View style={styles.headerRow}>
-            <HapticPressable hapticStyle="none"
+            <HapticPressable hapticStyle="none" hitSlop={12}
               onPress={() => router.back()}
               style={styles.backButton}
             >

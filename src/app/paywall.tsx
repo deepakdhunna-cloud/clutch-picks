@@ -284,6 +284,7 @@ export default function PaywallScreen() {
   };
 
   const handlePurchase = async () => {
+    if (isPurchasing) return;
     let packageToPurchase = monthlyPackage;
     if (!packageToPurchase) {
       setIsLoading(true);

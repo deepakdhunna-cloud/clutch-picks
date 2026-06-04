@@ -263,6 +263,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
 }) {
   const scale = useSharedValue(1);
   const selectionProgress = useSharedValue(isSelected ? 1 : 0);
+  const lastTapRef = React.useRef(0);
   const teamColors = getTeamColors(team.abbreviation, sport as any, team.color);
 
   useEffect(() => {
@@ -287,6 +288,9 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
 
   const handlePress = useCallback(() => {
     if (isDisabled) return;
+    const now = Date.now();
+    if (now - lastTapRef.current < 500) return;
+    lastTapRef.current = now;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withSequence(
       withTiming(0.92, { duration: 90, easing: Easing.out(Easing.ease) }),

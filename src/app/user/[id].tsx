@@ -199,7 +199,7 @@ export default function UserProfileScreen() {
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
         <SafeAreaView edges={['top']}>
           <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-            <HapticPressable hapticStyle="light"
+            <HapticPressable hapticStyle="light" hitSlop={12}
               onPress={() => router.back()}
               style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER }}
             >
@@ -241,7 +241,7 @@ export default function UserProfileScreen() {
       <SafeAreaView edges={['top']} style={{ backgroundColor: '#000000' }}>
         <Animated.View entering={FadeInDown.duration(350)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 }}>
-            <HapticPressable hapticStyle="light"
+            <HapticPressable hapticStyle="light" hitSlop={12}
               onPress={() => router.back()}
               style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: GLASS_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: GLASS_BORDER, marginRight: 12 }}
             >

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, Dimensions, TextInput, Image,
-  ActivityIndicator, StyleSheet,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -869,7 +869,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
   displayName: string; setDisplayName: (v: string) => void; profileImage: string | null; isUploading: boolean; onPhotoPress: () => void; onContinue: () => void; onBack: () => void;
 }) {
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
       <ProgressBar step={4} />
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 4 }}>
         <HapticPressable hapticStyle="none" onPress={onBack} style={{ padding: 8 }}>
@@ -978,7 +978,7 @@ function ProfileStep({ displayName, setDisplayName, profileImage, isUploading, o
           </LinearGradient>
         </HapticPressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

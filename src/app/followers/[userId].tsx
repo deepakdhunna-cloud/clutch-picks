@@ -204,7 +204,7 @@ export default function FollowersScreen() {
         entering={FadeInDown.duration(400)}
         className="px-5 pt-4 pb-3 flex-row items-center"
       >
-        <HapticPressable hapticStyle="light"
+        <HapticPressable hapticStyle="light" hitSlop={12}
           onPress={() => router.back()}
           className="active:opacity-70"
           style={{

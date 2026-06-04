@@ -160,7 +160,7 @@ export default function EditProfileScreen() {
         entering={FadeInDown.duration(400)}
         style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <HapticPressable hapticStyle="light"
+        <HapticPressable hapticStyle="light" hitSlop={12}
           onPress={() => router.back()}
           style={{
             width: 40,

@@ -225,7 +225,7 @@ export default function LiveGamesScreen() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(180)} style={styles.header}>
             <View style={styles.headerRow}>
-              <HapticPressable hapticStyle="none" onPress={() => router.back()} style={styles.backButton}>
+              <HapticPressable hapticStyle="none" hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
                 <ChevronLeft size={28} color="#fff" />
               </HapticPressable>
               <View style={styles.titleWrap}>

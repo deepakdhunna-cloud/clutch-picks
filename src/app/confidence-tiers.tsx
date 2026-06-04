@@ -36,7 +36,7 @@ export default function ConfidenceTiersScreen() {
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, gap: 12 }}>
-          <HapticPressable hapticStyle="light"
+          <HapticPressable hapticStyle="light" hitSlop={12}
             onPress={() => router.back()}
             style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
           >

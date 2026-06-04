@@ -272,7 +272,8 @@ const LiveGameLayout = memo(function LiveGameLayout({
     shouldHandlePress: shouldHandleCardPress,
   } = useTapGestureGuard();
 
-  const warmGame = useCallback(() => {
+    const warmGame = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     prefetchGame(game.id, game);
   }, [game, prefetchGame]);
 
@@ -287,7 +288,6 @@ const LiveGameLayout = memo(function LiveGameLayout({
       isNavigatingRef.current = false;
     }, 700);
   }, [game.id, router, shouldHandleCardPress, warmGame]);
-
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
       <HapticPressable hapticStyle="none"
@@ -710,10 +710,10 @@ export const GameCard = memo(function GameCard({ game, index = 0 }: GameCardProp
   const [pendingSelection, setPendingSelection] = useState<'home' | 'away' | null>(null);
   const [pendingAction, setPendingAction] = useState<'pick' | 'remove'>('pick');
 
-  const warmGame = useCallback(() => {
+    const warmGame = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     prefetchGame(game.id, game);
   }, [game, prefetchGame]);
-
   const handlePress = useCallback(() => {
     if (!shouldHandleCardPress()) return;
     if (isNavigatingRef.current) return;

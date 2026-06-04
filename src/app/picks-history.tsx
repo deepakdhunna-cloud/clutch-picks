@@ -279,7 +279,7 @@ export default function PicksHistoryScreen() {
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
         {/* ── HEADER ── */}
         <View style={s.header}>
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="none" hitSlop={12}
             onPress={() => router.back()}
             style={s.backBtn}
           >

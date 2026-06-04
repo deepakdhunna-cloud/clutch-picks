@@ -139,7 +139,7 @@ export function traceCanonicalUiConsumption(surface: string, game: GameWithPredi
   if (!__DEV__ || process.env.EXPO_PUBLIC_PREDICTION_TRACE !== '1') return;
   const canonical = getCanonicalResult(game.prediction);
   if (!canonical) return;
-  console.log('[prediction-ui-trace]', {
+  if (__DEV__) console.log('[prediction-ui-trace]', {
     surface,
     eventId: game.id,
     consumedCanonical: {

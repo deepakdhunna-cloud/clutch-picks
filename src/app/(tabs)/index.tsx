@@ -909,7 +909,7 @@ export default function HomeScreen() {
   }, [scrollToHomeBoard, statusFilter]);
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
-  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames();
+  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, isFetched: hasGamesFetched, prefetchGame } = useGames();
   const hasHomeGameData = (todaysGames?.length ?? 0) > 0;
   const isInitialHomeLoading = isLoadingGames && !hasHomeGameData;
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });
@@ -1432,7 +1432,7 @@ export default function HomeScreen() {
   ]);
 
   const homeListEmpty = useMemo(() => (
-    !isLoadingGames && nonLiveGames.length === 0 && liveGamesPreview.length === 0 ? (
+    !isLoadingGames && hasGamesFetched && nonLiveGames.length === 0 && liveGamesPreview.length === 0 ? (
       <View className="px-5">
         <Text className="text-zinc-200 text-xs font-semibold uppercase tracking-wider mb-3">
           Today's Games
@@ -1447,7 +1447,7 @@ export default function HomeScreen() {
         </View>
       </View>
     ) : null
-  ), [isLoadingGames, liveGamesPreview.length, nonLiveGames.length]);
+  ), [isLoadingGames, hasGamesFetched, liveGamesPreview.length, nonLiveGames.length]);
 
   const homeListFooter = useMemo(() => (
     <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 }}>

@@ -7,13 +7,14 @@ import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { enableScreens } from 'react-native-screens';
 import { useSession } from '@/lib/auth/use-session';
-import { View, AppState, Platform } from 'react-native';
+import { View, AppState, Platform, Text, TextInput } from 'react-native';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { SplashProvider, useSplash } from '@/lib/splash-context';
 import { SubscriptionProvider } from '@/lib/subscription-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotificationRegistration, useNotificationNavigation } from '@/hooks/useNotifications';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
@@ -22,6 +23,10 @@ import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useLiveScores } from '@/hooks/useLiveScores';
 
+
+// Enforce max font scaling globally to prevent layout overflow at largest Dynamic Type sizes
+(Text as any).defaultProps = { ...((Text as any).defaultProps || {}), maxFontSizeMultiplier: 1.3 };
+(TextInput as any).defaultProps = { ...((TextInput as any).defaultProps || {}), maxFontSizeMultiplier: 1.2 };
 
 enableScreens(true);
 
@@ -268,6 +273,7 @@ function RootLayoutNav({
     >
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         {splashAnimationComplete && session?.user ? <LiveScoreSync /> : null}
+        <OfflineBanner />
         <Stack screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 200, gestureEnabled: true, fullScreenGestureEnabled: false }}>
           <Stack.Screen name="welcome" options={{ freezeOnBlur: true, gestureEnabled: false }} />
           <Stack.Screen name="sign-in" options={{ freezeOnBlur: true }} />

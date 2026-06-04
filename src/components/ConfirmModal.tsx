@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Modal, View, Text } from 'react-native';
 import { HapticPressable } from '@/components/HapticPressable';
 import * as Haptics from 'expo-haptics';
@@ -32,6 +32,19 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reset processing state when modal becomes visible
+  React.useEffect(() => {
+    if (visible) setIsProcessing(false);
+  }, [visible]);
+
+  const handleConfirm = useCallback(() => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    onConfirm();
+  }, [isProcessing, onConfirm]);
+
   return (
     <Modal
       visible={visible}
@@ -109,13 +122,14 @@ export function ConfirmModal({
               </Text>
             </HapticPressable>
             <HapticPressable hapticStyle="medium"
+              disabled={isProcessing}
               onPress={() => {
                 Haptics.notificationAsync(
                   destructive
                     ? Haptics.NotificationFeedbackType.Warning
                     : Haptics.NotificationFeedbackType.Success
                 );
-                onConfirm();
+                handleConfirm();
               }}
               style={({ pressed }) => ({
                 flex: 1,

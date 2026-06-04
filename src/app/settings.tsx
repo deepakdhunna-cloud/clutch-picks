@@ -330,7 +330,7 @@ export default function SettingsScreen() {
             paddingVertical: 16,
           }}
         >
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="none" hitSlop={12}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();

@@ -76,7 +76,7 @@ export default function ModelAccuracyScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={s.header}>
-          <HapticPressable hapticStyle="light" onPress={() => router.back()} style={s.backBtn}>
+          <HapticPressable hapticStyle="light" hitSlop={12} onPress={() => router.back()} style={s.backBtn}>
             <ArrowLeft size={20} color="#FFFFFF" />
           </HapticPressable>
           <Text style={s.headerTitle}>Model Performance</Text>

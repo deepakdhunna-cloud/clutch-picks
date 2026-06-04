@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import Animated, {
@@ -1338,6 +1339,7 @@ export const SportCard = memo(function SportCard({
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
+          Haptics.selectionAsync();
           scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
         }}
         onPressOut={() => {
@@ -1417,6 +1419,7 @@ export const SportCard = memo(function SportCard({
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
         onPressIn={() => {
+          Haptics.selectionAsync();
           scale.value = withSpring(0.93, { damping: 15, stiffness: 400 });
         }}
         onPressOut={() => {
