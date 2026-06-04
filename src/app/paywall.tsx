@@ -101,7 +101,7 @@ function ShimmerButton({ onPress, loading, label }: {
   }));
 
   return (
-    <HapticPressable hapticStyle="none"
+    <HapticPressable hapticStyle="light"
       onPress={onPress}
       disabled={loading}
       style={({ pressed }) => ({
@@ -409,7 +409,7 @@ export default function PaywallScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <HapticPressable hapticStyle="none" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
+          <HapticPressable hapticStyle="light" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); } }} style={{
             width: 34, height: 34, borderRadius: 12,
             backgroundColor: 'rgba(255,255,255,0.04)',
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
@@ -602,12 +602,12 @@ export default function PaywallScreen() {
                         autoCorrect={false}
                       />
                       {promoCode.length > 0 ? (
-                        <HapticPressable hapticStyle="none" onPress={() => setPromoCode('')} hitSlop={8}>
+                        <HapticPressable hapticStyle="light" onPress={() => setPromoCode('')} hitSlop={8}>
                           <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>×</Text>
                         </HapticPressable>
                       ) : null}
                     </View>
-                    <HapticPressable hapticStyle="none"
+                    <HapticPressable hapticStyle="light"
                       onPress={async () => {
                         if (!promoCode.trim() || promoLoading) return;
                         setPromoLoading(true);
@@ -651,7 +651,7 @@ export default function PaywallScreen() {
                     </HapticPressable>
                   </View>
                 ) : (
-                  <HapticPressable hapticStyle="none"
+                  <HapticPressable hapticStyle="light"
                     onPress={() => setPromoOpen(true)}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, alignSelf: 'flex-start' }}
                   >
@@ -685,7 +685,7 @@ export default function PaywallScreen() {
 
           {/* ═══ RESTORE + LEGAL ═══ */}
           <Animated.View entering={FadeIn.delay(440)} style={{ alignItems: 'center', paddingTop: 20 }}>
-            <HapticPressable hapticStyle="none" onPress={handleRestore} disabled={isRestoring} style={{ paddingVertical: 12 }}>
+            <HapticPressable hapticStyle="light" onPress={handleRestore} disabled={isRestoring} style={{ paddingVertical: 12 }}>
               {isRestoring ? (
                 <ActivityIndicator color={TEAL} size="small" />
               ) : (
@@ -693,16 +693,16 @@ export default function PaywallScreen() {
               )}
             </HapticPressable>
 
-            <HapticPressable hapticStyle="none" onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')} style={{ marginTop: 10 }}>
+            <HapticPressable hapticStyle="light" onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')} style={{ marginTop: 10 }}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: TEAL, textDecorationLine: 'underline' }}>Manage Subscription</Text>
             </HapticPressable>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 }}>
-              <HapticPressable hapticStyle="none" onPress={() => router.push('/terms' as any)}>
+              <HapticPressable hapticStyle="light" onPress={() => router.push('/terms' as any)}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Terms</Text>
               </HapticPressable>
               <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)' }}>·</Text>
-              <HapticPressable hapticStyle="none" onPress={() => router.push('/privacy-policy' as any)}>
+              <HapticPressable hapticStyle="light" onPress={() => router.push('/privacy-policy' as any)}>
                 <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecorationLine: 'underline' }}>Privacy</Text>
               </HapticPressable>
             </View>

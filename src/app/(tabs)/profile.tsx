@@ -291,7 +291,7 @@ const SignedOutState = memo(function SignedOutState() {
         </View>
         <Text style={{ fontSize: 20, fontWeight: '800', color: C.TEXT_PRIMARY, marginBottom: 8, textAlign: 'center' }}>Sign in to see your card</Text>
         <Text style={{ fontSize: 14, color: C.TEXT_MUTED, textAlign: 'center', marginBottom: 28 }}>Track your picks, build your analyst record.</Text>
-        <HapticPressable hapticStyle="none" onPress={() => router.replace('/sign-in')} style={{ width: '100%', borderRadius: 14, overflow: 'hidden' }}>
+        <HapticPressable hapticStyle="light" onPress={() => router.replace('/sign-in')} style={{ width: '100%', borderRadius: 14, overflow: 'hidden' }}>
           <LinearGradient colors={[C.TEAL, C.TEAL_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 16, alignItems: 'center', borderRadius: 14 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: C.TEXT_PRIMARY }}>Sign In</Text>
           </LinearGradient>
@@ -309,7 +309,7 @@ const RecentPicksSummaryTile = memo(function RecentPicksSummaryTile({
   onPress: () => void;
 }) {
   return (
-    <HapticPressable hapticStyle="none"
+    <HapticPressable hapticStyle="light"
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${totalPicks} predictions`}
@@ -361,7 +361,7 @@ const RecentPicksViewAllTile = memo(function RecentPicksViewAllTile({
   onPress: () => void;
 }) {
   return (
-    <HapticPressable hapticStyle="none"
+    <HapticPressable hapticStyle="light"
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="View all predictions"
@@ -826,7 +826,7 @@ export default function ProfileScreen() {
                   const statusColor = isWin ? C.TEAL : isLoss ? C.MAROON : C.TEXT_MUTED;
                   const statusLabel = isWin ? 'Won' : isLoss ? 'Missed' : 'Pending';
                   return (
-                    <HapticPressable hapticStyle="none"
+                    <HapticPressable hapticStyle="light"
                       key={p.id}
                       onPress={() => handleRecentPickPress(p.gameId, p.game)}
                       onPressIn={() => p.game ? prefetchGame(p.gameId, p.game) : undefined}
@@ -960,7 +960,7 @@ export default function ProfileScreen() {
 
         {/* ── 7. SIGN OUT + VERSION ── */}
         <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 28 }}>
-          <HapticPressable hapticStyle="none" onPress={handleSignOut}>
+          <HapticPressable hapticStyle="light" onPress={handleSignOut}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
           </HapticPressable>
           <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>{appVersionLabel}</Text>

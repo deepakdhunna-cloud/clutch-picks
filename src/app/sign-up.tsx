@@ -80,7 +80,7 @@ export default function SignUpScreen() {
           style={{ flex: 1 }}
         >
           {/* Back arrow */}
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="light"
             onPress={() => router.back()}
             hitSlop={16}
             style={s.backBtn}
@@ -117,7 +117,7 @@ export default function SignUpScreen() {
 
           {/* Continue button */}
           <View style={s.buttonWrap}>
-            <HapticPressable hapticStyle="none"
+            <HapticPressable hapticStyle="light"
               onPress={handleContinue}
               disabled={isLoading || !email.trim()}
               style={[s.continueBtn, (isLoading || !email.trim()) && { opacity: 0.4 }]}

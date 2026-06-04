@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, Image, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -196,7 +196,8 @@ export default function EditProfileScreen() {
         </HapticPressable>
       </Animated.View>
 
-      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 100 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
         {/* Profile Photo Section */}
         <Animated.View
           entering={FadeInDown.delay(100).duration(500)}
@@ -308,6 +309,7 @@ export default function EditProfileScreen() {
         </Animated.View>
 
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

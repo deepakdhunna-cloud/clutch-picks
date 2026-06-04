@@ -106,7 +106,7 @@ const SportCard = memo(function SportCard({ sport, count, onSelect }: { sport: s
   const badgeLabel = SPORT_BADGE_LABELS[sport] ?? displaySport(sport);
   const handlePress = useCallback(() => onSelect(sport), [onSelect, sport]);
   return (
-    <HapticPressable hapticStyle="none" onPress={handlePress} style={{ width: SPORT_CARD_W }}>
+    <HapticPressable hapticStyle="light" onPress={handlePress} style={{ width: SPORT_CARD_W }}>
       <LinearGradient
         colors={[hexWithAlpha(color, 0.36), 'rgba(180,211,235,0.10)', 'rgba(255,255,255,0.04)']}
         start={{ x: 0, y: 0 }}
@@ -158,7 +158,7 @@ const GameBar = memo(function GameBar({ game, onPress, showModelSignals = false 
   const badgeLabelText = showBadge ? `${predictionDisplay!.badgeLabel} ${confidence}%` : null;
 
   return (
-    <HapticPressable hapticStyle="none" onPress={onPress}>
+    <HapticPressable hapticStyle="light" onPress={onPress}>
       <LinearGradient
         colors={[hexWithAlpha(sportColor, 0.32), 'rgba(180,211,235,0.08)', live ? 'rgba(239,68,68,0.22)' : 'rgba(139,10,31,0.10)']}
         start={{ x: 0, y: 0 }}
@@ -250,7 +250,7 @@ const ResultGameRow = memo(function ResultGameRow({
   const handlePress = useCallback(() => onSelect(game), [game, onSelect]);
 
   return (
-    <HapticPressable hapticStyle="none"
+    <HapticPressable hapticStyle="light"
       onPress={handlePress}
       style={{
         height: RESULT_ROW_HEIGHT,
@@ -358,13 +358,13 @@ const RecentSearchRow = memo(function RecentSearchRow({
   }, [onRemove, term]);
 
   return (
-    <HapticPressable hapticStyle="none"
+    <HapticPressable hapticStyle="light"
       onPress={handleSelect}
       style={{ flexDirection: 'row', alignItems: 'center', minHeight: 46, borderRadius: 14, paddingHorizontal: 13, backgroundColor: 'rgba(255,255,255,0.035)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' }}
     >
       <Clock size={14} color={TEXT_MUTED} />
       <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', color: TEXT_SECONDARY, marginLeft: 10 }} numberOfLines={1}>{term}</Text>
-      <HapticPressable hapticStyle="none" onPress={handleRemove} hitSlop={8} style={{ width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
+      <HapticPressable hapticStyle="light" onPress={handleRemove} hitSlop={8} style={{ width: 26, height: 26, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
         <X size={14} color={TEXT_MUTED} />
       </HapticPressable>
     </HapticPressable>
@@ -380,7 +380,7 @@ const StoryCard = memo(function StoryCard({ game, tone, title, subtitle, onPress
   const sportMeta = SPORT_META[game.sport as Sport];
   const sportColor = sportMeta?.color ?? TEXT_MUTED;
   return (
-    <HapticPressable hapticStyle="none" onPress={onPress} style={{ width: STORY_CARD_W }}>
+    <HapticPressable hapticStyle="light" onPress={onPress} style={{ width: STORY_CARD_W }}>
       <LinearGradient
         colors={[hexWithAlpha(accent, 0.34), 'rgba(180,211,235,0.08)', 'rgba(255,255,255,0.035)']}
         start={{ x: 0, y: 0 }}
@@ -667,7 +667,7 @@ export default function SearchExploreScreen() {
               </Text>
             </View>
             {sportFilter ? (
-              <HapticPressable hapticStyle="none" onPress={clearSportFilter} hitSlop={8}>
+              <HapticPressable hapticStyle="light" onPress={clearSportFilter} hitSlop={8}>
                 <Text style={{ fontSize: 12, fontWeight: '900', color: TEAL }}>CLEAR</Text>
               </HapticPressable>
             ) : null}
@@ -682,7 +682,7 @@ export default function SearchExploreScreen() {
             const active = statusFilter === key;
             return (
               <View key={key} style={{ marginRight: i === STATUS_OPTIONS.length - 1 ? 0 : 10, marginBottom: 8 }}>
-                <HapticPressable hapticStyle="none"
+                <HapticPressable hapticStyle="light"
                   onPress={() => {
                     if (active) return;
                     setStatusFilter(key);
@@ -759,7 +759,7 @@ export default function SearchExploreScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }} edges={['top']}>
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="light"
             onPress={goBack}
             hitSlop={12}
             style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}
@@ -795,7 +795,7 @@ export default function SearchExploreScreen() {
               onSubmitEditing={() => Keyboard.dismiss()}
             />
             {query.length > 0 || sportFilter ? (
-              <HapticPressable hapticStyle="none" onPress={clearSearch} hitSlop={8} style={{ width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)' }}>
+              <HapticPressable hapticStyle="light" onPress={clearSearch} hitSlop={8} style={{ width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)' }}>
                 <X size={16} color={TEXT_MUTED} />
               </HapticPressable>
             ) : null}
@@ -829,7 +829,7 @@ export default function SearchExploreScreen() {
               <View style={{ marginBottom: 32 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 }}>
                   <Text style={{ fontSize: 10, fontWeight: '900', color: TEXT_MUTED, letterSpacing: 2 }}>RECENT SEARCHES</Text>
-                  <HapticPressable hapticStyle="none" onPress={clearRecents} hitSlop={8}><Text style={{ fontSize: 10, fontWeight: '900', color: MAROON }}>CLEAR</Text></HapticPressable>
+                  <HapticPressable hapticStyle="light" onPress={clearRecents} hitSlop={8}><Text style={{ fontSize: 10, fontWeight: '900', color: MAROON }}>CLEAR</Text></HapticPressable>
                 </View>
                 <View style={{ paddingHorizontal: 20, gap: 8 }}>
                   {recentSearches.map(term => (

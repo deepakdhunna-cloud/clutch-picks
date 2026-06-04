@@ -225,7 +225,7 @@ export default function LiveGamesScreen() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(180)} style={styles.header}>
             <View style={styles.headerRow}>
-              <HapticPressable hapticStyle="none" hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
+              <HapticPressable hapticStyle="light" hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
                 <ChevronLeft size={28} color="#fff" />
               </HapticPressable>
               <View style={styles.titleWrap}>
@@ -248,7 +248,7 @@ export default function LiveGamesScreen() {
               style={styles.chipScroll}
               contentContainerStyle={styles.chipScrollContent}
             >
-              <HapticPressable hapticStyle="none"
+              <HapticPressable hapticStyle="light"
                 onPress={() => {
                   if (!shouldHandleChipPress()) return;
                   handleChipPress(null);
@@ -280,7 +280,7 @@ export default function LiveGamesScreen() {
                 const meta = SPORT_META[sport];
                 const bg = meta?.color ?? TEAL;
                 return (
-                  <HapticPressable hapticStyle="none"
+                  <HapticPressable hapticStyle="light"
                     key={sport}
                     onPress={() => {
                       if (!shouldHandleChipPress()) return;

@@ -11,7 +11,6 @@ import { useSession } from '@/lib/auth/use-session';
 import { useUserProfile, useIsFollowing, useFollowUser, useUnfollowUser, useUserPickStats, useBlockUser, useReportUser } from '@/hooks/useSocial';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/api';
-import * as Haptics from 'expo-haptics';
 import { MAROON, TEAL, WIN, LOSS } from '@/lib/theme';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';

@@ -102,7 +102,7 @@ const PickCard = memo(function PickCard({ item, index }: { item: PickTile; index
 
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(Math.min(index * 40, 200))}>
-      <HapticPressable hapticStyle="none"
+      <HapticPressable hapticStyle="light"
         onPressIn={() => prefetchGame(item.gameId)}
         onPress={() => {
           if (!claimGameNavigation(item.gameId)) return;
@@ -279,7 +279,7 @@ export default function PicksHistoryScreen() {
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
         {/* ── HEADER ── */}
         <View style={s.header}>
-          <HapticPressable hapticStyle="none" hitSlop={12}
+          <HapticPressable hapticStyle="light" hitSlop={12}
             onPress={() => router.back()}
             style={s.backBtn}
           >
@@ -327,7 +327,7 @@ export default function PicksHistoryScreen() {
           {filters.map((f) => {
             const active = filter === f.key;
             return (
-              <HapticPressable hapticStyle="none"
+              <HapticPressable hapticStyle="light"
                 key={f.key}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter(f.key); }}
                 style={[s.filterPill, active && { borderColor: f.color, backgroundColor: `${f.color}10` }]}

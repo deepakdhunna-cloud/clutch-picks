@@ -79,7 +79,7 @@ export default function SignInScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="light"
             onPress={() => router.back()}
             hitSlop={16}
             style={s.backBtn}
@@ -112,7 +112,7 @@ export default function SignInScreen() {
           <View style={{ flex: 1 }} />
 
           <View style={s.buttonWrap}>
-            <HapticPressable hapticStyle="none"
+            <HapticPressable hapticStyle="light"
               onPress={handleContinue}
               disabled={isLoading || !email.trim()}
               style={[s.continueBtn, (isLoading || !email.trim()) && { opacity: 0.4 }]}

@@ -320,7 +320,7 @@ const StatusFilterRail = memo(function StatusFilterRail({
         const hasFilter = statusFilter !== 'all';
         const dimmed = hasFilter && !active;
         return (
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="light"
             key={f.key}
             onPress={() => {
               if (!shouldHandlePress()) return;
@@ -371,7 +371,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
   return (
     <View style={{ paddingTop: 0 }}>
       <View style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, marginTop: 0, marginBottom: 12 }}>
-        <HapticPressable hapticStyle="none"
+        <HapticPressable hapticStyle="light"
           onPress={() => {
             if (selectedSportFilter) {
               setSelectedSportFilter(null);
@@ -505,7 +505,7 @@ const HomeHeader = React.memo(function HomeHeader({
               decelerationRate="fast"
             >
               {/* All pill */}
-              <HapticPressable hapticStyle="none"
+              <HapticPressable hapticStyle="light"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
                   setSelectedLiveSportFilter(null);
@@ -537,7 +537,7 @@ const HomeHeader = React.memo(function HomeHeader({
                 const count = liveSportCounts.get(sport) ?? 0;
                 const displayName = displaySport(sport);
                 return (
-                  <HapticPressable hapticStyle="none"
+                  <HapticPressable hapticStyle="light"
                     key={sport}
                     onPress={() => {
                       if (!shouldHandleLiveChipPress()) return;
@@ -584,7 +584,7 @@ const HomeHeader = React.memo(function HomeHeader({
 
             {/* View All button — only show when there are more than 5 and not yet expanded */}
             {!showAllLive && filteredLiveGames.length > 5 ? (
-            <HapticPressable hapticStyle="none"
+            <HapticPressable hapticStyle="light"
               onPress={() => {
                 if (!shouldHandleLiveChipPress()) return;
                 router.push('/live-games' as any);
@@ -1230,7 +1230,7 @@ export default function HomeScreen() {
       const DirectionIcon = hasMore ? ChevronDown : ChevronUp;
       return (
         <Animated.View entering={FadeInDown.duration(190)} style={numColumns > 1 ? { width: '100%', paddingHorizontal: responsive.contentPadding, marginBottom: 18 } : { paddingHorizontal: 20, marginBottom: 18 }}>
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="light"
             onPress={() => {
               if (hasMore) {
                 showMoreSportGames(item.sport, item.total);
@@ -1396,7 +1396,7 @@ export default function HomeScreen() {
               sideRail
             />
             {/* Clear button — separate jumbotron tile */}
-            <HapticPressable hapticStyle="none"
+            <HapticPressable hapticStyle="light"
               onPress={() => applySportFilter(null)}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.84 : 1,
@@ -1570,14 +1570,14 @@ export default function HomeScreen() {
                 autoCorrect={false}
               />
               {searchQuery.length > 0 ? (
-                <HapticPressable hapticStyle="none" onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }}>
+                <HapticPressable hapticStyle="light" onPress={() => setSearchQuery('')} className="active:opacity-60" style={{ padding: 4 }}>
                   <X size={14} color="rgba(255,255,255,0.4)" />
                 </HapticPressable>
               ) : null}
             </View>
 
             {/* Cancel button */}
-            <HapticPressable hapticStyle="none"
+            <HapticPressable hapticStyle="light"
               onPress={handleCloseSearchModal}
               className="active:opacity-60"
             >

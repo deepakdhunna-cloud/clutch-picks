@@ -80,7 +80,7 @@ const FilterButton = memo(function FilterButton({
       entering={FadeInRight.delay(index * 60).duration(300)}
       style={animatedStyle}
     >
-      <HapticPressable hapticStyle="none"
+      <HapticPressable hapticStyle="light"
         onPress={handlePress}
         style={({ pressed }) => [
           styles.filterButton,
@@ -243,7 +243,7 @@ export default function SportDetailScreen() {
           style={styles.header}
         >
           <View style={styles.headerRow}>
-            <HapticPressable hapticStyle="none" hitSlop={12}
+            <HapticPressable hapticStyle="light" hitSlop={12}
               onPress={() => router.back()}
               style={styles.backButton}
             >

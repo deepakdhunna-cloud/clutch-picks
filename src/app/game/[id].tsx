@@ -819,7 +819,7 @@ function RedactedPrediction({ homeTeam, awayTeam, prediction, onUnlock }: {
   homeTeam: GameTeam; awayTeam: GameTeam; prediction: GamePrediction; onUnlock: () => void;
 }) {
   return (
-    <HapticPressable hapticStyle="none" onPress={onUnlock}>
+    <HapticPressable hapticStyle="light" onPress={onUnlock}>
       <View style={{
         borderRadius: 22,
         padding: 1.2,
@@ -928,7 +928,7 @@ function RedactedSection({ title, height, onUnlock }: {
   return (
     <View style={{ marginBottom: 22 }}>
       <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>{title}</Text>
-      <HapticPressable hapticStyle="none" onPress={onUnlock}>
+      <HapticPressable hapticStyle="light" onPress={onUnlock}>
         <View style={{
           height,
           borderRadius: 18,
@@ -1209,7 +1209,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
           </View>
 
           {/* Pick Strength */}
-          <HapticPressable hapticStyle="none"
+          <HapticPressable hapticStyle="light"
             onPress={(e) => {
               e.stopPropagation();
               router.push({
@@ -1688,7 +1688,7 @@ function GameDetailContent() {
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
-      <HapticPressable hapticStyle="none" onPress={() => router.back()} style={{ marginTop: 16 }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></HapticPressable>
+      <HapticPressable hapticStyle="light" onPress={() => router.back()} style={{ marginTop: 16 }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></HapticPressable>
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
@@ -1736,7 +1736,7 @@ function GameDetailContent() {
           <View style={{ height: detailHeaderTopSpacer }} />
           {/* Top bar — back (absolute left) + centered combined pill */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginBottom: 10, position: 'relative' }}>
-            <HapticPressable hapticStyle="none" onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></HapticPressable>
+            <HapticPressable hapticStyle="light" onPress={() => router.back()} style={[styles.backBtn, { position: 'absolute', left: 16 }]}><Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text></HapticPressable>
             {/* Combined pill: LIVE indicator (if live) | sport badge | follow toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 }}>
               {isLive ? (<><LivePulseDot /><Text style={{ fontSize: suspended ? 10 : 11, fontWeight: '800', color: '#DC2626', letterSpacing: 0.5 }}>{suspended ? suspensionStatus.toUpperCase() : 'LIVE'}</Text><View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} /></>) : null}
@@ -1744,7 +1744,7 @@ function GameDetailContent() {
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>{displaySport(game.sport)}</Text>
               </View>
               <View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
-              <HapticPressable hapticStyle="none"
+              <HapticPressable hapticStyle="light"
                 onPress={toggleFollow}
                 hitSlop={8}
               >
@@ -1951,7 +1951,7 @@ function GameDetailContent() {
               ) : null}
               <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} isLocked={game.status === 'LIVE' || game.status === 'FINAL'} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
-              <HapticPressable hapticStyle="none" onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
+              <HapticPressable hapticStyle="light" onPress={() => router.push({ pathname: '/game-analysis', params: { id: game.id } })} style={styles.analysisLink}>
                 <View style={styles.analysisLinkIcon}>
                   <AnalysisIcon size={20} color="#FFFFFF" />
                 </View>
@@ -1974,7 +1974,7 @@ function GameDetailContent() {
               <RedactedSection title="Recent Performance" height={160} onUnlock={() => router.push('/paywall')} />
 
               {/* ═══ WHY WE MADE THIS PICK ═══ */}
-              <HapticPressable hapticStyle="none"
+              <HapticPressable hapticStyle="light"
                 onPress={() => router.push('/paywall')}
                 style={styles.analysisLink}
               >
