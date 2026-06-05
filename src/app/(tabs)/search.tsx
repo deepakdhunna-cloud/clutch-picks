@@ -287,8 +287,8 @@ const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
       style={{
         marginHorizontal: ARENA_SIDE_PADDING,
         marginTop: 2,
-        marginBottom: 18,
-        paddingVertical: 13,
+        marginBottom: 16,
+        paddingVertical: 10,
         alignItems: 'center',
         overflow: 'hidden',
       }}
@@ -318,9 +318,9 @@ const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
           style={{
             color: WHITE,
             fontFamily: 'BebasNeue_400Regular',
-            fontSize: 38,
-            lineHeight: 40,
-            letterSpacing: 1.4,
+            fontSize: 26,
+            lineHeight: 28,
+            letterSpacing: 1.2,
             includeFontPadding: false,
           }}
         >
@@ -331,10 +331,10 @@ const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
         numberOfLines={1}
         style={{
           color: hexWithAlpha(accent, subtitleOpacity),
-          fontSize: 10,
-          lineHeight: 13,
+          fontSize: 9,
+          lineHeight: 12,
           fontWeight: '900',
-          letterSpacing: 1.7,
+          letterSpacing: 1.5,
           marginTop: 3,
           includeFontPadding: false,
         }}
@@ -1096,7 +1096,6 @@ const YourGames = memo(function YourGames({
         decelerationRate="fast"
         snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}
         snapToAlignment="start"
-        disableIntervalMomentum
         contentContainerStyle={{ paddingHorizontal: FOLLOWED_CARD_SIDE_PADDING, paddingBottom: 4 }}
         ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
         initialNumToRender={2}
@@ -1304,9 +1303,9 @@ const LiveCard = memo(function LiveCard({
   const pickStatusColor = !pick ? '#6b7280' : lead ? '#4ade80' : ps === os ? '#facc15' : LIVE_RED;
   const pickStatusText = !pick ? 'No pick set' : lead ? `Up ${scoreGap}` : ps === os ? 'Even' : `Down ${scoreGap}`;
   const innerPadX = 14;
-  const bodyGap = 9;
-  const scoreColumnWidth = Math.min(148, Math.max(138, cardWidth * 0.4));
-  const teamColumnWidth = Math.max(78, (cardWidth - innerPadX * 2 - scoreColumnWidth - bodyGap * 2) / 2);
+  const bodyGap = 8;
+  const scoreColumnWidth = Math.min(130, Math.max(110, cardWidth * 0.36));
+  const teamColumnWidth = (cardWidth - innerPadX * 2 - scoreColumnWidth - bodyGap * 2) / 2;
   const renderCricketTeamMeta = (
     scoreLabel: string | null,
     role: 'BATTING' | 'BOWLING' | null,
@@ -1591,7 +1590,7 @@ const LiveCard = memo(function LiveCard({
 
         {/* C) Match body — tennis uses player metadata + set scores; other sports keep the team-versus-team layout. */}
         {isTennis ? renderTennisBody() : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 1, paddingBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 1, paddingBottom: 16 }}>
             {/* Home block (left) */}
             <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
               <View style={{ height: 78, alignItems: 'center', justifyContent: 'center', opacity: homeLeading || !awayLeading ? 1 : 0.66, transform: [{ scale: homeLeading ? 1.04 : 1 }] }}>
@@ -1608,7 +1607,7 @@ const LiveCard = memo(function LiveCard({
                   sport={game.sport as Sport}
                 />
               </View>
-              <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '900', lineHeight: 15.5, textAlign: 'center', marginTop: 5, minHeight: 32 }} numberOfLines={2}>
+              <Text adjustsFontSizeToFit minimumFontScale={0.75} style={{ color: '#f8fafc', fontSize: 12.5, fontWeight: '900', lineHeight: 15, textAlign: 'center', marginTop: 5, minHeight: 30, maxWidth: teamColumnWidth }} numberOfLines={2}>
                 {game.homeTeam.name}
               </Text>
               {isCricket ? (
@@ -1619,7 +1618,7 @@ const LiveCard = memo(function LiveCard({
             </View>
 
             {/* D) LED score panel — same primitives + soft grounding glow as the "Live Now" card. */}
-            <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
+            <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap }}>
               <View style={{ alignItems: 'center', justifyContent: 'center' }}>
                 {/* Soft black shadow grounds the LED panel against the team color. */}
                 <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
@@ -1685,7 +1684,7 @@ const LiveCard = memo(function LiveCard({
                   sport={game.sport as Sport}
                 />
               </View>
-              <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '900', lineHeight: 15.5, textAlign: 'center', marginTop: 5, minHeight: 32 }} numberOfLines={2}>
+              <Text adjustsFontSizeToFit minimumFontScale={0.75} style={{ color: '#f8fafc', fontSize: 12.5, fontWeight: '900', lineHeight: 15, textAlign: 'center', marginTop: 5, minHeight: 30, maxWidth: teamColumnWidth }} numberOfLines={2}>
                 {game.awayTeam.name}
               </Text>
               {isCricket ? (
@@ -2844,7 +2843,6 @@ const GameDay = memo(function GameDay({
             showsHorizontalScrollIndicator={false}
             snapToOffsets={liveSnapOffsets}
             snapToAlignment="start"
-            disableIntervalMomentum
             decelerationRate="fast"
             contentContainerStyle={{ paddingHorizontal: liveRailSidePadding }}
             ItemSeparatorComponent={() => <View style={{ width: ARENA_CARD_GAP }} />}
