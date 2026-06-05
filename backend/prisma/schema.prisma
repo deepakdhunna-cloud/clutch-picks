@@ -169,6 +169,24 @@ model EloRating {
   @@unique([sport, teamId])
 }
 
+// Point-in-time Elo snapshots for leak-free backtesting and auditing.
+// Recorded at prediction time so historical replays use the actual Elo
+// that was available when the prediction was made, not the current value.
+model EloSnapshot {
+  id      String   @id  // format: "{sport}-{teamId}-{date}-{gameId|daily}"
+  sport   String
+  teamId  String
+  rating  Float
+  date    DateTime
+  gameId  String?
+  source  String   @default("prediction") // "prediction" | "replay" | "daily-cron"
+  createdAt DateTime @default(now())
+
+  @@index([sport, teamId, date])
+  @@index([gameId])
+  @@index([sport, date])
+}
+
 model PredictionResult {
   id               String    @id @default(cuid())
   gameId           String    @unique

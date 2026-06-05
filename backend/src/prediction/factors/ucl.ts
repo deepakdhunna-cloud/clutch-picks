@@ -1,42 +1,50 @@
 /**
  * UCL-specific factors.
  *
- * Weight budget: 0.42. Four factors:
- *   - Fixture congestion (heavier — double duty):   0.14
- *   - Key player availability:                      0.14
- *   - Competition stage / pedigree:                 0.084
- *   - Continental travel burden:                    0.056
+ * Weight budget: 0.42. Five factors:
+ *   - xG differential (strongest predictor):      0.12
+ *   - Key player availability:                    0.10
+ *   - Fixture congestion (heavier — double duty): 0.10
+ *   - Competition stage / pedigree:               0.06
+ *   - Continental travel burden:                  0.04
  *   → 0.42 exactly
  *
- * xG factor removed — Understat and FBRef are both Cloudflare-blocked from
- * Railway. If we add a proxy service or paid xG API later, re-add this
- * factor and rebalance weights.
+ * xG factor RE-ADDED (2026-06-05): Using FBref/Understat pipeline.
+ * For UCL, xG data comes from the team's domestic league performance
+ * (since UCL-only xG is sparse). This is a reasonable proxy because
+ * UCL teams' attacking quality correlates strongly with domestic xG.
  *
  * Pedigree and travel factors use verified JSON tables in lib/data/.
  * When those tables are empty, the factors stay unavailable.
  */
 
 import type { GameContext, FactorContribution } from "../types";
-import { fixtureCongestionFactor, keyPlayerFactor } from "./soccerCommon";
+import type { TeamXgMetrics } from "../../lib/soccerXg";
+import { xgDifferentialFactor, fixtureCongestionFactor, keyPlayerFactor } from "./soccerCommon";
 
 // ─── Public entrypoint ──────────────────────────────────────────────────────
 
-export function computeUCLFactors(ctx: GameContext): FactorContribution[] {
+export function computeUCLFactors(
+  ctx: GameContext,
+  homeXg?: TeamXgMetrics | null,
+  awayXg?: TeamXgMetrics | null,
+): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  // 1. Fixture congestion — higher weight because UCL teams pull double
-  //    duty (domestic league + UCL + cup).
-  factors.push(fixtureCongestionFactor(ctx, 0.14));    // 0.14
+  // 1. xG differential — strongest signal
+  factors.push(xgDifferentialFactor(ctx, 0.12, homeXg ?? null, awayXg ?? null));
 
-  // 2. Key-player availability — UCL squads tend to be deeper so missing
-  //    one player hurts a little less than domestic.
-  factors.push(keyPlayerFactor(ctx, 0.14));            // 0.14
+  // 2. Key-player availability
+  factors.push(keyPlayerFactor(ctx, 0.10));
 
-  // 3. Pedigree (competition stage) — 0.084
-  factors.push(pedigreeFactor(ctx));                   // 0.084
+  // 3. Fixture congestion — higher weight because UCL teams pull double duty
+  factors.push(fixtureCongestionFactor(ctx, 0.10));
 
-  // 4. Continental travel — 0.056
-  factors.push(travelFactor(ctx));                     // 0.056
+  // 4. Pedigree (competition stage)
+  factors.push(pedigreeFactor(ctx));
+
+  // 5. Continental travel
+  factors.push(travelFactor(ctx));
 
   return factors;
 }
@@ -46,7 +54,7 @@ export function computeUCLFactors(ctx: GameContext): FactorContribution[] {
 // is worth ≈8 Elo, capped ±25. Empty data keeps this factor unavailable.
 
 function pedigreeFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.084;
+  const weight = 0.06;
   const homePed = ctx.uclPedigree?.home;
   const awayPed = ctx.uclPedigree?.away;
 
@@ -81,11 +89,10 @@ function pedigreeFactor(ctx: GameContext): FactorContribution {
 
 // ─── Continental travel ─────────────────────────────────────────────────────
 // Haversine distance between home and away cities. If >1500km AND the two
-// cities are in different countries (approximated by "different city
-// entries"), we dock 15 Elo from the away side (which is home-positive).
+// cities are in different countries, we dock 15 Elo from the away side.
 
 function travelFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.056;
+  const weight = 0.04;
   const travel = ctx.uclTravel;
   if (!travel) {
     return {
@@ -112,7 +119,6 @@ function travelFactor(ctx: GameContext): FactorContribution {
     };
   }
 
-  // >1500km → away team fatigued → +15 Elo for home.
   const delta = 15;
   return {
     key: "ucl_travel",
