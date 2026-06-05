@@ -125,16 +125,11 @@ const ArenaHeader = memo(function ArenaHeader({
         marginHorizontal: ARENA_SIDE_PADDING,
         marginTop: 4,
         marginBottom: ARENA_SECTION_GAP,
-        borderRadius: 18,
+        borderRadius: 14,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(180,211,235,0.12)',
+        borderColor: 'rgba(180,211,235,0.10)',
         backgroundColor: '#05080d',
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.22,
-        shadowRadius: 18,
-        elevation: 6,
       }}
     >
       <LinearGradient
@@ -142,40 +137,35 @@ const ArenaHeader = memo(function ArenaHeader({
         locations={[0, 0.62, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ padding: 16, minHeight: 116, justifyContent: 'center' }}
+        style={{ paddingVertical: 14, paddingHorizontal: 16 }}
       >
         <View
           pointerEvents="none"
           style={{
             position: 'absolute',
             left: 0,
-            top: 16,
-            bottom: 16,
+            top: 12,
+            bottom: 12,
             width: 3,
             borderTopRightRadius: 3,
             borderBottomRightRadius: 3,
             backgroundColor: hexWithAlpha(accent, 0.78),
-            shadowColor: accent,
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
           }}
         />
         <LinearGradient
           pointerEvents="none"
-          colors={[hexWithAlpha(accent, 0.12), 'rgba(255,255,255,0)', 'rgba(255,255,255,0.035)']}
+          colors={[hexWithAlpha(accent, 0.08), 'rgba(255,255,255,0)', 'rgba(255,255,255,0.02)']}
           locations={[0, 0.58, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, minWidth: 0, paddingRight: right ? 14 : 0 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.82} style={{ fontSize: 24, fontWeight: '900', color: WHITE, lineHeight: 29, letterSpacing: 0 }} numberOfLines={1}>{title}</Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: 'rgba(224,234,240,0.62)', lineHeight: 18, marginTop: 7, maxWidth: 320 }} numberOfLines={2}>{subtitle}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1, minWidth: 0, paddingRight: right ? 12 : 0 }}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.82} style={{ fontSize: 17, fontWeight: '900', color: WHITE, lineHeight: 21, letterSpacing: -0.2 }} numberOfLines={1}>{title}</Text>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(224,234,240,0.55)', lineHeight: 15, marginTop: 4 }} numberOfLines={2}>{subtitle}</Text>
           </View>
-          {right ? <View style={{ paddingTop: 1, alignItems: 'flex-end', flexShrink: 0, maxWidth: 116 }}>{right}</View> : null}
+          {right ? <View style={{ alignItems: 'flex-end', flexShrink: 0, maxWidth: 100 }}>{right}</View> : null}
         </View>
       </LinearGradient>
     </View>
@@ -745,7 +735,7 @@ const YourGames = memo(function YourGames({
         horizontal
         nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
-        decelerationRate={0.992}
+        decelerationRate="fast"
         snapToInterval={FOLLOWED_CARD_W + ARENA_CARD_GAP}
         snapToAlignment="start"
         contentInset={{left: 20, right: 20}}
@@ -1357,7 +1347,7 @@ const LiveCard = memo(function LiveCard({
         </View>
 
         {/* C) Match body — home left, score middle, away right */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2, paddingBottom: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingTop: 2, paddingBottom: 14 }}>
           {/* Home block (left) */}
           <View style={{ width: teamColumnWidth, alignItems: 'center', minWidth: 0 }}>
             <View style={{ height: 56, alignItems: 'center', justifyContent: 'center', opacity: homeLeading || !awayLeading ? 1 : 0.66, transform: [{ scale: homeLeading ? 1.04 : 1 }] }}>
@@ -1372,7 +1362,7 @@ const LiveCard = memo(function LiveCard({
                 />
               </JerseyGlow>
             </View>
-            <Text style={{ color: '#f8fafc', fontSize: 12, fontWeight: '900', lineHeight: 14.5, textAlign: 'center', marginTop: 4, minHeight: 30 }} numberOfLines={2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.78} style={{ color: '#f8fafc', fontSize: 11.5, fontWeight: '900', lineHeight: 14, textAlign: 'center', marginTop: 4, minHeight: 28, maxWidth: teamColumnWidth }} numberOfLines={2}>
               {game.homeTeam.name}
             </Text>
             {isCricket ? (
@@ -1383,7 +1373,7 @@ const LiveCard = memo(function LiveCard({
           </View>
 
           {/* D) LED score panel — same primitives as the home-page LED tiles. */}
-          <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', marginHorizontal: bodyGap / 2 }}>
+          <View style={{ width: scoreColumnWidth, flexShrink: 0, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginHorizontal: bodyGap / 2 }}>
             {!suspended && matchTime ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
                 <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: LIVE_RED, marginRight: 5 }} />
@@ -1441,7 +1431,7 @@ const LiveCard = memo(function LiveCard({
                 />
               </JerseyGlow>
             </View>
-            <Text style={{ color: '#f8fafc', fontSize: 12, fontWeight: '900', lineHeight: 14.5, textAlign: 'center', marginTop: 4, minHeight: 30 }} numberOfLines={2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.78} style={{ color: '#f8fafc', fontSize: 11.5, fontWeight: '900', lineHeight: 14, textAlign: 'center', marginTop: 4, minHeight: 28, maxWidth: teamColumnWidth }} numberOfLines={2}>
               {game.awayTeam.name}
             </Text>
             {isCricket ? (
@@ -2511,7 +2501,7 @@ const GameDay = memo(function GameDay({
           showsHorizontalScrollIndicator={false}
           snapToInterval={LIVE_CARD_SNAP_INTERVAL}
           snapToAlignment="start"
-          decelerationRate={0.992}
+          decelerationRate="fast"
           contentInset={{left: ARENA_SIDE_PADDING, right: ARENA_SIDE_PADDING}}
           contentOffset={{x: -ARENA_SIDE_PADDING, y: 0}}
           contentContainerStyle={{paddingHorizontal: Platform.OS === 'android' ? ARENA_SIDE_PADDING : 0}}
@@ -2653,7 +2643,7 @@ const Prep = memo(function Prep({
             horizontal
             nestedScrollEnabled
             showsHorizontalScrollIndicator={false}
-            decelerationRate={0.992}
+            decelerationRate="fast"
             contentContainerStyle={{paddingLeft:ARENA_SIDE_PADDING, paddingRight:ARENA_SIDE_PADDING, paddingBottom:2, flexDirection:'row'}}
             style={{flexGrow:0, overflow:'visible'}}
             onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
