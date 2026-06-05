@@ -288,7 +288,7 @@ const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
         marginHorizontal: ARENA_SIDE_PADDING,
         marginTop: 2,
         marginBottom: 16,
-        paddingVertical: 10,
+        paddingVertical: 13,
         alignItems: 'center',
         overflow: 'hidden',
       }}
@@ -318,8 +318,8 @@ const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
           style={{
             color: WHITE,
             fontFamily: 'BebasNeue_400Regular',
-            fontSize: 26,
-            lineHeight: 28,
+            fontSize: 38,
+            lineHeight: 40,
             letterSpacing: 1.2,
             includeFontPadding: false,
           }}
@@ -331,11 +331,11 @@ const ArenaModeTitleBanner = memo(function ArenaModeTitleBanner({
         numberOfLines={1}
         style={{
           color: hexWithAlpha(accent, subtitleOpacity),
-          fontSize: 9,
-          lineHeight: 12,
+          fontSize: 10,
+          lineHeight: 13,
           fontWeight: '900',
           letterSpacing: 1.5,
-          marginTop: 3,
+          marginTop: 4,
           includeFontPadding: false,
         }}
       >
@@ -494,12 +494,8 @@ const SportPills = memo(function SportPills({
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0, marginBottom: bottomMargin }}
       contentContainerStyle={{ paddingLeft: sidePadding, paddingRight: sidePadding, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
-      onTouchStart={onHorizontalGestureStart}
-      onTouchEnd={onHorizontalGestureEnd}
-      onTouchCancel={onHorizontalGestureEnd}
       onScrollBeginDrag={onHorizontalGestureStart}
       onScrollEndDrag={onHorizontalGestureEnd}
-      onMomentumScrollBegin={onHorizontalGestureStart}
       onMomentumScrollEnd={onHorizontalGestureEnd}
     >
       {visible.map((s, index) => {
@@ -514,16 +510,9 @@ const SportPills = memo(function SportPills({
               if (!on) fireSelectionHaptic();
               onSelect(s);
             }}
-            onTouchStart={(event) => {
-              onPillTouchStart(event);
-              onHorizontalGestureStart?.();
-            }}
+            onTouchStart={onPillTouchStart}
             onTouchMove={onPillTouchMove}
-            onTouchCancel={() => {
-              onPillTouchCancel();
-              onHorizontalGestureEnd?.();
-            }}
-            onTouchEnd={onHorizontalGestureEnd}
+            onTouchCancel={onPillTouchCancel}
             pressRetentionOffset={6}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
@@ -814,6 +803,7 @@ const ArenaScrollView = memo(function ArenaScrollView({
       onScroll={sh}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
@@ -1106,12 +1096,8 @@ const YourGames = memo(function YourGames({
         renderItem={({ item }) => <FollowedCard game={item} />}
         getItemLayout={(_, index) => ({ length: FOLLOWED_CARD_W + ARENA_CARD_GAP, offset: (FOLLOWED_CARD_W + ARENA_CARD_GAP) * index, index })}
         style={{ flexGrow: 0 }}
-        onTouchStart={onHorizontalGestureStart}
-        onTouchEnd={onHorizontalGestureEnd}
-        onTouchCancel={onHorizontalGestureEnd}
         onScrollBeginDrag={onHorizontalGestureStart}
         onScrollEndDrag={onHorizontalGestureEnd}
-        onMomentumScrollBegin={onHorizontalGestureStart}
         onMomentumScrollEnd={onHorizontalGestureEnd}
       />
     </View>
@@ -2403,13 +2389,13 @@ const MATCHUP_CHIP_BACKGROUND = 'rgba(5,9,14,0.42)';
 const MATCHUP_CHIP_BORDER = 'rgba(152,185,211,0.14)';
 const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.08)';
 const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.16)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 20;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
-const MATCHUP_CARD_MIN_HEIGHT = 148;
-const MATCHUP_RANK_SIZE = 30;
-const MATCHUP_RANK_GAP = 12;
-const MATCHUP_ACTION_SIZE = 30;
-const MATCHUP_ACTION_GAP = 10;
+const MATCHUP_CARD_CONTENT_PADDING_X = 16;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 14;
+const MATCHUP_CARD_MIN_HEIGHT = 0;
+const MATCHUP_RANK_SIZE = 26;
+const MATCHUP_RANK_GAP = 10;
+const MATCHUP_ACTION_SIZE = 28;
+const MATCHUP_ACTION_GAP = 8;
 const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;
 
 const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, resetSignal }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; resetSignal?: number }) {
@@ -2424,7 +2410,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
   }, [game.id, resetSignal]);
 
   return (
-    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 18, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', minHeight: MATCHUP_CARD_MIN_HEIGHT, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 14, elevation: 5 }}>
+    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 14, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }}>
       <Pressable
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
         accessibilityRole="button"
@@ -2433,7 +2419,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
         style={({ pressed }) => ({
           paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X,
           paddingVertical: MATCHUP_CARD_CONTENT_PADDING_Y,
-          minHeight: expanded ? undefined : MATCHUP_CARD_MIN_HEIGHT,
+          
           opacity: pressed ? 0.92 : 1,
         })}
       >
@@ -2442,14 +2428,14 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
             <Text style={{ fontSize: 10.2, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 15.8, lineHeight: 20.8, fontWeight: '800', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 12.8, lineHeight: 19, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 10 }} numberOfLines={expanded ? undefined : 2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 14, lineHeight: 18.5, fontWeight: '700', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 11.5, lineHeight: 16.5, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 6 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
               {headline}
             </Text>
             {tags.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 13 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 8 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
                   <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 8, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 5 }}>
                     <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 8.8, lineHeight: 11.5, fontWeight: '800', color: i === 0 ? MATCHUP_ACCENT_COLOR : TEXT_MUTED, letterSpacing: 0.35, includeFontPadding: false }}>{tg}</Text>
@@ -2864,15 +2850,11 @@ const GameDay = memo(function GameDay({
             )}
             getItemLayout={(_, index) => ({ length: liveCardSnapInterval, offset: liveCardSnapInterval * index, index })}
             style={{flexGrow:0}}
-            onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
-            onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
             onScrollBeginDrag={markLiveRailScrollStart}
             onScrollEndDrag={(event) => {
               snapLiveRail(event, true);
               markLiveRailScrollEnd();
             }}
-            onMomentumScrollBegin={markLiveRailScrollStart}
             onMomentumScrollEnd={(event) => {
               snapLiveRail(event, true);
               markLiveRailScrollEnd();
@@ -2911,7 +2893,7 @@ const PREP_SUBTAB_GAP = 4;
 const PREP_SUBTAB_TRACK_INNER_PADDING = 3;
 const MATCHUP_CARD_CTA_HEIGHT = 40;
 const MATCHUP_TAG_ROW_GAP = 5;
-const PREP_MATCHUP_CARD_GAP = 10;
+const PREP_MATCHUP_CARD_GAP = 12;
 
 // ─── PREP MODE ───
 const Prep = memo(function Prep({
@@ -3364,7 +3346,7 @@ export default function MyArenaScreen() {
     if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
     pagerUnlockTimer.current = setTimeout(() => {
       setArenaPagerEnabled((current) => current ? current : true);
-    }, 120);
+    }, 50);
   }, []);
 
   const horizontalGestureGuard = useMemo<ArenaHorizontalGestureGuard>(() => ({
