@@ -587,7 +587,8 @@ const HomeHeader = React.memo(function HomeHeader({
             <HapticPressable hapticStyle="light"
               onPress={() => {
                 if (!shouldHandleLiveChipPress()) return;
-                guardedPush('/live-games' as any);
+                const sportParam = selectedLiveSportFilter ?? selectedSportFilter;
+                guardedPush(sportParam ? `/live-games?sport=${sportParam}` as any : '/live-games' as any);
               }}
               pressRetentionOffset={6}
               onTouchStart={onLiveChipTouchStart}

@@ -1,9 +1,8 @@
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
 import { HapticPressable } from '@/components/HapticPressable';
-import { useRouter, Stack } from 'expo-router';
-import { useState, useCallback, useMemo, useDeferredValue, useRef } from 'react';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useState, useCallback, useMemo, useDeferredValue, useRef, useEffect } from 'react';
 import Animated, {
-  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -32,7 +31,9 @@ const ENTER_DURATION = 260;
 
 export default function LiveGamesScreen() {
   const router = useRouter();
+  const { sport: initialSport } = useLocalSearchParams<{ sport?: string }>();
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
+  const initialSportApplied = useRef(false);
   const deferredSelectedSport = useDeferredValue(selectedSport);
 
   const translateX = useSharedValue(0);
@@ -67,6 +68,16 @@ export default function LiveGamesScreen() {
   }, [liveGames]);
 
   const availableSports = useMemo(() => Array.from(gamesBySport.keys()), [gamesBySport]);
+
+  // Apply initial sport filter from homepage navigation
+  useEffect(() => {
+    if (initialSportApplied.current || !initialSport || !availableSports.length) return;
+    const match = availableSports.find(s => s.toUpperCase() === initialSport.toUpperCase());
+    if (match) {
+      setSelectedSport(match);
+      initialSportApplied.current = true;
+    }
+  }, [initialSport, availableSports]);
 
   const filteredGames = useMemo(() => {
     if (!deferredSelectedSport) return liveGames;
@@ -222,7 +233,7 @@ export default function LiveGamesScreen() {
           }
         >
           {/* Header */}
-          <Animated.View entering={FadeInDown.duration(180)} style={styles.header}>
+          <View style={styles.header}>
             <View style={styles.headerRow}>
               <HapticPressable hapticStyle="light" hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
                 <ChevronLeft size={28} color="#fff" />
@@ -237,7 +248,7 @@ export default function LiveGamesScreen() {
                 </Text>
               </View>
             </View>
-          </Animated.View>
+          </View>
 
           {/* Sport filter chips */}
           {availableSports.length > 1 ? (
