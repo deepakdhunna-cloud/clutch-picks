@@ -2389,8 +2389,8 @@ const MATCHUP_CHIP_BACKGROUND = 'rgba(5,9,14,0.42)';
 const MATCHUP_CHIP_BORDER = 'rgba(152,185,211,0.14)';
 const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.08)';
 const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.16)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 16;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 14;
+const MATCHUP_CARD_CONTENT_PADDING_X = 22;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 16;
 const MATCHUP_CARD_MIN_HEIGHT = 0;
 const MATCHUP_RANK_SIZE = 26;
 const MATCHUP_RANK_GAP = 10;
@@ -2428,8 +2428,8 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
             <Text style={{ fontSize: 10.2, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 14, lineHeight: 18.5, fontWeight: '700', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 11.5, lineHeight: 16.5, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 6 }} numberOfLines={expanded ? undefined : 2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 13, lineHeight: 17.5, fontWeight: '700', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 11.2, lineHeight: 15.5, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 5 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
               {headline}
