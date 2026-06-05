@@ -277,6 +277,15 @@ export type GameContext = {
     source: "espn-cricket-h2h";
   } | null;
 
+  // Soccer (EPL/MLS/UCL): Expected Goals metrics from FBref/Understat.
+  // null when sport is not soccer or when xG data fetch failed.
+  homeXg?: import("../lib/soccerXg").TeamXgMetrics | null;
+  awayXg?: import("../lib/soccerXg").TeamXgMetrics | null;
+
+  // Tennis: Surface-specific performance adjustment.
+  // null when sport is not tennis or when surface data fetch failed.
+  surfaceAdjustment?: import("../lib/tennisSurface").SurfaceAdjustment | null;
+
   /** ISO date string of the game */
   gameDate: string;
 };

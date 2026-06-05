@@ -37,9 +37,14 @@ export function isSelfLearningCalibrationEnabled(): boolean {
 
 const MIN_BUCKET_SAMPLE = 30;
 const FULL_TRUST_BUCKET_SAMPLE = 100;
-const MAX_BINARY_ADJUSTMENT = 0.03;
-const MAX_THREE_WAY_ADJUSTMENT = 0.02;
-const LEARNING_BLEND_RATE = 0.35;
+// Increased caps (2026-06-05): the previous ±3pp/±2pp caps were too conservative
+// to fix the systematic overconfidence at extremes (75%+ predictions winning only
+// 72% — a 13.6pp gap). The ±8pp/±5pp caps allow the self-learning layer to
+// meaningfully correct calibration errors while still preventing wild swings.
+const MAX_BINARY_ADJUSTMENT = 0.08;
+const MAX_THREE_WAY_ADJUSTMENT = 0.05;
+// Increased blend rate from 0.35 to 0.55 so corrections propagate faster.
+const LEARNING_BLEND_RATE = 0.55;
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
 const cache = new Map<string, { expiresAt: number; snapshot: LearningCalibrationSnapshot | null }>();

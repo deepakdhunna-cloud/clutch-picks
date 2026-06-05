@@ -1023,8 +1023,16 @@ export interface LineupPlayer {
   mlbPersonId?: number;     // MLB StatsAPI person ID for cross-referencing
   seasonGamesStarted?: number;
   seasonInningsPitched?: number;
-  source?: "espn-probable" | "mlb-statsapi-probable" | "mlb-rotation-projection";
+  source?: "espn-probable" | "mlb-statsapi-probable" | "mlb-rotation-projection" | "nhl-api-confirmed" | "espn-roster-inferred";
   projectionNote?: string;
+  // ── NHL goalie metrics (optional; populated for NHL G only) ──
+  savePercentage?: number;   // 0–1 (e.g., 0.920)
+  goalsAgainstAvg?: number;  // GAA (e.g., 2.45)
+  shutouts?: number;         // Season shutouts
+  gamesPlayed?: number;      // Season games played
+  wins?: number;             // Season wins
+  losses?: number;           // Season losses
+  nhlPlayerId?: number;      // NHL API player ID for cross-referencing
 }
 
 export interface StartingLineup {
@@ -1032,6 +1040,8 @@ export interface StartingLineup {
   starters: LineupPlayer[];
   // MLB-specific: the confirmed probable starting pitcher if available
   startingPitcher?: LineupPlayer;
+  // NHL-specific: the confirmed or probable starting goalie if available
+  startingGoalie?: LineupPlayer;
 }
 
 const LINEUP_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes

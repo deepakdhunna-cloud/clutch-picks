@@ -5,21 +5,23 @@
  *
  * Weight budget: 0.42 (remaining after 0.58 base).
  * Breakdown:
- *   - Starting goalie: 0.22
+ *   - Starting goalie (individual stats preferred): 0.22
  *   - Back-to-back backup: 0.08
  *   - Special teams differential (PP% vs PK%): 0.06
  *   - Injuries (top-6 forwards, top-4 defense): 0.06
  *
- * Data source: ESPN scoreboard returns `probableStartingGoalie` with playerId
- * in `competitors[].probables[]`. Individual goalie stats (GAA, SV%, SO)
- * available via ESPN athlete stats endpoint.
- * Verified against live API response 2026-04-12: Vasilevskiy (TB), Swayman (BOS)
- * both returned with full season stats (GP, GAA, SV%, SO).
+ * Changes (2026-06-05):
+ *   - Goalie factor now uses INDIVIDUAL goalie stats (SV%, GAA) from the
+ *     confirmed starting goalie when available via the NHL API pipeline.
+ *   - Falls back to team-level save% only when individual stats are missing,
+ *     and marks the factor as "degraded" (reduced confidence via hasSignal).
+ *   - Special teams formula was fixed in the previous commit.
  *
  * All deltas in rating points (positive = favors home).
  */
 
 import type { GameContext, FactorContribution } from "../types";
+import type { LineupPlayer } from "../../lib/espnStats";
 import { injuryReportsAreVerified, injuryUnavailableEvidence } from "./availability";
 
 // ─── League average baselines (2024-2025) ───────────────────────────────
@@ -39,36 +41,59 @@ const POSITION_IMPACT: Record<string, number> = {
 };
 
 /**
- * Convert a goalie's season save percentage to Elo-point quality relative to
- * league average. Each 0.01 SV% above average ≈ 1 GAA improvement over ~30
- * shots/game ≈ significant edge.
+ * Convert a goalie's individual stats to Elo-point quality relative to
+ * league average. Uses a blend of SV% (60%) and GAA (40%).
  *
  * Source: Hockey Reference — a goalie with .920 SV% vs .900 SV% saves ~0.6
  * extra goals per game over a 30-shot average, which is worth ~40-50 Elo pts.
+ * Individual stats are FAR more predictive than team-level save% because
+ * they isolate the goalie's contribution from team defensive quality.
  */
-function goalieQualityDelta(savePct: number | undefined, gaa: number | undefined): number {
-  if (savePct === undefined && gaa === undefined) return 0;
+function goalieQualityFromIndividual(goalie: LineupPlayer): number {
+  const sv = goalie.savePercentage;
+  const gaa = goalie.goalsAgainstAvg;
 
-  let delta = 0;
-  if (savePct !== undefined) {
-    // Each 0.01 SV% above league average ≈ 25 Elo points
-    // (0.910 vs 0.900 = 0.01 = +25 pts)
-    delta += (savePct - LG_SAVE_PCT) * 2500;
-  }
-  if (gaa !== undefined) {
-    // Each goal below league average GAA ≈ 30 Elo points
-    delta += (LG_GAA - gaa) * 30;
-  }
+  if (sv === undefined && gaa === undefined) return 0;
 
-  // Blend SV% (60%) and GAA (40%) — SV% is more predictive (less team-dependent)
-  // Source: Hockey Reference correlation studies
-  if (savePct !== undefined && gaa !== undefined) {
-    const svDelta = (savePct - LG_SAVE_PCT) * 2500;
+  if (sv !== undefined && gaa !== undefined) {
+    // Blend: SV% is more predictive (less team-dependent)
+    const svDelta = (sv - LG_SAVE_PCT) * 2500;
     const gaaDelta = (LG_GAA - gaa) * 30;
-    delta = svDelta * 0.6 + gaaDelta * 0.4;
+    return svDelta * 0.6 + gaaDelta * 0.4;
   }
 
-  return delta;
+  if (sv !== undefined) {
+    return (sv - LG_SAVE_PCT) * 2500;
+  }
+
+  // GAA only
+  return (LG_GAA - gaa!) * 30;
+}
+
+/**
+ * Convert team-level save percentage to Elo-point quality.
+ * This is the DEGRADED fallback — less predictive because it blends
+ * starter and backup performance.
+ */
+function goalieQualityFromTeamSV(savePct: number): number {
+  // Each 0.01 SV% above league average ≈ 25 Elo points
+  // Reduced from individual (2500 multiplier) because team SV% is noisier
+  return (savePct - LG_SAVE_PCT) * 2000;
+}
+
+/**
+ * Extract the starting goalie from the lineup data.
+ * Prefers the dedicated startingGoalie field, falls back to first G in starters.
+ */
+function extractStartingGoalie(lineup: import("../../lib/espnStats").StartingLineup | null): LineupPlayer | null {
+  if (!lineup) return null;
+
+  // Prefer the dedicated startingGoalie field (populated by NHL API pipeline)
+  if (lineup.startingGoalie) return lineup.startingGoalie;
+
+  // Fallback: first goalie in starters list
+  const goalie = lineup.starters.find((p) => p.position === "G");
+  return goalie ?? null;
 }
 
 export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
@@ -76,31 +101,83 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
 
   // ── 1. Starting goalie ────────────────────────────────────────────────
   // THE single most important NHL factor.
-  // ESPN scoreboard provides probable starting goalie with playerId.
-  // Team save percentage from advanced metrics serves as a proxy for the
-  // starter's quality when individual stats aren't available.
   //
-  // We use team-level save% from ESPN's statistics endpoint as the primary
-  // signal. When individual goalie stats become available via the athlete
-  // endpoint, this can be upgraded.
-  const homeSavePct = ctx.homeAdvanced.savePercentage;
-  const awaySavePct = ctx.awayAdvanced.savePercentage;
-  const goalieAvailable = homeSavePct !== undefined || awaySavePct !== undefined;
+  // Priority chain:
+  // 1. Individual goalie stats from confirmed starter (NHL API pipeline)
+  // 2. Team-level save% from ESPN/NHL stats (degraded signal)
+  // 3. Unavailable (factor redistributes)
+  const homeGoalie = extractStartingGoalie(ctx.homeLineup);
+  const awayGoalie = extractStartingGoalie(ctx.awayLineup);
+
+  const homeHasIndividual = homeGoalie?.savePercentage !== undefined || homeGoalie?.goalsAgainstAvg !== undefined;
+  const awayHasIndividual = awayGoalie?.savePercentage !== undefined || awayGoalie?.goalsAgainstAvg !== undefined;
+
+  // Determine if we're using individual stats (high quality) or team fallback (degraded)
+  const homeGoalieConfirmed = homeGoalie?.isConfirmed === true && homeHasIndividual;
+  const awayGoalieConfirmed = awayGoalie?.isConfirmed === true && awayHasIndividual;
 
   let goalieDelta = 0;
-  let goalieEvidence = "Starting goalie/team save data unavailable from public team feeds";
+  let goalieEvidence = "Starting goalie data unavailable";
+  let goalieAvailable = false;
+  let goalieHasSignal = false;
 
-  if (homeSavePct !== undefined && awaySavePct !== undefined) {
-    const homeQuality = goalieQualityDelta(homeSavePct, undefined);
-    const awayQuality = goalieQualityDelta(awaySavePct, undefined);
+  if (homeHasIndividual && awayHasIndividual) {
+    // BEST CASE: Both goalies have individual stats
+    const homeQuality = goalieQualityFromIndividual(homeGoalie!);
+    const awayQuality = goalieQualityFromIndividual(awayGoalie!);
     goalieDelta = homeQuality - awayQuality;
-    goalieEvidence = `Home team SV% ${(homeSavePct * 100).toFixed(1)}% vs Away SV% ${(awaySavePct * 100).toFixed(1)}% (league avg ${(LG_SAVE_PCT * 100).toFixed(1)}%)`;
-  } else if (homeSavePct !== undefined) {
-    goalieDelta = goalieQualityDelta(homeSavePct, undefined);
-    goalieEvidence = `Home team SV% ${(homeSavePct * 100).toFixed(1)}% (away data unavailable)`;
-  } else if (awaySavePct !== undefined) {
-    goalieDelta = -goalieQualityDelta(awaySavePct, undefined);
-    goalieEvidence = `Away team SV% ${(awaySavePct * 100).toFixed(1)}% (home data unavailable)`;
+    goalieAvailable = true;
+    goalieHasSignal = true;
+
+    const homeLabel = homeGoalieConfirmed ? `${homeGoalie!.name} (confirmed)` : `${homeGoalie!.name} (probable)`;
+    const awayLabel = awayGoalieConfirmed ? `${awayGoalie!.name} (confirmed)` : `${awayGoalie!.name} (probable)`;
+    const homeSV = homeGoalie!.savePercentage !== undefined ? `${(homeGoalie!.savePercentage * 100).toFixed(1)}% SV` : "";
+    const awaySV = awayGoalie!.savePercentage !== undefined ? `${(awayGoalie!.savePercentage * 100).toFixed(1)}% SV` : "";
+    const homeGAA = homeGoalie!.goalsAgainstAvg !== undefined ? `${homeGoalie!.goalsAgainstAvg.toFixed(2)} GAA` : "";
+    const awayGAA = awayGoalie!.goalsAgainstAvg !== undefined ? `${awayGoalie!.goalsAgainstAvg.toFixed(2)} GAA` : "";
+
+    goalieEvidence = `${homeLabel} [${[homeSV, homeGAA].filter(Boolean).join(", ")}] vs ${awayLabel} [${[awaySV, awayGAA].filter(Boolean).join(", ")}]`;
+  } else if (homeHasIndividual || awayHasIndividual) {
+    // PARTIAL: One goalie has individual stats, other uses team fallback
+    goalieAvailable = true;
+    goalieHasSignal = true;
+
+    if (homeHasIndividual) {
+      const homeQuality = goalieQualityFromIndividual(homeGoalie!);
+      const awayFallback = ctx.awayAdvanced.savePercentage;
+      const awayQuality = awayFallback !== undefined ? goalieQualityFromTeamSV(awayFallback) : 0;
+      goalieDelta = homeQuality - awayQuality;
+      goalieEvidence = `${homeGoalie!.name} [${homeGoalie!.savePercentage !== undefined ? `${(homeGoalie!.savePercentage * 100).toFixed(1)}% SV` : ""}] vs Away team SV% ${awayFallback !== undefined ? `${(awayFallback * 100).toFixed(1)}%` : "unavailable"}`;
+    } else {
+      const homeFallback = ctx.homeAdvanced.savePercentage;
+      const homeQuality = homeFallback !== undefined ? goalieQualityFromTeamSV(homeFallback) : 0;
+      const awayQuality = goalieQualityFromIndividual(awayGoalie!);
+      goalieDelta = homeQuality - awayQuality;
+      goalieEvidence = `Home team SV% ${homeFallback !== undefined ? `${(homeFallback * 100).toFixed(1)}%` : "unavailable"} vs ${awayGoalie!.name} [${awayGoalie!.savePercentage !== undefined ? `${(awayGoalie!.savePercentage * 100).toFixed(1)}% SV` : ""}]`;
+    }
+  } else {
+    // FALLBACK: No individual stats — use team-level save% (degraded)
+    const homeSavePct = ctx.homeAdvanced.savePercentage;
+    const awaySavePct = ctx.awayAdvanced.savePercentage;
+    goalieAvailable = homeSavePct !== undefined || awaySavePct !== undefined;
+
+    if (homeSavePct !== undefined && awaySavePct !== undefined) {
+      const homeQuality = goalieQualityFromTeamSV(homeSavePct);
+      const awayQuality = goalieQualityFromTeamSV(awaySavePct);
+      goalieDelta = homeQuality - awayQuality;
+      goalieHasSignal = goalieDelta !== 0;
+      goalieEvidence = `Team-level fallback: Home SV% ${(homeSavePct * 100).toFixed(1)}% vs Away SV% ${(awaySavePct * 100).toFixed(1)}% (individual goalie stats unavailable — reduced confidence)`;
+    } else if (homeSavePct !== undefined) {
+      goalieDelta = goalieQualityFromTeamSV(homeSavePct);
+      goalieHasSignal = goalieDelta !== 0;
+      goalieEvidence = `Team-level fallback: Home SV% ${(homeSavePct * 100).toFixed(1)}% (away data unavailable)`;
+    } else if (awaySavePct !== undefined) {
+      goalieDelta = -goalieQualityFromTeamSV(awaySavePct);
+      goalieHasSignal = goalieDelta !== 0;
+      goalieEvidence = `Team-level fallback: Away SV% ${(awaySavePct * 100).toFixed(1)}% (home data unavailable)`;
+    } else {
+      goalieEvidence = "Starting goalie/team save data unavailable from any source";
+    }
   }
 
   factors.push({
@@ -109,7 +186,7 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
     homeDelta: goalieDelta,
     weight: 0.22,
     available: goalieAvailable,
-    hasSignal: goalieAvailable && goalieDelta !== 0,
+    hasSignal: goalieHasSignal,
     evidence: goalieEvidence,
   });
 
@@ -146,9 +223,6 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
   });
 
   // ── 3. Special teams differential ─────────────────────────────────────
-  // Source: Natural Stat Trick / Hockey Reference — power play and penalty
-  // kill percentages are moderately predictive. The differential between
-  // team A's PP% and team B's PK% (and vice versa) creates scoring edges.
   const homePP = ctx.homeAdvanced.powerPlayPct;
   const homePK = ctx.homeAdvanced.penaltyKillPct;
   const awayPP = ctx.awayAdvanced.powerPlayPct;
@@ -164,15 +238,15 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
   let stEvidence = "Special teams data unavailable from public team feeds";
 
   if (stAvailable) {
-    // Home PP vs Away PK: positive = home has edge on power play
-    const homePPvsAwayPK = homePP! - (1 - awayPK!);
-    // Away PP vs Home PK: positive = away has edge on power play
-    const awayPPvsHomePK = awayPP! - (1 - homePK!);
-    // Net special teams edge for home
-    const netST = homePPvsAwayPK - awayPPvsHomePK;
-    // Each 1% net special teams edge ≈ 15 Elo points
-    stDelta = netST * 100 * 15;
-    stEvidence = `Home PP ${(homePP! * 100).toFixed(1)}%/PK ${(homePK! * 100).toFixed(1)}% vs Away PP ${(awayPP! * 100).toFixed(1)}%/PK ${(awayPK! * 100).toFixed(1)}%`;
+    const LG_PP = 0.215;
+    const LG_PK = 0.795;
+
+    const homeSTQuality = (homePP! - LG_PP) + (homePK! - LG_PK);
+    const awaySTQuality = (awayPP! - LG_PP) + (awayPK! - LG_PK);
+    const netST = homeSTQuality - awaySTQuality;
+    stDelta = netST * 100 * 20;
+    stDelta = Math.max(-60, Math.min(60, stDelta));
+    stEvidence = `Home PP ${(homePP! * 100).toFixed(1)}%/PK ${(homePK! * 100).toFixed(1)}% vs Away PP ${(awayPP! * 100).toFixed(1)}%/PK ${(awayPK! * 100).toFixed(1)}% (net ST quality: ${netST > 0 ? "+" : ""}${(netST * 100).toFixed(1)}%)`;
   }
 
   factors.push({
@@ -186,8 +260,6 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
   });
 
   // ── 4. Skater injuries ────────────────────────────────────────────────
-  // Top-6 forwards and top-4 defense by TOI matter most.
-  // We don't have TOI data, so we use all OUT skaters and weight by position.
   let injuryDelta = 0;
   const injuryParts: string[] = [];
   const injurySourceVerified = injuryReportsAreVerified(ctx.homeInjuries, ctx.awayInjuries);

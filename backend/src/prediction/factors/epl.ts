@@ -1,18 +1,19 @@
 /**
  * EPL-specific factors.
  *
- * Weight budget: 0.42 (remaining after 0.58 base). Four factors:
- *   - Fixture congestion (midweek cups / UCL):  0.112
- *   - Key player availability:                  0.168
- *   - Manager-change bounce:                    0.056
- *   - Stakes (title / Europe / relegation):     0.084
+ * Weight budget: 0.42 (remaining after 0.58 base). Five factors:
+ *   - xG differential (strongest predictor):      0.14
+ *   - Key player availability:                    0.12
+ *   - Fixture congestion (midweek cups / UCL):    0.07
+ *   - Manager-change bounce:                      0.03
+ *   - Stakes (title / Europe / relegation):       0.06
  *   → 0.42 exactly
  *
- * xG factor removed — Understat and FBRef are both Cloudflare-blocked from
- * Railway. If we add a proxy service or paid xG API later, re-add this
- * factor and rebalance weights.
+ * xG factor RE-ADDED (2026-06-05): Using FBref/Understat pipeline.
+ * xG is the single best predictor in soccer — far better than actual goals.
  *
  * Data sources:
+ *   - FBref/Understat for xG (via soccerXg.ts)
  *   - ESPN schedule for fixture congestion
  *   - ./data/soccerManagerChanges.json for new-manager windows
  *   - ESPN standings for stakes flags (6h cache)
@@ -21,34 +22,34 @@
  */
 
 import type { GameContext, FactorContribution, SoccerStakes } from "../types";
+import type { TeamXgMetrics } from "../../lib/soccerXg";
 import {
+  xgDifferentialFactor,
   fixtureCongestionFactor,
   keyPlayerFactor,
   managerChangeFactor,
 } from "./soccerCommon";
 
-export function computeEPLFactors(ctx: GameContext): FactorContribution[] {
+export function computeEPLFactors(
+  ctx: GameContext,
+  homeXg?: TeamXgMetrics | null,
+  awayXg?: TeamXgMetrics | null,
+): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  factors.push(fixtureCongestionFactor(ctx, 0.112));   // 0.112
-  factors.push(keyPlayerFactor(ctx, 0.168));           // 0.168
-  factors.push(managerChangeFactor(ctx, 0.056));       // 0.056
-  factors.push(stakesFactor(ctx));                     // 0.084
+  factors.push(xgDifferentialFactor(ctx, 0.14, homeXg ?? null, awayXg ?? null));
+  factors.push(keyPlayerFactor(ctx, 0.12));
+  factors.push(fixtureCongestionFactor(ctx, 0.07));
+  factors.push(managerChangeFactor(ctx, 0.03));
+  factors.push(stakesFactor(ctx));
 
   return factors;
 }
 
 // ─── EPL-specific: late-season stakes ───────────────────────────────────────
-// Fires only when BOTH teams have stakes data AND gamesRemaining < 10.
-// Logic:
-//   - Title race: home in top-3 and within 8pts of leader vs mid-table
-//     opponent → +20 Elo home. Flipped if the away team is the motivated one.
-//   - Relegation battle: home in bottom-6 vs a comfortable opponent → +25
-//     Elo home (cornered-animal effect).
-//   - Both motivated equally → 0 (signal cancels).
 
 function stakesFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.084;
+  const weight = 0.06;
   const home = ctx.homeStakes ?? null;
   const away = ctx.awayStakes ?? null;
   const lateSeason =
@@ -86,7 +87,6 @@ function stakesFactor(ctx: GameContext): FactorContribution {
 }
 
 function motivationScore(s: SoccerStakes): number {
-  // Relegation > title > Europe. Only apply full weight in the final stretch.
   if (s.inRelegationRace) return 25;
   if (s.inTitleRace) return 20;
   if (s.inEuropeRace) return 10;

@@ -1,10 +1,11 @@
-# Prediction Decision Flow
+# Prediction Engine — Unified Simulation Architecture (v3.0)
 
-`predictGame(ctx)` is the single pregame engine entry point. It validates the
-available matchup context, computes the factor-model read, runs the
-league-specific game-script simulation as an independent challenge read, applies
-the small market calibration vote when available, preserves raw projection
-disagreement as a separate engine read, and returns one `canonicalResult`.
+`predictGame(ctx)` is the single pregame engine entry point. It computes all
+matchup factors, feeds them into a league-specific Monte Carlo simulation that
+produces **both** the win probability **and** the projected scores in a single
+coherent pass, then applies optional market calibration as a post-processing
+step. The result is one `canonicalResult` where the probability and the
+projected score line always agree because they came from the same simulation.
 
 The canonical object lives on `HonestPrediction.canonicalResult` and is carried
 through the API as `GamePrediction.canonicalResult`. UI surfaces must read the
@@ -13,36 +14,73 @@ that object. Legacy fields such as `predictedWinner`, `confidence`,
 `homeWinProbability`, and `projection.*WinProbability` are mirrored for older
 components, but they are not the source of truth.
 
-## Unified Decision Profile
+## Unified Engine Flow
 
-Every canonical result now also carries `decisionProfile`, a compact read on
-what the unified system actually sees:
+```
+Factors → Rating Delta → Monte Carlo Simulation → Probability + Scores
+                                                         ↓
+                                               Market Calibration (optional)
+                                                         ↓
+                                               Thin-Data Confidence Cap
+                                                         ↓
+                                               Final Canonical Result
+```
 
-- cross-engine agreement between factors, game-script projection, and optional market calibration
+1. **Compute all factors** — base factors (Elo, home advantage, form, injuries,
+   rest) plus sport-specific factors (pitcher matchups, goalie stats, xG, surface
+   ratings, special teams, etc.)
+2. **Redistribute weights** — missing factors reduce confidence rather than
+   inflating Elo; rating_diff is capped at 0.55 max effective weight
+3. **Sum factor deltas** into a total rating advantage (Elo points)
+4. **Run the unified simulation** — 50,000 deterministic Monte Carlo iterations
+   using the rating delta + all game context to produce win probabilities AND
+   projected scores simultaneously
+5. **Market calibration** — the betting line nudges the simulation's probability
+   (not scores) when the market has information the model doesn't
+6. **Thin-data confidence cap** — when critical factors are missing, probability
+   is compressed toward 50% to prevent overconfident picks on thin evidence
+7. **Build projection** — scores come directly from the simulation, quantized
+   for display (no reconciliation or overwrite)
+
+## Decision Profile
+
+Every canonical result carries `decisionProfile`, a compact read on what the
+unified system sees:
+
+- simulation-market agreement (the simulation is the primary engine)
 - non-Elo hidden support from injuries, rest, matchup, form, venue, weather, and sport-specific factors
 - market disagreement and model-vs-consensus delta when market data exists
-- upset/watchout scoring from projection volatility, disagreement, and underdog pressure
+- upset/watchout scoring from simulation volatility and underdog pressure
 - data and signal coverage so thin slates do not masquerade as strong edges
 
 The adapter maps this profile into `edgeRating`, `valueRating`,
 `lowDataWarning`, and `ensembleDivergence` for existing app surfaces.
 
-## Reconciliation
+## Simulation Details
 
-The orchestrator uses `factor-simulation-market-consensus-v1`:
+The simulation is league-profiled:
+- **NBA** uses possession proxy, recency-weighted net rating, usage-tier injury impact
+- **NFL/NCAAF** use drive/tempo proxies
+- **MLB** uses starter/bullpen run context with pitcher-specific FIP/ERA
+- **NHL** uses confirmed starting goalie stats + special teams matchup
+- **Soccer (EPL/MLS/UCL)** uses xG differential with regression penalty, keeps draw risk
+- **IPL** uses T20 innings/run-rate context with venue/toss splits
+- **Tennis** uses surface-specific win rates, set/match-format context
 
-- factors are the primary model read
-- game-script simulation runs 50,000 deterministic game scripts and contributes distribution plus expected-score context
-- simulation is league-profiled: NBA uses a possession proxy, NFL/NCAAF use drive/tempo proxies, MLB uses starter/bullpen run context, NHL uses goalie/special-teams context, soccer keeps draw-risk, IPL uses T20 innings/run-rate context, and tennis uses set/match-format context
-- missing critical simulator inputs do not get guessed; they create `simulation-feature-gap` signals and widen variance
-- the simulator receives the rating edge as a league-specific prior, but it can disagree when the independent scoring script points the other way
-- factor/simulation tension creates a `factor-script-tension` signal instead of being hidden
-- market consensus is optional and only a small calibration input
-- if sub-engines disagree, the disagreement remains in `engineBreakdown`
-- the public score projection is reconciled to the final orchestrator pick,
-  while the raw simulator read remains in `engineBreakdown` and
-  `simulationSummary`
-- the final displayed answer comes from the `orchestrator-v1` read
+Missing critical simulator inputs do not get guessed; they create
+`simulation-feature-gap` signals and widen variance (reducing confidence).
+
+## Key Differences from v2 (factor-simulation-market-consensus-v1)
+
+| Aspect | v2 (Old) | v3 (Unified) |
+|--------|----------|--------------|
+| Architecture | 3 separate brains (factor, simulation, market) blended | 1 simulation fed by factors, calibrated by market |
+| Scores | Overwritten by reconciliation to match factor probability | Come directly from simulation |
+| Factor weight | 80% of final answer | 0% direct vote (feeds INTO simulation) |
+| Simulation weight | 8-14% challenge read | 100% — IS the answer |
+| Market | 6-10% small vote | Post-processing calibration (10-25% by sport) |
+| Disagreement | Factor vs simulation vs market | Only simulation vs market |
+| Score-probability coherence | Forced via reconciliation | Natural (same source) |
 
 ## Backtesting
 
@@ -54,41 +92,30 @@ fabricate historical injuries, form, ratings, starters, or market lines; the
 fixture file must contain what the model would have known before kickoff,
 first pitch, puck drop, tip, match start, or toss.
 
-`bun run backtest:historical-current -- --sports NBA,MLB,NHL --days 60` runs
-an approximate replay using real completed ESPN scoreboards, chronological
-rolling Elo, and the current engine/context builder. Its report is useful for
-directional QA and league triage, but not for official accuracy claims because
-rebuilt injuries, form, standings, weather, and provider feeds may reflect
-current availability rather than the exact pregame snapshot.
+Point-in-time Elo snapshots are now stored via `EloSnapshot` model, enabling
+leak-free backtesting that uses the exact Elo rating the engine had at
+prediction time rather than current ratings.
 
 ## Engine Contract
 
-These rules are release gates for this engine. A change that violates one of
-these rules is not ready to ship.
+These rules are release gates for this engine:
 
 - One source of truth: API and UI surfaces must use `canonicalResult` for the
   final pick, confidence, and displayed win probabilities.
+- Scores and probability must agree: the projected score line must come from
+  the same simulation that produced the probability. No reconciliation.
 - Market data cannot be displayed and ignored. If ESPN provides a favorite,
   spread, or total and SharpAPI consensus is unavailable, the engine builds a
-  conservative market fallback from the displayed odds metadata and marks it as
-  fallback market calibration.
-- Projection and simulation are separate reads. Raw simulation can disagree,
-  but the public projection object must be reconciled to the final pick so the
-  card does not show one winner in the pick and another winner in the projected
-  score.
+  conservative market fallback from the displayed odds metadata.
 - Thin-data, market-disagreement, and engine-divergence spots must remain
   visible through `decisionProfile.tags`, `warnings`, and `engineBreakdown`.
 - Confidence is the selected outcome probability. The engine does not inflate
   confidence to create stronger-looking picks.
-- Release checks must cover the prediction/projection/simulation/market
-  contract, not only a single game example.
+- Missing critical factors REDUCE confidence (via redistribution drag and
+  thin-data cap) rather than inflating Elo.
 
-Live games keep the pregame canonical result. Scoreboard state can update, but
-it does not rewrite the betting-facing pick, confidence, or projection simply
-because one team is currently trailing or leading in-game. Predictions should
-only change after a fresh model run with materially different inputs, and the
-API suppresses small visible updates unless the pick, probability, projection,
-or market-divergence move is large enough to matter.
+Live games keep the pregame canonical result. Predictions should only change
+after a fresh model run with materially different inputs.
 
 Development tracing is gated behind `PREDICTION_TRACE=1` on the backend and
 `EXPO_PUBLIC_PREDICTION_TRACE=1` in the app.

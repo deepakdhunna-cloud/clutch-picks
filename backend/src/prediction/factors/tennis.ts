@@ -1,14 +1,23 @@
 /**
  * Tennis-specific factors.
  *
- * ESPN exposes tennis as player/team matchups inside tournament scoreboards,
- * so these factors use only data the game shell already carries: rankings,
- * recent form when available, tournament round text, match format, and outdoor
- * conditions. Missing context stays unavailable and redistributes through the
- * shared engine instead of being guessed.
+ * Weight budget: 0.42 (remaining after 0.58 base). Six factors:
+ *   - ATP/WTA ranking edge:           0.13
+ *   - Surface-specific performance:   0.10  ← NEW (2026-06-05)
+ *   - Recent form:                    0.08
+ *   - Round pressure:                 0.06
+ *   - Match format:                   0.03
+ *   - Outdoor conditions:             0.02
+ *   → 0.42 exactly
+ *
+ * Surface factor added (2026-06-05): Tennis performance varies dramatically
+ * by surface. A clay specialist on grass is a completely different proposition.
+ * This factor compares each player's surface-specific win rate on the match
+ * surface and applies an Elo adjustment.
  */
 
 import type { GameContext, FactorContribution } from "../types";
+import type { SurfaceAdjustment, TennisSurface } from "../../lib/tennisSurface";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -62,7 +71,10 @@ function contextText(ctx: GameContext): string {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
-export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
+export function computeTennisFactors(
+  ctx: GameContext,
+  surfaceAdjustment?: SurfaceAdjustment | null,
+): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
   const homeRank = playerRank(ctx.game.homeTeam);
@@ -90,16 +102,32 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
       ? `Tournament seed fallback: ${ctx.game.homeTeam.abbreviation} seed ${homeSeed ?? "unseeded"} vs ${ctx.game.awayTeam.abbreviation} seed ${awaySeed ?? "unseeded"}`
       : "ATP/WTA ranking unavailable for both sides";
 
+  // 1. Ranking edge (0.13)
   factors.push({
     key: "tennis_ranking_edge",
     label: worldRankingAvailable ? "ATP/WTA ranking edge" : "Tournament seed edge",
     homeDelta: rankingDelta,
-    weight: 0.16,
+    weight: 0.13,
     available: rankingAvailable,
     hasSignal: rankingAvailable && rankingDelta !== 0,
     evidence: rankingEvidence,
   });
 
+  // 2. Surface-specific performance (0.10) — NEW
+  const surfaceAdj = surfaceAdjustment ?? null;
+  const surfaceAvailable = surfaceAdj !== null && surfaceAdj.surface !== "unknown" &&
+    (surfaceAdj.homeSurfaceWinRate !== null || surfaceAdj.awaySurfaceWinRate !== null);
+  factors.push({
+    key: "tennis_surface",
+    label: `Surface performance (${surfaceAdj?.surface ?? "unknown"})`,
+    homeDelta: surfaceAdj?.deltaElo ?? 0,
+    weight: 0.10,
+    available: surfaceAvailable,
+    hasSignal: surfaceAvailable && Math.abs(surfaceAdj?.deltaElo ?? 0) > 5,
+    evidence: surfaceAdj?.evidence ?? "Surface data unavailable — cannot determine match surface or player surface records",
+  });
+
+  // 3. Recent form (0.08)
   const homeFormPct = recentWinPct(ctx.homeForm.results);
   const awayFormPct = recentWinPct(ctx.awayForm.results);
   const formAvailable = homeFormPct !== null && awayFormPct !== null;
@@ -108,7 +136,7 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
     key: "tennis_recent_form",
     label: "Recent form",
     homeDelta: formDelta,
-    weight: 0.10,
+    weight: 0.08,
     available: formAvailable,
     hasSignal: formAvailable && formDelta !== 0,
     evidence: formAvailable
@@ -116,6 +144,7 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
       : "Recent tennis form sample unavailable from ESPN player schedules",
   });
 
+  // 4. Round pressure (0.06)
   const roundText = contextText(ctx);
   const isHighLeverage =
     roundText.includes("final") ||
@@ -126,7 +155,7 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
     key: "tennis_round_pressure",
     label: "Round pressure",
     homeDelta: roundDelta,
-    weight: 0.08,
+    weight: 0.06,
     available: isHighLeverage,
     hasSignal: isHighLeverage && roundDelta !== 0,
     evidence: isHighLeverage
@@ -134,12 +163,13 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
       : "Round pressure only applies to quarterfinals, semifinals, and finals",
   });
 
+  // 5. Match format (0.03)
   const isDoubles = roundText.includes("doubles") || ctx.game.homeTeam.name.includes(" / ") || ctx.game.awayTeam.name.includes(" / ");
   factors.push({
     key: "tennis_match_format",
     label: "Match format",
     homeDelta: 0,
-    weight: 0.04,
+    weight: 0.03,
     available: true,
     hasSignal: false,
     evidence: isDoubles
@@ -147,6 +177,7 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
       : "Singles format carries no side-specific format adjustment",
   });
 
+  // 6. Outdoor conditions (0.02)
   let conditionsVolatility = 0;
   let conditionsEvidence = "Weather data unavailable for tennis venue";
   const conditionsAvailable = ctx.weather !== null && !ctx.weather.isDomed;
@@ -173,7 +204,7 @@ export function computeTennisFactors(ctx: GameContext): FactorContribution[] {
     key: "tennis_conditions",
     label: "Outdoor conditions",
     homeDelta: 0,
-    weight: 0.04,
+    weight: 0.02,
     available: conditionsAvailable,
     hasSignal: conditionsAvailable && conditionsVolatility > 0,
     evidence: conditionsEvidence,

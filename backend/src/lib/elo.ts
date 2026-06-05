@@ -36,8 +36,12 @@ const K_FACTORS: Record<string, number> = {
 };
 
 // Home advantage bonuses (added to home team's effective rating)
+// NBA reduced from 100 to 65 (2026-06-05): post-2020 NBA home advantage has
+// declined to ~2.5 points per game (~60-65 Elo). The previous 100 created
+// systematic home bias and overconfident home picks. Source: NBA home win%
+// 2021-2025 averages ~56-57% (down from 60%+ pre-COVID).
 const HOME_BONUSES: Record<string, number> = {
-  NBA:   100,
+  NBA:   65,
   NCAAB: 120,
   NFL:   48,
   NCAAF: 55,

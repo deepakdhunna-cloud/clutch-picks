@@ -144,13 +144,15 @@ export function buildDecisionProfile(args: {
   const signalCoverage = totalFactorWeight > 0 ? signalFactorWeight / totalFactorWeight : 1;
 
   const weights = args.engineWeights ?? {
-    factor: args.marketProbabilities ? 0.8 : 0.86,
-    projection: 0.14,
-    market: args.marketProbabilities ? 0.06 : 0,
+    factor: 0,
+    projection: 1.0,
+    market: args.marketProbabilities ? 0.1 : 0,
   };
+  // In the unified engine, the simulation is the single source of truth.
+  // Agreement is measured between the simulation pick and the market pick.
+  // Factor pick is retained for transparency but has zero weight.
   const reads = [
-    { pick: factorPick, weight: weights.factor },
-    { pick: projectionPick, weight: weights.projection },
+    { pick: projectionPick, weight: 1.0 },
     ...(marketPick ? [{ pick: marketPick, weight: weights.market }] : []),
   ].filter((read) => read.weight > 0);
   const totalReadWeight = reads.reduce((sum, read) => sum + read.weight, 0) || 1;
@@ -158,7 +160,7 @@ export function buildDecisionProfile(args: {
     .filter((read) => read.pick === finalPick)
     .reduce((sum, read) => sum + read.weight, 0);
   const agreementScore = clamp((supportWeight / totalReadWeight) * 100, 0, 100);
-  const engineDivergence = reads.some((read) => read.pick !== finalPick);
+  const engineDivergence = marketPick !== undefined && marketPick !== finalPick;
 
   const hiddenSupport = factorHiddenSupport(args.factors, finalPick);
   const topSupport = topDirectionalFactor(args.factors, finalPick, true);

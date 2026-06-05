@@ -12,7 +12,7 @@ import type {
 import { buildDecisionProfile } from "./decisionProfile";
 
 export const CANONICAL_RECONCILIATION_METHOD =
-  "factor-simulation-market-consensus-v1";
+  "unified-simulation-engine-v3";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -125,19 +125,8 @@ function warningList(args: {
   if (!Number.isFinite(args.final.home) || !Number.isFinite(args.final.away)) {
     warnings.push("Invalid final probability encountered; canonical normalizer repaired the output.");
   }
-  if (args.projection) {
-    const projectionPick = canonicalPickFromProbabilities(
-      normalizeCanonicalProbabilities({
-        home: args.projection.homeWinProbability,
-        away: args.projection.awayWinProbability,
-        draw: args.projection.drawProbability,
-      }),
-    );
-    const finalPick = canonicalPickFromProbabilities(args.final);
-    if (projectionPick !== finalPick) {
-      warnings.push("Projection engine disagreed before reconciliation; final pick uses orchestrator output.");
-    }
-  }
+  // In the unified engine (v3), the simulation IS the prediction.
+  // No separate projection disagreement is possible.
   if (!args.ctx.game.id || !args.ctx.game.homeTeam.id || !args.ctx.game.awayTeam.id) {
     warnings.push("Event/team mapping is incomplete.");
   }
@@ -179,29 +168,38 @@ export function buildCanonicalPredictionResult(args: {
     draw: final.draw !== undefined ? engineProjection.drawProbability : undefined,
   });
   const engineWeights = args.engineWeights ?? {
-    factor: args.marketProbabilities ? 0.8 : 0.86,
-    projection: 0.14,
-    market: args.marketProbabilities ? 0.06 : 0,
+    factor: 0,
+    projection: 1.0,
+    market: args.marketProbabilities ? 0.1 : 0,
   };
 
+  // Unified engine breakdown: the simulation is the primary engine.
+  // Factor probabilities are shown for transparency (what the Elo logistic alone
+  // would have predicted), but they are inputs TO the simulation, not a separate vote.
   const breakdown: CanonicalEngineRead[] = [
     engineRead({
-      engine: "factor-model-v1",
-      probabilities: normalizeCanonicalProbabilities(args.factorProbabilities),
-      weight: roundTo(engineWeights.factor),
-      inputs: {
-        factorCount: args.factors.length,
-        availableFactorCount,
-      },
-    }),
-    engineRead({
-      engine: engineProjection.engine,
-      probabilities: projectionProbabilities,
-      weight: roundTo(engineWeights.projection),
+      engine: "unified-simulation-v3",
+      probabilities: final,
+      weight: 1.0,
       inputs: {
         iterations: engineProjection.iterations,
         projectedHomeScore: engineProjection.projectedHomeScore,
         projectedAwayScore: engineProjection.projectedAwayScore,
+        factorCount: args.factors.length,
+        availableFactorCount,
+        marketCalibrationApplied: Boolean(args.marketProbabilities),
+        marketWeight: roundTo(engineWeights.market),
+      },
+    }),
+    // Factor-only read preserved for transparency/debugging
+    engineRead({
+      engine: "factor-model-v1",
+      probabilities: normalizeCanonicalProbabilities(args.factorProbabilities),
+      weight: 0,
+      inputs: {
+        factorCount: args.factors.length,
+        availableFactorCount,
+        note: "Factor-only Elo logistic probability (input to simulation, not a separate vote)",
       },
     }),
   ];
@@ -216,19 +214,7 @@ export function buildCanonicalPredictionResult(args: {
         inputs: {
           source: marketSourceLabel,
           fallback: Boolean(args.ctx.marketConsensus?.isFallback),
-          usedAsSmallCalibrationOnly: true,
-        },
-      }),
-    );
-  }
-
-  if (args.blendedProbabilities) {
-    breakdown.push(
-      engineRead({
-        engine: "pre-reconciliation-blend",
-        probabilities: normalizeCanonicalProbabilities(args.blendedProbabilities),
-        inputs: {
-          note: "Factor, simulation, and optional market calibration before projection reconciliation",
+          note: "Post-simulation calibration (adjusts probability, not scores)",
         },
       }),
     );
@@ -249,6 +235,8 @@ export function buildCanonicalPredictionResult(args: {
     confidence: args.confidence,
   });
 
+  // In the unified engine, there is no separate orchestrator — the simulation IS the final answer.
+  // We keep the orchestrator read for backward compatibility with consumers that expect it.
   breakdown.push(
     engineRead({
       engine: "orchestrator-v1",
@@ -256,21 +244,19 @@ export function buildCanonicalPredictionResult(args: {
       weight: 1,
       inputs: {
         reconciliationMethod: CANONICAL_RECONCILIATION_METHOD,
+        note: "Unified engine: simulation output = final answer (no reconciliation needed)",
       },
       warnings,
     }),
   );
 
-  const projectionPick = canonicalPickFromProbabilities(projectionProbabilities);
   const notes = [
-    "Factors provide the primary model read; simulation/projection contributes game-script distribution.",
+    "Unified engine: factors feed into the Monte Carlo simulation which produces both probability and projected scores.",
     args.marketProbabilities
-      ? `${args.ctx.marketConsensus?.sourceLabel ?? "Market consensus"} is a small calibration input and never overrides the model vote.`
+      ? `${args.ctx.marketConsensus?.sourceLabel ?? "Market consensus"} calibrates the simulation probability (weight: ${roundTo(engineWeights.market)}).`
       : "No market calibration was included for this event.",
+    "Projected scores come directly from the simulation — no reconciliation or overwrite.",
   ];
-  if (projectionPick !== finalPick) {
-    notes.push("Projection disagreement was preserved in engineBreakdown and reconciled by the orchestrator.");
-  }
 
   return {
     eventId: args.ctx.game.id,
