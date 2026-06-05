@@ -514,11 +514,9 @@ function quantizeProjectedScoreLine(
     const a = roundTo(away, 1);
     return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
   }
-  // Low-scoring sports keep ONE decimal. Forcing a whole-number >=1 margin would
-  // badly distort the total here (one run on an ~8-run game), so the two team
-  // scores would no longer sum to the true projected total. Decimals are the
-  // honest expected values; they reconcile exactly and the sub-unit lean (already
-  // oriented toward the pick by the reconcile step above) stays visible.
+  // Low-scoring sports keep ONE decimal. The reconciliation step above already
+  // sized the margin to match the confidence, so the scores should already show
+  // the picked side leading. Just round to display precision.
   if (LOW_SCORING_SPORTS.has(sport)) {
     if (finalPick === "draw") {
       const each = roundTo((home + away) / 2, 1);
@@ -1485,41 +1483,29 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 7: Build the unified projection directly from simulation scores
-  // NO reconciliation — the simulation's scores ARE the projection.
-  // The only adjustment is quantization (rounding to display-appropriate values)
-  // and tennis set-score formatting.
+  // STEP 7: Reconcile the simulation projection to the final probabilities.
+  // The simulation's raw scores reflect its OWN win probability, but the public
+  // confidence is the orchestrator's calibrated blend — the two can disagree in
+  // magnitude. reconcileProjectionToFinal re-sizes the margin to match the
+  // public confidence so the score line and the tier label always tell the same
+  // story (e.g. a 59% MLB lean shows ~0.7-run margin, not a near-tie).
   // ═══════════════════════════════════════════════════════════════════════════
   const finalPick = finalOutcomeFromProbabilities(homeWinProb, awayWinProb, drawProb);
-  let projection: SimulationProjection;
-
-  if (ctx.sport === "TENNIS" && (finalPick === "home" || finalPick === "away")) {
-    // Tennis: convert to set scores
-    const winSets = tennisWinSets(
-      ctx.game.venue,
-      (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour,
-    );
-    projection = tennisSetProjection(simulation, finalPick, { home: homeWinProb, away: awayWinProb }, winSets);
-  } else {
-    // All other sports: use simulation scores directly, just quantize for display
-    const quantized = quantizeProjectedScoreLine(
-      ctx.sport,
-      simulation.projectedHomeScore,
-      simulation.projectedAwayScore,
-      finalPick,
-    );
-    projection = {
-      ...simulation,
-      homeWinProbability: roundTo(homeWinProb, 4),
-      awayWinProbability: roundTo(awayWinProb, 4),
-      drawProbability: drawProb !== undefined ? roundTo(drawProb, 4) : undefined,
-      projectedHomeScore: quantized.home,
-      projectedAwayScore: quantized.away,
-      projectedSpread: quantized.spread,
-      projectedTotal: quantized.total,
-      signals: simulation.signals.slice(0, 5),
-    };
-  }
+  const projection: SimulationProjection = reconcileProjectionToFinal({
+    sport: ctx.sport,
+    projection: simulation,
+    finalProbabilities: {
+      home: homeWinProb,
+      away: awayWinProb,
+      draw: drawProb,
+    },
+    tennisWinSets: ctx.sport === "TENNIS"
+      ? tennisWinSets(
+          ctx.game.venue,
+          (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour,
+        )
+      : undefined,
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STEP 8: Collect metadata

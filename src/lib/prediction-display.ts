@@ -33,13 +33,18 @@ function formatConfidence(confidence: number): string {
 
 function isCanonicalTossUp(prediction: Prediction | null | undefined, finalPick: CanonicalFinalPick | null, confidence: number): boolean {
   if (finalPick === 'none') return true;
-  // Compare the ROUNDED displayed confidence (formatConfidence shows Math.round)
-  // so a card rendered at "53%" is never also flagged Toss-Up because the raw
-  // value was 52.9. Mirrors the backend isMarketAwareTossUp boundary exactly.
-  const displayedConfidence = Math.round(confidence);
   const canonical = getCanonicalResult(prediction);
-  if (!canonical) return Boolean(prediction?.isTossUp) || displayedConfidence < TOSS_UP_CONFIDENCE_THRESHOLD;
+  if (!canonical) {
+    // No canonical result available — fall back to the legacy isTossUp flag or
+    // the displayed confidence threshold. This path only fires for very old
+    // predictions that predate the canonical result system.
+    const displayedConfidence = Math.round(confidence);
+    return Boolean(prediction?.isTossUp) || displayedConfidence < TOSS_UP_CONFIDENCE_THRESHOLD;
+  }
 
+  // Mirror the backend isMarketAwareTossUp EXACTLY so the badge, tier label,
+  // and projected score line never contradict each other. The single source of
+  // truth is the ROUNDED displayed leader probability (what the user sees).
   const entries = [
     { outcome: 'home' as const, probability: canonical.probabilities.home },
     { outcome: 'away' as const, probability: canonical.probabilities.away },
@@ -51,12 +56,18 @@ function isCanonicalTossUp(prediction: Prediction | null | undefined, finalPick:
   const runnerUp = entries[1];
   if (!leader || !runnerUp) return true;
 
+  const displayedLeader = Math.round(leader.probability * 100);
   const lead = leader.probability - runnerUp.probability;
   if (canonical.marketType === 'three_way_result') {
-    return Math.round(leader.probability * 100) < 37 || lead < 0.025;
+    return displayedLeader < 37 || lead < 0.025;
   }
 
-  return Boolean(prediction?.isTossUp) || displayedConfidence < TOSS_UP_CONFIDENCE_THRESHOLD || lead < 0.06;
+  // For moneyline sports: toss-up when the displayed leader is below 53% OR
+  // the raw probability gap is under 6%. This matches the backend exactly.
+  // Previously the frontend also OR'd in prediction.isTossUp and a separate
+  // displayedConfidence check, which caused games the backend marked as a
+  // valid lean (53%+) to be overridden to toss-up on the client.
+  return displayedLeader < 53 || lead < 0.06;
 }
 
 export function isPredictionTossUpForDisplay(
