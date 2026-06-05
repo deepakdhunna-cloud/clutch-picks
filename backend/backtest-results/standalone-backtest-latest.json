@@ -1,43 +1,43 @@
 {
-  "runAt": "2026-06-05T16:34:15.782Z",
+  "runAt": "2026-06-05T17:11:30.398Z",
   "mode": "standalone-backtest-no-db",
   "engine": "3.0.0-unified-simulation-engine",
   "sportsRequested": [
-    "MLB",
     "NBA",
+    "MLB",
     "NHL"
   ],
-  "daysScanned": 60,
-  "warmupGamesPerTeam": 5,
+  "daysScanned": 90,
+  "warmupGamesPerTeam": 3,
   "maxGamesPerSport": 200,
-  "totalGamesScored": 354,
+  "totalGamesScored": 600,
   "overall": {
-    "scoredGames": 354,
-    "correct": 199,
-    "accuracy": 56.2,
-    "avgConfidence": 56.6
+    "scoredGames": 600,
+    "correct": 374,
+    "accuracy": 62.3,
+    "avgConfidence": 59.3
   },
   "perSport": [
     {
-      "sport": "MLB",
+      "sport": "NBA",
       "scoredGames": 200,
-      "correct": 101,
-      "accuracy": 50.5,
-      "avgConfidence": 54.8
+      "correct": 143,
+      "accuracy": 71.5,
+      "avgConfidence": 60.8
     },
     {
-      "sport": "NBA",
-      "scoredGames": 74,
-      "correct": 47,
-      "accuracy": 63.5,
-      "avgConfidence": 58.2
+      "sport": "MLB",
+      "scoredGames": 200,
+      "correct": 103,
+      "accuracy": 51.5,
+      "avgConfidence": 56.4
     },
     {
       "sport": "NHL",
-      "scoredGames": 80,
-      "correct": 51,
-      "accuracy": 63.7,
-      "avgConfidence": 59.6
+      "scoredGames": 200,
+      "correct": 128,
+      "accuracy": 64,
+      "avgConfidence": 60.7
     }
   ],
   "calibration": [
@@ -45,80 +45,60 @@
       "label": "50-54%",
       "min": 50,
       "max": 54,
-      "total": 143,
-      "correct": 82,
-      "accuracy": 57.3
+      "total": 170,
+      "correct": 90,
+      "accuracy": 52.9
     },
     {
       "label": "55-59%",
       "min": 55,
       "max": 59,
-      "total": 102,
-      "correct": 53,
-      "accuracy": 52
+      "total": 135,
+      "correct": 84,
+      "accuracy": 62.2
     },
     {
       "label": "60-64%",
       "min": 60,
       "max": 64,
-      "total": 30,
-      "correct": 20,
-      "accuracy": 66.7
+      "total": 113,
+      "correct": 73,
+      "accuracy": 64.6
     },
     {
       "label": "65-69%",
       "min": 65,
       "max": 69,
-      "total": 19,
-      "correct": 15,
-      "accuracy": 78.9
+      "total": 53,
+      "correct": 39,
+      "accuracy": 73.6
     },
     {
       "label": "70-74%",
       "min": 70,
       "max": 74,
-      "total": 3,
-      "correct": 2,
-      "accuracy": 66.7
+      "total": 27,
+      "correct": 19,
+      "accuracy": 70.4
     },
     {
       "label": "75-79%",
       "min": 75,
       "max": 79,
-      "total": 2,
-      "correct": 0,
-      "accuracy": 0
+      "total": 14,
+      "correct": 12,
+      "accuracy": 85.7
     },
     {
       "label": "80%+",
       "min": 80,
       "max": 100,
-      "total": 1,
-      "correct": 1,
-      "accuracy": 100
+      "total": 6,
+      "correct": 2,
+      "accuracy": 33.3
     }
   ],
   "highConfidenceMisses": [
-    {
-      "gameId": "401869780",
-      "sport": "NHL",
-      "date": "2026-04-21T01:50Z",
-      "matchup": "MIN @ DAL",
-      "actualPick": "home",
-      "predictedPick": "away",
-      "correct": false,
-      "confidence": 79.7,
-      "actualScore": {
-        "home": 4,
-        "away": 2
-      },
-      "projectedScore": {
-        "home": 2.6,
-        "away": 4.6,
-        "spread": -2,
-        "total": 7.2
-      }
-    },
     {
       "gameId": "401869396",
       "sport": "NBA",
@@ -127,16 +107,36 @@
       "actualPick": "away",
       "predictedPick": "home",
       "correct": false,
-      "confidence": 79.2,
+      "confidence": 89.2,
       "actualScore": {
         "home": 97,
         "away": 111
       },
       "projectedScore": {
-        "home": 115,
-        "away": 104,
-        "spread": 11,
-        "total": 219
+        "home": 118,
+        "away": 100,
+        "spread": 18,
+        "total": 218
+      }
+    },
+    {
+      "gameId": "401869780",
+      "sport": "NHL",
+      "date": "2026-04-21T01:50Z",
+      "matchup": "MIN @ DAL",
+      "actualPick": "home",
+      "predictedPick": "away",
+      "correct": false,
+      "confidence": 86.6,
+      "actualScore": {
+        "home": 4,
+        "away": 2
+      },
+      "projectedScore": {
+        "home": 2,
+        "away": 5,
+        "spread": -3,
+        "total": 7
       }
     },
     {
@@ -147,16 +147,16 @@
       "actualPick": "away",
       "predictedPick": "home",
       "correct": false,
-      "confidence": 78.3,
+      "confidence": 80.8,
       "actualScore": {
         "home": 2,
         "away": 3
       },
       "projectedScore": {
-        "home": 4.2,
-        "away": 2.3,
-        "spread": 1.9,
-        "total": 6.5
+        "home": 4,
+        "away": 2,
+        "spread": 2,
+        "total": 6
       }
     },
     {
@@ -167,56 +167,16 @@
       "actualPick": "away",
       "predictedPick": "home",
       "correct": false,
-      "confidence": 76.4,
+      "confidence": 80.1,
       "actualScore": {
         "home": 2,
         "away": 4
       },
       "projectedScore": {
-        "home": 3.5,
-        "away": 1.8,
-        "spread": 1.7,
-        "total": 5.3
-      }
-    },
-    {
-      "gameId": "401871424",
-      "sport": "NHL",
-      "date": "2026-05-07T01:30Z",
-      "matchup": "ANA @ VGK",
-      "actualPick": "away",
-      "predictedPick": "home",
-      "correct": false,
-      "confidence": 72.2,
-      "actualScore": {
-        "home": 1,
-        "away": 3
-      },
-      "projectedScore": {
-        "home": 4.3,
-        "away": 3,
-        "spread": 1.3,
-        "total": 7.3
-      }
-    },
-    {
-      "gameId": "401871426",
-      "sport": "NHL",
-      "date": "2026-05-11T01:30Z",
-      "matchup": "VGK @ ANA",
-      "actualPick": "home",
-      "predictedPick": "away",
-      "correct": false,
-      "confidence": 69.4,
-      "actualScore": {
-        "home": 4,
-        "away": 3
-      },
-      "projectedScore": {
-        "home": 3,
-        "away": 4.2,
-        "spread": -1.2,
-        "total": 7.2
+        "home": 3.6,
+        "away": 1.6,
+        "spread": 2,
+        "total": 5.2
       }
     },
     {
@@ -227,78 +187,156 @@
       "actualPick": "away",
       "predictedPick": "home",
       "correct": false,
-      "confidence": 69.2,
+      "confidence": 75.7,
       "actualScore": {
         "home": 97,
         "away": 113
       },
       "projectedScore": {
-        "home": 113,
-        "away": 106,
-        "spread": 7,
-        "total": 219
+        "home": 112,
+        "away": 103,
+        "spread": 9,
+        "total": 215
       }
     },
     {
-      "gameId": "401869758",
+      "gameId": "401803547",
       "sport": "NHL",
-      "date": "2026-04-25T01:30Z",
-      "matchup": "VGK @ UTA",
-      "actualPick": "home",
-      "predictedPick": "away",
-      "correct": false,
-      "confidence": 69.2,
-      "actualScore": {
-        "home": 4,
-        "away": 2
-      },
-      "projectedScore": {
-        "home": 2.5,
-        "away": 3.7,
-        "spread": -1.2,
-        "total": 6.2
-      }
-    },
-    {
-      "gameId": "401869801",
-      "sport": "NHL",
-      "date": "2026-04-27T23:00Z",
-      "matchup": "PHI @ PIT",
-      "actualPick": "home",
-      "predictedPick": "away",
-      "correct": false,
-      "confidence": 66.2,
-      "actualScore": {
-        "home": 3,
-        "away": 2
-      },
-      "projectedScore": {
-        "home": 2.2,
-        "away": 3.2,
-        "spread": -1,
-        "total": 5.4
-      }
-    },
-    {
-      "gameId": "401869387",
-      "sport": "NBA",
-      "date": "2026-04-21T00:00Z",
-      "matchup": "ATL @ NY",
+      "date": "2026-04-02T23:00Z",
+      "matchup": "DET @ PHI",
       "actualPick": "away",
       "predictedPick": "home",
       "correct": false,
-      "confidence": 65.6,
+      "confidence": 75.4,
       "actualScore": {
-        "home": 106,
-        "away": 107
+        "home": 2,
+        "away": 4
       },
       "projectedScore": {
-        "home": 113,
-        "away": 107,
-        "spread": 6,
-        "total": 220
+        "home": 4,
+        "away": 2,
+        "spread": 2,
+        "total": 6
+      }
+    },
+    {
+      "gameId": "401803559",
+      "sport": "NHL",
+      "date": "2026-04-04T17:00Z",
+      "matchup": "MIN @ OTT",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 74.1,
+      "actualScore": {
+        "home": 1,
+        "away": 4
+      },
+      "projectedScore": {
+        "home": 4,
+        "away": 2,
+        "spread": 2,
+        "total": 6
+      }
+    },
+    {
+      "gameId": "401803658",
+      "sport": "NHL",
+      "date": "2026-04-17T00:00Z",
+      "matchup": "ANA @ NSH",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 74,
+      "actualScore": {
+        "home": 4,
+        "away": 5
+      },
+      "projectedScore": {
+        "home": 4,
+        "away": 2,
+        "spread": 2,
+        "total": 6
+      }
+    },
+    {
+      "gameId": "401871424",
+      "sport": "NHL",
+      "date": "2026-05-07T01:30Z",
+      "matchup": "ANA @ VGK",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 72.9,
+      "actualScore": {
+        "home": 1,
+        "away": 3
+      },
+      "projectedScore": {
+        "home": 5,
+        "away": 3,
+        "spread": 2,
+        "total": 8
+      }
+    },
+    {
+      "gameId": "401869395",
+      "sport": "NBA",
+      "date": "2026-04-21T02:30Z",
+      "matchup": "MIN @ DEN",
+      "actualPick": "away",
+      "predictedPick": "home",
+      "correct": false,
+      "confidence": 72.4,
+      "actualScore": {
+        "home": 114,
+        "away": 119
+      },
+      "projectedScore": {
+        "home": 116,
+        "away": 109,
+        "spread": 7,
+        "total": 225
       }
     }
   ],
-  "dataQualityNote": "Standalone backtest: uses ESPN scoreboards + chronological Elo replay. Context is MINIMAL (no injuries, no form, no lineups from DB). This tests the engine's structural accuracy with Elo + market data only. Production accuracy will be HIGHER because it has full context."
+  "projectionAccuracy": {
+    "overall": {
+      "spreadMae": 6.48,
+      "totalMae": 7.14,
+      "homeScoreMae": 4.77,
+      "awayScoreMae": 4.95,
+      "gamesWithProjections": 600
+    },
+    "perSport": [
+      {
+        "sport": "NBA",
+        "games": 200,
+        "spreadMae": 13.73,
+        "totalMae": 15.84,
+        "homeScoreMae": 10.11,
+        "awayScoreMae": 10.83,
+        "avgTotalError": 15.84
+      },
+      {
+        "sport": "MLB",
+        "games": 200,
+        "spreadMae": 3.62,
+        "totalMae": 3.71,
+        "homeScoreMae": 2.74,
+        "awayScoreMae": 2.64,
+        "avgTotalError": 3.71
+      },
+      {
+        "sport": "NHL",
+        "games": 200,
+        "spreadMae": 2.1,
+        "totalMae": 1.87,
+        "homeScoreMae": 1.45,
+        "awayScoreMae": 1.38,
+        "avgTotalError": 1.87
+      }
+    ]
+  },
+  "dataQualityNote": "Standalone backtest: uses ESPN scoreboards + chronological Elo replay. Context includes real form data from ESPN. This tests the engine's structural accuracy with Elo + form + market data. Production accuracy will be HIGHER because it has full context (injuries, lineups)."
 }

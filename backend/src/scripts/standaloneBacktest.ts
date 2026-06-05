@@ -540,6 +540,42 @@ async function main() {
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 10);
 
+  // ─── Projection Accuracy Metrics ────────────────────────────────────────
+  const projectionRows = allRows.filter((r) => r.projectedScore && r.projectedScore.total > 0);
+  type ProjectionMetrics = {
+    sport: string;
+    games: number;
+    spreadMae: number;
+    totalMae: number;
+    homeScoreMae: number;
+    awayScoreMae: number;
+    avgTotalError: number;
+  };
+  const projMetricsBySport: ProjectionMetrics[] = [];
+  for (const sport of sports) {
+    const sportRows = projectionRows.filter((r) => r.sport === sport);
+    if (sportRows.length === 0) continue;
+    const spreadErrors = sportRows.map((r) => Math.abs((r.projectedScore!.spread) - (r.actualScore.home - r.actualScore.away)));
+    const totalErrors = sportRows.map((r) => Math.abs((r.projectedScore!.total) - (r.actualScore.home + r.actualScore.away)));
+    const homeErrors = sportRows.map((r) => Math.abs((r.projectedScore!.home) - r.actualScore.home));
+    const awayErrors = sportRows.map((r) => Math.abs((r.projectedScore!.away) - r.actualScore.away));
+    const avg = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+    projMetricsBySport.push({
+      sport,
+      games: sportRows.length,
+      spreadMae: round(avg(spreadErrors), 2),
+      totalMae: round(avg(totalErrors), 2),
+      homeScoreMae: round(avg(homeErrors), 2),
+      awayScoreMae: round(avg(awayErrors), 2),
+      avgTotalError: round(avg(totalErrors), 2),
+    });
+  }
+  const allSpreadErrors = projectionRows.map((r) => Math.abs((r.projectedScore!.spread) - (r.actualScore.home - r.actualScore.away)));
+  const allTotalErrors = projectionRows.map((r) => Math.abs((r.projectedScore!.total) - (r.actualScore.home + r.actualScore.away)));
+  const allHomeErrors = projectionRows.map((r) => Math.abs((r.projectedScore!.home) - r.actualScore.home));
+  const allAwayErrors = projectionRows.map((r) => Math.abs((r.projectedScore!.away) - r.actualScore.away));
+  const avgAll = (arr: number[]) => arr.length > 0 ? round(arr.reduce((s, v) => s + v, 0) / arr.length, 2) : 0;
+
   // Print results
   console.log(`\n╔══════════════════════════════════════════════════════════════╗`);
   console.log(`║  RESULTS                                                     ║`);
@@ -548,6 +584,13 @@ async function main() {
   console.log(`╠══════════════════════════════════════════════════════════════╣`);
   for (const s of sportSummaries) {
     console.log(`║  ${s.sport.padEnd(8)} ${String(s.correct).padStart(3)}/${String(s.scoredGames).padStart(3)} = ${String(s.accuracy ?? "N/A").padStart(5)}% (conf: ${String(s.avgConfidence ?? "N/A").padStart(5)}%)`.padEnd(63) + `║`);
+  }
+  console.log(`╠══════════════════════════════════════════════════════════════╣`);
+  console.log(`║  PROJECTION ACCURACY (how close projected scores are)         ║`);
+  console.log(`╠══════════════════════════════════════════════════════════════╣`);
+  console.log(`║  Overall: Spread MAE=${avgAll(allSpreadErrors)} | Total MAE=${avgAll(allTotalErrors)} | Home MAE=${avgAll(allHomeErrors)} | Away MAE=${avgAll(allAwayErrors)}`.padEnd(63) + `║`);
+  for (const pm of projMetricsBySport) {
+    console.log(`║  ${pm.sport.padEnd(8)} Spread MAE=${String(pm.spreadMae).padStart(5)} | Total MAE=${String(pm.totalMae).padStart(5)} | Home=${String(pm.homeScoreMae).padStart(5)} | Away=${String(pm.awayScoreMae).padStart(5)}`.padEnd(63) + `║`);
   }
   console.log(`╠══════════════════════════════════════════════════════════════╣`);
   console.log(`║  CALIBRATION                                                 ║`);
@@ -581,10 +624,20 @@ async function main() {
     perSport: sportSummaries,
     calibration: buckets,
     highConfidenceMisses: highConfMisses,
+    projectionAccuracy: {
+      overall: {
+        spreadMae: avgAll(allSpreadErrors),
+        totalMae: avgAll(allTotalErrors),
+        homeScoreMae: avgAll(allHomeErrors),
+        awayScoreMae: avgAll(allAwayErrors),
+        gamesWithProjections: projectionRows.length,
+      },
+      perSport: projMetricsBySport,
+    },
     dataQualityNote: "Standalone backtest: uses ESPN scoreboards + chronological Elo replay. " +
-      "Context is MINIMAL (no injuries, no form, no lineups from DB). " +
-      "This tests the engine's structural accuracy with Elo + market data only. " +
-      "Production accuracy will be HIGHER because it has full context.",
+      "Context includes real form data from ESPN. " +
+      "This tests the engine's structural accuracy with Elo + form + market data. " +
+      "Production accuracy will be HIGHER because it has full context (injuries, lineups).",
   };
 
   const outDir = join(import.meta.dir, "../../backtest-results");
