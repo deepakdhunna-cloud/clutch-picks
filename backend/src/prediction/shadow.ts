@@ -42,6 +42,11 @@ import {
   fetchFreeTennisProfileByName,
 } from "../lib/freeDataSources";
 // fetchTeamShootingRecent removed — stats.nba.com IP-blocks Railway
+import { fetchNHLStartingGoalie } from "../lib/nhlGoalieApi";
+import { recordEloSnapshot } from "../lib/eloSnapshot";
+import { fetchTeamXgMetrics } from "../lib/soccerXg";
+import { detectSurface, fetchPlayerSurfaceProfile, computeSurfaceAdjustment } from "../lib/tennisSurface";
+import { extractTennisAthleteId } from "../lib/tennisStats";
 import { lookupHomePlateUmpireBias } from "../lib/mlbUmpireApi";
 import {
   fetchLeagueStandings,
@@ -329,6 +334,11 @@ export async function buildGameContext(
       : Promise.resolve(null),
   ]);
 
+  // Record point-in-time Elo snapshots for leak-free backtesting.
+  // Fire-and-forget: never blocks the prediction path.
+  recordEloSnapshot(sport, game.homeTeam.id, homeElo, gameDate, game.id);
+  recordEloSnapshot(sport, game.awayTeam.id, awayElo, gameDate, game.id);
+
   // Translate PlayerInjury[] → TeamInjuryReport, then merge SportsDataIO and
   // PlayerAvailability rows. Each provider is conservative: no source is
   // allowed to invent availability, and duplicate players collapse to the
@@ -350,8 +360,37 @@ export async function buildGameContext(
   const awayAdvancedFree = mergeAdvancedMetrics(awayAdvancedEspn, awayFreeAdvanced);
   const homeAdvanced = mergeAdvancedMetrics(homeAdvancedFree, homeSportsDataIOAdvanced);
   const awayAdvanced = mergeAdvancedMetrics(awayAdvancedFree, awaySportsDataIOAdvanced);
-  const homeLineup = homeSportsDataIOLineup ?? homeLineupEspn;
-  const awayLineup = awaySportsDataIOLineup ?? awayLineupEspn;
+  let homeLineup = homeSportsDataIOLineup ?? homeLineupEspn;
+  let awayLineup = awaySportsDataIOLineup ?? awayLineupEspn;
+
+  // NHL: Enrich lineup with confirmed starting goalie + individual stats.
+  // This runs AFTER the base lineup is resolved so we can attach goalie
+  // data to the existing lineup structure.
+  if (sport === "NHL") {
+    const [homeGoalie, awayGoalie] = await Promise.all([
+      fetchNHLStartingGoalie(
+        game.homeTeam.id,
+        String(game.homeTeam.abbreviation ?? ""),
+        gameDate,
+        "home"
+      ),
+      fetchNHLStartingGoalie(
+        game.awayTeam.id,
+        String(game.awayTeam.abbreviation ?? ""),
+        gameDate,
+        "away"
+      ),
+    ]);
+
+    if (homeGoalie) {
+      if (!homeLineup) homeLineup = { sport: "NHL", starters: [] };
+      homeLineup.startingGoalie = homeGoalie;
+    }
+    if (awayGoalie) {
+      if (!awayLineup) awayLineup = { sport: "NHL", starters: [] };
+      awayLineup.startingGoalie = awayGoalie;
+    }
+  }
   const resolvedHomeForm =
     sport === "TENNIS" && homeTennisProfile?.form?.results.length
       ? homeTennisProfile.form
@@ -465,6 +504,47 @@ export async function buildGameContext(
     seasonContext,
   };
 
+  // Soccer: Fetch xG metrics from FBref/Understat for EPL/MLS/UCL.
+  // Fire in parallel — non-blocking, null on failure.
+  let homeXg: import("../lib/soccerXg").TeamXgMetrics | null = null;
+  let awayXg: import("../lib/soccerXg").TeamXgMetrics | null = null;
+  if (isSoccer) {
+    [homeXg, awayXg] = await Promise.all([
+      fetchTeamXgMetrics(sport, game.homeTeam.name),
+      fetchTeamXgMetrics(sport, game.awayTeam.name),
+    ]);
+  }
+
+  // Tennis: Compute surface-specific performance adjustment.
+  let surfaceAdjustment: import("../lib/tennisSurface").SurfaceAdjustment | null = null;
+  if (sport === "TENNIS") {
+    try {
+      const tournamentContext = [
+        sportsGame.venue,
+        sportsGame.seasonContext?.label,
+        sportsGame.seasonContext?.detail,
+      ].filter(Boolean).join(" ");
+      const matchSurface = detectSurface(sportsGame.venue, tournamentContext);
+
+      // Extract athlete IDs for surface profile fetch
+      const homeAthleteId = extractTennisAthleteId(game.homeTeam.id);
+      const awayAthleteId = extractTennisAthleteId(game.awayTeam.id);
+
+      if (homeAthleteId && awayAthleteId) {
+        const [homeProfile, awayProfile] = await Promise.all([
+          fetchPlayerSurfaceProfile(homeAthleteId),
+          fetchPlayerSurfaceProfile(awayAthleteId),
+        ]);
+        surfaceAdjustment = computeSurfaceAdjustment(matchSurface, homeProfile, awayProfile);
+      } else {
+        surfaceAdjustment = computeSurfaceAdjustment(matchSurface, null, null);
+      }
+    } catch {
+      // Surface data fetch failed — factor will be unavailable
+      surfaceAdjustment = null;
+    }
+  }
+
   return {
     game: sportsGame,
     sport,
@@ -519,6 +599,9 @@ export async function buildGameContext(
       iplVenueSplit: !!iplVenueSplit,
     },
     iplVenueSplit,
+    homeXg,
+    awayXg,
+    surfaceAdjustment,
     gameDate: gameDate.toISOString(),
   };
 }

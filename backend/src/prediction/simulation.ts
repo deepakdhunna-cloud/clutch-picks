@@ -37,7 +37,7 @@ function envWeight(name: string, fallback: number): number {
 // (NBA 13.62→12.97, MLB 3.72→3.65) with NO accuracy change. Past 0.65 NBA edges
 // back up, so 0.65 is the data-optimal single default. Both env-tunable for sweeps.
 const MARGIN_ANCHOR_MARKET_WEIGHT = envWeight("ENGINE_MARGIN_ANCHOR_WEIGHT", 0.22);
-const TOTAL_ANCHOR_MARKET_WEIGHT = envWeight("ENGINE_TOTAL_ANCHOR_WEIGHT", 0.65);
+const TOTAL_ANCHOR_MARKET_WEIGHT = envWeight("ENGINE_TOTAL_ANCHOR_WEIGHT", 0.75);
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -78,6 +78,12 @@ function inferTeamAttack(
 ): number {
   const usableScored = scored > 0 ? scored : baselineShare;
   const usableAllowed = allowedByOpponent > 0 ? allowedByOpponent : baselineShare;
+  // When we have real scoring data, trust it heavily (50% team scored, 25%
+  // opponent allowed, 25% baseline). When data is missing, fall back to baseline.
+  const hasRealData = scored > 0 && allowedByOpponent > 0;
+  if (hasRealData) {
+    return usableScored * 0.50 + usableAllowed * 0.25 + baselineShare * 0.25;
+  }
   return baselineShare * 0.45 + usableScored * 0.35 + usableAllowed * 0.20;
 }
 
@@ -245,6 +251,59 @@ function applyLeagueScoringAdjustments(args: {
   let marginSd = args.marginSd;
 
   if (args.ctx.sport === "MLB") {
+    // ─── Ballpark factor ─────────────────────────────────────────────────────
+    // Coors Field adds ~1.2 runs/game; Oracle Park suppresses ~0.4 runs/game.
+    // Apply the home team's park factor to the total.
+    const parkFactors: Record<string, number> = {
+      ARI: 0.35, ATL: 0.15, BAL: 0.10, BOS: 0.20, CHC: 0.05,
+      CHW: 0.00, CIN: 0.35, CLE: -0.10, COL: 1.20, DET: -0.15,
+      HOU: 0.05, KC: 0.00, LAA: -0.05, LAD: -0.15, MIA: -0.30,
+      MIL: 0.05, MIN: 0.00, NYM: -0.05, NYY: 0.25, OAK: -0.20,
+      PHI: 0.10, PIT: -0.10, SD: -0.35, SEA: -0.25, SF: -0.40,
+      STL: 0.00, TB: -0.10, TEX: 0.15, TOR: 0.05, WSH: 0.00,
+    };
+    const homeAbbr = args.ctx.game.homeTeam?.abbreviation ?? "";
+    const parkDelta = parkFactors[homeAbbr] ?? 0;
+    if (Math.abs(parkDelta) >= 0.05) {
+      totalMean += parkDelta;
+      args.signals.push({
+        key: "mlb-park-factor",
+        label: "Ballpark factor",
+        value: round(parkDelta, 2),
+        evidence: `${homeAbbr} park factor ${parkDelta >= 0 ? "+" : ""}${round(parkDelta, 2)} runs/game vs league average`,
+      });
+    }
+
+    // ─── Weather/wind total adjustment ───────────────────────────────────────
+    // Wind blowing out at outdoor parks adds ~1 run; wind blowing in suppresses.
+    // High temperature (>85°F) adds ~0.5 runs (ball carries farther).
+    if (args.ctx.weather && !args.ctx.weather.isDomed) {
+      let weatherShift = 0;
+      const wind = args.ctx.weather.windSpeed;
+      const temp = args.ctx.weather.temperature;
+      // Wind impact: >12mph is significant for baseball
+      if (wind > 12) {
+        weatherShift += clamp((wind - 12) * 0.08, 0, 1.0);
+      }
+      // Temperature impact: hot air = ball carries
+      if (temp > 85) {
+        weatherShift += clamp((temp - 85) * 0.04, 0, 0.5);
+      }
+      // Cold weather suppresses offense
+      if (temp < 50) {
+        weatherShift -= clamp((50 - temp) * 0.03, 0, 0.6);
+      }
+      if (Math.abs(weatherShift) >= 0.1) {
+        totalMean += weatherShift;
+        args.signals.push({
+          key: "mlb-weather-total",
+          label: "Weather total adjustment",
+          value: round(weatherShift, 2),
+          evidence: `Weather conditions (wind ${round(wind, 0)}mph, temp ${round(temp, 0)}°F) adjust total ${weatherShift >= 0 ? "+" : ""}${round(weatherShift, 1)} runs`,
+        });
+      }
+    }
+
     const homePitcher = args.ctx.homeLineup?.startingPitcher;
     const awayPitcher = args.ctx.awayLineup?.startingPitcher;
     const starterRunLevel = averageFinite([
@@ -255,7 +314,10 @@ function applyLeagueScoringAdjustments(args: {
     ]);
 
     if (starterRunLevel !== null) {
-      const totalShift = clamp((starterRunLevel - 4.2) * 0.45, -0.9, 0.9);
+      // Uncapped: two aces (ERA 2.5) should suppress total by ~0.77 runs;
+      // two bad starters (ERA 5.5) should boost by +0.59 runs. The old ±0.9 cap
+      // was too tight for extreme matchups (e.g., deGrom vs a 6.0 ERA opener).
+      const totalShift = clamp((starterRunLevel - 4.2) * 0.55, -2.0, 2.0);
       if (Math.abs(totalShift) >= 0.08) {
         totalMean += totalShift;
         args.signals.push({
@@ -399,7 +461,7 @@ function buildScoreModel(
   }
 
   if (ctx.sport === "MLB" && Math.abs(pitcherDelta) > 0.5) {
-    const shift = clamp(pitcherDelta / 12, -1.25, 1.25);
+    const shift = clamp(pitcherDelta / 10, -2.0, 2.0);
     homeMean += shift / 2;
     awayMean -= shift / 2;
     signals.push({
@@ -485,6 +547,126 @@ function buildScoreModel(
   let marginSd = baseline.marginSd * readiness.varianceMultiplier;
   const totalSd = baseline.totalSd * readiness.totalVarianceMultiplier;
 
+  // ─── NBA/NCAAB: Back-to-back penalty ──────────────────────────────────────
+  // Teams on the second night of a back-to-back score ~3.5 fewer points on average
+  // and allow ~2 more points. This is one of the strongest predictors in basketball.
+  if (ctx.sport === "NBA" || ctx.sport === "NCAAB") {
+    const homeRest = ctx.homeExtended.restDays;
+    const awayRest = ctx.awayExtended.restDays;
+    const homeB2B = homeRest !== null && homeRest <= 1;
+    const awayB2B = awayRest !== null && awayRest <= 1;
+    if (homeB2B && !awayB2B) {
+      homeMean -= 1.8;
+      awayMean += 0.8;
+      signals.push({
+        key: "nba-b2b-home",
+        label: "Home back-to-back",
+        value: -2.6,
+        evidence: "Home team on second night of back-to-back: -1.8 pts scored, +0.8 pts allowed",
+      });
+    } else if (awayB2B && !homeB2B) {
+      awayMean -= 1.8;
+      homeMean += 0.8;
+      signals.push({
+        key: "nba-b2b-away",
+        label: "Away back-to-back",
+        value: 2.6,
+        evidence: "Away team on second night of back-to-back: -1.8 pts scored, +0.8 pts allowed",
+      });
+    } else if (homeB2B && awayB2B) {
+      homeMean -= 1.0;
+      awayMean -= 1.0;
+      signals.push({
+        key: "nba-b2b-both",
+        label: "Both teams back-to-back",
+        value: -2.0,
+        evidence: "Both teams on back-to-back: total reduced by ~2 points",
+      });
+    }
+  }
+
+  // ─── NBA/NCAAB: Opponent defensive strength adjustment ───────────────────────
+  // Adjust each team's projected scoring based on the opponent's defensive rating.
+  // A team facing a top-5 defense should project lower than against a bottom-5 defense.
+  if (ctx.sport === "NBA" || ctx.sport === "NCAAB") {
+    const homeDefRtg = ctx.homeAdvanced.defensiveRating;
+    const awayDefRtg = ctx.awayAdvanced.defensiveRating;
+    const leagueAvgDefRtg = 112.0;
+
+    if (typeof awayDefRtg === "number" && Number.isFinite(awayDefRtg) && awayDefRtg > 0) {
+      // Away team's defense affects home team's scoring
+      const awayDefImpact = clamp((awayDefRtg - leagueAvgDefRtg) * 0.35, -4.0, 4.0);
+      if (Math.abs(awayDefImpact) >= 0.5) {
+        homeMean += awayDefImpact;
+        signals.push({
+          key: "nba-opp-def-home",
+          label: "Opponent defense (home)",
+          value: round(awayDefImpact, 1),
+          evidence: `Away team defensive rating ${round(awayDefRtg, 1)} ${awayDefRtg < leagueAvgDefRtg ? "suppresses" : "inflates"} home scoring by ${round(Math.abs(awayDefImpact), 1)} pts`,
+        });
+      }
+    }
+
+    if (typeof homeDefRtg === "number" && Number.isFinite(homeDefRtg) && homeDefRtg > 0) {
+      // Home team's defense affects away team's scoring
+      const homeDefImpact = clamp((homeDefRtg - leagueAvgDefRtg) * 0.35, -4.0, 4.0);
+      if (Math.abs(homeDefImpact) >= 0.5) {
+        awayMean += homeDefImpact;
+        signals.push({
+          key: "nba-opp-def-away",
+          label: "Opponent defense (away)",
+          value: round(homeDefImpact, 1),
+          evidence: `Home team defensive rating ${round(homeDefRtg, 1)} ${homeDefRtg < leagueAvgDefRtg ? "suppresses" : "inflates"} away scoring by ${round(Math.abs(homeDefImpact), 1)} pts`,
+        });
+      }
+    }
+  }
+
+  // ─── NBA/NCAAB: Real pace-based total adjustment ─────────────────────────────
+  // Use actual pace data (possessions/game) from advanced metrics when available.
+  // Two fast teams (pace 102+) should project significantly higher totals.
+  if (ctx.sport === "NBA" || ctx.sport === "NCAAB") {
+    const homePace = ctx.homeAdvanced.pace;
+    const awayPace = ctx.awayAdvanced.pace;
+    const leagueAvgPace = 99.5;
+
+    if (typeof homePace === "number" && typeof awayPace === "number" &&
+        Number.isFinite(homePace) && Number.isFinite(awayPace) &&
+        homePace > 0 && awayPace > 0) {
+      // Combined pace differential: how many extra/fewer possessions vs average
+      const combinedPaceDiff = ((homePace - leagueAvgPace) + (awayPace - leagueAvgPace)) / 2;
+      // Each extra possession ≈ 1.1 points per team (league avg offensive efficiency)
+      const paceAdjust = clamp(combinedPaceDiff * 1.1, -8.0, 8.0);
+      if (Math.abs(paceAdjust) >= 1.0) {
+        homeMean += paceAdjust / 2;
+        awayMean += paceAdjust / 2;
+        signals.push({
+          key: "nba-pace-total",
+          label: "Pace-adjusted total",
+          value: round(paceAdjust, 1),
+          evidence: `Combined pace (${round(homePace, 0)} + ${round(awayPace, 0)}) / 2 = ${round((homePace + awayPace) / 2, 1)} vs league avg ${leagueAvgPace}: total ${paceAdjust >= 0 ? "+" : ""}${round(paceAdjust, 1)} pts`,
+        });
+      }
+    } else if (hasScoreBaseline) {
+      // Fallback: use scoring averages as a pace proxy when advanced metrics unavailable
+      const homeAboveAvg = ctx.homeForm.avgScore - halfTotal;
+      const awayAboveAvg = ctx.awayForm.avgScore - halfTotal;
+      if ((homeAboveAvg > 0 && awayAboveAvg > 0) || (homeAboveAvg < 0 && awayAboveAvg < 0)) {
+        const paceShift = clamp((homeAboveAvg + awayAboveAvg) * 0.35, -8, 8);
+        if (Math.abs(paceShift) > 1) {
+          homeMean += paceShift / 2;
+          awayMean += paceShift / 2;
+          signals.push({
+            key: "pace-matching",
+            label: "Pace matching (proxy)",
+            value: round(paceShift, 1),
+            evidence: `Both teams ${paceShift > 0 ? "above" : "below"} league scoring pace — total adjusted ${paceShift > 0 ? "+" : ""}${round(paceShift, 1)} points`,
+          });
+        }
+      }
+    }
+  }
+
   if (Math.abs(weatherDelta) > 0.5) {
     const compression = ctx.sport === "NFL" || ctx.sport === "NCAAF" ? 0.06 : 0.03;
     totalMean *= 1 - compression;
@@ -513,8 +695,8 @@ function buildScoreModel(
     ctx.awayExtended.scoringTrend -
     ctx.homeExtended.defenseTrend -
     ctx.awayExtended.defenseTrend;
-  if (Math.abs(totalTrend) > 0.06) {
-    const totalShift = clamp(totalTrend * 0.035, -0.08, 0.08);
+  if (Math.abs(totalTrend) > 0.04) {
+    const totalShift = clamp(totalTrend * 0.055, -0.14, 0.14);
     totalMean *= 1 + totalShift;
     signals.push({
       key: "total-trend-script",
@@ -637,6 +819,13 @@ export function simulateGameProjection(
   let marginSum = 0;
   let marginSquareSum = 0;
 
+  // Track score frequencies to find the MODE (most common outcome) — this is
+  // what users intuitively expect as "the projected score". The mean is skewed
+  // by blowout outliers; the mode represents the most likely game script.
+  const homeScoreFreq = new Map<number, number>();
+  const awayScoreFreq = new Map<number, number>();
+  const totalFreq = new Map<number, number>();
+
   for (let i = 0; i < ITERATIONS; i++) {
     let { home, away } = sampleScorePair(model, ctx.sport, rand);
 
@@ -654,10 +843,32 @@ export function simulateGameProjection(
     marginSum += margin;
     marginSquareSum += margin ** 2;
 
+    // Track frequencies for mode calculation
+    homeScoreFreq.set(home, (homeScoreFreq.get(home) ?? 0) + 1);
+    awayScoreFreq.set(away, (awayScoreFreq.get(away) ?? 0) + 1);
+    const total = home + away;
+    totalFreq.set(total, (totalFreq.get(total) ?? 0) + 1);
+
     if (home > away) homeWins++;
     else if (away > home) awayWins++;
     else draws++;
   }
+
+  // Find the mode (most frequent score) for each team and total.
+  // This gives users the "most likely" score rather than the average.
+  function getMode(freq: Map<number, number>): number {
+    let maxCount = 0;
+    let modeValue = 0;
+    for (const [value, count] of freq) {
+      if (count > maxCount) {
+        maxCount = count;
+        modeValue = value;
+      }
+    }
+    return modeValue;
+  }
+  const homeMode = getMode(homeScoreFreq);
+  const awayMode = getMode(awayScoreFreq);
 
   if (ctx.sport === "TENNIS") {
     model.signals.unshift({
@@ -667,10 +878,34 @@ export function simulateGameProjection(
       evidence: "Projected tennis line uses expected match games from the matchup model, not a recycled set score",
     });
   }
+  // Use the MODE (most frequent simulation outcome) as the projected score.
+  // This gives users a realistic "expected final score" rather than the mean
+  // which is skewed by blowout outliers. For example, if 50K sims produce
+  // "Lakers 108" most often, that's more useful than "Lakers 111.3" (mean).
+  //
+  // However, we must ensure the mode-based scores are directionally consistent
+  // with the winner pick. If the model says "home wins" but mode says away > home
+  // (possible with bimodal distributions), fall back to the mean.
+  const meanHome = homeScoreSum / ITERATIONS;
+  const meanAway = awayScoreSum / ITERATIONS;
+  const modelFavorsHome = meanHome > meanAway;
+  const modeConsistent = modelFavorsHome ? homeMode >= awayMode : awayMode >= homeMode;
+
+  let displayHome: number;
+  let displayAway: number;
+  if (modeConsistent && homeMode > 0 && awayMode > 0) {
+    displayHome = homeMode;
+    displayAway = awayMode;
+  } else {
+    // Fall back to mean when mode is inconsistent with the pick direction
+    displayHome = meanHome;
+    displayAway = meanAway;
+  }
+
   const boundedScores = boundedProjectedScoreLine(
     ctx.sport,
-    homeScoreSum / ITERATIONS,
-    awayScoreSum / ITERATIONS,
+    displayHome,
+    displayAway,
     model.signals,
   );
   const projectedHomeScore = boundedScores.home;

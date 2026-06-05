@@ -1,44 +1,51 @@
 /**
  * MLS-specific factors.
  *
- * Same four factors as EPL, same redistribution (0.112 / 0.168 / 0.056 / 0.084
- * = 0.42).
+ * Weight budget: 0.42 (remaining after 0.58 base). Five factors:
+ *   - xG differential (strongest predictor):      0.14
+ *   - Key player availability:                    0.12
+ *   - Fixture congestion:                         0.07
+ *   - Manager-change bounce:                      0.03
+ *   - Stakes (playoff race / Shield):             0.06
+ *   → 0.42 exactly
  *
- * xG factor removed — no viable xG data source works from Railway.
- * If we add an ASA integration or paid xG API later, re-add and rebalance.
+ * xG factor RE-ADDED (2026-06-05): Using FBref/Understat pipeline.
  *
  * Stakes mapping for MLS:
  *   - "title race" = top-of-conference / Supporters' Shield chase (rank ≤ 3)
- *   - "relegation race" = there is no relegation in MLS, but the flag is
- *     reused by soccerStandings.computeStakes to signal bottom-4 teams
- *     fighting for a playoff spot. Kept under the same key for consistency.
+ *   - "relegation race" = reused for bottom-4 teams fighting for playoff spot
  *   - "Europe race" flag is unused (stays false).
  */
 
 import type { GameContext, FactorContribution, SoccerStakes } from "../types";
+import type { TeamXgMetrics } from "../../lib/soccerXg";
 import {
+  xgDifferentialFactor,
   fixtureCongestionFactor,
   keyPlayerFactor,
   managerChangeFactor,
 } from "./soccerCommon";
 
-export function computeMLSFactors(ctx: GameContext): FactorContribution[] {
+export function computeMLSFactors(
+  ctx: GameContext,
+  homeXg?: TeamXgMetrics | null,
+  awayXg?: TeamXgMetrics | null,
+): FactorContribution[] {
   const factors: FactorContribution[] = [];
 
-  factors.push(fixtureCongestionFactor(ctx, 0.112));   // 0.112
-  factors.push(keyPlayerFactor(ctx, 0.168));           // 0.168
-  factors.push(managerChangeFactor(ctx, 0.056));       // 0.056
-  factors.push(stakesFactor(ctx));                     // 0.084
+  factors.push(xgDifferentialFactor(ctx, 0.14, homeXg ?? null, awayXg ?? null));
+  factors.push(keyPlayerFactor(ctx, 0.12));
+  factors.push(fixtureCongestionFactor(ctx, 0.07));
+  factors.push(managerChangeFactor(ctx, 0.03));
+  factors.push(stakesFactor(ctx));
 
   return factors;
 }
 
 // ─── MLS-specific stakes ────────────────────────────────────────────────────
-// Same signal shape as EPL but lightly relabeled so the evidence string
-// doesn't mention "relegation" (MLS doesn't relegate).
 
 function stakesFactor(ctx: GameContext): FactorContribution {
-  const weight = 0.084;
+  const weight = 0.06;
   const home = ctx.homeStakes ?? null;
   const away = ctx.awayStakes ?? null;
   const lateSeason =
@@ -73,7 +80,6 @@ function stakesFactor(ctx: GameContext): FactorContribution {
 }
 
 function motivationScore(s: SoccerStakes): number {
-  // MLS re-uses the "relegation race" flag for playoff-bubble teams.
   if (s.inRelegationRace) return 25;
   if (s.inTitleRace) return 20;
   return 0;

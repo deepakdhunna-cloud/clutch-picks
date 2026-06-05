@@ -45,8 +45,14 @@ export function isFullScaleRatingEnabled(): boolean {
  * rating_diff weight is dead and dilutes the only real signal (ATP/WTA ranking).
  * When enabled, the tennis rating_diff factor is marked unavailable so
  * redistributeWeights reallocates its weight onto the live ranking/form factors.
- * Separate flag from #2 so it can be validated independently. Default OFF.
+ * Separate flag from #2 so it can be validated independently.
+ *
+ * GRADUATED TO ON BY DEFAULT (2026-06-05). The dead Elo weight was diluting
+ * the ATP/WTA ranking signal — the only real predictive input for tennis.
+ * With reclaim ON, the ranking/form factors absorb the full weight budget,
+ * producing sharper separation between ranked and unranked players.
+ * Set ENGINE_TENNIS_RANK_RECLAIM=false to force the legacy behavior.
  */
 export function isTennisRankReclaimEnabled(): boolean {
-  return envEnabled("ENGINE_TENNIS_RANK_RECLAIM");
+  return !envDisabled("ENGINE_TENNIS_RANK_RECLAIM");
 }
