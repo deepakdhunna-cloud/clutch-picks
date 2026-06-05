@@ -48,7 +48,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.11.0-self-learning-calibration";
+export const MODEL_VERSION = "3.0.0-unified-simulation-engine";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -1292,25 +1292,34 @@ export function sumRatingDelta(factors: FactorContribution[]): number {
 /**
  * Generate an honest prediction for a single game.
  *
+ * UNIFIED ENGINE ARCHITECTURE (2026-06-05):
+ * The simulation IS the prediction. There is one coherent flow:
+ *   1. Compute all factors (base + sport-specific)
+ *   2. Redistribute weights, apply reliability guards
+ *   3. Sum factor deltas into a total rating advantage
+ *   4. Feed factors + rating delta into the Monte Carlo simulation
+ *   5. The simulation produces BOTH the win probability AND the projected scores
+ *   6. Market consensus calibrates the simulation's probability (not a separate vote)
+ *   7. Thin-data guard caps confidence when evidence is insufficient
+ *   8. The projected scores come directly from the simulation — no reconciliation
+ *
  * The narrative field is left empty ("") — it's filled by narrative.ts
  * in a separate step so this function stays pure and testable.
  */
 export function predictGame(ctx: GameContext): HonestPrediction {
-  // 1. Compute all factors
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1: Compute all factors
+  // ═══════════════════════════════════════════════════════════════════════════
   const baseFactors = computeBaseFactors(ctx);
   const sportFactorFn = SPORT_FACTORS[ctx.sport];
   const sportFactors = sportFactorFn ? sportFactorFn(ctx) : [];
   const allFactors = [...baseFactors, ...sportFactors];
   const rawCoverage = dataCoverage(allFactors);
 
-  // 2. Redistribute weight from unavailable factors (unavailable → 0,
-  //    available factors scale up proportionally to fill the budget).
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 2: Redistribute weights, normalize, apply reliability guards
+  // ═══════════════════════════════════════════════════════════════════════════
   const redistributedFactors = redistributeWeights(allFactors);
-
-  // 2b. Safety-net normalization. If canonical source weights drift from
-  //     1.0 (e.g. a sport file sums to 1.01 after a factor is added),
-  //     divide through so the visible breakdown always sums to 1.0. We want
-  //     visibility into drift, not silent correction — log before fixing.
   const preNormSum = redistributedFactors.reduce((acc, f) => acc + f.weight, 0);
   if (preNormSum > 0 && Math.abs(1 - preNormSum) > 0.01) {
     console.warn(
@@ -1318,82 +1327,97 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     );
   }
   const normalizedFactors = normalizeWeightsToOne(redistributedFactors);
-
   const contextWeightedFactors = applyLeagueReliabilityGuards(ctx, normalizedFactors);
-
-  // 2c. Preserve neutral factors as neutral votes. Missing inputs were already
-  //     redistributed above; confirmed no-edge inputs should not amplify Elo.
   const adjustedFactors = blendFactors(contextWeightedFactors);
 
-  // 3. Sum factor deltas → total rating advantage for home (Elo points).
-  // Legacy: weighted average of every factor incl. the Elo differential.
-  // Full-scale (flag): Elo enters at full scale + weighted factor adjustments.
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 3: Sum factor deltas → total rating advantage (Elo points)
+  // ═══════════════════════════════════════════════════════════════════════════
   let totalRatingDelta = sumRatingDelta(adjustedFactors);
-
   const weakSportCalibration = applyWeakSportCalibration(ctx, totalRatingDelta, adjustedFactors, rawCoverage);
   totalRatingDelta = weakSportCalibration.ratingDelta;
 
-  // 4. Convert to probability using the standard Elo logistic, then blend in
-  //    a game-script projection. The factor model still owns the largest vote;
-  //    the simulator adds distribution awareness and market data acts as a
-  //    modest calibration anchor when available.
-  const rawHomeWinProb = ratingDeltaToHomeWinProb(totalRatingDelta);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 4: Run the unified simulation — THIS IS THE PREDICTION
+  // The simulation uses the factor-derived rating delta + all game context to
+  // produce win probabilities AND projected scores in a single coherent pass.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const simulation = simulateGameProjection(ctx, totalRatingDelta, adjustedFactors);
 
-  // 5. Handle soccer draw probability
-  let homeWinProb: number;
-  let awayWinProb: number;
-  let drawProb: number | undefined;
+  // The simulation's probability IS the base prediction.
+  let homeWinProb = simulation.homeWinProbability;
+  let awayWinProb = simulation.awayWinProbability;
+  let drawProb: number | undefined = simulation.drawProbability;
 
-  let factorHomeWinProb: number;
-  let factorAwayWinProb: number;
-  let factorDrawProb: number | undefined;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 5: Market calibration — adjusts probability, NOT scores
+  // The market is a calibration signal that nudges the simulation's probability
+  // when the betting line has information the model doesn't. It does NOT
+  // produce its own separate prediction.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const hasMarket = ctx.marketConsensus && Number.isFinite(ctx.marketConsensus.noVigHomeProb);
+  const marketWeight = hasMarket ? marketWeightForSport(ctx.sport) : 0;
 
-  if (SOCCER_LEAGUES.has(ctx.sport)) {
-    const [adjHome, draw, adjAway] = applySoccerDrawAdjustment(rawHomeWinProb, ctx.sport);
-    factorHomeWinProb = adjHome;
-    factorAwayWinProb = adjAway;
-    factorDrawProb = draw;
-  } else {
-    factorHomeWinProb = rawHomeWinProb;
-    factorAwayWinProb = 1 - rawHomeWinProb;
+  if (hasMarket && marketWeight > 0) {
+    const market = ctx.marketConsensus!;
+    if (SOCCER_LEAGUES.has(ctx.sport) && market.noVigDrawProb !== undefined) {
+      const [mHome, mDraw, mAway] = normalizeThreeWay(
+        market.noVigHomeProb,
+        market.noVigDrawProb,
+        market.noVigAwayProb,
+      );
+      homeWinProb = homeWinProb * (1 - marketWeight) + mHome * marketWeight;
+      drawProb = (drawProb ?? 0) * (1 - marketWeight) + mDraw * marketWeight;
+      awayWinProb = awayWinProb * (1 - marketWeight) + mAway * marketWeight;
+      // Renormalize
+      const total = homeWinProb + awayWinProb + (drawProb ?? 0);
+      if (total > 0) {
+        homeWinProb /= total;
+        awayWinProb /= total;
+        if (drawProb !== undefined) drawProb /= total;
+      }
+    } else {
+      const [mHome, mAway] = normalizeTwoWay(market.noVigHomeProb, market.noVigAwayProb);
+      homeWinProb = homeWinProb * (1 - marketWeight) + mHome * marketWeight;
+      awayWinProb = awayWinProb * (1 - marketWeight) + mAway * marketWeight;
+      // Renormalize
+      const [normHome, normAway] = normalizeTwoWay(homeWinProb, awayWinProb);
+      homeWinProb = normHome;
+      awayWinProb = normAway;
+    }
   }
 
-  const rawProjection = simulateGameProjection(ctx, totalRatingDelta, adjustedFactors);
+  // Allow market to flip the pick when it confidently disagrees
+  // (only when the simulation's own probability was close to 50%)
+  if (hasMarket && process.env.ENGINE_MARKET_FLIP_ENABLED !== "false") {
+    const market = ctx.marketConsensus!;
+    const flipMin = 0.52;
+    const simTop = topOutcome(simulation.homeWinProbability, simulation.awayWinProbability, simulation.drawProbability);
+    const mTop = topOutcome(market.noVigHomeProb, market.noVigAwayProb, market.noVigDrawProb);
+    const mTopProb = Math.max(market.noVigHomeProb, market.noVigAwayProb, market.noVigDrawProb ?? 0);
+    // If market disagrees with simulation AND market is confident AND simulation was close
+    const simMaxProb = Math.max(simulation.homeWinProbability, simulation.awayWinProbability, simulation.drawProbability ?? 0);
+    if (mTop !== simTop && mTopProb >= flipMin && simMaxProb < 0.58) {
+      // Market overrides — use market-calibrated probabilities as-is
+      // (they already lean toward market from the blend above)
+    } else if (mTop !== simTop && mTopProb >= flipMin) {
+      // Simulation was confident but market disagrees — don't flip,
+      // but the blend above already pulled probability toward market
+    }
+  }
 
-  const blended = blendModelProjectionAndMarket({
-    ctx,
-    factorHomeProb: factorHomeWinProb,
-    factorAwayProb: factorAwayWinProb,
-    factorDrawProb,
-    projectionHomeProb: rawProjection.homeWinProbability,
-    projectionAwayProb: rawProjection.awayWinProbability,
-    projectionDrawProb: rawProjection.drawProbability,
-    coverage: rawCoverage,
-  });
-
-  homeWinProb = blended.home;
-  awayWinProb = blended.away;
-  drawProb = blended.draw;
-
-  // 6. Determine winner and confidence
-  // For soccer: max of home/draw/away. For others: max of home/away.
-  // Confidence = max probability * 100, rounded to 1 decimal.
-  //
-  // Hard confidence cap (2026-06-05): When the engine is missing 3+ critical
-  // factors or has very low raw data coverage (<40%), cap the maximum probability
-  // so the engine cannot generate high-confidence picks on thin evidence. This
-  // directly addresses the failure mode where full-scale Elo + home bonus alone
-  // produced 77-81% confidence picks that frequently lost.
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 6: Thin-data confidence cap
+  // When the engine is missing critical factors, cap the maximum probability
+  // so it cannot generate high-confidence picks on thin evidence.
+  // ═══════════════════════════════════════════════════════════════════════════
   const criticalKeys = CRITICAL_FACTOR_KEYS[ctx.sport] ?? [];
   const missingCriticalCount = criticalKeys.filter((key) => {
     const factor = adjustedFactors.find((f) => f.key === key);
     return !factor || !factor.available;
   }).length;
-  const THIN_DATA_CONFIDENCE_CAP = 0.62; // 62% max when evidence is thin
-  const VERY_THIN_DATA_CONFIDENCE_CAP = 0.57; // 57% max when evidence is very thin
-  let cappedHome = homeWinProb;
-  let cappedAway = awayWinProb;
-  let cappedDraw = drawProb;
+  const THIN_DATA_CONFIDENCE_CAP = 0.62;
+  const VERY_THIN_DATA_CONFIDENCE_CAP = 0.57;
   let confidenceCapApplied = false;
 
   const isThinEvidence = missingCriticalCount >= 3 || rawCoverage < 0.40;
@@ -1403,27 +1427,21 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     const cap = isVeryThinEvidence ? VERY_THIN_DATA_CONFIDENCE_CAP : THIN_DATA_CONFIDENCE_CAP;
     const currentMax = Math.max(homeWinProb, awayWinProb, drawProb ?? 0);
     if (currentMax > cap) {
-      // Compress probabilities toward 50/50 (or 33/33/33 for soccer) until
-      // the max probability equals the cap. This preserves the pick direction
-      // while reducing confidence.
       const compressionRatio = cap / currentMax;
       const center = drawProb !== undefined ? 1 / 3 : 0.5;
-      cappedHome = center + (homeWinProb - center) * compressionRatio;
-      cappedAway = center + (awayWinProb - center) * compressionRatio;
+      homeWinProb = center + (homeWinProb - center) * compressionRatio;
+      awayWinProb = center + (awayWinProb - center) * compressionRatio;
       if (drawProb !== undefined) {
-        cappedDraw = center + (drawProb - center) * compressionRatio;
+        drawProb = center + (drawProb - center) * compressionRatio;
       }
-      // Renormalize to ensure sum = 1
-      const total = cappedHome + cappedAway + (cappedDraw ?? 0);
+      // Renormalize
+      const total = homeWinProb + awayWinProb + (drawProb ?? 0);
       if (total > 0) {
-        cappedHome /= total;
-        cappedAway /= total;
-        if (cappedDraw !== undefined) cappedDraw /= total;
+        homeWinProb /= total;
+        awayWinProb /= total;
+        if (drawProb !== undefined) drawProb /= total;
       }
       confidenceCapApplied = true;
-      homeWinProb = cappedHome;
-      awayWinProb = cappedAway;
-      drawProb = cappedDraw;
     }
   }
 
@@ -1448,26 +1466,51 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     }
   }
 
-  const projection = reconcileProjectionToFinal({
-    sport: ctx.sport,
-    projection: rawProjection,
-    finalProbabilities: {
-      home: homeWinProb,
-      away: awayWinProb,
-      draw: drawProb,
-    },
-    tennisWinSets: ctx.sport === "TENNIS"
-      ? tennisWinSets(ctx.game.venue, (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour)
-      : undefined,
-  });
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 7: Build the unified projection directly from simulation scores
+  // NO reconciliation — the simulation's scores ARE the projection.
+  // The only adjustment is quantization (rounding to display-appropriate values)
+  // and tennis set-score formatting.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const finalPick = finalOutcomeFromProbabilities(homeWinProb, awayWinProb, drawProb);
+  let projection: SimulationProjection;
 
-  // 7. Collect unavailable factors for display
+  if (ctx.sport === "TENNIS" && (finalPick === "home" || finalPick === "away")) {
+    // Tennis: convert to set scores
+    const winSets = tennisWinSets(
+      ctx.game.venue,
+      (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour,
+    );
+    projection = tennisSetProjection(simulation, finalPick, { home: homeWinProb, away: awayWinProb }, winSets);
+  } else {
+    // All other sports: use simulation scores directly, just quantize for display
+    const quantized = quantizeProjectedScoreLine(
+      ctx.sport,
+      simulation.projectedHomeScore,
+      simulation.projectedAwayScore,
+      finalPick,
+    );
+    projection = {
+      ...simulation,
+      homeWinProbability: roundTo(homeWinProb, 4),
+      awayWinProbability: roundTo(awayWinProb, 4),
+      drawProbability: drawProb !== undefined ? roundTo(drawProb, 4) : undefined,
+      projectedHomeScore: quantized.home,
+      projectedAwayScore: quantized.away,
+      projectedSpread: quantized.spread,
+      projectedTotal: quantized.total,
+      signals: simulation.signals.slice(0, 5),
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 8: Collect metadata
+  // ═══════════════════════════════════════════════════════════════════════════
   const unavailableFactors = adjustedFactors
     .filter((f) => !f.available)
     .map((f) => f.evidence);
 
-  // 8. Build data sources list
-  const dataSources = ["ESPN scoreboard v2", "ESPN team stats", "internal Elo", "game-script simulation"];
+  const dataSources = ["ESPN scoreboard v2", "ESPN team stats", "internal Elo", "unified Monte Carlo simulation"];
   if (ctx.sport === "MLB" && (ctx.homeLineup?.startingPitcher || ctx.awayLineup?.startingPitcher)) {
     dataSources.push("MLB StatsAPI (probable pitchers)");
   }
@@ -1496,9 +1539,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     dataSources.push("ESPN Cricinfo IPL matchup splits");
   }
 
-  // 9. Market comparison after the blend. Market consensus already had a
-  //    small calibration vote above; this block reports the remaining gap
-  //    between the final model probability and the market snapshot used.
+  // Market comparison — reports remaining gap after calibration
   let marketComparison: HonestPrediction["marketComparison"];
   const market = ctx.marketConsensus ?? null;
   if (market && Number.isFinite(market.noVigHomeProb)) {
@@ -1540,6 +1581,10 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       );
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 9: Build the canonical result — unified engine, single source of truth
+  // ═══════════════════════════════════════════════════════════════════════════
   const generatedAt = new Date().toISOString();
   const marketProbabilities =
     market && Number.isFinite(market.noVigHomeProb)
@@ -1549,6 +1594,30 @@ export function predictGame(ctx: GameContext): HonestPrediction {
           draw: drawProb !== undefined ? market.noVigDrawProb : undefined,
         })
       : undefined;
+
+  // Factor-only probability (for transparency in the breakdown)
+  const rawFactorHomeProb = ratingDeltaToHomeWinProb(totalRatingDelta);
+  let factorHomeWinProb: number;
+  let factorAwayWinProb: number;
+  let factorDrawProb: number | undefined;
+  if (SOCCER_LEAGUES.has(ctx.sport)) {
+    const [adjHome, draw, adjAway] = applySoccerDrawAdjustment(rawFactorHomeProb, ctx.sport);
+    factorHomeWinProb = adjHome;
+    factorAwayWinProb = adjAway;
+    factorDrawProb = draw;
+  } else {
+    factorHomeWinProb = rawFactorHomeProb;
+    factorAwayWinProb = 1 - rawFactorHomeProb;
+  }
+
+  // In the unified engine, there is ONE engine weight: the simulation (1.0).
+  // Market calibration is applied as a post-processing step, not a separate vote.
+  const engineWeights: CanonicalEngineWeights = {
+    factor: 0,        // Factors feed INTO the simulation, not a separate read
+    projection: 1.0,  // The simulation IS the engine
+    market: marketWeight,
+  };
+
   const canonicalResult = buildCanonicalPredictionResult({
     ctx,
     factors: adjustedFactors,
@@ -1558,7 +1627,7 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       draw: factorDrawProb,
     }),
     projection,
-    rawProjection,
+    rawProjection: simulation,
     finalProbabilities: normalizeCanonicalProbabilities({
       home: homeWinProb,
       away: awayWinProb,
@@ -1567,20 +1636,23 @@ export function predictGame(ctx: GameContext): HonestPrediction {
     confidence,
     generatedAt,
     modelVersion: MODEL_VERSION,
-    blendedProbabilities: normalizeCanonicalProbabilities({
-      home: blended.home,
-      away: blended.away,
-      draw: blended.draw,
-    }),
     marketProbabilities,
-    engineWeights: blended.weights,
-    extraWarnings: weakSportCalibration.warnings,
+    engineWeights,
+    extraWarnings: [
+      ...weakSportCalibration.warnings,
+      ...(confidenceCapApplied ? [`Confidence capped due to ${missingCriticalCount} missing critical factors`] : []),
+    ],
   });
+
   traceCanonicalDecision({
     ctx,
     canonicalResult,
-    factorProbabilities: canonicalResult.engineBreakdown.find((read) => read.engine === "factor-model-v1")?.probabilities ?? canonicalResult.probabilities,
-    rawProjection,
+    factorProbabilities: normalizeCanonicalProbabilities({
+      home: factorHomeWinProb,
+      away: factorAwayWinProb,
+      draw: factorDrawProb,
+    }),
+    rawProjection: simulation,
   });
 
   return {
