@@ -164,15 +164,40 @@ export function computeNHLFactors(ctx: GameContext): FactorContribution[] {
   let stEvidence = "Special teams data unavailable from public team feeds";
 
   if (stAvailable) {
-    // Home PP vs Away PK: positive = home has edge on power play
-    const homePPvsAwayPK = homePP! - (1 - awayPK!);
-    // Away PP vs Home PK: positive = away has edge on power play
-    const awayPPvsHomePK = awayPP! - (1 - homePK!);
-    // Net special teams edge for home
-    const netST = homePPvsAwayPK - awayPPvsHomePK;
-    // Each 1% net special teams edge ≈ 15 Elo points
-    stDelta = netST * 100 * 15;
-    stEvidence = `Home PP ${(homePP! * 100).toFixed(1)}%/PK ${(homePK! * 100).toFixed(1)}% vs Away PP ${(awayPP! * 100).toFixed(1)}%/PK ${(awayPK! * 100).toFixed(1)}%`;
+    // Fixed special teams formula (2026-06-05):
+    // The correct matchup comparison is:
+    //   - Home PP% vs Away PK%: when home has a power play, how does their
+    //     conversion rate compare to the opponent's kill rate?
+    //   - Away PP% vs Home PK%: same for the away team.
+    //
+    // A team with 25% PP facing a team with 75% PK has a net edge of
+    // (0.25 - (1 - 0.75)) = 0.25 - 0.25 = 0 (neutral).
+    // But that's wrong! The correct interpretation is:
+    //   Home PP 25% means they score on 25% of power plays.
+    //   Away PK 75% means opponents score on 25% of power plays against them.
+    //   So home PP 25% vs away PK 75% is a neutral matchup (both at 25% conversion).
+    //
+    // The real signal is the RAW differential between the two teams' special
+    // teams effectiveness, not the PP vs (1-PK) formula.
+    // Home advantage = (homePP - leagueAvgPP) + (homePK - leagueAvgPK)
+    //               - (awayPP - leagueAvgPP) - (awayPK - leagueAvgPK)
+    // Simplified: (homePP + homePK) - (awayPP + awayPK)
+    // This captures total special teams quality differential.
+    const LG_PP = 0.215; // League average PP% 2024-2025
+    const LG_PK = 0.795; // League average PK% 2024-2025
+
+    // Home team's special teams quality above/below average
+    const homeSTQuality = (homePP! - LG_PP) + (homePK! - LG_PK);
+    // Away team's special teams quality above/below average
+    const awaySTQuality = (awayPP! - LG_PP) + (awayPK! - LG_PK);
+    // Net differential — positive favors home
+    const netST = homeSTQuality - awaySTQuality;
+    // Each 1% net special teams quality edge ≈ 20 Elo points
+    // (special teams account for ~25% of goals; a 2% edge ≈ 0.15 goals/game)
+    stDelta = netST * 100 * 20;
+    // Cap to prevent extreme values from noisy early-season data
+    stDelta = Math.max(-60, Math.min(60, stDelta));
+    stEvidence = `Home PP ${(homePP! * 100).toFixed(1)}%/PK ${(homePK! * 100).toFixed(1)}% vs Away PP ${(awayPP! * 100).toFixed(1)}%/PK ${(awayPK! * 100).toFixed(1)}% (net ST quality: ${netST > 0 ? "+" : ""}${(netST * 100).toFixed(1)}%)`;
   }
 
   factors.push({

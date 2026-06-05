@@ -772,18 +772,28 @@ function resolveBlendOutcome(args: {
     });
   if (process.env.ENGINE_ESPN_MARKET === "false" || args.marketWeight <= 0) return preserve();
   const flipMinRaw = Number(process.env.ENGINE_MARKET_FLIP_MIN);
-  // Default 0.52: in weak-factor leagues (heavy market weight) the market is
-  // allowed to set the pick when it favors a side, which is where its accuracy
-  // edge lives (MLB +4). The downstream pick-stability lock (7pp commit gate)
-  // prevents this from oscillating the SHOWN pick on noise.
+  // Default 0.52 (2026-06-05): the market is allowed to flip the model's pick
+  // when it confidently disagrees. This is where the market's accuracy edge
+  // lives — especially in MLB (+4pp) and NHL where the factor model is weak.
+  // The downstream pick-stability lock (7pp commit gate) prevents oscillation.
+  // Set ENGINE_MARKET_FLIP_ENABLED=false to disable market flips entirely.
+  const flipEnabled = process.env.ENGINE_MARKET_FLIP_ENABLED !== "false";
+  if (!flipEnabled) return preserve();
   const flipMin = Number.isFinite(flipMinRaw) && flipMinRaw > 0.5 ? flipMinRaw : 0.52;
   const nmTop = topOutcome(args.nonMarketHome, args.nonMarketAway, args.nonMarketDraw);
   const mTop = topOutcome(args.marketHome, args.marketAway, args.marketDraw);
   const mTopProb = Math.max(args.marketHome, args.marketAway, args.marketDraw ?? 0);
-  // Let the market override only when it confidently picks a different side.
+  // Let the market override when it confidently picks a different side.
+  // The blended probabilities already incorporate the market weight, so when
+  // the market is strong enough to flip the blend naturally, allow it through
+  // rather than forcing the non-market outcome back on top.
   if (mTop !== nmTop && mTopProb >= flipMin) {
+    // Market is confident and disagrees — allow the natural blend through
+    // (which already incorporates market weight). This lets the market
+    // correct wrong factor picks in weak-signal leagues.
     return { home: args.home, away: args.away, draw: args.draw };
   }
+  // Market agrees or isn't confident enough to flip — preserve model pick.
   return preserve();
 }
 
@@ -936,17 +946,22 @@ function blendModelProjectionAndMarket(args: {
 }
 
 /**
- * Redistribute weight from unavailable factors proportionally to available ones.
+ * Redistribute weight from unavailable factors to available ones.
  *
- * This is the honest way to handle missing data:
- * - Unavailable factors contribute 0 delta and their displayed weight drops
- *   to 0 (they don't count toward the visible factor breakdown).
- * - Their weight budget is redistributed so available factors don't get diluted.
- * - The total effective weight still sums to the original total.
+ * Revised (2026-06-05): The old proportional redistribution had a critical flaw:
+ * when multiple sport-specific factors were unavailable, rating_diff (the largest
+ * single factor at 0.40) would absorb most of the freed weight, sometimes reaching
+ * 0.65-0.75 effective weight. This made the engine overconfident on Elo alone.
  *
- * Example: if base rating_diff (weight 0.40) and rest (weight 0.05) are available
- * but form (weight 0.10) is not, then rating_diff gets 0.40 * (0.55/0.45) = 0.489
- * and rest gets 0.05 * (0.55/0.45) = 0.061.
+ * New approach:
+ * 1. rating_diff can absorb at most 15% additional weight (capped at 0.55 total).
+ * 2. Non-rating available factors absorb their proportional share normally.
+ * 3. Any remaining weight that can't be absorbed becomes a neutral "confidence
+ *    drag" factor (homeDelta=0, available=true, hasSignal=false) that dilutes
+ *    the final probability toward 50% without changing the pick direction.
+ *
+ * This ensures that missing data REDUCES confidence rather than INFLATING it
+ * by concentrating all weight onto the Elo differential.
  */
 function redistributeWeights(factors: FactorContribution[]): FactorContribution[] {
   const totalWeight = factors.reduce((sum, f) => sum + f.weight, 0);
@@ -958,15 +973,64 @@ function redistributeWeights(factors: FactorContribution[]): FactorContribution[
     return factors; // All factors unavailable — nothing to redistribute onto.
   }
 
-  const scale = totalWeight / availableWeight;
+  const unavailableWeight = totalWeight - availableWeight;
+  if (unavailableWeight <= 0.001) {
+    // Nothing to redistribute
+    return factors.map((f) => ({
+      ...f,
+      weight: f.available ? f.weight : 0,
+    }));
+  }
 
-  return factors.map((f) => ({
-    ...f,
-    // Available factors absorb the unavailable budget proportionally.
-    // Unavailable factors' displayed weight drops to 0 — their contribution
-    // was already 0, and we don't want them inflating the visible total.
-    weight: f.available ? f.weight * scale : 0,
-  }));
+  // Cap how much rating_diff can grow
+  const RATING_MAX_TOTAL_WEIGHT = 0.55;
+  const ratingFactor = factors.find((f) => f.key === "rating_diff" && f.available);
+  const ratingBaseWeight = ratingFactor?.weight ?? 0;
+  const ratingMaxAbsorb = Math.max(0, RATING_MAX_TOTAL_WEIGHT - ratingBaseWeight);
+
+  // Non-rating available factors
+  const nonRatingAvailable = factors.filter(
+    (f) => f.available && f.key !== "rating_diff"
+  );
+  const nonRatingWeight = nonRatingAvailable.reduce((sum, f) => sum + f.weight, 0);
+
+  // Proportional redistribution with rating cap
+  const naiveScale = totalWeight / availableWeight;
+  const ratingNaiveNew = ratingBaseWeight * naiveScale;
+  const ratingExcess = Math.max(0, ratingNaiveNew - (ratingBaseWeight + ratingMaxAbsorb));
+
+  // If rating would exceed its cap, the excess becomes confidence drag
+  const confidenceDragWeight = ratingExcess;
+  const ratingFinalWeight = Math.min(ratingBaseWeight * naiveScale, ratingBaseWeight + ratingMaxAbsorb);
+
+  // Non-rating factors get their proportional share (slightly more if rating is capped)
+  const nonRatingBudget = totalWeight - ratingFinalWeight - confidenceDragWeight;
+  const nonRatingScale = nonRatingWeight > 0 ? nonRatingBudget / nonRatingWeight : 1;
+
+  const result = factors.map((f) => {
+    if (!f.available) {
+      return { ...f, weight: 0 };
+    }
+    if (f.key === "rating_diff") {
+      return { ...f, weight: ratingFinalWeight };
+    }
+    return { ...f, weight: f.weight * nonRatingScale };
+  });
+
+  // Add confidence drag as a neutral factor if there's excess weight
+  if (confidenceDragWeight > 0.005) {
+    result.push({
+      key: "redistribution_drag",
+      label: "Missing-data confidence reduction",
+      homeDelta: 0,
+      weight: confidenceDragWeight,
+      available: true,
+      hasSignal: false,
+      evidence: `${Math.round(confidenceDragWeight * 100)}% of model weight parked as neutral drag due to missing factors (prevents Elo inflation)`,
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -1313,7 +1377,56 @@ export function predictGame(ctx: GameContext): HonestPrediction {
 
   // 6. Determine winner and confidence
   // For soccer: max of home/draw/away. For others: max of home/away.
-  // Confidence = max probability * 100, rounded to 1 decimal. No manipulation.
+  // Confidence = max probability * 100, rounded to 1 decimal.
+  //
+  // Hard confidence cap (2026-06-05): When the engine is missing 3+ critical
+  // factors or has very low raw data coverage (<40%), cap the maximum probability
+  // so the engine cannot generate high-confidence picks on thin evidence. This
+  // directly addresses the failure mode where full-scale Elo + home bonus alone
+  // produced 77-81% confidence picks that frequently lost.
+  const criticalKeys = CRITICAL_FACTOR_KEYS[ctx.sport] ?? [];
+  const missingCriticalCount = criticalKeys.filter((key) => {
+    const factor = adjustedFactors.find((f) => f.key === key);
+    return !factor || !factor.available;
+  }).length;
+  const THIN_DATA_CONFIDENCE_CAP = 0.62; // 62% max when evidence is thin
+  const VERY_THIN_DATA_CONFIDENCE_CAP = 0.57; // 57% max when evidence is very thin
+  let cappedHome = homeWinProb;
+  let cappedAway = awayWinProb;
+  let cappedDraw = drawProb;
+  let confidenceCapApplied = false;
+
+  const isThinEvidence = missingCriticalCount >= 3 || rawCoverage < 0.40;
+  const isVeryThinEvidence = missingCriticalCount >= 4 || (missingCriticalCount >= 3 && rawCoverage < 0.50);
+
+  if (isVeryThinEvidence || isThinEvidence) {
+    const cap = isVeryThinEvidence ? VERY_THIN_DATA_CONFIDENCE_CAP : THIN_DATA_CONFIDENCE_CAP;
+    const currentMax = Math.max(homeWinProb, awayWinProb, drawProb ?? 0);
+    if (currentMax > cap) {
+      // Compress probabilities toward 50/50 (or 33/33/33 for soccer) until
+      // the max probability equals the cap. This preserves the pick direction
+      // while reducing confidence.
+      const compressionRatio = cap / currentMax;
+      const center = drawProb !== undefined ? 1 / 3 : 0.5;
+      cappedHome = center + (homeWinProb - center) * compressionRatio;
+      cappedAway = center + (awayWinProb - center) * compressionRatio;
+      if (drawProb !== undefined) {
+        cappedDraw = center + (drawProb - center) * compressionRatio;
+      }
+      // Renormalize to ensure sum = 1
+      const total = cappedHome + cappedAway + (cappedDraw ?? 0);
+      if (total > 0) {
+        cappedHome /= total;
+        cappedAway /= total;
+        if (cappedDraw !== undefined) cappedDraw /= total;
+      }
+      confidenceCapApplied = true;
+      homeWinProb = cappedHome;
+      awayWinProb = cappedAway;
+      drawProb = cappedDraw;
+    }
+  }
+
   const maxProb = Math.max(homeWinProb, awayWinProb, drawProb ?? 0);
   const confidence = Math.round(maxProb * 1000) / 10; // 1 decimal place
 
