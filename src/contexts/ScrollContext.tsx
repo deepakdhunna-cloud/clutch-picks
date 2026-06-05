@@ -49,6 +49,9 @@ export function useHideOnScroll() {
 
       previousOffset.value = currentOffset;
 
+      // Ignore tiny movements (likely horizontal scroll noise bleeding through)
+      if (Math.abs(diff) < 3) return;
+
       // Always show near top
       if (currentOffset < 20) {
         if (tabBarVisible.value !== 1) {

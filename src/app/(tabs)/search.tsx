@@ -295,12 +295,8 @@ const SportPills = memo(function SportPills({
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0, marginBottom: bottomMargin }}
       contentContainerStyle={{ paddingLeft: sidePadding, paddingRight: sidePadding, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
-      onTouchStart={onHorizontalGestureStart}
-      onTouchEnd={onHorizontalGestureEnd}
-      onTouchCancel={onHorizontalGestureEnd}
       onScrollBeginDrag={onHorizontalGestureStart}
       onScrollEndDrag={onHorizontalGestureEnd}
-      onMomentumScrollBegin={onHorizontalGestureStart}
       onMomentumScrollEnd={onHorizontalGestureEnd}
     >
       {visible.map((s, index) => {
@@ -764,12 +760,8 @@ const YourGames = memo(function YourGames({
         renderItem={({ item }) => <FollowedCard game={item} />}
         getItemLayout={(_, index) => ({ length: FOLLOWED_CARD_W + ARENA_CARD_GAP, offset: (FOLLOWED_CARD_W + ARENA_CARD_GAP) * index, index })}
         style={{ flexGrow: 0 }}
-        onTouchStart={onHorizontalGestureStart}
-        onTouchEnd={onHorizontalGestureEnd}
-        onTouchCancel={onHorizontalGestureEnd}
         onScrollBeginDrag={onHorizontalGestureStart}
         onScrollEndDrag={onHorizontalGestureEnd}
-        onMomentumScrollBegin={onHorizontalGestureStart}
         onMomentumScrollEnd={onHorizontalGestureEnd}
       />
     </View>
@@ -2541,12 +2533,8 @@ const GameDay = memo(function GameDay({
           style={{flexGrow:0}}
           onScroll={onLiveScroll}
           scrollEventThrottle={16}
-          onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
-          onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
-          onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
           onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
           onScrollEndDrag={horizontalGestureGuard?.onHorizontalGestureEnd}
-          onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
           onMomentumScrollEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
         />
       )}
@@ -2666,12 +2654,8 @@ const Prep = memo(function Prep({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{paddingLeft:ARENA_SIDE_PADDING, paddingRight:ARENA_SIDE_PADDING, paddingBottom:2, flexDirection:'row'}}
             style={{flexGrow:0}}
-            onTouchStart={horizontalGestureGuard?.onHorizontalGestureStart}
-            onTouchEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onTouchCancel={horizontalGestureGuard?.onHorizontalGestureEnd}
             onScrollBeginDrag={horizontalGestureGuard?.onHorizontalGestureStart}
             onScrollEndDrag={horizontalGestureGuard?.onHorizontalGestureEnd}
-            onMomentumScrollBegin={horizontalGestureGuard?.onHorizontalGestureStart}
             onMomentumScrollEnd={horizontalGestureGuard?.onHorizontalGestureEnd}
           >
             {top3.map((r, i) => {
@@ -3037,10 +3021,8 @@ export default function MyArenaScreen() {
 
   const unlockArenaPager = useCallback(() => {
     if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
-    pagerUnlockTimer.current = setTimeout(() => {
-      setArenaPagerEnabled(true);
-      pagerRef.current?.setScrollEnabled(true);
-    }, 150);
+    setArenaPagerEnabled(true);
+    pagerRef.current?.setScrollEnabled(true);
   }, []);
 
   const horizontalGestureGuard = useMemo<ArenaHorizontalGestureGuard>(() => ({
