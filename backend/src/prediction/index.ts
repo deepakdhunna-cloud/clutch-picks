@@ -27,7 +27,9 @@
 import type { GameContext, FactorContribution, HonestPrediction, LeagueKey, SimulationProjection, CanonicalEngineWeights } from "./types";
 import { getConfidenceBand } from "./types";
 import { ratingDeltaToHomeWinProb, applySoccerDrawAdjustment } from "./probability";
+import { isFullScaleRatingEnabled } from "./flags";
 import { simulateGameProjection } from "./simulation";
+import { getSportSimulationProfile } from "./simulators/profiles";
 import { computeBaseFactors } from "./factors/base";
 import { computeNFLFactors } from "./factors/nfl";
 import { computeNBAFactors } from "./factors/nba";
@@ -46,7 +48,7 @@ import {
   traceCanonicalDecision,
 } from "./canonical";
 
-export const MODEL_VERSION = "2.10.0-source-aware-availability";
+export const MODEL_VERSION = "2.11.0-self-learning-calibration";
 
 // ─── Sport → factor function map ────────────────────────────────────────
 
@@ -65,6 +67,10 @@ const SPORT_FACTORS: Record<string, (ctx: GameContext) => FactorContribution[]> 
 };
 
 const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
+// Sports whose projected scores stay as ONE decimal (the real expected value):
+// runs/goals are small, so the projected margin is often sub-1 and rounding to a
+// whole number would either collapse the lean to a tie or distort the total.
+const LOW_SCORING_SPORTS = new Set(["MLB", "NHL", "MLS", "EPL", "UCL"]);
 
 type ConsensusOutcome = "home" | "away" | "draw";
 type ProjectionOutcome = ConsensusOutcome | "none";
@@ -137,20 +143,22 @@ function applyWeakSportCalibration(
   } else if (ctx.sport === "TENNIS") {
     const ranking = factorByKey(factors, "tennis_ranking_edge");
     const form = factorByKey(factors, "tennis_recent_form");
+    const hasRankingSignal = Boolean(ranking?.available && ranking.hasSignal);
 
     // Tennis has no true home field and ESPN often lacks enough player-level
-    // context. Rankings remain useful, but we should not present ranking-only
-    // reads as strong model signal.
-    multiplier *= 0.78;
-    if (!ranking?.available || !ranking.hasSignal) {
+    // context. Rankings remain the best public pre-match anchor, so a clear
+    // rank edge should not be crushed back into the toss-up band just because
+    // recent-form or market feeds are missing.
+    multiplier *= hasRankingSignal ? 0.88 : 0.78;
+    if (!hasRankingSignal) {
       multiplier *= 0.60;
       warnings.push("Tennis ranking signal missing or neutral; confidence compressed.");
     }
     if (!form?.available) {
-      multiplier *= 0.86;
+      multiplier *= hasRankingSignal ? 0.96 : 0.86;
     }
     if (!ctx.marketConsensus) {
-      multiplier *= 0.92;
+      multiplier *= hasRankingSignal ? 0.98 : 0.92;
     }
 
     multiplier = Math.max(0.45, multiplier);
@@ -209,7 +217,7 @@ function meaningfulProjectionSpreadThreshold(sport: string): number {
   if (sport === "NFL" || sport === "NCAAF") return 0.45;
   if (sport === "IPL") return 3;
   if (sport === "MLB" || sport === "NHL" || SOCCER_LEAGUES.has(sport)) return 0.12;
-  if (sport === "TENNIS") return 0.08;
+  if (sport === "TENNIS") return 0.8;
   return 0.25;
 }
 
@@ -217,7 +225,108 @@ function projectionMinimumScore(sport: string): number {
   if (sport === "NBA") return 75;
   if (sport === "NCAAB") return 45;
   if (sport === "IPL") return 80;
+  if (sport === "TENNIS") return 6;
   return 0;
+}
+
+/**
+ * Inverse of the standard normal CDF (probit): returns z such that Φ(z) = p.
+ * Acklam's rational approximation, accurate to ~1.15e-9 over (0,1). Pure math,
+ * no dependency. This is the inverse of the normalCdf the simulator samples
+ * against, so it lets us recover the margin a given win probability implies.
+ */
+function inverseNormalCdf(p: number): number {
+  // Coefficients for Acklam's rational approximation.
+  const a0 = -3.969683028665376e1, a1 = 2.209460984245205e2, a2 = -2.759285104469687e2,
+    a3 = 1.38357751867269e2, a4 = -3.066479806614716e1, a5 = 2.506628277459239e0;
+  const b0 = -5.447609879822406e1, b1 = 1.615858368580409e2, b2 = -1.556989798598866e2,
+    b3 = 6.680131188771972e1, b4 = -1.328068155288572e1;
+  const c0 = -7.784894002430293e-3, c1 = -3.223964580411365e-1, c2 = -2.400758277161838e0,
+    c3 = -2.549732539343734e0, c4 = 4.374664141464968e0, c5 = 2.938163982698783e0;
+  const d0 = 7.784695709041462e-3, d1 = 3.224671290700398e-1, d2 = 2.445134137142996e0,
+    d3 = 3.754408661907416e0;
+  const pLow = 0.02425;
+  const pHigh = 1 - pLow;
+  const x = clamp(p, 1e-9, 1 - 1e-9);
+  if (x < pLow) {
+    const q = Math.sqrt(-2 * Math.log(x));
+    return (
+      (((((c0 * q + c1) * q + c2) * q + c3) * q + c4) * q + c5) /
+      ((((d0 * q + d1) * q + d2) * q + d3) * q + 1)
+    );
+  }
+  if (x <= pHigh) {
+    const q = x - 0.5;
+    const r = q * q;
+    return (
+      ((((((a0 * r + a1) * r + a2) * r + a3) * r + a4) * r + a5) * q) /
+      (((((b0 * r + b1) * r + b2) * r + b3) * r + b4) * r + 1)
+    );
+  }
+  const q = Math.sqrt(-2 * Math.log(1 - x));
+  return -(
+    (((((c0 * q + c1) * q + c2) * q + c3) * q + c4) * q + c5) /
+    ((((d0 * q + d1) * q + d2) * q + d3) * q + 1)
+  );
+}
+
+/**
+ * The projected MARGIN a displayed win probability implies, so the public score
+ * line and the public confidence always tell the same story. Under the
+ * simulator's Gaussian margin model, P(favorite wins) = Φ(margin / sd), so the
+ * margin a probability `p` implies is Φ⁻¹(p) · sd. We anchor on the sport's
+ * calibrated BASELINE margin SD (the documented spread↔probability relationship)
+ * rather than a single game's realized volatility, which keeps the mapping
+ * stable, monotonic, and immune to a pathologically low per-game variance that
+ * would shrink a confident pick back toward a near-tie. Clamped to the sport's
+ * meaningful-margin floor and to a value the total can physically hold.
+ *
+ * Soccer (3-way) note: the home-vs-away GOAL margin is orthogonal to the draw,
+ * so we condition on the two SIDES only — p_pick / (p_pick + p_opponent) — which
+ * is >0.5 whenever the pick genuinely leads its opponent. Feeding the raw 3-way
+ * win probability (often <50% because the draw absorbs 20-30%) would collapse
+ * every sub-50% pick to the same floor line. For 2-outcome sports the opponent
+ * probability is 1-p_pick, so the conditional equals the win probability exactly.
+ */
+function displayMarginSd(sport: string, baselineMarginSd: number): number {
+  // IPL run-margin SD (36) is realistic for the SIMULATION but, mapped through
+  // the confidence→margin curve, prints implausible 30-46 run blowouts at high
+  // confidence. Cap the DISPLAY SD only — the simulation/model is untouched, so
+  // win probabilities and calibration do not change.
+  if (sport === "IPL") return Math.min(baselineMarginSd, 18);
+  return baselineMarginSd;
+}
+
+function impliedMarginForProbability(
+  sport: string,
+  finalProbabilities: { home: number; away: number; draw?: number },
+  finalPick: ProjectionOutcome,
+  total: number,
+): number {
+  const baseline = getSportSimulationProfile(sport).baseline;
+  const marginSd = displayMarginSd(sport, baseline.marginSd);
+  const threshold = meaningfulProjectionSpreadThreshold(sport);
+  const minScore = projectionMinimumScore(sport);
+  // Reserve a small loser floor on low-scoring sports (minScore is 0 there) so an
+  // extreme-confidence pick projects e.g. 3.5-0.5 rather than a literal 4.0-0.0
+  // shutout pinned to the total floor — the loser almost always scores something.
+  const loserFloor = LOW_SCORING_SPORTS.has(sport) ? Math.max(minScore, 0.5) : minScore;
+  const maxMargin = Math.max(threshold, total - loserFloor * 2);
+  // Head-to-head favorite probability (see soccer note above).
+  let pPick = 0.5;
+  let pOther = 0.5;
+  if (finalPick === "home") {
+    pPick = finalProbabilities.home;
+    pOther = finalProbabilities.away;
+  } else if (finalPick === "away") {
+    pPick = finalProbabilities.away;
+    pOther = finalProbabilities.home;
+  }
+  const denom = pPick + pOther;
+  const conditional = denom > 0 ? pPick / denom : 0.5;
+  const p = clamp(Number.isFinite(conditional) ? conditional : 0.5, 0.5, 0.999);
+  const z = inverseNormalCdf(p); // >= 0 for p >= 0.5
+  return roundTo(clamp(z * marginSd, threshold, maxMargin), 2);
 }
 
 function projectedScoreOutcome(
@@ -256,11 +365,80 @@ function scoresForTargetSpread(args: {
   };
 }
 
+function tennisProjectionDominance(selectedProbability?: number): number {
+  const probability =
+    typeof selectedProbability === "number" && Number.isFinite(selectedProbability)
+      ? clamp(selectedProbability > 1 ? selectedProbability / 100 : selectedProbability, 0, 1)
+      : 0.55;
+  return clamp((probability - 0.5) * 4, 0, 1.4);
+}
+
+function tennisGameMarginForProbability(selectedProbability?: number, total?: number): number {
+  const dominance = tennisProjectionDominance(selectedProbability);
+  const maxMargin =
+    typeof total === "number" && Number.isFinite(total)
+      ? Math.max(1.2, total - 12)
+      : 7.5;
+  return roundTo(clamp(1.6 + dominance * 4.8, 1.2, Math.min(7.5, maxMargin)), 1);
+}
+
+function tennisGameLineForPick(
+  finalPick: "home" | "away",
+  selectedProbability?: number,
+  currentTotal?: number,
+): { home: number; away: number; spread: number; total: number } {
+  const dominance = tennisProjectionDominance(selectedProbability);
+  const hasUsableTotal =
+    typeof currentTotal === "number" &&
+    Number.isFinite(currentTotal) &&
+    currentTotal >= 16 &&
+    currentTotal <= 40;
+  const total = roundTo(
+    hasUsableTotal
+      ? clamp(currentTotal, 16, 40)
+      : clamp(26.5 - dominance * 4.5, 18.5, 30.5),
+    1,
+  );
+  const margin = tennisGameMarginForProbability(selectedProbability, total);
+  const spread = finalPick === "home" ? margin : -margin;
+  const home = roundTo((total + spread) / 2, 1);
+  const away = roundTo((total - spread) / 2, 1);
+
+  return {
+    home,
+    away,
+    spread: roundTo(home - away, 1),
+    total: roundTo(home + away, 1),
+  };
+}
+
+function isPlausibleTennisGameLine(home: number, away: number): boolean {
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return false;
+  const total = home + away;
+  return total >= 16 && total <= 40 && home >= 5 && away >= 5;
+}
+
+function probabilityForFinalPick(
+  probabilities: { home: number; away: number; draw?: number },
+  pick: ProjectionOutcome,
+): number | undefined {
+  if (pick === "home") return probabilities.home;
+  if (pick === "away") return probabilities.away;
+  if (pick === "draw") return probabilities.draw;
+  return undefined;
+}
+
 function reconciledScoreLineForPick(args: {
   sport: string;
   total: number;
   finalPick: Exclude<ProjectionOutcome, "none">;
+  selectedProbability?: number;
+  targetMargin?: number;
 }): { home: number; away: number; spread: number; total: number } {
+  if (args.sport === "TENNIS" && (args.finalPick === "home" || args.finalPick === "away")) {
+    return tennisGameLineForPick(args.finalPick, args.selectedProbability, args.total);
+  }
+
   if (args.finalPick === "draw") {
     const scores = scoresForTargetSpread({
       sport: args.sport,
@@ -277,7 +455,10 @@ function reconciledScoreLineForPick(args: {
 
   const direction = args.finalPick === "home" ? 1 : -1;
   const threshold = meaningfulProjectionSpreadThreshold(args.sport);
-  let targetMagnitude = threshold;
+  // Start from the margin the win probability implies (so the line matches the
+  // confidence), never below the meaningful-margin floor. The loop below only
+  // nudges UP if rounding to one decimal would collapse the winner.
+  let targetMagnitude = Math.max(threshold, args.targetMargin ?? threshold);
   let fallback: { home: number; away: number; spread: number; total: number } | null = null;
 
   // Public score projections are displayed to one decimal. Small raw spreads
@@ -311,22 +492,138 @@ function reconciledScoreLineForPick(args: {
   };
 }
 
+/**
+ * Quantize the projected score line for display truthfulness + consistency:
+ * integer-scored sports (everything except tennis) show WHOLE numbers — a team
+ * cannot score 4.5 runs — and the winner of the score line always matches the
+ * final pick. When rounding the expected means would collapse a real sub-unit
+ * lean into a tie (common in low-scoring MLB/NHL/soccer), the favorite is nudged
+ * +1 so the line never contradicts the pick. Spread/total are derived from the
+ * rounded scores so the three numbers always reconcile. Tennis keeps one decimal
+ * (expected games) everywhere.
+ */
+function quantizeProjectedScoreLine(
+  sport: string,
+  home: number,
+  away: number,
+  finalPick: ProjectionOutcome,
+): { home: number; away: number; spread: number; total: number } {
+  if (sport === "TENNIS") {
+    const h = roundTo(home, 1);
+    const a = roundTo(away, 1);
+    return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
+  }
+  // Low-scoring sports keep ONE decimal. Forcing a whole-number >=1 margin would
+  // badly distort the total here (one run on an ~8-run game), so the two team
+  // scores would no longer sum to the true projected total. Decimals are the
+  // honest expected values; they reconcile exactly and the sub-unit lean (already
+  // oriented toward the pick by the reconcile step above) stays visible.
+  if (LOW_SCORING_SPORTS.has(sport)) {
+    if (finalPick === "draw") {
+      const each = roundTo((home + away) / 2, 1);
+      return { home: each, away: each, spread: 0, total: roundTo(each * 2, 1) };
+    }
+    const h = roundTo(home, 1);
+    const a = roundTo(away, 1);
+    return { home: h, away: a, spread: roundTo(h - a, 1), total: roundTo(h + a, 1) };
+  }
+  // High-scoring / discrete sports (NBA/NCAAB/NFL/NCAAF/IPL): whole numbers.
+  // The MARGIN carries the confidence, so we preserve the rounded margin EXACTLY
+  // and absorb any integer-parity mismatch into the TOTAL (a +/-1 shift on a
+  // 100+/300+ total is negligible). This keeps the displayed spread equal to the
+  // implied margin for every game — strictly monotonic in confidence, with no
+  // parity stairstep where one game's total silently bumps the margin by 1.
+  const baseTotal = Math.round(home + away);
+  if (finalPick === "draw") {
+    const each = Math.round(baseTotal / 2);
+    return { home: each, away: each, spread: 0, total: each * 2 };
+  }
+  let margin = Math.round(Math.abs(home - away));
+  if ((finalPick === "home" || finalPick === "away") && margin < 1) margin = 1; // favorite must lead the line
+  // total and margin must share parity for integer team scores that sum exactly.
+  let total = (baseTotal - margin) % 2 === 0 ? baseTotal : baseTotal + 1;
+  const { totalMin, totalMax } = getSportSimulationProfile(sport).baseline;
+  if (total > totalMax) total -= 2; // -2 keeps parity while staying in bound
+  if (total < totalMin) total += 2;
+  const favorite = (total + margin) / 2;
+  const underdog = total - favorite;
+  const homeIsFavorite =
+    finalPick === "home" || (finalPick !== "away" && home >= away);
+  const h = homeIsFavorite ? favorite : underdog;
+  const a = homeIsFavorite ? underdog : favorite;
+  return { home: h, away: a, spread: h - a, total: h + a };
+}
+
+const GRAND_SLAM_VENUE_RE = /grand slam|australian open|roland garros|french open|wimbledon|us open/i;
+
+/**
+ * Sets needed to WIN a tennis match: men's Grand Slam main draw is best-of-5
+ * (3 sets to win); everything else (all WTA, all non-Slam ATP) is best-of-3.
+ * Defaults to best-of-3 when the tour is unknown.
+ */
+export function tennisWinSets(venue: string | undefined, tour: string | undefined): number {
+  return GRAND_SLAM_VENUE_RE.test(venue ?? "") && tour === "ATP" ? 3 : 2;
+}
+
+/**
+ * Tennis projects a real SET score (e.g. 2-0 / 2-1, or 3-x at a men's Slam) —
+ * the natural unit for a tennis result — instead of a synthetic games total.
+ * The winner takes the full set count; the loser's sets reflect how close the
+ * match is (a clear favorite wins in straight sets; a tight pick drops one).
+ */
+function tennisSetProjection(
+  projection: SimulationProjection,
+  finalPick: ProjectionOutcome,
+  finalProbabilities: { home: number; away: number; draw?: number },
+  winSets: number,
+): SimulationProjection {
+  const favSide: "home" | "away" =
+    finalPick === "home" || finalPick === "away"
+      ? finalPick
+      : finalProbabilities.home >= finalProbabilities.away
+        ? "home"
+        : "away";
+  const favProb = favSide === "home" ? finalProbabilities.home : finalProbabilities.away;
+  const loserSets =
+    winSets >= 3
+      ? favProb >= 0.68
+        ? 0
+        : favProb >= 0.56
+          ? 1
+          : 2
+      : favProb >= 0.6
+        ? 0
+        : 1;
+  const home = favSide === "home" ? winSets : loserSets;
+  const away = favSide === "home" ? loserSets : winSets;
+  return {
+    ...projection,
+    homeWinProbability: roundTo(finalProbabilities.home, 4),
+    awayWinProbability: roundTo(finalProbabilities.away, 4),
+    drawProbability: undefined,
+    projectedHomeScore: home,
+    projectedAwayScore: away,
+    projectedSpread: home - away,
+    projectedTotal: home + away,
+    signals: projection.signals.slice(0, 5),
+  };
+}
+
 export function reconcileProjectionToFinal(args: {
   sport: string;
   projection: SimulationProjection;
   finalProbabilities: { home: number; away: number; draw?: number };
+  tennisWinSets?: number;
 }): SimulationProjection {
   const finalPick = finalOutcomeFromProbabilities(
     args.finalProbabilities.home,
     args.finalProbabilities.away,
     args.finalProbabilities.draw,
   );
-  const rawScorePick = projectedScoreOutcome(
-    args.sport,
-    args.projection.projectedHomeScore,
-    args.projection.projectedAwayScore,
-  );
-
+  // Tennis: project a set score directly (and bypass the games/quantize path).
+  if (args.sport === "TENNIS") {
+    return tennisSetProjection(args.projection, finalPick, args.finalProbabilities, args.tennisWinSets ?? 2);
+  }
   let projectedHomeScore = args.projection.projectedHomeScore;
   let projectedAwayScore = args.projection.projectedAwayScore;
   let projectedSpread = roundTo(projectedHomeScore - projectedAwayScore, 1);
@@ -334,12 +631,30 @@ export function reconcileProjectionToFinal(args: {
   let scoreAdjusted =
     Math.abs(projectedSpread - args.projection.projectedSpread) > 0.001 ||
     Math.abs(projectedTotal - args.projection.projectedTotal) > 0.001;
+  const selectedProbability = probabilityForFinalPick(args.finalProbabilities, finalPick);
 
-  if (finalPick !== "none" && rawScorePick !== finalPick) {
+  // Align the DISPLAYED projected margin to the DISPLAYED win probability so the
+  // score line and the confidence always tell the same story. The simulator's
+  // raw mean margin reflects its OWN win probability, but the public confidence
+  // is the orchestrator's calibrated probability — the two can disagree in
+  // magnitude, which is how a 59% lean used to show a 1-point near-tie. We keep
+  // the simulator's TOTAL and re-size only the margin to Φ⁻¹(p)·volatility, so
+  // higher confidence always shows a bigger margin (monotonic) and the winner of
+  // the line always matches the pick. The raw simulator line stays in
+  // engineBreakdown for transparency. Tennis returns above with a real set score.
+  if (finalPick !== "none") {
+    const targetMargin = impliedMarginForProbability(
+      args.sport,
+      args.finalProbabilities,
+      finalPick,
+      projectedTotal,
+    );
     const reconciledScores = reconciledScoreLineForPick({
       sport: args.sport,
       total: projectedTotal,
       finalPick,
+      selectedProbability,
+      targetMargin,
     });
     projectedHomeScore = reconciledScores.home;
     projectedAwayScore = reconciledScores.away;
@@ -365,6 +680,8 @@ export function reconcileProjectionToFinal(args: {
     });
   }
 
+  const quantized = quantizeProjectedScoreLine(args.sport, projectedHomeScore, projectedAwayScore, finalPick);
+
   return {
     ...args.projection,
     homeWinProbability: roundTo(args.finalProbabilities.home, 4),
@@ -373,10 +690,10 @@ export function reconcileProjectionToFinal(args: {
       args.finalProbabilities.draw !== undefined
         ? roundTo(args.finalProbabilities.draw, 4)
         : undefined,
-    projectedHomeScore,
-    projectedAwayScore,
-    projectedSpread,
-    projectedTotal,
+    projectedHomeScore: quantized.home,
+    projectedAwayScore: quantized.away,
+    projectedSpread: quantized.spread,
+    projectedTotal: quantized.total,
     signals: signals.slice(0, 5),
   };
 }
@@ -422,6 +739,97 @@ function preserveNonMarketOutcome(args: {
   return { home: normHome, away: normAway };
 }
 
+/**
+ * Decide the final blended outcome. By DEFAULT the factor/projection favorite is
+ * preserved — the market can only shrink or grow the gap, never flip the pick.
+ * That default makes a wrong factor pick impossible for the market to correct,
+ * which caps accuracy. When the (free, ESPN-sourced) market anchor is enabled
+ * AND the market is CONFIDENT in a favorite that disagrees with the factor lean,
+ * we let the market flip the pick — that is exactly where a real line fixes a
+ * wrong factor pick (the accuracy win). Gated + thresholded via env so the flip
+ * behavior is A/B-validated on the backtest before it ships.
+ */
+function resolveBlendOutcome(args: {
+  home: number;
+  away: number;
+  draw?: number;
+  nonMarketHome: number;
+  nonMarketAway: number;
+  nonMarketDraw?: number;
+  marketHome: number;
+  marketAway: number;
+  marketDraw?: number;
+  marketWeight: number;
+}): { home: number; away: number; draw?: number } {
+  const preserve = () =>
+    preserveNonMarketOutcome({
+      home: args.home,
+      away: args.away,
+      draw: args.draw,
+      nonMarketHome: args.nonMarketHome,
+      nonMarketAway: args.nonMarketAway,
+      nonMarketDraw: args.nonMarketDraw,
+    });
+  if (process.env.ENGINE_ESPN_MARKET === "false" || args.marketWeight <= 0) return preserve();
+  const flipMinRaw = Number(process.env.ENGINE_MARKET_FLIP_MIN);
+  // Default 0.52: in weak-factor leagues (heavy market weight) the market is
+  // allowed to set the pick when it favors a side, which is where its accuracy
+  // edge lives (MLB +4). The downstream pick-stability lock (7pp commit gate)
+  // prevents this from oscillating the SHOWN pick on noise.
+  const flipMin = Number.isFinite(flipMinRaw) && flipMinRaw > 0.5 ? flipMinRaw : 0.52;
+  const nmTop = topOutcome(args.nonMarketHome, args.nonMarketAway, args.nonMarketDraw);
+  const mTop = topOutcome(args.marketHome, args.marketAway, args.marketDraw);
+  const mTopProb = Math.max(args.marketHome, args.marketAway, args.marketDraw ?? 0);
+  // Let the market override only when it confidently picks a different side.
+  if (mTop !== nmTop && mTopProb >= flipMin) {
+    return { home: args.home, away: args.away, draw: args.draw };
+  }
+  return preserve();
+}
+
+/**
+ * League-aware market weight (only when the free ESPN market anchor is enabled).
+ * The market is not uniformly better than our factor model — the backtest shows
+ * it BEATS our model where our signal is weak and LOSES to it where our signal
+ * is strong. So we lean on the market heavily in weak-factor leagues and lightly
+ * in strong-factor leagues, instead of one blanket weight.
+ *
+ * Calibrated on a leak-aware, SEQUENTIAL historical replay (concurrency=1 so the
+ * single-book ESPN/DraftKings line attaches on every game; running it wide
+ * starves the odds fetch and silently understates the market). n=110/league:
+ *   - MLB: blind 52.7% → 0.65 54.5% → 0.80 59.1% → 0.90 59.1%. Accuracy climbs
+ *     with market weight and PEAKS at 0.80 (0.90 identical), so MLB sits at 0.80.
+ *   - NBA: blind 67.3% → 0.15 68.2% → 0.40 68.2%. Factor model is strong and
+ *     market-insensitive — keep the market a light 0.15 calibrator.
+ *   - EPL: 0.60 50.9% → 0.80 49.1%. Leaning harder does NOT help 3-way soccer
+ *     (draws don't sharpen by over-following) — hold at 0.60.
+ *   - NHL: 0.40 54.5% → 0.65 55.5% (+1 game = noise) — hold at 0.40.
+ * Tunable per env (ENGINE_MARKET_WEIGHT) for future sweeps.
+ */
+function marketWeightForSport(sport: string): number {
+  switch (sport) {
+    // Our model is at/above the line here — keep the market a light calibrator.
+    case "NBA":
+    case "NCAAB":
+      return 0.15;
+    // Weak factor model + high single-game variance: the DraftKings line is the
+    // single best free predictor and accuracy peaks here (validated +4.6pp).
+    case "MLB":
+      return 0.8;
+    case "MLS":
+    case "EPL":
+    case "UCL":
+      return 0.6;
+    case "NHL":
+      return 0.4;
+    case "NFL":
+    case "NCAAF":
+      return 0.45;
+    default:
+      return 0.4;
+  }
+}
+
 function blendModelProjectionAndMarket(args: {
   ctx: GameContext;
   factorHomeProb: number;
@@ -444,7 +852,20 @@ function blendModelProjectionAndMarket(args: {
   } = args;
   const hasMarket = ctx.marketConsensus && Number.isFinite(ctx.marketConsensus.noVigHomeProb);
   const projectionWeight = clamp(0.08 + coverage * 0.06, 0.08, 0.14);
-  const marketWeight = hasMarket ? clamp(0.06 + coverage * 0.04, 0.06, 0.10) : 0;
+  // Market weight. The legacy default treats the market as a tiny ~6-10%
+  // calibration nudge. When the (free, ESPN-sourced) market anchor is enabled,
+  // the market — the most predictive single signal — gets real weight so it can
+  // actually move the pick. Both are env-tunable for backtest sweeps.
+  const espnMarketEnabled = process.env.ENGINE_ESPN_MARKET !== "false";
+  const marketWeightRaw = Number(process.env.ENGINE_MARKET_WEIGHT);
+  const marketWeightOverride =
+    Number.isFinite(marketWeightRaw) && marketWeightRaw > 0 ? clamp(marketWeightRaw, 0, 0.9) : null;
+  const marketWeight = hasMarket
+    ? marketWeightOverride ??
+      (espnMarketEnabled
+        ? marketWeightForSport(ctx.sport)
+        : clamp(0.06 + coverage * 0.04, 0.06, 0.1))
+    : 0;
   const factorWeight = 1 - projectionWeight - marketWeight;
   const weights = {
     factor: factorWeight,
@@ -476,13 +897,17 @@ function blendModelProjectionAndMarket(args: {
       nonMarketDraw * (1 - marketWeight) + marketDrawNorm * marketWeight,
       nonMarketAway * (1 - marketWeight) + marketAway * marketWeight,
     );
-    const preserved = preserveNonMarketOutcome({
+    const preserved = resolveBlendOutcome({
       home,
       away,
       draw,
       nonMarketHome,
       nonMarketAway,
       nonMarketDraw,
+      marketHome,
+      marketAway,
+      marketDraw: marketDrawNorm,
+      marketWeight,
     });
     return { ...preserved, weights };
   }
@@ -498,11 +923,14 @@ function blendModelProjectionAndMarket(args: {
     nonMarketHome * (1 - marketWeight) + marketHome * marketWeight,
     nonMarketAway * (1 - marketWeight) + marketAway * marketWeight,
   );
-  const preserved = preserveNonMarketOutcome({
+  const preserved = resolveBlendOutcome({
     home,
     away,
     nonMarketHome,
     nonMarketAway,
+    marketHome,
+    marketAway,
+    marketWeight,
   });
   return { ...preserved, weights };
 }
@@ -645,22 +1073,38 @@ function applyLeagueReliabilityGuards(
   }
 
   const ratingDirection = Math.sign(rating.homeDelta);
-  const matchupTargets = factors.filter((factor) =>
+  const counterTargets = factors.filter((factor) =>
     factor.available &&
     factor.hasSignal &&
     factor.key !== "rating_diff" &&
     Math.sign(factor.homeDelta) === -ratingDirection &&
     factor.weight > 0
   );
-  const targetWeight = matchupTargets.reduce((sum, factor) => sum + factor.weight, 0);
+  const supportingTargets = factors.filter((factor) =>
+    factor.available &&
+    factor.hasSignal &&
+    factor.key !== "rating_diff" &&
+    Math.sign(factor.homeDelta) === ratingDirection &&
+    factor.weight > 0
+  );
+  const redistributionTargets =
+    counterTargets.length > 0
+      ? counterTargets
+      : thinSignal
+        ? []
+        : supportingTargets;
+  const targetWeight = redistributionTargets.reduce((sum, factor) => sum + factor.weight, 0);
   const excess = rating.weight - ratingCap;
+  const redistributingToCounter = counterTargets.length > 0;
   const redistributionShare =
-    matchupTargets.length > 0
-      ? isNbaHighLeverageWindow(ctx) ? 0.75 : 0.55
+    redistributionTargets.length > 0
+      ? redistributingToCounter
+        ? isNbaHighLeverageWindow(ctx) ? 0.75 : 0.55
+        : isNbaHighLeverageWindow(ctx) ? 0.65 : 0.45
       : 0;
   const redistributedExcess = excess * redistributionShare;
   const reserveWeight = excess - redistributedExcess;
-  const targetKeys = new Set(matchupTargets.map((factor) => factor.key));
+  const targetKeys = new Set(redistributionTargets.map((factor) => factor.key));
   const missingLabels = criticalMissing
     .map(({ key, factor }) => factor?.label ?? key)
     .filter(Boolean);
@@ -729,6 +1173,59 @@ export function blendFactors(factors: FactorContribution[]): FactorContribution[
 }
 
 /**
+ * Sum factor contributions into a single home rating advantage (Elo points).
+ *
+ * Legacy: a weighted average of every factor's homeDelta, INCLUDING the Elo
+ * differential — which shrinks a 100-pt home edge to ~40 effective points and
+ * compresses confidence toward 50%.
+ *
+ * Full-scale (flag): the Elo differential (rating_diff) enters at full scale and
+ * the remaining factors are added as weighted adjustments, so earned confidence
+ * is preserved while secondary factors still nudge the line.
+ */
+export function sumRatingDelta(factors: FactorContribution[]): number {
+  if (!isFullScaleRatingEnabled()) {
+    let total = 0;
+    for (const factor of factors) {
+      if (factor.available) total += factor.homeDelta * factor.weight;
+    }
+    return total;
+  }
+
+  const ratingFactor = factors.find((f) => f.key === "rating_diff");
+  let adjustments = 0;
+  for (const factor of factors) {
+    if (factor.key === "rating_diff") continue;
+    if (factor.available) adjustments += factor.homeDelta * factor.weight;
+  }
+  if (!ratingFactor?.available) return adjustments;
+
+  // Full-scale takes the Elo delta at FULL scale (the decompression we want),
+  // with two protections so it can't manufacture confident-but-wrong picks:
+  //
+  // 1. eloScale — honor any thin-data down-weighting of rating_diff. The pipeline
+  //    (e.g. the NBA playoff thin-data guard) cuts rating_diff's weight below its
+  //    nominal 0.40 when Elo is unreliable; full-scale shrinks the Elo base in
+  //    proportion (>=0.40 keeps the full delta).
+  // 2. conflict-aware blend — full-scale enters Elo at full magnitude while the
+  //    other factors enter weight-diluted, so when the TRUSTED factors point the
+  //    OPPOSITE way from Elo (a cold/injured higher-Elo team vs a hot healthy
+  //    underdog), the full Elo base would drown them. So when adjustments oppose
+  //    the Elo lean, blend the Elo base back toward its legacy (weight-shrunk)
+  //    value in proportion to how strongly they oppose it. Agreeing signals keep
+  //    the full decompression; strong disagreement falls back to balanced legacy.
+  const NOMINAL_RATING_WEIGHT = 0.4;
+  const eloScale = Math.min(1, ratingFactor.weight / NOMINAL_RATING_WEIGHT);
+  const legacyBase = ratingFactor.homeDelta * ratingFactor.weight;
+  let eloBase = ratingFactor.homeDelta * eloScale;
+  if (eloBase !== 0 && adjustments * eloBase < 0 && Math.abs(legacyBase) > 1e-9) {
+    const opposition = Math.min(1, Math.abs(adjustments) / Math.abs(legacyBase));
+    eloBase = eloBase * (1 - opposition) + legacyBase * opposition;
+  }
+  return eloBase + adjustments;
+}
+
+/**
  * Generate an honest prediction for a single game.
  *
  * The narrative field is left empty ("") — it's filled by narrative.ts
@@ -764,15 +1261,10 @@ export function predictGame(ctx: GameContext): HonestPrediction {
   //     redistributed above; confirmed no-edge inputs should not amplify Elo.
   const adjustedFactors = blendFactors(contextWeightedFactors);
 
-  // 3. Sum weighted deltas → total rating advantage for home
-  // Each factor's contribution = homeDelta * weight (if available)
-  // The sum is in "Elo rating points in favor of home"
-  let totalRatingDelta = 0;
-  for (const factor of adjustedFactors) {
-    if (factor.available) {
-      totalRatingDelta += factor.homeDelta * factor.weight;
-    }
-  }
+  // 3. Sum factor deltas → total rating advantage for home (Elo points).
+  // Legacy: weighted average of every factor incl. the Elo differential.
+  // Full-scale (flag): Elo enters at full scale + weighted factor adjustments.
+  let totalRatingDelta = sumRatingDelta(adjustedFactors);
 
   const weakSportCalibration = applyWeakSportCalibration(ctx, totalRatingDelta, adjustedFactors, rawCoverage);
   totalRatingDelta = weakSportCalibration.ratingDelta;
@@ -851,6 +1343,9 @@ export function predictGame(ctx: GameContext): HonestPrediction {
       away: awayWinProb,
       draw: drawProb,
     },
+    tennisWinSets: ctx.sport === "TENNIS"
+      ? tennisWinSets(ctx.game.venue, (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour)
+      : undefined,
   });
 
   // 7. Collect unavailable factors for display

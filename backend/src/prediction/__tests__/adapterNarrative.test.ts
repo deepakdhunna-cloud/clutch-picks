@@ -50,15 +50,25 @@ function makeCanonicalResult(args: {
   finalPick: "home" | "away" | "draw" | "none";
   home: number;
   away: number;
+  draw?: number;
   confidence: number;
+  marketType?: "moneyline" | "three_way_result";
 }): CanonicalPredictionResult {
+  const finalProbability =
+    args.finalPick === "draw"
+      ? args.draw ?? 0
+      : args.finalPick === "away"
+        ? args.away
+        : Math.max(args.home, args.away, args.draw ?? 0);
   return {
     eventId: args.eventId,
-    marketType: "moneyline",
+    marketType: args.marketType ?? "moneyline",
     finalPick: args.finalPick,
-    finalProbability: Math.max(args.home, args.away),
+    finalProbability,
     confidence: args.confidence,
-    probabilities: { home: args.home, away: args.away },
+    probabilities: args.draw !== undefined
+      ? { home: args.home, away: args.away, draw: args.draw }
+      : { home: args.home, away: args.away },
     modelInputs: {
       sport: args.sport,
       homeTeamId: "1",
@@ -135,7 +145,7 @@ describe("buildAdapterNarrative", () => {
 
     expect(narrative).toContain("Boston Celtics");
     expect(narrative).not.toContain("Elo");
-    expect(narrative.toLowerCase()).toContain("not much supporting context available");
+    expect(narrative.toLowerCase()).toMatch(/not a ton of extra context|rides on that one main edge/);
   });
 
   it("produces a valid narrative even for a pick'em (winner=null)", () => {
@@ -250,6 +260,39 @@ describe("translateNewEnginePrediction", () => {
     expect(translated.valueRating).toBe(7);
     expect(translated.lowDataWarning).toBe(false);
     expect(translated.ensembleDivergence).toBe(true);
+  });
+
+  it("does not hide a real three-way soccer leader below binary 53 percent", () => {
+    const canonicalResult = makeCanonicalResult({
+      eventId: "g1",
+      sport: "EPL",
+      finalPick: "home",
+      home: 0.42,
+      draw: 0.29,
+      away: 0.29,
+      confidence: 42,
+      marketType: "three_way_result",
+    });
+    const prediction = makePred({
+      factors: makeFactorsForEnrichment(),
+      canonicalResult,
+      confidence: 42,
+      homeWinProbability: 0.42,
+      awayWinProbability: 0.29,
+      drawProbability: 0.29,
+    });
+
+    const translated = translateNewEnginePrediction(
+      { ...makeGame(), sport: "EPL" },
+      prediction,
+      0,
+      0,
+      makeMLBCtx(),
+    );
+
+    expect(translated.predictedOutcome).toBe("home");
+    expect(translated.confidence).toBe(42);
+    expect(translated.isTossUp).toBe(false);
   });
 });
 

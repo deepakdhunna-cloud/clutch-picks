@@ -71,7 +71,16 @@ function pitcherQualityDelta(pitcher: LineupPlayer): number {
   // regress toward zero (league average). At 0 IP: 100% regression.
   // At 30 IP: 50% regression. At 100+ IP: ~15% regression.
   // Source: "Regression to the mean" in Tango/Lichtman/Dolphin "The Book".
-  const ip = pitcher.seasonInningsPitched ?? 0;
+  //
+  // IP is frequently MISSING (undefined) for pitchers sourced from the ESPN
+  // probable feed rather than MLB StatsAPI — those carry a real ERA but no
+  // innings count. Treating a missing IP as 0 would multiply a known ace's
+  // quality by zero (regression = 30/30 = 1.0) and silently drop baseball's #1
+  // signal, collapsing the pick onto pure team Elo. So when IP is unknown but we
+  // DO have an ERA, regress against a mid-season innings prior instead of 0. An
+  // explicit 0 IP (a pitcher who genuinely hasn't thrown) still fully regresses.
+  const MISSING_IP_PRIOR = 70;
+  const ip = pitcher.seasonInningsPitched ?? (pitcher.era !== undefined ? MISSING_IP_PRIOR : 0);
   const regression = 30 / (ip + 30); // Simple Bayesian regression weight
   quality = quality * (1 - regression);
 

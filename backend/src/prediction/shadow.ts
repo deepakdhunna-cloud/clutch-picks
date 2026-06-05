@@ -16,7 +16,7 @@ import { join } from "path";
 import { predictGame } from "./index";
 import { prisma } from "../prisma";
 import type { GameContext } from "./types";
-import type { Game } from "../types/sports";
+import type { Game, Team } from "../types/sports";
 import { Sport, League, GameStatus } from "../types/sports";
 import { getEloRating } from "../lib/elo";
 import {
@@ -26,6 +26,7 @@ import {
   fetchStartingLineup,
   fetchGameWeather,
   fetchFixtureCongestion,
+  type TeamRecentForm,
 } from "../lib/espnStats";
 import { fetchGameInjuries, toTeamInjuryReport, mergePlayerAvailability } from "../lib/espnInjuries";
 import {
@@ -53,6 +54,7 @@ import {
   lookupUclTravelInfo,
 } from "../lib/uclVerifiedData";
 import { fetchMarketConsensus } from "../lib/sharpApi";
+import { fetchEspnMarketConsensus } from "../lib/espnOdds";
 import { buildMarketConsensusFromGameOdds } from "./market";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "./seasonContext";
 import type { SoccerStakes } from "./types";
@@ -115,6 +117,48 @@ interface ShadowErrorEntry {
 
 export function useNewEngine(): boolean {
   return useNewPredictionEngine;
+}
+
+function finiteTeamNumber(team: Team | null | undefined, field: "runRateFor" | "runRateAgainst"): number | null {
+  const value = team?.[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function t20RunsFromRate(rate: number | null): number | null {
+  if (rate === null) return null;
+  return Math.max(80, Math.min(240, rate * 20));
+}
+
+function averageFinite(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (finite.length === 0) return null;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function resolveIPLScoringForm(
+  sport: string,
+  form: TeamRecentForm,
+  team: Team,
+  opponent: Team,
+): TeamRecentForm {
+  if (sport !== "IPL") return form;
+
+  const estimatedScore = averageFinite([
+    t20RunsFromRate(finiteTeamNumber(team, "runRateFor")),
+    t20RunsFromRate(finiteTeamNumber(opponent, "runRateAgainst")),
+  ]);
+  const estimatedAllowed = averageFinite([
+    t20RunsFromRate(finiteTeamNumber(team, "runRateAgainst")),
+    t20RunsFromRate(finiteTeamNumber(opponent, "runRateFor")),
+  ]);
+
+  if (estimatedScore === null && estimatedAllowed === null) return form;
+
+  return {
+    ...form,
+    avgScore: form.avgScore > 0 ? form.avgScore : estimatedScore ?? form.avgScore,
+    avgAllowed: form.avgAllowed > 0 ? form.avgAllowed : estimatedAllowed ?? form.avgAllowed,
+  };
 }
 
 // ─── Log rotation (keep last 14 days) ───────────────────────────────────
@@ -202,8 +246,8 @@ export async function buildGameContext(
   ] = await Promise.all([
     getEloRating(game.homeTeam.id, sport),
     getEloRating(game.awayTeam.id, sport),
-    fetchTeamRecentForm(game.homeTeam.id, sport),
-    fetchTeamRecentForm(game.awayTeam.id, sport),
+    fetchTeamRecentForm(game.homeTeam.id, sport, 10, gameDate),
+    fetchTeamRecentForm(game.awayTeam.id, sport, 10, gameDate),
     fetchTeamExtendedStats(game.homeTeam.id, sport, game.awayTeam.id, gameDate),
     fetchTeamExtendedStats(game.awayTeam.id, sport, game.homeTeam.id, gameDate),
     // Per-game injuries via ESPN summary endpoint. Soccer/NFL/NCAA return
@@ -316,8 +360,19 @@ export async function buildGameContext(
     sport === "TENNIS" && awayTennisProfile?.form?.results.length
       ? awayTennisProfile.form
       : awayForm;
+  // Market consensus priority: paid SharpAPI (if configured) > FREE ESPN
+  // moneyline consensus (real DraftKings line de-vigged to a win probability) >
+  // the weak spread-only fallback derived from the game shell. The ESPN
+  // moneyline path is the no-cost market anchor when SHARPAPI_KEY is unset; it
+  // is gated behind ENGINE_ESPN_MARKET so its accuracy lift can be A/B'd on the
+  // backtest before it carries weight in production.
+  const espnMarketConsensus =
+    sharpMarketConsensus || process.env.ENGINE_ESPN_MARKET === "false"
+      ? null
+      : await fetchEspnMarketConsensus(sport, game.id);
   const marketConsensus =
     sharpMarketConsensus ??
+    espnMarketConsensus ??
     buildMarketConsensusFromGameOdds({
       sport,
       marketFavorite: game.marketFavorite,
@@ -367,6 +422,8 @@ export async function buildGameContext(
       standingsRank: game.homeTeam.standingsRank,
       standingsPoints: game.homeTeam.standingsPoints,
       netRunRate: game.homeTeam.netRunRate,
+      runRateFor: game.homeTeam.runRateFor,
+      runRateAgainst: game.homeTeam.runRateAgainst,
       matchesPlayed: game.homeTeam.matchesPlayed,
       record: {
         wins: typeof game.homeTeam.record === "string"
@@ -389,6 +446,8 @@ export async function buildGameContext(
       standingsRank: game.awayTeam.standingsRank,
       standingsPoints: game.awayTeam.standingsPoints,
       netRunRate: game.awayTeam.netRunRate,
+      runRateFor: game.awayTeam.runRateFor,
+      runRateAgainst: game.awayTeam.runRateAgainst,
       matchesPlayed: game.awayTeam.matchesPlayed,
       record: {
         wins: typeof game.awayTeam.record === "string"
@@ -411,8 +470,8 @@ export async function buildGameContext(
     sport,
     homeElo,
     awayElo,
-    homeForm: resolvedHomeForm,
-    awayForm: resolvedAwayForm,
+    homeForm: resolveIPLScoringForm(sport, resolvedHomeForm, sportsGame.homeTeam, sportsGame.awayTeam),
+    awayForm: resolveIPLScoringForm(sport, resolvedAwayForm, sportsGame.awayTeam, sportsGame.homeTeam),
     homeExtended,
     awayExtended,
     homeInjuries,
@@ -433,9 +492,17 @@ export async function buildGameContext(
     uclPedigree,
     uclTravel,
     marketConsensus,
-    marketFavorite: game.marketFavorite,
-    marketSpread: game.spread,
-    marketOverUnder: game.overUnder,
+    // The score-projection anchors (simulation.ts margin + total) read these
+    // three fields. They MUST prefer the fresh ESPN consensus line (real de-vigged
+    // DraftKings spread + over/under, fetched per game) over the route-level
+    // game.* values — which are frequently absent (ESPN's *site* scoreboard, the
+    // replay's source, posts no totals, so game.overUnder is ~always null and the
+    // total anchor never fired). Falling back to game.* preserves the old behavior
+    // when no consensus line exists. The margin anchor takes |spread| and applies
+    // the favorite's sign, so favorite + spread are sourced together for coherence.
+    marketFavorite: marketConsensus?.marketFavorite ?? game.marketFavorite,
+    marketSpread: marketConsensus?.spread ?? game.spread,
+    marketOverUnder: marketConsensus?.overUnder ?? game.overUnder,
     sportsDataIO: {
       homeAdvanced: !!homeSportsDataIOAdvanced,
       awayAdvanced: !!awaySportsDataIOAdvanced,

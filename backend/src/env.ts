@@ -74,6 +74,7 @@ const envSchema = z.object({
   APPLE_KEY_ID: z.string().optional(),
   APPLE_PRIVATE_KEY: z.string().optional(),
   APPLE_CLIENT_ID: z.string().optional(),
+  APPLE_APP_BUNDLE_IDENTIFIER: z.string().optional(),
 
   // ─── RevenueCat webhook — inbound subscription events ────────────────
   // Shared secret RevenueCat sends in the Authorization header on every
@@ -89,6 +90,18 @@ const envSchema = z.object({
 
   // ─── Feature flags ────────────────────────────────────────────────────
   USE_NEW_PREDICTION_ENGINE: z.string().optional(),
+  // Kill-switch for the self-learning calibration layer. Defaults to ENABLED
+  // (preserves shipped 2.11.0 behavior). Set to "false"/"0"/"off" to disable
+  // the layer in production without a code revert — predictions then serve the
+  // raw model probability with no self-learning adjustment.
+  SELF_LEARNING_CALIBRATION_ENABLED: z.string().optional(),
+  // When "true"/"1"/"on", the Elo rating differential (incl. home-field) enters
+  // the probability logistic at FULL scale, with the remaining factors added as
+  // weighted Elo-point adjustments — instead of shrinking the rating delta by
+  // its ~0.40 weight inside a weighted average. Fixes systemic under-confidence
+  // (78% of picks pile into the 50-60% band). Default OFF (legacy behavior)
+  // until validated out-of-sample per league.
+  ENGINE_FULL_SCALE_RATING: z.string().optional(),
 
   // ─── Paths ────────────────────────────────────────────────────────────
   // Where prediction_shadow_*.jsonl files land; defaults to backend/logs

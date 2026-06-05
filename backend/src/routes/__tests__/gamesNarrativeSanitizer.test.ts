@@ -43,6 +43,49 @@ function makeGame(): Game {
   };
 }
 
+function makeIplGame(): Game {
+  return {
+    ...makeGame(),
+    id: "rcb-kkr",
+    sport: "IPL",
+    homeTeam: {
+      id: "rcb",
+      name: "Royal Challengers Bengaluru",
+      abbreviation: "RCB",
+      city: "Bengaluru",
+      record: "8-4",
+      color: "#D11D2A",
+      standingsRank: 1,
+      standingsPoints: 18,
+      netRunRate: 1.065,
+      runRateFor: 9.7,
+      runRateAgainst: 8.1,
+      matchesPlayed: 13,
+    },
+    awayTeam: {
+      id: "kkr",
+      name: "Kolkata Knight Riders",
+      abbreviation: "KKR",
+      city: "Kolkata",
+      record: "6-6",
+      color: "#3A225D",
+      standingsRank: 7,
+      standingsPoints: 12,
+      netRunRate: -0.32,
+      runRateFor: 8,
+      runRateAgainst: 9.5,
+      matchesPlayed: 13,
+    },
+    venue: "M. Chinnaswamy Stadium",
+    seasonContext: {
+      phase: "tournament",
+      label: "IPL tournament window",
+      detail: "This is IPL T20 context, so team run rate should shape the visible score projection.",
+      source: "date",
+    },
+  };
+}
+
 function makePrediction(analysis: string): GamePrediction {
   return {
     id: "pred-lal-okc",
@@ -246,6 +289,7 @@ describe("sanitizePredictionForGame", () => {
     expect(sanitized.analysis).not.toContain("usable edges");
     expect(sanitized.analysis).not.toContain("power-rating case");
     expect(sanitized.analysis).not.toContain("Working against the pick");
+    expect(sanitized.analysis).not.toMatch(/the model|power-rating setup|start here/i);
     expect(sanitized.analysis[0]).toBe(sanitized.analysis[0]?.toUpperCase());
   });
 
@@ -297,6 +341,31 @@ describe("attachPredictionToGame", () => {
     expect(attached.spread).toBe(-4.5);
     expect(attached.overUnder).toBe(218.5);
     expect(attached.marketFavorite).toBe("home");
+  });
+
+  test("does not attach a cached prediction when the matchup changed", () => {
+    const game = {
+      ...makeGame(),
+      awayTeam: {
+        ...makeGame().awayTeam,
+        id: "rr",
+        name: "Rajasthan Royals",
+        abbreviation: "RR",
+      },
+    };
+    const staleTbaPrediction = makeTopPickPrediction({
+      canonicalResult: makeCanonicalResult({
+        modelInputs: {
+          ...makeCanonicalResult().modelInputs,
+          homeTeamId: game.homeTeam.id,
+          awayTeamId: "tba",
+        },
+      }),
+    });
+
+    const attached = attachPredictionToGame(game, staleTbaPrediction);
+
+    expect(attached.prediction).toBeUndefined();
   });
 
   test("does not rewrite the public pick from live IPL chase state", () => {
@@ -390,23 +459,133 @@ describe("isTopPickEligible", () => {
 });
 
 describe("selectTopPicksForDisplay", () => {
-  test("returns the best scheduled pick per sport and falls back when strict gates reject a sport", () => {
+  test("surfaces the best strict pick per sport, and a clean relaxed lean when no strict pick exists", () => {
     const nba = attachTopPick(makeSportGame("nba-1", "NBA", "LAL", "OKC"), 62);
     const mlbWeak = attachTopPick(makeSportGame("mlb-1", "MLB", "NYY", "BOS"), 58);
     const mlbStrong = attachTopPick(makeSportGame("mlb-2", "MLB", "LAD", "SF"), 66);
-    const nhlLowConviction = attachTopPick(
-      makeSportGame("nhl-1", "NHL", "DAL", "EDM"),
-      53,
-      ["low-conviction"],
-    );
+    // NHL has no >=56 strict pick, but this 54 lean is clean (no blocked tags,
+    // no low-data, not a toss-up) so it is an acceptable relaxed fallback.
+    const nhlCleanLean = attachTopPick(makeSportGame("nhl-1", "NHL", "DAL", "EDM"), 54);
 
-    const selected = selectTopPicksForDisplay([mlbWeak, nhlLowConviction, mlbStrong, nba]);
+    const selected = selectTopPicksForDisplay([mlbWeak, nhlCleanLean, mlbStrong, nba]);
 
     expect(selected.map((game) => game.id)).toEqual(["nba-1", "mlb-2", "nhl-1"]);
   });
+
+  test("never surfaces a blocked/low-conviction pick, even when a sport has no other pick", () => {
+    const nba = attachTopPick(makeSportGame("nba-1", "NBA", "LAL", "OKC"), 62);
+    // NHL's only pick carries a low-conviction blocked tag. The old ungated
+    // fallback surfaced it (a defect); the relaxed fallback must still reject it
+    // so the sport contributes no pick rather than one the engine distrusts.
+    const nhlBlocked = attachTopPick(makeSportGame("nhl-1", "NHL", "DAL", "EDM"), 53, ["low-conviction"]);
+    // A below-floor clean pick (52, < relaxed floor 53) is also not surfaced.
+    const mlbBelowFloor = attachTopPick(makeSportGame("mlb-1", "MLB", "NYY", "BOS"), 52);
+
+    const selected = selectTopPicksForDisplay([nba, nhlBlocked, mlbBelowFloor]);
+
+    expect(selected.map((game) => game.id)).toEqual(["nba-1"]);
+  });
 });
 
+function makeStoredRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "row-base",
+    gameId: "lal-okc",
+    sport: "NBA",
+    scheduledStart: new Date("2026-05-11T21:30:00.000Z"),
+    homeTeam: "LAL",
+    awayTeam: "OKC",
+    predictedWinner: "home",
+    predictedOutcome: "home",
+    actualWinner: null,
+    actualOutcome: null,
+    confidence: 55,
+    isTossUp: false,
+    wasCorrect: null,
+    homeElo: 1595,
+    awayElo: 1538,
+    homeWinProb: 0.55,
+    awayWinProb: 0.45,
+    drawProb: null,
+    modelVersion: "test",
+    selectedOutcomeProb: null,
+    rawHomeWinProb: null,
+    rawAwayWinProb: null,
+    rawDrawProb: null,
+    rawSelectedOutcomeProb: null,
+    brierScore: null,
+    logLoss: null,
+    finalHomeScore: null,
+    finalAwayScore: null,
+    marketHomeProb: null,
+    marketAwayProb: null,
+    marketDrawProb: null,
+    marketDivergence: null,
+    dataCoverage: null,
+    signalCoverage: null,
+    agreementScore: null,
+    edgeRating: null,
+    valueRating: null,
+    riskScore: null,
+    tagsJson: null,
+    dataSourcesJson: null,
+    gradeVersion: null,
+    gradedAt: null,
+    settledBy: null,
+    createdAt: new Date("2026-05-11T12:00:00.000Z"),
+    resolvedAt: null,
+    analysisSnapshot: null,
+    projectionJson: null,
+    canonicalResultJson: null,
+    ...overrides,
+  } as any;
+}
+
 describe("buildStoredPregamePrediction", () => {
+  test("rebuilds older snapshots from confidence when probability columns are missing", () => {
+    const prediction = buildStoredPregamePrediction(
+      makeGame(),
+      makeStoredRow({
+        predictedWinner: "away",
+        predictedOutcome: "away",
+        confidence: 63,
+        homeWinProb: null,
+        awayWinProb: null,
+      }),
+    );
+
+    expect(prediction.predictedWinner).toBe("away");
+    expect(prediction.awayWinProbability).toBeCloseTo(63, 1);
+    expect(prediction.homeWinProbability).toBeCloseTo(37, 1);
+    expect(prediction.projection?.awayWinProbability).toBeCloseTo(63, 1);
+    expect(prediction.projection?.projectedSpread).toBeLessThan(0);
+  });
+
+  test("rebuilds older IPL snapshots from team run rates instead of a generic baseline", () => {
+    const prediction = buildStoredPregamePrediction(
+      makeIplGame(),
+      makeStoredRow({
+        gameId: "rcb-kkr",
+        sport: "IPL",
+        homeTeam: "RCB",
+        awayTeam: "KKR",
+        predictedWinner: "home",
+        predictedOutcome: "home",
+        confidence: 61,
+        homeWinProb: null,
+        awayWinProb: null,
+      }),
+    );
+
+    expect(prediction.projection).toBeDefined();
+    expect(prediction.homeWinProbability).toBeCloseTo(61, 1);
+    expect(prediction.awayWinProbability).toBeCloseTo(39, 1);
+    expect(prediction.projection!.projectedHomeScore).toBeGreaterThan(185);
+    expect(prediction.projection!.projectedAwayScore).toBeLessThan(170);
+    expect(prediction.projection!.projectedTotal).toBeGreaterThan(345);
+    expect(prediction.projection!.signals.some((signal) => signal.key === "ipl-run-rate-projection")).toBe(true);
+  });
+
   test("preserves the original settled prediction instead of replaying the current engine", () => {
     const row = {
       id: "row-1",
@@ -429,6 +608,10 @@ describe("buildStoredPregamePrediction", () => {
       drawProb: null,
       modelVersion: "2.6.0-neutral-factor-projection-truth",
       selectedOutcomeProb: 0.5454,
+      rawHomeWinProb: null,
+      rawAwayWinProb: null,
+      rawDrawProb: null,
+      rawSelectedOutcomeProb: null,
       brierScore: 0.2975,
       logLoss: 0.7869,
       finalHomeScore: 93,
@@ -464,9 +647,89 @@ describe("buildStoredPregamePrediction", () => {
     expect(prediction.analysis).toContain("locked");
     expect(prediction.analysis).not.toContain("Stored pregame prediction");
     expect(prediction.analysis).not.toContain("2.6.0-neutral-factor-projection-truth");
+    expect(prediction.projection).toBeDefined();
+    const storedProjection = prediction.projection!;
+    expect(storedProjection.engine).toBe("stored-pregame-projection-v1");
+    expect(storedProjection.projectedTotal).toBeGreaterThan(180);
+    expect(prediction.predictedTotal).toBe(storedProjection.projectedTotal);
+    expect(prediction.canonicalResult?.projectedScore?.total).toBe(storedProjection.projectedTotal);
     expect(prediction.canonicalResult?.finalPick).toBe("home");
     expect(prediction.canonicalResult?.dataVersion).toBe("2.6.0-neutral-factor-projection-truth");
-    expect(prediction.canonicalResult?.warnings).toContain("Stored pregame prediction snapshot; not recomputed after final.");
+    expect(prediction.canonicalResult?.warnings?.join(" ")).toContain("projection rebuilt from stored probabilities");
+  });
+
+  test("uses stored analysis and projection payload when the snapshot has them", () => {
+    const projection = {
+      engine: "game-script-v1",
+      iterations: 50000,
+      homeWinProbability: 59,
+      awayWinProbability: 41,
+      projectedHomeScore: 111.2,
+      projectedAwayScore: 105.8,
+      projectedSpread: 5.4,
+      projectedTotal: 217,
+      volatility: 0.18,
+      upsetRisk: 0.41,
+      signals: [],
+    };
+    const row = {
+      id: "row-2",
+      gameId: "lal-okc",
+      sport: "NBA",
+      scheduledStart: new Date("2026-05-11T21:30:00.000Z"),
+      homeTeam: "LAL",
+      awayTeam: "OKC",
+      predictedWinner: "home",
+      predictedOutcome: "home",
+      actualWinner: null,
+      actualOutcome: null,
+      confidence: 59,
+      isTossUp: false,
+      wasCorrect: null,
+      homeElo: 1595,
+      awayElo: 1538,
+      homeWinProb: 0.59,
+      awayWinProb: 0.41,
+      drawProb: null,
+      modelVersion: "2.6.0-neutral-factor-projection-truth",
+      analysisSnapshot: "The Los Angeles Lakers are the pregame side because the matchup data gives them the cleaner case.",
+      projectionJson: JSON.stringify(projection),
+      canonicalResultJson: null,
+      selectedOutcomeProb: 0.59,
+      rawHomeWinProb: null,
+      rawAwayWinProb: null,
+      rawDrawProb: null,
+      rawSelectedOutcomeProb: null,
+      brierScore: null,
+      logLoss: null,
+      finalHomeScore: null,
+      finalAwayScore: null,
+      marketHomeProb: null,
+      marketAwayProb: null,
+      marketDrawProb: null,
+      marketDivergence: null,
+      dataCoverage: 0.875,
+      signalCoverage: 0.375,
+      agreementScore: null,
+      edgeRating: 2,
+      valueRating: 1,
+      riskScore: null,
+      tagsJson: null,
+      dataSourcesJson: null,
+      gradeVersion: null,
+      gradedAt: null,
+      settledBy: null,
+      createdAt: new Date("2026-05-11T12:00:00.000Z"),
+      resolvedAt: null,
+    };
+
+    const prediction = buildStoredPregamePrediction(makeGame(), row);
+
+    expect(prediction.analysis).toBe(row.analysisSnapshot);
+    expect(prediction.projection?.engine).toBe("game-script-v1");
+    expect(prediction.projection?.projectedHomeScore).toBe(111.2);
+    expect(prediction.predictedSpread).toBe(5.4);
+    expect(prediction.canonicalResult?.warnings?.join(" ")).toContain("not recomputed");
   });
 });
 
@@ -543,6 +806,27 @@ describe("shouldPromotePredictionUpdate", () => {
 
     expect(shouldPromotePredictionUpdate(makeGame(), previous, noisyFlip)).toBe(false);
     expect(shouldPromotePredictionUpdate(makeGame(), previous, clearFlip)).toBe(true);
+  });
+
+  test("holds a committed pick against a near-coin-flip flip (betting-stability lock)", () => {
+    // A user who acted on the home pick must not come back to a silent switch
+    // because the model wiggled to a 6pp lead the other way. Only a decisively
+    // favored new side (>= 7pp) flips a shown pick; this borderline flip is held.
+    const previous: GamePrediction = {
+      ...makePrediction("Pregame read favors the home side."),
+      confidence: 52,
+      homeWinProbability: 52,
+      awayWinProbability: 48,
+    };
+    const borderlineFlip: GamePrediction = {
+      ...previous,
+      predictedWinner: "away",
+      predictedOutcome: "away",
+      confidence: 53,
+      homeWinProbability: 47,
+      awayWinProbability: 53, // 6pp lead — below the 7pp commit threshold
+    };
+    expect(shouldPromotePredictionUpdate(makeGame(), previous, borderlineFlip)).toBe(false);
   });
 
   test("never promotes prediction changes after the game starts", () => {

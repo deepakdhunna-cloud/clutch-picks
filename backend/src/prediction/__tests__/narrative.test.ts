@@ -83,7 +83,7 @@ describe("buildDeterministicNarrative", () => {
   it("includes counterpoint when one exists", () => {
     // Factor 4 (injuries) has negative homeDelta — should appear as counterpoint
     const text = buildNarrative(makeFactors(), "clear edge", "BOS");
-    expect(text.toLowerCase()).toContain("the concern");
+    expect(text.toLowerCase()).toMatch(/gives me pause|flip it|not all one-way/);
   });
 
   it("includes structured injury context when provided", () => {
@@ -179,13 +179,61 @@ describe("buildDeterministicNarrative", () => {
     expect(sentenceCount(text)).toBeLessThanOrEqual(10);
   });
 
+  it("uses singular player phrasing for tennis narratives", () => {
+    const factors: FactorContribution[] = [
+      {
+        key: "tennis_ranking_edge",
+        label: "ATP/WTA ranking edge",
+        homeDelta: 70,
+        weight: 0.35,
+        available: true,
+        hasSignal: true,
+        evidence: "ATP ranking: GANN #1130 (11 pts) vs COCO #1314 (6 pts)",
+      },
+      {
+        key: "recent_form",
+        label: "Recent form (L10)",
+        homeDelta: 20,
+        weight: 0.10,
+        available: true,
+        hasSignal: true,
+        evidence: "Home L10: 5-5 (50%), Away L10: 4-6 (40%)",
+      },
+    ];
+    const input = buildNarrativeInput(
+      factors,
+      "clear edge",
+      60.0,
+      "GANN",
+      "COCO",
+      "GANN",
+      "TENNIS",
+      [],
+      {
+        phase: "regular_season",
+        label: "Tennis tournament setting",
+        detail: "Tournament draw context.",
+        source: "date",
+      },
+      "Conor Gannon",
+      "Sebastiano Cocola",
+    );
+
+    const text = buildDeterministicNarrative(input);
+
+    expect(text).toContain("Conor Gannon");
+    expect(text).not.toContain("Conor Gannon have");
+    expect(text).not.toContain("hotter team");
+    expect(text).not.toContain("Sebastiano Cocola sit at");
+  });
+
   it("adds a fan-interest angle without inventing facts", () => {
     const input = buildNarrativeInput(
       makeFactors(), "clear edge", 62.0, "BOS", "ORL", "BOS", "NBA",
     );
     const text = buildDeterministicNarrative(input).toLowerCase();
 
-    expect(text).toMatch(/question|hinge|interesting|clean edge|story/);
+    expect(text).toMatch(/question|hinge|interesting|clean edge|story|fun part|juice|spicy|comes down|carry the night|keep an eye|under the lights/);
     expect(text).not.toContain("game 7");
     expect(text).not.toContain("series lead");
   });
@@ -246,20 +294,21 @@ describe("buildDeterministicNarrative", () => {
     const factors = makeFactors();
     // net_rating has weight 0.10 >= 0.05, so it should trigger caveat
     const text = buildNarrative(factors, "clear edge");
-    expect(text.toLowerCase()).toContain("caveat");
+    expect(text.toLowerCase()).toMatch(/flag|caveat/);
   });
 
   it("coinflip band never sounds confident", () => {
     const text = buildNarrative(makeFactors(), "coinflip");
     expect(text.toLowerCase()).not.toContain("strong case");
     expect(text.toLowerCase()).not.toContain("clear separation");
-    expect(text.toLowerCase()).toContain("toss-up");
+    // any toss-up / coin-flip framing, never a confident declaration
+    expect(text.toLowerCase()).toMatch(/toss-up|coin flip|coin-flip|keep it light/);
   });
 
   it("handles pick'em (null winner)", () => {
     const text = buildNarrative(makeFactors(), "coinflip", null);
-    expect(text.toLowerCase()).toContain("coin flip");
-    expect(text.toLowerCase()).toContain("neither team");
+    expect(text.toLowerCase()).toMatch(/coin flip|pick'em|too close to call/);
+    expect(text.toLowerCase()).toMatch(/nobody's separating|no real edge|no need to force|more than a lean/);
   });
 
   it("handles all factors unavailable", () => {
@@ -321,7 +370,7 @@ describe("buildDeterministicNarrative", () => {
 
     // Must explicitly flag the absence of supporting signals instead of
     // silently ending after the lead factor.
-    expect(text.toLowerCase()).toContain("not much supporting context available");
+    expect(text.toLowerCase()).toMatch(/not a ton of extra context|rides on that one main edge/);
 
     // Non-empty, no banned words.
     expect(text.length).toBeGreaterThan(40);
@@ -334,8 +383,18 @@ describe("buildDeterministicNarrative", () => {
 // Extract the sentence rendered in the counterpoint slot, if any. Returns
 // null when the narrative does not include a counterpoint section at all.
 function extractCounterpointSentence(text: string): string | null {
-  const marker = "The concern:";
-  const idx = text.indexOf(marker);
+  // The counterpoint connector now varies (cool-friend voice). Find whichever
+  // of the connectors rendered, earliest in the text.
+  const markers = [
+    "The one thing that gives me pause:",
+    "What could flip it:",
+    "Not all one-way though —",
+  ];
+  let idx = -1;
+  for (const m of markers) {
+    const i = text.indexOf(m);
+    if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+  }
   if (idx === -1) return null;
   const after = text.slice(idx);
   const endIdx = after.indexOf(".");
@@ -527,7 +586,7 @@ describe("buildDeterministicNarrative — counterpoint framing", () => {
     const input = buildNarrativeInput(factors, "strong edge", 78.0, "BOS", "PHI", "BOS", "NBA");
     const text = buildDeterministicNarrative(input);
 
-    expect(text.toLowerCase()).toContain("not much supporting context available");
+    expect(text.toLowerCase()).toMatch(/not a ton of extra context|rides on that one main edge/);
     expect(text).not.toContain("Elo");
     expect(text).toContain("BOS");
   });

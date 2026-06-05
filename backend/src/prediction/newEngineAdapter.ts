@@ -6,11 +6,16 @@
  * actual computation to the new engine when USE_NEW_PREDICTION_ENGINE=true.
  */
 
-import { predictGame } from "./index";
+import { predictGame, reconcileProjectionToFinal, tennisWinSets } from "./index";
 import { buildGameContext } from "./shadow";
 import { buildDeterministicNarrative, buildNarrativeInput } from "./narrative";
 import type { HonestPrediction, FactorContribution, GameContext } from "./types";
 import { getConfidenceBand } from "./types";
+import {
+  applySelfLearningCalibration,
+  getSelfLearningCalibrationSnapshot,
+  isSelfLearningCalibrationEnabled,
+} from "./selfLearningCalibration";
 import type { Game, GamePrediction, PredictionFactor } from "../routes/games";
 import { prisma } from "../prisma";
 import { enqueueWrite } from "../lib/writeQueue";
@@ -80,7 +85,7 @@ export function buildAdapterNarrative(
   const band = getConfidenceBand(
     Math.max(newPred.homeWinProbability, newPred.awayWinProbability, newPred.drawProbability ?? 0),
   );
-  const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const winnerAbbr = winnerAbbrFromCanonical(newPred, game);
   const seasonContext =
     game.seasonContext ??
     deriveSeasonContext({ sport, gameTime: game.gameTime });
@@ -212,6 +217,43 @@ function bestBookForPick(
     : null;
 }
 
+export function isMarketAwareTossUp(canonical: HonestPrediction["canonicalResult"]): boolean {
+  if (canonical.finalPick === "none") return true;
+
+  const entries = [
+    { outcome: "home", probability: canonical.probabilities.home },
+    { outcome: "away", probability: canonical.probabilities.away },
+    ...(canonical.probabilities.draw !== undefined
+      ? [{ outcome: "draw", probability: canonical.probabilities.draw }]
+      : []),
+  ].sort((a, b) => b.probability - a.probability);
+  const leader = entries[0];
+  const runnerUp = entries[1];
+  if (!leader || !runnerUp) return true;
+
+  const lead = leader.probability - runnerUp.probability;
+  // Compare the ROUNDED displayed confidence, not the raw probability, so the
+  // badge and the toss-up flag never contradict (a card shown at "53%" is never
+  // also flagged toss-up because the raw value was 0.5299).
+  const displayedLeader = Math.round(leader.probability * 100);
+  if (canonical.marketType === "three_way_result") {
+    return displayedLeader < 37 || lead < 0.025;
+  }
+
+  return displayedLeader < 53 || lead < 0.06;
+}
+
+/**
+ * The narrated winner MUST be the canonical pick, not the legacy predictedWinner
+ * (which can lag a self-learning flip). Draw/none → no single winner to name.
+ */
+function winnerAbbrFromCanonical(newPred: HonestPrediction, game: Game): string | null {
+  const finalPick = newPred.canonicalResult.finalPick;
+  if (finalPick === "home") return game.homeTeam.abbreviation;
+  if (finalPick === "away") return game.awayTeam.abbreviation;
+  return null;
+}
+
 /**
  * Build a GamePrediction from a HonestPrediction + Game shell.
  * Confidence is deliberately the RAW max probability — no ceilings, no
@@ -240,13 +282,29 @@ export function translateNewEnginePrediction(
       newPred.predictedWinner.teamId === game.homeTeam.id ? "home" : "away";
     predictedOutcome = predictedWinner;
   } else {
-    predictedWinner = homeProbPct >= awayProbPct ? "home" : "away";
-    predictedOutcome = drawProbPct !== undefined ? "draw" : predictedWinner;
+    // predictedWinner is null when self-learning flipped/voided the raw leader.
+    // The canonical finalPick is authoritative — derive the legacy fields from it
+    // so the card, the grading loop, and the badge never disagree with the pick.
+    const finalPick = newPred.canonicalResult.finalPick;
+    if (finalPick === "home" || finalPick === "away") {
+      predictedWinner = finalPick;
+      predictedOutcome = finalPick;
+    } else {
+      predictedWinner = homeProbPct >= awayProbPct ? "home" : "away";
+      predictedOutcome = finalPick === "draw" ? "draw" : predictedWinner;
+    }
   }
 
-  // Confidence = raw outcome probability, no capping. Soccer draw reads must
-  // use the three-way max, not the larger of only home/away.
-  const confidence = Math.max(homeProbPct, awayProbPct, drawProbPct ?? 0);
+  // Confidence = the probability of the PICK itself, no capping. After a flip the
+  // raw leader and the pick can differ, so an unconditional max() would show a
+  // different team's probability than the one we picked. Soccer draw picks read
+  // the three-way draw probability (which is the pick's own probability).
+  const confidence =
+    predictedOutcome === "home"
+      ? homeProbPct
+      : predictedOutcome === "away"
+        ? awayProbPct
+        : drawProbPct ?? Math.max(homeProbPct, awayProbPct);
 
   const decisionProfile = newPred.canonicalResult.decisionProfile;
 
@@ -293,7 +351,7 @@ export function translateNewEnginePrediction(
     recentFormAway: recentFormString(ctx?.awayForm),
     homeStreak: ctx?.homeForm?.streak ?? 0,
     awayStreak: ctx?.awayForm?.streak ?? 0,
-    isTossUp: Math.abs(homeProbPct - awayProbPct) < 5,
+    isTossUp: isMarketAwareTossUp(newPred.canonicalResult),
     lowDataWarning: decisionProfile?.lowDataWarning ?? false,
     ensembleDivergence: decisionProfile?.engineDivergence ?? false,
     marketComparison: newPred.marketComparison
@@ -334,7 +392,46 @@ export function shouldUpdatePredictionSnapshot(
  */
 export async function runNewEnginePrediction(game: Game): Promise<GamePrediction> {
   const ctx = await buildGameContext(game);
-  const newPred = predictGame(ctx);
+  let newPred = predictGame(ctx);
+  // Capture the RAW (pre-self-learning) probabilities as primitives now, before
+  // any self-learning adjustment reassigns/mutates newPred. Persisted alongside
+  // the served values so calibration/recalibration can grade the raw model and
+  // avoid the self-learning feedback loop (#3).
+  const rawHomeWinProb = newPred.homeWinProbability;
+  const rawAwayWinProb = newPred.awayWinProbability;
+  const rawDrawProb = newPred.drawProbability ?? null;
+  // Self-learning calibration is gated by a kill-switch so it can be disabled in
+  // production without a revert. When disabled we serve the raw model output.
+  const learnedPred = isSelfLearningCalibrationEnabled()
+    ? applySelfLearningCalibration(newPred, await getSelfLearningCalibrationSnapshot(ctx.sport))
+    : newPred;
+  if (learnedPred !== newPred) {
+    const alignedProjection = learnedPred.projection
+      ? reconcileProjectionToFinal({
+          sport: ctx.sport,
+          projection: learnedPred.projection,
+          finalProbabilities: learnedPred.canonicalResult.probabilities,
+          tennisWinSets: ctx.sport === "TENNIS"
+            ? tennisWinSets(ctx.game.venue, (ctx.game.homeTeam as { tour?: string }).tour ?? (ctx.game.awayTeam as { tour?: string }).tour)
+            : undefined,
+        })
+      : undefined;
+    newPred = {
+      ...learnedPred,
+      projection: alignedProjection,
+      canonicalResult: {
+        ...learnedPred.canonicalResult,
+        projectedScore: alignedProjection
+          ? {
+              home: alignedProjection.projectedHomeScore,
+              away: alignedProjection.projectedAwayScore,
+              spread: alignedProjection.projectedSpread,
+              total: alignedProjection.projectedTotal,
+            }
+          : learnedPred.canonicalResult.projectedScore,
+      },
+    };
+  }
 
   // Populate the narrative with the deterministic template: synchronous,
   // always valid, no LLM latency tax on cold requests. LLM enrichment can
@@ -384,6 +481,16 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
     awayWinProb,
     drawProb,
   });
+  // Raw selected-outcome probability uses the SAME pick but the pre-self-learning
+  // probabilities, so the raw model's calibration can be measured independently.
+  const rawSelectedProb = selectedOutcomeProbability({
+    predictedWinner,
+    predictedOutcome,
+    confidence,
+    homeWinProb: rawHomeWinProb,
+    awayWinProb: rawAwayWinProb,
+    drawProb: rawDrawProb,
+  });
 
   if (shouldPersistPredictionSnapshot(game)) {
     enqueueWrite(async () => {
@@ -403,7 +510,14 @@ export async function runNewEnginePrediction(game: Game): Promise<GamePrediction
         awayWinProb,
         drawProb,
         modelVersion,
+        analysisSnapshot: prediction.analysis,
+        projectionJson: prediction.projection ? JSON.stringify(prediction.projection) : null,
+        canonicalResultJson: prediction.canonicalResult ? JSON.stringify(prediction.canonicalResult) : null,
         selectedOutcomeProb: selectedProb,
+        rawHomeWinProb,
+        rawAwayWinProb,
+        rawDrawProb,
+        rawSelectedOutcomeProb: rawSelectedProb,
         marketHomeProb: ctx.marketConsensus?.noVigHomeProb ?? null,
         marketAwayProb: ctx.marketConsensus?.noVigAwayProb ?? null,
         marketDrawProb: ctx.marketConsensus?.noVigDrawProb ?? null,
@@ -592,7 +706,7 @@ function buildLLMNarrativeInput(
       newPred.drawProbability ?? 0,
     ),
   );
-  const winnerAbbr = newPred.predictedWinner?.abbr ?? null;
+  const winnerAbbr = winnerAbbrFromCanonical(newPred, game);
   const seasonContext =
     game.seasonContext ??
     deriveSeasonContext({ sport, gameTime: game.gameTime });

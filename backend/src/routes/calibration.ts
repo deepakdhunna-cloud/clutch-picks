@@ -17,6 +17,7 @@ import { Hono } from "hono";
 import {
   getLatestCalibration,
   computeAndStoreCalibration,
+  type CalibrationMetrics,
 } from "../prediction/calibration";
 import { buildGradebookSummary } from "../prediction/grading";
 import {
@@ -28,6 +29,39 @@ import {
 import { prisma } from "../prisma";
 
 const calibrationRouter = new Hono();
+
+export type CalibrationResponseLeague = Omit<
+  LeagueCalibrationSnapshot,
+  "brierScore" | "logLoss"
+> & {
+  brierScore: number | null;
+  logLoss: number | null;
+};
+
+export function formatCalibrationLeagueForResponse(
+  metrics: CalibrationMetrics,
+  overallAccuracy: number | null,
+): CalibrationResponseLeague {
+  const reliabilityCurve: ReliabilityBucketWithError[] =
+    metrics.reliabilityCurve.map((b) => ({
+      ...b,
+      calibrationErrorPts:
+        b.count > 0
+          ? Math.round((b.predictedWinRate - b.actualWinRate) * 1000) / 10
+          : null,
+    }));
+  const hasResolvedPredictions = metrics.sampleSize > 0;
+
+  return {
+    league: metrics.league as LeagueCalibrationSnapshot["league"],
+    brierScore: hasResolvedPredictions ? metrics.brierScore : null,
+    logLoss: hasResolvedPredictions ? metrics.logLoss : null,
+    sampleSize: metrics.sampleSize,
+    overallAccuracy,
+    reliabilityCurve,
+    note: hasResolvedPredictions ? metrics.note : "No resolved predictions yet.",
+  };
+}
 
 // ─── GET /api/calibration ───────────────────────────────────────────────────
 
@@ -63,29 +97,12 @@ calibrationRouter.get("/", async (c) => {
     }
 
     // Enrich each league with overall accuracy and per-bucket calibration
-    // error, matching the snapshot shape written by the weekly runner so
-    // clients don't have to branch on which code path produced the data.
-    const perLeague: LeagueCalibrationSnapshot[] = [];
+    // error. Empty leagues return null metric values so the app does not
+    // display random-baseline scores as measured performance.
+    const perLeague: CalibrationResponseLeague[] = [];
     for (const m of raw) {
       const accuracy = await leagueAccuracy(m.league);
-      const reliabilityCurve: ReliabilityBucketWithError[] =
-        m.reliabilityCurve.map((b) => ({
-          ...b,
-          calibrationErrorPts:
-            b.count > 0
-              ? Math.round((b.predictedWinRate - b.actualWinRate) * 1000) / 10
-              : null,
-        }));
-
-      perLeague.push({
-        league: m.league as LeagueCalibrationSnapshot["league"],
-        brierScore: m.brierScore,
-        logLoss: m.logLoss,
-        sampleSize: m.sampleSize,
-        overallAccuracy: accuracy,
-        reliabilityCurve,
-        note: m.note,
-      });
+      perLeague.push(formatCalibrationLeagueForResponse(m, accuracy));
     }
 
     return c.json({

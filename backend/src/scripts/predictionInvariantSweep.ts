@@ -10,7 +10,7 @@ type SweepIssue = {
 };
 
 const DEFAULT_BASE_URL = "https://clutch-picks-production.up.railway.app";
-const EXPECTED_ENGINE_VERSION = "2.10.0-source-aware-availability";
+const EXPECTED_ENGINE_VERSION = "2.11.0-self-learning-calibration";
 
 const baseUrl = (process.env.PREDICTION_SWEEP_BASE_URL ?? process.env.BACKEND_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 const sweepDate = process.env.PREDICTION_SWEEP_DATE ?? new Date().toISOString().slice(0, 10);
@@ -21,10 +21,19 @@ const endpoints = [
   `/api/games/date/${sweepDate}`,
 ];
 
-const TOP_PICK_MIN_CONFIDENCE = 56;
+// Absolute floor a featured top pick may have. Picks at the strict 56 bar are
+// preferred, but a sport with no strict pick may surface a clean relaxed lean
+// down to 53 (see routes/games.ts). Below this floor it is not a featured pick.
+// Must stay in sync with TOP_PICK_RELAXED_MIN_CONFIDENCE in routes/games.ts.
+const TOP_PICK_FLOOR_CONFIDENCE = 53;
 const TOP_PICK_BLOCKED_TAGS = new Set(["thin-data", "low-conviction"]);
 const TOP_PICK_BLOCKED_WARNING_REGEX =
   /reliability reserve|missing critical|data coverage is thin|source unavailable|confidence compressed/i;
+// Stored-pregame snapshots must carry an audit warning. Accept both the legacy
+// "...after final." wording and the current "...after start." wording so a copy
+// change in the engine does not silently fail the gate.
+const STORED_PREGAME_WARNING_REGEX =
+  /Stored pregame prediction snapshot;.*not recomputed after (final|start)\.?/i;
 
 function asGames(payload: unknown): ApiObject[] {
   if (Array.isArray(payload)) return payload as ApiObject[];
@@ -95,7 +104,10 @@ function projectedTotalBounds(sportKey: string): { min: number; max: number } {
     EPL: { min: 1.4, max: 4.5 },
     UCL: { min: 1.5, max: 4.8 },
     IPL: { min: 245, max: 430 },
-    TENNIS: { min: 2.0, max: 3.0 },
+    // Raw backend tennis projections are set scores (2-0, 2-1, 3-1, etc.).
+    // The mobile display layer converts weak/stale raw tennis projections into
+    // match-game lines before showing them in cards/detail views.
+    TENNIS: { min: 2.0, max: 5.0 },
   };
   return bounds[sportKey] ?? { min: 0, max: Number.POSITIVE_INFINITY };
 }
@@ -170,8 +182,8 @@ async function main(): Promise<void> {
         const confidence = Number(canonical.confidence ?? prediction.confidence);
         const tags = canonical.decisionProfile?.tags ?? [];
         const warnings = canonical.warnings ?? [];
-        if (!Number.isFinite(confidence) || confidence < TOP_PICK_MIN_CONFIDENCE) {
-          issues.push(issue(game, `top-pick confidence ${confidence} is below ${TOP_PICK_MIN_CONFIDENCE}`));
+        if (!Number.isFinite(confidence) || confidence < TOP_PICK_FLOOR_CONFIDENCE) {
+          issues.push(issue(game, `top-pick confidence ${confidence} is below floor ${TOP_PICK_FLOOR_CONFIDENCE}`));
         }
         if (prediction.snapshotType === "stored-pregame") {
           issues.push(issue(game, "top-pick response included a stored pregame snapshot"));
@@ -202,7 +214,10 @@ async function main(): Promise<void> {
     if (canonical?.dataVersion && canonical.dataVersion !== expectedEngineVersion && !isStoredPregameSnapshot) {
       issues.push(issue(game, `unexpected dataVersion ${canonical.dataVersion}`));
     }
-    if (isStoredPregameSnapshot && !canonical?.warnings?.includes("Stored pregame prediction snapshot; not recomputed after final.")) {
+    if (
+      isStoredPregameSnapshot &&
+      !(canonical?.warnings ?? []).some((warning: string) => STORED_PREGAME_WARNING_REGEX.test(warning))
+    ) {
       issues.push(issue(game, "stored pregame snapshot is missing audit warning"));
     }
 

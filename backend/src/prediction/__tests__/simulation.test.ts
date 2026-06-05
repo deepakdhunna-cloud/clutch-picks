@@ -497,15 +497,23 @@ describe("game-script simulation", () => {
     );
   });
 
-  it("wires tennis into ranking factors and set-based projection scale", () => {
+  it("wires tennis into ranking factors and projects a set score", () => {
     const prediction = predictGame(makeTennisContext());
 
     expect(prediction.league).toBe("TENNIS");
     expect(prediction.factors.some((factor) => factor.key === "tennis_ranking_edge")).toBe(true);
     expect(prediction.factors.some((factor) => factor.key === "tennis_round_pressure")).toBe(true);
     expect(prediction.projection).toBeDefined();
-    expect(prediction.projection!.projectedTotal).toBeGreaterThanOrEqual(2);
-    expect(prediction.projection!.projectedTotal).toBeLessThanOrEqual(3);
+    // Tennis projects a SET score: winner takes >=2 sets, whole numbers, total is
+    // the sets played (<=5), and the three numbers reconcile.
+    expect(prediction.projection!.projectedAwayScore).toBeGreaterThan(prediction.projection!.projectedHomeScore);
+    expect(prediction.projection!.projectedAwayScore).toBeGreaterThanOrEqual(2);
+    expect(Number.isInteger(prediction.projection!.projectedHomeScore)).toBe(true);
+    expect(Number.isInteger(prediction.projection!.projectedAwayScore)).toBe(true);
+    expect(prediction.projection!.projectedTotal).toBeLessThanOrEqual(5);
+    expect(prediction.projection!.projectedTotal).toBe(
+      prediction.projection!.projectedHomeScore + prediction.projection!.projectedAwayScore,
+    );
     expect(prediction.awayWinProbability).toBeGreaterThan(prediction.homeWinProbability);
     expect(prediction.confidence).toBeGreaterThan(51);
     expect(prediction.confidence).toBeLessThan(55);
@@ -514,6 +522,51 @@ describe("game-script simulation", () => {
     expect(prediction.confidence).toBe(
       Math.round(Math.max(prediction.homeWinProbability, prediction.awayWinProbability) * 1000) / 10,
     );
+  });
+
+  it("lets a clear tennis ranking edge clear the toss-up band when recent form is missing", () => {
+    const base = makeTennisContext();
+    const prediction = predictGame({
+      ...base,
+      game: {
+        ...base.game,
+        id: "tennis-clear-ranking-edge",
+        homeTeam: {
+          ...base.game.homeTeam,
+          abbreviation: "TOP",
+          name: "Top Ranked Player",
+          rank: 5,
+        },
+        awayTeam: {
+          ...base.game.awayTeam,
+          abbreviation: "LOW",
+          name: "Lower Ranked Player",
+          rank: 80,
+        },
+      },
+      homeForm: {
+        ...base.homeForm,
+        results: [],
+        formString: "",
+        wins: 0,
+        losses: 0,
+      },
+      awayForm: {
+        ...base.awayForm,
+        results: [],
+        formString: "",
+        wins: 0,
+        losses: 0,
+      },
+      marketConsensus: null,
+    });
+
+    expect(prediction.predictedWinner?.teamId).toBe(base.game.homeTeam.id);
+    expect(prediction.confidence).toBeGreaterThanOrEqual(53);
+    expect(prediction.homeWinProbability - prediction.awayWinProbability).toBeGreaterThanOrEqual(0.06);
+    expect(prediction.projection?.projectedHomeScore).toBeGreaterThan(prediction.projection?.projectedAwayScore ?? 0);
+    // Set-score margin: the clear favorite leads by at least one set.
+    expect(Math.abs((prediction.projection?.projectedSpread ?? 0))).toBeGreaterThanOrEqual(1);
   });
 
   it("treats adverse tennis weather as variance instead of home-side edge", () => {

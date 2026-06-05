@@ -8,10 +8,11 @@ import { streamSSE } from "hono/streaming";
 import { LRUCache } from "lru-cache";
 import type { PredictionResult as StoredPredictionResult } from "@prisma/client";
 import { cleanOldShadowLogs } from "../prediction/shadow";
-import { runNewEnginePrediction } from "../prediction/newEngineAdapter";
+import { runNewEnginePrediction, isMarketAwareTossUp } from "../prediction/newEngineAdapter";
 import { deriveSeasonContext, type NarrativeSeasonContext } from "../prediction/seasonContext";
 import { buildDeterministicNarrative, buildNarrativeInput } from "../prediction/narrative";
 import { getConfidenceBand, type CanonicalEngineRead, type CanonicalPredictionResult, type FactorContribution } from "../prediction/types";
+import { getSportSimulationProfile } from "../prediction/simulators/profiles";
 import {
   canonicalFromLegacyPrediction,
   canonicalPickFromProbabilities,
@@ -74,6 +75,8 @@ export interface GameTeam {
   standingsRank?: number;
   standingsPoints?: number;
   netRunRate?: number;
+  runRateFor?: number;
+  runRateAgainst?: number;
   matchesPlayed?: number;
 }
 
@@ -623,7 +626,7 @@ function setCachedPrediction(gameId: string, prediction: GamePrediction): void {
 }
 
 const STALE_NARRATIVE_REGEX =
-  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating case\b|\bworking against the pick\b|\bexpected-score projection adds context\b/i;
+  /the data points toward|biggest driver|clear separation|Expected score rounds to|Average scoring is basically level|Projected finish rounds to|Home\s+[A-Z0-9]{2,5}\s+Elo|Away\s+[A-Z0-9]{2,5}\s+Elo|Home\s+L10:|Away\s+L10:|\bthe model\b|\bthe algorithm\b|\bget the call\b|\busable edges\b|\bpower-rating (?:case|setup)\b|\bworking against the pick\b|\bexpected-score projection adds context\b|\bstart here\b|\bgets? the nod\b|\bgot (?:a |the )?(?:slight |solid |clear )?edge\b|don['’]t sleep|\brather grim\b|\blighting up\b|The main reason:|The clearest starting point|The first thing that stands out|Additional support:|There is backup for it too|The concern:|are the lean over|get the narrow nod|The next layer supports/i;
 
 function predictionFactorToContribution(factor: PredictionFactor): FactorContribution {
   const homeScore = Number.isFinite(factor.homeScore) ? factor.homeScore : 0.5;
@@ -642,10 +645,19 @@ function predictionFactorToContribution(factor: PredictionFactor): FactorContrib
 function rebuildNarrativeFromPrediction(game: Game, prediction: GamePrediction): string | null {
   if (!prediction.factors || prediction.factors.length === 0) return null;
 
+  // Narrate the canonical pick (the single source of truth). Draw/none → no
+  // single winner; fall back to the legacy field only if canonical is absent.
+  const finalPick = prediction.canonicalResult?.finalPick;
   const winnerAbbr =
-    prediction.predictedWinner === "home"
+    finalPick === "home"
       ? game.homeTeam.abbreviation
-      : game.awayTeam.abbreviation;
+      : finalPick === "away"
+        ? game.awayTeam.abbreviation
+        : finalPick === "draw" || finalPick === "none"
+          ? null
+          : prediction.predictedWinner === "home"
+            ? game.homeTeam.abbreviation
+            : game.awayTeam.abbreviation;
   const winnerProb = Math.max(
     (prediction.homeWinProbability ?? 50) / 100,
     (prediction.awayWinProbability ?? 50) / 100,
@@ -682,6 +694,10 @@ export function sanitizePredictionForGame(game: Game, prediction: GamePrediction
 }
 
 export function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
+  if (!predictionMatchesGame(game, prediction)) {
+    return game;
+  }
+
   const displayPrediction = sanitizePredictionForGame(
     game,
     ensureCanonicalPredictionResult(game, prediction),
@@ -693,6 +709,12 @@ export function attachPredictionToGame(game: Game, prediction: GamePrediction): 
 }
 
 const TOP_PICK_MIN_CONFIDENCE = 56;
+// Fallback floor used only when a sport has no pick that clears the strict 56
+// bar. A relaxed pick must still be a genuine lean (above a coin flip) and must
+// pass every quality gate below — it just may be a 53-55 lean rather than a
+// high-conviction read. This keeps the board populated on thin/offseason slates
+// without ever surfacing a pick the engine itself flagged as unreliable.
+const TOP_PICK_RELAXED_MIN_CONFIDENCE = 53;
 const TOP_PICK_LIMIT = 8;
 const TOP_PICK_MAX_CANDIDATES = 48;
 const TOP_PICK_MAX_CANDIDATES_PER_SPORT = 6;
@@ -713,7 +735,12 @@ const TOP_PICK_SPORT_ORDER: Game["sport"][] = [
   "UCL",
 ];
 
-export function isTopPickEligible(game: Game): boolean {
+// Every quality gate a featured pick must clear, parameterized only by the
+// confidence floor. Both the strict and relaxed gates share this so a relaxed
+// fallback pick can never bypass the blocked-tag / low-data / toss-up /
+// reliability-warning checks — the exact defect that let a 44.5% thin-data pick
+// reach Top Picks. The ONLY difference between strict and relaxed is the floor.
+function passesTopPickQualityGates(game: Game, minConfidence: number): boolean {
   const prediction = game.prediction;
   const canonical = prediction?.canonicalResult;
   if (!prediction || !canonical) return false;
@@ -722,7 +749,7 @@ export function isTopPickEligible(game: Game): boolean {
   if (prediction.lowDataWarning || prediction.isTossUp) return false;
 
   const confidence = canonical.confidence ?? prediction.confidence;
-  if (!Number.isFinite(confidence) || confidence < TOP_PICK_MIN_CONFIDENCE) return false;
+  if (!Number.isFinite(confidence) || confidence < minConfidence) return false;
   if (canonical.decisionProfile?.lowDataWarning) return false;
 
   const tags = canonical.decisionProfile?.tags ?? [];
@@ -732,6 +759,16 @@ export function isTopPickEligible(game: Game): boolean {
   if (warnings.some((warning) => TOP_PICK_BLOCKED_WARNING_REGEX.test(warning))) return false;
 
   return true;
+}
+
+export function isTopPickEligible(game: Game): boolean {
+  return passesTopPickQualityGates(game, TOP_PICK_MIN_CONFIDENCE);
+}
+
+// Relaxed fallback: same quality gates, lower confidence floor. Used only when
+// no strict-eligible pick exists for a sport.
+export function isRelaxedTopPickEligible(game: Game): boolean {
+  return passesTopPickQualityGates(game, TOP_PICK_RELAXED_MIN_CONFIDENCE);
 }
 
 function isDisplayableTopPickCandidate(game: Game): boolean {
@@ -781,7 +818,10 @@ export function selectTopPicksForDisplay(games: Game[]): Game[] {
   return [...gamesBySport.entries()]
     .map(([sport, sportGames]) => {
       const strict = sportGames.filter(isTopPickEligible);
-      const pool = strict.length > 0 ? strict : sportGames;
+      // Fallback to relaxed-but-still-clean picks (never the ungated sportGames,
+      // which let blocked/low-data/below-coin-flip picks through). A sport with
+      // no acceptable pick contributes none rather than a pick we distrust.
+      const pool = strict.length > 0 ? strict : sportGames.filter(isRelaxedTopPickEligible);
       const best = [...pool].sort((a, b) => topPickScore(b) - topPickScore(a))[0];
       return { sport, game: best };
     })
@@ -820,15 +860,57 @@ function isFinalGame(game: Game): boolean {
   return game.status === "FINAL";
 }
 
-function normalizedStoredProbabilities(row: StoredPredictionResult): {
+function normalizedStoredProbabilities(row: {
+  predictedOutcome: string | null;
+  predictedWinner?: string | null;
+  confidence?: number | null;
+  homeWinProb: number | null;
+  awayWinProb: number | null;
+  drawProb: number | null;
+}): {
   home: number;
   away: number;
   draw?: number;
 } {
-  const includeDraw = row.predictedOutcome === "draw" || typeof row.drawProb === "number";
-  const home = typeof row.homeWinProb === "number" ? row.homeWinProb : 0.5;
-  const away = typeof row.awayWinProb === "number" ? row.awayWinProb : 0.5;
-  const draw = includeDraw ? (typeof row.drawProb === "number" ? row.drawProb : 0) : undefined;
+  const predictedOutcome =
+    row.predictedOutcome === "home" || row.predictedOutcome === "away" || row.predictedOutcome === "draw"
+      ? row.predictedOutcome
+      : row.predictedWinner === "away"
+        ? "away"
+        : "home";
+  const includeDraw = predictedOutcome === "draw" || typeof row.drawProb === "number";
+  const confidenceProbability =
+    typeof row.confidence === "number" && Number.isFinite(row.confidence)
+      ? clampNumber(row.confidence / 100, 0, 1)
+      : null;
+
+  let home = typeof row.homeWinProb === "number" ? row.homeWinProb : null;
+  let away = typeof row.awayWinProb === "number" ? row.awayWinProb : null;
+  let draw = includeDraw ? (typeof row.drawProb === "number" ? row.drawProb : null) : undefined;
+
+  if (home === null && away === null && (draw === null || draw === undefined) && confidenceProbability !== null) {
+    if (predictedOutcome === "home") {
+      home = confidenceProbability;
+      away = 1 - confidenceProbability;
+    } else if (predictedOutcome === "away") {
+      away = confidenceProbability;
+      home = 1 - confidenceProbability;
+    } else {
+      draw = confidenceProbability;
+      home = (1 - confidenceProbability) / 2;
+      away = (1 - confidenceProbability) / 2;
+    }
+  }
+
+  if (!includeDraw) {
+    if (home === null && away !== null) home = 1 - away;
+    if (away === null && home !== null) away = 1 - home;
+  }
+
+  home ??= includeDraw ? 0.375 : 0.5;
+  away ??= includeDraw ? 0.375 : 0.5;
+  if (includeDraw) draw ??= 0.25;
+
   const total = home + away + (draw ?? 0);
   if (total <= 0) {
     return includeDraw ? { home: 0.375, away: 0.375, draw: 0.25 } : { home: 0.5, away: 0.5 };
@@ -885,9 +967,411 @@ function buildStoredPregameAnalysis(
   return `The pregame read favored ${selectedTeam}${probabilityText} ${startPhrase}. This pick is locked now that the event has started, so the live score is shown separately and does not rewrite the recommendation.`;
 }
 
+type StoredPredictionSnapshotRow = Omit<
+  StoredPredictionResult,
+  "analysisSnapshot" | "projectionJson" | "canonicalResultJson"
+> &
+  Partial<Pick<StoredPredictionResult, "analysisSnapshot" | "projectionJson" | "canonicalResultJson">>;
+
+function safeJsonObject(value: string | null | undefined): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseStoredProjection(value: string | null | undefined): GamePrediction["projection"] | undefined {
+  const raw = safeJsonObject(value);
+  if (!raw) return undefined;
+  const projectedHomeScore = finiteNumber(raw.projectedHomeScore);
+  const projectedAwayScore = finiteNumber(raw.projectedAwayScore);
+  const projectedSpread = finiteNumber(raw.projectedSpread);
+  const projectedTotal = finiteNumber(raw.projectedTotal);
+  const homeWinProbability = finiteNumber(raw.homeWinProbability);
+  const awayWinProbability = finiteNumber(raw.awayWinProbability);
+  const volatility = finiteNumber(raw.volatility);
+  const upsetRisk = finiteNumber(raw.upsetRisk);
+  if (
+    projectedHomeScore === null ||
+    projectedAwayScore === null ||
+    projectedSpread === null ||
+    projectedTotal === null ||
+    homeWinProbability === null ||
+    awayWinProbability === null ||
+    volatility === null ||
+    upsetRisk === null
+  ) {
+    return undefined;
+  }
+
+  const drawProbability = finiteNumber(raw.drawProbability) ?? undefined;
+  const signals = Array.isArray(raw.signals)
+    ? raw.signals
+        .map((signal): NonNullable<GamePrediction["projection"]>["signals"][number] | null => {
+          if (!signal || typeof signal !== "object") return null;
+          const record = signal as Record<string, unknown>;
+          const key = typeof record.key === "string" ? record.key : "stored-signal";
+          const label = typeof record.label === "string" ? record.label : "Stored projection signal";
+          const value = finiteNumber(record.value) ?? 0;
+          const evidence = typeof record.evidence === "string" ? record.evidence : "Stored pregame projection signal";
+          return { key, label, value, evidence };
+        })
+        .filter((signal): signal is NonNullable<GamePrediction["projection"]>["signals"][number] => signal !== null)
+    : [];
+
+  return {
+    engine: typeof raw.engine === "string" ? raw.engine : "game-script-v1",
+    iterations: finiteNumber(raw.iterations) ?? 0,
+    homeWinProbability,
+    awayWinProbability,
+    drawProbability,
+    projectedHomeScore,
+    projectedAwayScore,
+    projectedSpread,
+    projectedTotal,
+    volatility,
+    upsetRisk,
+    signals,
+  };
+}
+
+function parseStoredCanonicalResult(value: string | null | undefined): CanonicalPredictionResult | undefined {
+  const raw = safeJsonObject(value);
+  if (!raw) return undefined;
+  const finalPick = raw.finalPick;
+  const probabilities = raw.probabilities;
+  if (
+    finalPick !== "home" &&
+    finalPick !== "away" &&
+    finalPick !== "draw" &&
+    finalPick !== "none"
+  ) {
+    return undefined;
+  }
+  if (!probabilities || typeof probabilities !== "object") return undefined;
+  return raw as unknown as CanonicalPredictionResult;
+}
+
+function normalizeTeamSnapshot(value: string | null | undefined): string {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function storedTeamSnapshotMatches(team: GameTeam, snapshot: string | null | undefined): boolean {
+  const normalized = normalizeTeamSnapshot(snapshot);
+  if (!normalized) return true;
+  return normalized === normalizeTeamSnapshot(team.abbreviation) || normalized === normalizeTeamSnapshot(team.name);
+}
+
+function storedPredictionRowMatchesGame(game: Game, row: StoredPredictionSnapshotRow): boolean {
+  const canonical = parseStoredCanonicalResult(row.canonicalResultJson);
+  if (canonical) {
+    const inputs = canonical.modelInputs;
+    if (inputs?.homeTeamId && inputs.homeTeamId !== game.homeTeam.id) return false;
+    if (inputs?.awayTeamId && inputs.awayTeamId !== game.awayTeam.id) return false;
+  }
+
+  return (
+    storedTeamSnapshotMatches(game.homeTeam, row.homeTeam) &&
+    storedTeamSnapshotMatches(game.awayTeam, row.awayTeam)
+  );
+}
+
+function withStoredSnapshotWarning(
+  canonical: CanonicalPredictionResult,
+  warning: string,
+): CanonicalPredictionResult {
+  const warnings = canonical.warnings ?? [];
+  return {
+    ...canonical,
+    warnings: warnings.includes(warning) ? warnings : [...warnings, warning],
+  };
+}
+
+function finiteTeamProjectionNumber(
+  team: GameTeam,
+  field: "runRateFor" | "runRateAgainst",
+): number | null {
+  const value = team[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function t20RunsFromRunRate(rate: number | null): number | null {
+  if (rate === null) return null;
+  return clampNumber(rate * 20, 80, 240);
+}
+
+function averageFiniteNumbers(values: Array<number | null>): number | null {
+  const finite = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (finite.length === 0) return null;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function roundTenth(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function tennisRankValue(team: GameTeam | undefined): number | null {
+  if (typeof team?.rank === "number" && Number.isFinite(team.rank)) return team.rank;
+  const match = team?.record?.match(/#(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function tennisGameLineForPick(
+  game: Game,
+  winner: "home" | "away",
+  selectedProbability: number,
+): { home: number; away: number; spread: number; total: number } {
+  const winnerRank = tennisRankValue(winner === "home" ? game.homeTeam : game.awayTeam);
+  const opponentRank = tennisRankValue(winner === "home" ? game.awayTeam : game.homeTeam);
+  const rankAdvantage =
+    winnerRank !== null && opponentRank !== null
+      ? opponentRank - winnerRank
+      : 0;
+  const probability = clampNumber(
+    selectedProbability > 1 ? selectedProbability / 100 : selectedProbability,
+    0,
+    1,
+  );
+  const dominance = clampNumber((probability - 0.5) * 4 + rankAdvantage / 90, 0, 1.6);
+  const projectedTotal = roundTenth(clampNumber(26.5 - dominance * 4.5, 18.5, 30.5));
+  const maxMargin = Math.max(1.2, projectedTotal - 12);
+  const margin = roundTenth(clampNumber(1.6 + dominance * 5.2, 1.2, Math.min(8.5, maxMargin)));
+  const spread = winner === "home" ? margin : -margin;
+  const home = roundTenth((projectedTotal + spread) / 2);
+  const away = roundTenth((projectedTotal - spread) / 2);
+
+  return {
+    home,
+    away,
+    spread: roundTenth(home - away),
+    total: roundTenth(home + away),
+  };
+}
+
+function iplRunRateScoreLine(game: Game): { home: number; away: number } | null {
+  if (game.sport !== "IPL") return null;
+
+  const home = averageFiniteNumbers([
+    t20RunsFromRunRate(finiteTeamProjectionNumber(game.homeTeam, "runRateFor")),
+    t20RunsFromRunRate(finiteTeamProjectionNumber(game.awayTeam, "runRateAgainst")),
+  ]);
+  const away = averageFiniteNumbers([
+    t20RunsFromRunRate(finiteTeamProjectionNumber(game.awayTeam, "runRateFor")),
+    t20RunsFromRunRate(finiteTeamProjectionNumber(game.homeTeam, "runRateAgainst")),
+  ]);
+
+  if (home === null || away === null) return null;
+  return {
+    home: Math.round(home),
+    away: Math.round(away),
+  };
+}
+
+function alignScoreLineToOutcome(args: {
+  home: number;
+  away: number;
+  pick: "home" | "away";
+  minMargin: number;
+  minScore: number;
+}): { home: number; away: number } {
+  const total = args.home + args.away;
+  const currentSpread = args.home - args.away;
+  const targetSpread =
+    args.pick === "home"
+      ? Math.max(currentSpread, args.minMargin)
+      : Math.min(currentSpread, -args.minMargin);
+  let home = (total + targetSpread) / 2;
+  let away = (total - targetSpread) / 2;
+
+  if (home < args.minScore) {
+    away += args.minScore - home;
+    home = args.minScore;
+  }
+  if (away < args.minScore) {
+    home += args.minScore - away;
+    away = args.minScore;
+  }
+
+  return {
+    home: Math.round(home),
+    away: Math.round(away),
+  };
+}
+
+function buildProbabilityProjection(
+  game: Game,
+  predictedOutcome: "home" | "away" | "draw",
+  probabilities: { home: number; away: number; draw?: number },
+): NonNullable<GamePrediction["projection"]> {
+  const profile = getSportSimulationProfile(game.sport);
+  const baseline = profile.baseline;
+
+  if (game.sport === "TENNIS") {
+    const tennisPick =
+      predictedOutcome === "home" || predictedOutcome === "away"
+        ? predictedOutcome
+        : probabilities.home >= probabilities.away ? "home" : "away";
+    const selectedProbability = probabilityForPick(probabilities, tennisPick);
+    const scoreLine = tennisGameLineForPick(game, tennisPick, selectedProbability);
+    const projectedHomeScore = scoreLine.home;
+    const projectedAwayScore = scoreLine.away;
+    const projectedTotal = scoreLine.total;
+    const projectedSpread = scoreLine.spread;
+    const volatility = Math.round(clampNumber(baseline.marginSd / Math.max(projectedTotal, 1), 0.05, 0.95) * 1000) / 1000;
+
+    return {
+      engine: "stored-pregame-projection-v1",
+      iterations: 0,
+      homeWinProbability: roundPercentTenth(probabilities.home * 100),
+      awayWinProbability: roundPercentTenth(probabilities.away * 100),
+      drawProbability:
+        probabilities.draw !== undefined
+          ? roundPercentTenth(probabilities.draw * 100)
+          : undefined,
+      projectedHomeScore,
+      projectedAwayScore,
+      projectedSpread,
+      projectedTotal,
+      volatility,
+      upsetRisk: Math.round(clampNumber(1 - selectedProbability, 0.05, 0.49) * 1000) / 1000,
+      signals: [
+        {
+          key: "stored-pregame-probability",
+          label: "Stored pregame probability",
+          value: roundPercentTenth(selectedProbability * 100),
+          evidence: "Projected match games rebuilt from the locked pregame probability snapshot and player-rank context; live/final score was not used",
+        },
+        {
+          key: "league-scoring-profile",
+          label: "League scoring profile",
+          value: projectedTotal,
+          evidence: "Tennis scoring uses expected match games instead of recycled set scores",
+        },
+      ],
+    };
+  }
+
+  if (game.sport === "IPL") {
+    const runRateLine = iplRunRateScoreLine(game);
+    if (runRateLine) {
+      const cricketPick =
+        predictedOutcome === "home" || predictedOutcome === "away"
+          ? predictedOutcome
+          : probabilities.home >= probabilities.away ? "home" : "away";
+      const selectedProbability = probabilityForPick(probabilities, cricketPick);
+      const minDirectionalMargin = Math.min(profile.meaningfulMarginThreshold, (runRateLine.home + runRateLine.away) * 0.08);
+      const alignedLine = alignScoreLineToOutcome({
+        ...runRateLine,
+        pick: cricketPick,
+        minMargin: minDirectionalMargin,
+        minScore: baseline.minScore,
+      });
+      const projectedHomeScore = alignedLine.home;
+      const projectedAwayScore = alignedLine.away;
+      const projectedTotal = projectedHomeScore + projectedAwayScore;
+      const projectedSpread = projectedHomeScore - projectedAwayScore;
+      const volatility = Math.round(clampNumber(baseline.marginSd / Math.max(projectedTotal, 1), 0.05, 0.95) * 1000) / 1000;
+
+      return {
+        engine: "stored-pregame-projection-v1",
+        iterations: 0,
+        homeWinProbability: roundPercentTenth(probabilities.home * 100),
+        awayWinProbability: roundPercentTenth(probabilities.away * 100),
+        drawProbability:
+          probabilities.draw !== undefined
+            ? roundPercentTenth(probabilities.draw * 100)
+            : undefined,
+        projectedHomeScore,
+        projectedAwayScore,
+        projectedSpread,
+        projectedTotal,
+        volatility,
+        upsetRisk: Math.round(clampNumber(1 - selectedProbability, 0.05, 0.49) * 1000) / 1000,
+        signals: [
+          {
+            key: "ipl-run-rate-projection",
+            label: "IPL run-rate projection",
+            value: projectedSpread,
+            evidence: "Projected IPL runs rebuilt from team season run rates instead of a generic T20 baseline",
+          },
+          {
+            key: "stored-pregame-probability",
+            label: "Stored pregame probability",
+            value: roundPercentTenth(selectedProbability * 100),
+            evidence: "Projected line rebuilt from the locked pregame probability snapshot; live/final score was not used",
+          },
+        ],
+      };
+    }
+  }
+
+  const marketTotal =
+    typeof game.overUnder === "number" && Number.isFinite(game.overUnder)
+      ? game.overUnder
+      : baseline.total;
+  const projectedTotal = Math.round(clampNumber(marketTotal, baseline.totalMin, baseline.totalMax) * 10) / 10;
+  const probabilityMargin = probabilities.home - probabilities.away;
+  const minDirectionalMargin =
+    predictedOutcome === "draw" ? 0 : Math.min(profile.meaningfulMarginThreshold, projectedTotal * 0.08);
+  let projectedSpread = probabilityMargin * baseline.marginSd;
+  if (predictedOutcome === "home") {
+    projectedSpread = Math.max(projectedSpread, minDirectionalMargin);
+  } else if (predictedOutcome === "away") {
+    projectedSpread = Math.min(projectedSpread, -minDirectionalMargin);
+  } else {
+    projectedSpread = 0;
+  }
+
+  const maxSpread = Math.max(0, projectedTotal - baseline.minScore * 2);
+  projectedSpread = clampNumber(projectedSpread, -maxSpread, maxSpread);
+  const projectedHomeScore = Math.round(((projectedTotal + projectedSpread) / 2) * 10) / 10;
+  const projectedAwayScore = Math.round(((projectedTotal - projectedSpread) / 2) * 10) / 10;
+  const selectedProbability = probabilityForPick(probabilities, predictedOutcome);
+  const volatility = Math.round(clampNumber(baseline.marginSd / Math.max(projectedTotal, 1), 0.05, 0.95) * 1000) / 1000;
+
+  return {
+    engine: "stored-pregame-projection-v1",
+    iterations: 0,
+    homeWinProbability: roundPercentTenth(probabilities.home * 100),
+    awayWinProbability: roundPercentTenth(probabilities.away * 100),
+    drawProbability:
+      probabilities.draw !== undefined
+        ? roundPercentTenth(probabilities.draw * 100)
+        : undefined,
+    projectedHomeScore,
+    projectedAwayScore,
+    projectedSpread: Math.round((projectedHomeScore - projectedAwayScore) * 10) / 10,
+    projectedTotal: Math.round((projectedHomeScore + projectedAwayScore) * 10) / 10,
+    volatility,
+    upsetRisk: Math.round(clampNumber(1 - selectedProbability, 0.05, 0.49) * 1000) / 1000,
+    signals: [
+      {
+        key: "stored-pregame-probability",
+        label: "Stored pregame probability",
+        value: roundPercentTenth(selectedProbability * 100),
+        evidence: "Projected line rebuilt from the locked pregame probability snapshot; live/final score was not used",
+      },
+      {
+        key: "league-scoring-profile",
+        label: "League scoring profile",
+        value: projectedTotal,
+        evidence: `${game.sport} scoring baseline used when the older stored row did not persist a full projection payload`,
+      },
+    ],
+  };
+}
+
 export function buildStoredPregamePrediction(
   game: Game,
-  row: StoredPredictionResult,
+  row: StoredPredictionSnapshotRow,
 ): GamePrediction {
   const probabilities = normalizedStoredProbabilities(row);
   const predictedOutcome =
@@ -898,6 +1382,10 @@ export function buildStoredPregamePrediction(
         : "home";
   const predictedWinner = row.predictedWinner === "away" ? "away" : "home";
   const modelVersion = row.modelVersion ?? "stored-pregame-snapshot";
+  const projection =
+    parseStoredProjection(row.projectionJson) ??
+    buildProbabilityProjection(game, predictedOutcome, probabilities);
+  const analysisSnapshot = row.analysisSnapshot?.trim();
 
   const prediction: GamePrediction = {
     id: `stored-${row.id}`,
@@ -905,9 +1393,9 @@ export function buildStoredPregamePrediction(
     predictedWinner,
     predictedOutcome,
     confidence: row.confidence,
-    analysis: buildStoredPregameAnalysis(game, predictedOutcome, probabilities),
-    predictedSpread: 0,
-    predictedTotal: 0,
+    analysis: analysisSnapshot || buildStoredPregameAnalysis(game, predictedOutcome, probabilities),
+    predictedSpread: projection.projectedSpread,
+    predictedTotal: projection.projectedTotal,
     createdAt: row.createdAt.toISOString(),
     homeWinProbability: Math.round(probabilities.home * 1000) / 10,
     awayWinProbability: Math.round(probabilities.away * 1000) / 10,
@@ -933,15 +1421,23 @@ export function buildStoredPregamePrediction(
       row.actualOutcome === "unavailable"
         ? row.actualOutcome
         : null,
+    projection,
   };
+
+  const storedCanonical = parseStoredCanonicalResult(row.canonicalResultJson);
+  const storedWarning = projection.engine === "stored-pregame-projection-v1"
+    ? "Stored pregame prediction snapshot; projection rebuilt from stored probabilities, not recomputed after start."
+    : "Stored pregame prediction snapshot; not recomputed after final.";
 
   return {
     ...prediction,
-    canonicalResult: canonicalFromLegacyPrediction(prediction, game.sport, {
-      timestamp: row.createdAt.toISOString(),
-      dataVersion: modelVersion,
-      warning: "Stored pregame prediction snapshot; not recomputed after final.",
-    }),
+    canonicalResult: storedCanonical
+      ? withStoredSnapshotWarning(storedCanonical, storedWarning)
+      : canonicalFromLegacyPrediction(prediction, game.sport, {
+          timestamp: row.createdAt.toISOString(),
+          dataVersion: modelVersion,
+          warning: storedWarning,
+        }),
   };
 }
 
@@ -960,6 +1456,7 @@ async function loadStoredPregamePredictionMap(games: Game[]): Promise<Map<string
   for (const row of rows) {
     const game = gameById.get(row.gameId);
     if (!game) continue;
+    if (!storedPredictionRowMatchesGame(game, row)) continue;
     predictions.set(row.gameId, buildStoredPregamePrediction(game, row));
   }
   return predictions;
@@ -1019,6 +1516,26 @@ function setCachedLivePrediction(gameId: string, prediction: GamePrediction): vo
  */
 function pickFreshestPrediction(gameId: string, isLive: boolean): GamePrediction | null {
   return getCachedPrediction(gameId, { allowExpired: isLive });
+}
+
+function canonicalInputsMatchGame(game: Game, prediction: GamePrediction): boolean {
+  const inputs = prediction.canonicalResult?.modelInputs;
+  if (!inputs) return true;
+  if (inputs.homeTeamId && inputs.homeTeamId !== game.homeTeam.id) return false;
+  if (inputs.awayTeamId && inputs.awayTeamId !== game.awayTeam.id) return false;
+  return true;
+}
+
+function predictionMatchesGame(game: Game, prediction: GamePrediction): boolean {
+  if (prediction.gameId && prediction.gameId !== game.id) return false;
+  if (prediction.canonicalResult?.eventId && prediction.canonicalResult.eventId !== game.id) return false;
+  return canonicalInputsMatchGame(game, prediction);
+}
+
+function pickFreshestPredictionForGame(game: Game): GamePrediction | null {
+  const prediction = pickFreshestPrediction(game.id, game.status === "LIVE");
+  if (!prediction) return null;
+  return predictionMatchesGame(game, prediction) ? prediction : null;
 }
 
 // Clear all prediction caches — forces regeneration with current engine parameters
@@ -1143,8 +1660,47 @@ function withCanonicalPredictionResult(
   };
 }
 
+/**
+ * Force the legacy mirror fields (predictedWinner/predictedOutcome/confidence/
+ * win probabilities/isTossUp) to equal the canonical result, so EVERY surface —
+ * prediction card, AI pick badge, projection lean, projected score line, and
+ * narration — shows the same winner. canonicalResult.finalPick is the single
+ * source of truth. Without this, self-learning (which recomputes finalPick but
+ * kept the stale predictedWinner) and other paths could ship mirror fields that
+ * disagree with the canonical pick.
+ */
+function reconcileLegacyFieldsToCanonical(prediction: GamePrediction): GamePrediction {
+  const canonical = prediction.canonicalResult;
+  if (!canonical) return prediction;
+  const probs = canonical.probabilities;
+  const homePct = Math.round((probs.home ?? 0) * 100);
+  const awayPct = Math.round((probs.away ?? 0) * 100);
+  const drawPct = probs.draw !== undefined ? Math.round(probs.draw * 100) : undefined;
+  const leader: "home" | "away" = homePct >= awayPct ? "home" : "away";
+  const predictedWinner: "home" | "away" =
+    canonical.finalPick === "home" || canonical.finalPick === "away" ? canonical.finalPick : leader;
+  const predictedOutcome: "home" | "away" | "draw" =
+    canonical.finalPick === "draw"
+      ? "draw"
+      : canonical.finalPick === "home" || canonical.finalPick === "away"
+        ? canonical.finalPick
+        : drawPct !== undefined && drawPct >= homePct && drawPct >= awayPct
+          ? "draw"
+          : leader;
+  return {
+    ...prediction,
+    predictedWinner,
+    predictedOutcome,
+    confidence: Math.round(canonical.confidence),
+    homeWinProbability: homePct,
+    awayWinProbability: awayPct,
+    drawProbability: drawPct,
+    isTossUp: isMarketAwareTossUp(canonical),
+  };
+}
+
 function ensureCanonicalPredictionResult(game: Game, prediction: GamePrediction): GamePrediction {
-  if (prediction.canonicalResult) return prediction;
+  if (prediction.canonicalResult) return reconcileLegacyFieldsToCanonical(prediction);
   return withCanonicalPredictionResult(prediction, game.sport);
 }
 
@@ -1431,9 +1987,19 @@ async function annotateMarketComparison(game: Game, prediction: GamePrediction):
 
 type PredictionOutcome = "home" | "away" | "draw";
 
+// ─── Pick-stability lock (commit + only change on a real, decisive reason) ──
+// Once a pick is shown it COMMITS. A re-prediction can only flip the displayed
+// SIDE when the new side is clearly favored (lead >= MATERIAL_PICK_FLIP_LEAD_PP);
+// anything inside that band keeps the prior pick, so a coin-flip never
+// oscillates and the (heavily-weighted, free) market anchor can inform the pick
+// without chasing the line tick-by-tick. The threshold is intentionally
+// conservative for a betting product: a user who acts on a pick should not come
+// back to a silent switch — when it DOES flip, the new side is decisively ahead
+// (the signature of real news: a confirmed injury, an announced pitcher/goalie,
+// or a big line move), which is exactly what a bettor would want to see.
 const MATERIAL_PREDICTION_PROBABILITY_MOVE_PP = 3;
 const MATERIAL_CONFIDENCE_MOVE_PP = 4;
-const MATERIAL_PICK_FLIP_LEAD_PP = 5;
+const MATERIAL_PICK_FLIP_LEAD_PP = 7;
 const MATERIAL_MARKET_DIVERGENCE_MOVE_PP = 7;
 
 function predictionOutcome(prediction: GamePrediction): PredictionOutcome {
@@ -1556,7 +2122,7 @@ function choosePredictionUpdate(
 // Generate prediction for an ESPN game. The prediction remains the stable
 // model/simulation call even when the game is in progress.
 async function addPredictionToGame(game: Game): Promise<Game> {
-  const cachedPrediction = pickFreshestPrediction(game.id, game.status === "LIVE");
+  const cachedPrediction = pickFreshestPredictionForGame(game);
   if (cachedPrediction) {
     return attachPredictionToGame(game, cachedPrediction);
   }
@@ -1575,7 +2141,11 @@ async function addPredictionToGame(game: Game): Promise<Game> {
     await annotateMarketComparison(game, newPrediction);
 
     const candidatePrediction = sanitizePredictionForGame(game, newPrediction);
-    const previousPrediction = getCachedPrediction(game.id, { allowExpired: true });
+    const previousPredictionRaw = getCachedPrediction(game.id, { allowExpired: true });
+    const previousPrediction =
+      previousPredictionRaw && predictionMatchesGame(game, previousPredictionRaw)
+        ? previousPredictionRaw
+        : null;
     const displayPrediction = choosePredictionUpdate(game, previousPrediction, candidatePrediction);
     setCachedPrediction(game.id, displayPrediction);
 
@@ -2113,6 +2683,8 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
       standingsRank: homeStanding?.rank ?? undefined,
       standingsPoints: homeStanding?.matchPoints ?? undefined,
       netRunRate: homeStanding?.netRunRate ?? undefined,
+      runRateFor: homeStanding?.runRateFor ?? undefined,
+      runRateAgainst: homeStanding?.runRateAgainst ?? undefined,
       matchesPlayed: homeStanding?.matchesPlayed ?? undefined,
     },
     awayTeam: {
@@ -2126,6 +2698,8 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
       standingsRank: awayStanding?.rank ?? undefined,
       standingsPoints: awayStanding?.matchPoints ?? undefined,
       netRunRate: awayStanding?.netRunRate ?? undefined,
+      runRateFor: awayStanding?.runRateFor ?? undefined,
+      runRateAgainst: awayStanding?.runRateAgainst ?? undefined,
       matchesPlayed: awayStanding?.matchesPlayed ?? undefined,
     },
     gameTime: event.date,
@@ -2154,7 +2728,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
 
   // Attach freshest cached prediction if available, don't block on generating
   // new ones. Live games still use the stable pregame model call.
-  const cachedPrediction = pickFreshestPrediction(game.id, gameStatus === "LIVE");
+  const cachedPrediction = pickFreshestPredictionForGame(game);
   if (cachedPrediction) {
     return attachPredictionToGame(game, cachedPrediction);
   }
@@ -2493,7 +3067,7 @@ function transformTennisExplorerMatch(match: TennisExplorerLiveMatch): Game {
     homeLinescores: match.homeLinescores,
     awayLinescores: match.awayLinescores,
   };
-  const cachedPrediction = pickFreshestPrediction(game.id, match.status === "LIVE");
+  const cachedPrediction = pickFreshestPredictionForGame(game);
   return cachedPrediction ? attachPredictionToGame(game, cachedPrediction) : game;
 }
 
@@ -2569,7 +3143,7 @@ function transformTennisCompetition(
     awayLinescores,
   };
 
-  const cachedPrediction = pickFreshestPrediction(game.id, gameStatus === "LIVE");
+  const cachedPrediction = pickFreshestPredictionForGame(game);
   return cachedPrediction ? attachPredictionToGame(game, cachedPrediction) : game;
 }
 
@@ -2858,6 +3432,72 @@ const gamesRouter = new Hono<{
   };
 }>();
 
+function formatUtcDate(date: Date): string {
+  return date.toISOString().split("T")[0]!;
+}
+
+function utcDateWithOffset(base: Date, offsetDays: number): string {
+  const date = new Date(base);
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return formatUtcDate(date);
+}
+
+export function buildHomeGamesDateWindow(now = new Date()): {
+  fetchDates: string[];
+  coverageStart: Date;
+  scheduledCutoff: Date;
+} {
+  const coverageStart = new Date(now);
+  coverageStart.setUTCHours(coverageStart.getUTCHours() - 30);
+
+  const scheduledCutoff = new Date(now);
+  scheduledCutoff.setUTCDate(scheduledCutoff.getUTCDate() + 2);
+  scheduledCutoff.setUTCHours(23, 59, 59, 999);
+
+  return {
+    fetchDates: [-1, 0, 1, 2].map((offset) => utcDateWithOffset(now, offset)),
+    coverageStart,
+    scheduledCutoff,
+  };
+}
+
+// Historical search depth for resolving a game by ID (used by /id/:id and
+// lookupGameById). The profile + picks-history surfaces let users tap picks
+// well older than the home slate; today's cache + a tiny ±3-day window cannot
+// resolve those once the in-memory gameById index is cold (e.g. after a deploy).
+//
+// When we know the sport (query hint or gameIdToSport index) we can afford a
+// deep, targeted look-back (1 sport × N dates). When the sport is unknown we
+// keep a much shallower window because every date fans out to all 11 sports.
+const GAME_LOOKUP_BACK_DAYS_TARGETED = 21;
+const GAME_LOOKUP_FORWARD_DAYS = 3;
+const GAME_LOOKUP_BACK_DAYS_BROAD = 3;
+
+// Build the ordered list of YYYY-MM-DD dates to search when resolving a game by
+// ID. Today (offset 0) is always searched first by the caller, so it is omitted
+// here. Recent days are searched before older ones so the common case (a pick
+// from the last few days) resolves with the fewest ESPN round-trips.
+export function buildGameLookupDateOffsets(opts: { knownSport: boolean }): number[] {
+  const backDays = opts.knownSport
+    ? GAME_LOOKUP_BACK_DAYS_TARGETED
+    : GAME_LOOKUP_BACK_DAYS_BROAD;
+
+  const offsets: number[] = [];
+  // Interleave so we probe the closest dates first regardless of direction.
+  const maxSpan = Math.max(backDays, GAME_LOOKUP_FORWARD_DAYS);
+  for (let i = 1; i <= maxSpan; i++) {
+    if (i <= GAME_LOOKUP_FORWARD_DAYS) offsets.push(i);
+    if (i <= backDays) offsets.push(-i);
+  }
+  return offsets;
+}
+
+function normalizeSportHint(value: string | undefined | null): SportKey | null {
+  if (!value) return null;
+  const upper = value.toUpperCase();
+  return upper in ESPN_ENDPOINTS ? (upper as SportKey) : null;
+}
+
 // Force-refresh all predictions (clears cache so new engine params take effect)
 // Admin-only: requires authenticated user whose ID matches ADMIN_USER_ID env var
 gamesRouter.post("/refresh-predictions", async (c) => {
@@ -2875,56 +3515,26 @@ gamesRouter.post("/refresh-predictions", async (c) => {
 
 gamesRouter.get("/", async (c) => {
   try {
-    const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const { fetchDates, coverageStart, scheduledCutoff } = buildHomeGamesDateWindow(new Date());
 
-    // Fetch today + tomorrow + day-after-tomorrow in parallel. The third day is
-    // needed because Railway runs in UTC and a US-PST user's "tomorrow night"
-    // games (e.g. 7pm PST) have a gameTime in the UTC day-after-tomorrow.
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split("T")[0];
-
-    const dayAfter = new Date(now);
-    dayAfter.setDate(dayAfter.getDate() + 2);
-    const dayAfterStr = dayAfter.toISOString().split("T")[0];
-
-    const [todayGames, tomorrowGames, dayAfterGames] = await Promise.all([
-      fetchAllGames(todayStr),
-      fetchAllGames(tomorrowStr),
-      fetchAllGames(dayAfterStr),
-    ]);
-
-    // Check if we need yesterday's live games (only if any might still be running)
-    const hour = now.getUTCHours();
-    let extraGames: Game[] = [];
-
-    if (hour < 12) {
-      // Early in UTC day - yesterday's games might still be live
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-      const yesterdayGames = await fetchAllGames(yesterdayStr);
-      extraGames = yesterdayGames.filter((g) => g.status === "LIVE");
-    }
-
-    const allGames = [...extraGames, ...todayGames, ...tomorrowGames, ...dayAfterGames];
+    // Fetch previous UTC day + today + two days out in parallel. The previous
+    // day keeps US evening users from losing same-local-day finals after the
+    // Railway server has already crossed into tomorrow UTC.
+    const allGames = (await Promise.all(fetchDates.map((date) => fetchAllGames(date)))).flat();
 
     // Deduplicate by game ID
     const uniqueGames = Array.from(
       new Map(allGames.map((game) => [game.id, game])).values()
     );
 
-    // Keep games whose gameTime is at most ~2 calendar days out in UTC. This
+    // Keep games whose gameTime is in the rolling Home coverage window. This
     // covers a US-PST user's "tomorrow night" slate (which spills into the UTC
-    // day-after-tomorrow) without leaking far-future games into the response.
-    const endOfToday = new Date(now);
-    endOfToday.setDate(endOfToday.getDate() + 2);
-    endOfToday.setUTCHours(23, 59, 59, 999);
-
+    // day-after-tomorrow) without leaking stale scheduled games into the response.
     const filteredGames = uniqueGames.filter((game) => {
-      if (game.status === "LIVE" || game.status === "FINAL") return true;
-      return new Date(game.gameTime) <= endOfToday;
+      const gameTime = new Date(game.gameTime);
+      if (game.status === "LIVE") return true;
+      if (game.status === "FINAL") return gameTime >= coverageStart;
+      return gameTime >= coverageStart && gameTime <= scheduledCutoff;
     });
     filteredGames.sort(
       (a, b) =>
@@ -2946,7 +3556,7 @@ gamesRouter.get("/", async (c) => {
         filteredGames[i] = attachPredictionToGame(game, storedPregamePrediction);
         continue;
       }
-      const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+      const cached = pickFreshestPredictionForGame(game);
       if (cached) {
         filteredGames[i] = attachPredictionToGame(game, cached);
       }
@@ -3048,7 +3658,7 @@ gamesRouter.get("/date/:date", async (c) => {
       const storedPregamePrediction = storedPregamePredictions.get(g.id);
       if (storedPregamePrediction) return attachPredictionToGame(g, storedPregamePrediction);
       if (g.prediction) return g;
-      const cached = pickFreshestPrediction(g.id, g.status === "LIVE");
+      const cached = pickFreshestPredictionForGame(g);
       return cached ? attachPredictionToGame(g, cached) : g;
     });
 
@@ -3070,6 +3680,11 @@ gamesRouter.get("/date/:date", async (c) => {
 
 gamesRouter.get("/id/:id", async (c) => {
   const gameId = c.req.param("id");
+  // Optional sport hint (e.g. ?sport=NBA). The profile + picks-history tiles
+  // know the sport of an old pick even when our in-memory index has been
+  // cleared by a restart, so the client can pass it to make the historical
+  // look-back cheap and reliable.
+  const sportHint = normalizeSportHint(c.req.query("sport"));
 
   try {
     // Helper to ensure game has the freshest prediction.
@@ -3085,7 +3700,7 @@ gamesRouter.get("/id/:id", async (c) => {
         return attachPredictionToGame(game, storedPregamePrediction);
       }
 
-      const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+      const cached = pickFreshestPredictionForGame(game);
       if (cached) {
         return attachPredictionToGame(game, cached);
       }
@@ -3116,18 +3731,19 @@ gamesRouter.get("/id/:id", async (c) => {
       return c.json({ data: gameWithPrediction });
     }
 
-    // Fallback: search nearby dates (+-3 days)
+    // Fallback: search nearby dates. If we know which sport this game belongs
+    // to — from the client hint or our gameId→sport index — we can search a
+    // deep historical window (targeting just that sport, so it stays cheap).
+    // Without a sport we keep a shallow window because each date fans out to
+    // all sports. This is what lets older picks (profile + picks-history) open.
+    const knownSport = sportHint ?? gameIdToSport.get(gameId) ?? null;
     const today = new Date();
-    const dates: string[] = [];
-    for (let i = -3; i <= 3; i++) {
-      if (i === 0) continue; // already checked today
+    const dates = buildGameLookupDateOffsets({ knownSport: !!knownSport }).map((offset) => {
       const date = new Date(today);
-      date.setDate(date.getDate() + i);
-      dates.push(date.toISOString().split("T")[0]!);
-    }
+      date.setDate(date.getDate() + offset);
+      return date.toISOString().split("T")[0]!;
+    });
 
-    // Fix 4: if we know which sport this game belongs to, only search that sport
-    const knownSport = gameIdToSport.get(gameId);
     const dateResults = await Promise.all(
       dates.map(async (date) => {
         const games = knownSport
@@ -3226,7 +3842,7 @@ gamesRouter.get("/:sport", async (c) => {
       if (game.prediction) return game;
       const storedPregamePrediction = storedPregamePredictions.get(game.id);
       if (storedPregamePrediction) return attachPredictionToGame(game, storedPregamePrediction);
-      const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+      const cached = pickFreshestPredictionForGame(game);
       return cached ? attachPredictionToGame(game, cached) : game;
     });
     const missing = gamesWithCached.filter((game) => !game.prediction);
@@ -3453,7 +4069,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
  */
 export async function lookupGameById(gameId: string): Promise<Game | null> {
   const ensurePrediction = async (game: Game): Promise<Game> => {
-    const cached = pickFreshestPrediction(game.id, game.status === "LIVE");
+    const cached = pickFreshestPredictionForGame(game);
     if (cached) return attachPredictionToGame(game, cached);
     const storedPregamePrediction = await getStoredPregamePrediction(game);
     if (storedPregamePrediction) return attachPredictionToGame(game, storedPregamePrediction);
@@ -3472,16 +4088,14 @@ export async function lookupGameById(gameId: string): Promise<Game | null> {
   const found = todays.find((g) => g.id === gameId);
   if (found) return ensurePrediction(found);
 
+  const knownSport = gameIdToSport.get(gameId) ?? null;
   const today = new Date();
-  const dates: string[] = [];
-  for (let i = -3; i <= 3; i++) {
-    if (i === 0) continue;
+  const dates = buildGameLookupDateOffsets({ knownSport: !!knownSport }).map((offset) => {
     const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split("T")[0]!);
-  }
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().split("T")[0]!;
+  });
 
-  const knownSport = gameIdToSport.get(gameId);
   const dateResults = await Promise.all(
     dates.map(async (date) => {
       const games = knownSport

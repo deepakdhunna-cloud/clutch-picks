@@ -33,7 +33,9 @@ export interface TeamRecentForm {
 
 interface ESPNScheduleEvent {
   id: string;
+  date?: string;
   competitions: Array<{
+    date?: string;
     competitors: Array<{
       id: string;
       homeAway: string;
@@ -134,6 +136,32 @@ function parseScore(score: string | { value: number; displayValue: string } | un
   return isNaN(parsed) ? null : parsed;
 }
 
+function eventStartMs(event: ESPNScheduleEvent): number | null {
+  const raw = event.date ?? event.competitions?.[0]?.date;
+  if (!raw) return null;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function isCompletedEvent(event: ESPNScheduleEvent): boolean {
+  const compStatus = event.competitions?.[0]?.status;
+  const state = compStatus?.type?.state?.toLowerCase();
+  return compStatus?.type?.completed === true || state === "post";
+}
+
+function completedBefore(event: ESPNScheduleEvent, asOfDate?: Date): boolean {
+  if (!isCompletedEvent(event)) return false;
+  if (!asOfDate || Number.isNaN(asOfDate.getTime())) return true;
+
+  const startMs = eventStartMs(event);
+  if (startMs === null) return true;
+  return startMs < asOfDate.getTime();
+}
+
+function byEventStartAsc(a: ESPNScheduleEvent, b: ESPNScheduleEvent): number {
+  return (eventStartMs(a) ?? 0) - (eventStartMs(b) ?? 0);
+}
+
 /**
  * Calculate streak from an ordered list of results (most recent last).
  * Returns positive for win streak, negative for loss streak.
@@ -162,13 +190,17 @@ function calculateStreak(results: Array<"W" | "L" | "D">): number {
 export async function fetchTeamRecentForm(
   teamId: string,
   sport: string,
-  limit = 10
+  limit = 10,
+  asOfDate?: Date
 ): Promise<TeamRecentForm> {
   if (sport === "TENNIS") {
     return fetchTennisRecentForm(teamId, limit);
   }
 
-  const cacheKey = `team-${teamId}-${sport}`;
+  const asOfKey = asOfDate && !Number.isNaN(asOfDate.getTime())
+    ? asOfDate.toISOString()
+    : "current";
+  const cacheKey = `team-${teamId}-${sport}-${limit}-${asOfKey}`;
   const cached = getCachedForm(cacheKey);
   if (cached) return cached;
 
@@ -181,14 +213,11 @@ export async function fetchTeamRecentForm(
       return defaultForm();
     }
 
-    // Filter to completed games only, then take the last `limit` ones
-    // ESPN schedule API puts status inside competitions[0], not at event level
-    const completedEvents = events.filter((e) => {
-      const compStatus = e.competitions?.[0]?.status;
-      const state = compStatus?.type?.state?.toLowerCase();
-      const completed = compStatus?.type?.completed;
-      return completed === true || state === "post";
-    });
+    // Filter to games completed before the target event. This keeps historical
+    // replay and same-day doubleheader projections from seeing future results.
+    const completedEvents = events
+      .filter((e) => completedBefore(e, asOfDate))
+      .sort(byEventStartAsc);
 
     // Take the last `limit` completed games (most recent at end)
     const recentEvents = completedEvents.slice(-limit);
@@ -300,6 +329,12 @@ export interface TeamInjuryReport {
 const EXTENDED_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const extendedStatsCache = new LRUCache<string, { data: TeamExtendedStats; timestamp: number }>({ max: 200 });
 
+export function resetESPNStatsCachesForTest(): void {
+  scheduleCache.clear();
+  teamFormCache.clear();
+  extendedStatsCache.clear();
+}
+
 function defaultExtendedStats(): TeamExtendedStats {
   return {
     homeRecord: { wins: 0, losses: 0 },
@@ -346,12 +381,12 @@ export async function fetchTeamExtendedStats(
     const events = data.events;
     if (!Array.isArray(events) || events.length === 0) return defaultExtendedStats();
 
-    // Filter to completed games only
-    const completedEvents = events.filter((e) => {
-      const compStatus = e.competitions?.[0]?.status;
-      const state = compStatus?.type?.state?.toLowerCase();
-      return compStatus?.type?.completed === true || state === "post";
-    });
+    // Filter to games completed before this event. Without this, historical
+    // replay can accidentally include results that happened after the game being
+    // evaluated, which makes projection accuracy audits untrustworthy.
+    const completedEvents = events
+      .filter((e) => completedBefore(e, gameDate))
+      .sort(byEventStartAsc);
 
     if (completedEvents.length === 0) return defaultExtendedStats();
 
@@ -654,6 +689,37 @@ export async function fetchTeamSeasonResults(
     }
 
     return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all current team IDs for a league from ESPN's teams list. Used by the
+ * nightly Elo refresh to know which teams to roll ratings forward for. Returns
+ * [] on any failure or for sports without a clean team list (e.g. TENNIS is
+ * per-player); the caller then skips that league and ratings stay as-is.
+ */
+export async function fetchLeagueTeamIds(sport: string): Promise<string[]> {
+  const sportPath = ESPN_SPORT_PATHS[sport];
+  if (!sportPath) return [];
+  try {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams?limit=1000`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      sports?: Array<{ leagues?: Array<{ teams?: Array<{ team?: { id?: string } }> }> }>;
+    };
+    const ids = new Set<string>();
+    for (const s of data.sports ?? []) {
+      for (const lg of s.leagues ?? []) {
+        for (const t of lg.teams ?? []) {
+          const id = t.team?.id;
+          if (id) ids.add(String(id));
+        }
+      }
+    }
+    return Array.from(ids);
   } catch {
     return [];
   }

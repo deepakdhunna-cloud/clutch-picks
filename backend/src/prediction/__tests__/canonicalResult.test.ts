@@ -144,9 +144,11 @@ describe("canonical prediction result", () => {
 
     const reads = new Map(result.canonicalResult.engineBreakdown.map((read) => [read.engine, read]));
 
-    expect(reads.get("factor-model-v1")?.weight).toBeCloseTo(0.76, 3);
+    // NBA market weight is the league-aware 0.15 (kept light — our NBA model
+    // beats the line; backtest showed NBA accuracy unchanged at this weight).
+    expect(reads.get("factor-model-v1")?.weight).toBeCloseTo(0.71, 3);
     expect(reads.get("game-script-v1")?.weight).toBeCloseTo(0.14, 3);
-    expect(reads.get("market-calibration")?.weight).toBeCloseTo(0.1, 3);
+    expect(reads.get("market-calibration")?.weight).toBeCloseTo(0.15, 3);
     expect(result.canonicalResult.modelInputs.marketConsensusIncluded).toBe(true);
     expect(result.canonicalResult.decisionProfile?.marketPick).toBeDefined();
     expect(result.canonicalResult.decisionProfile?.marketDelta).toBeTypeOf("number");
@@ -236,6 +238,29 @@ describe("canonical prediction result", () => {
     expect(result.factors.find((factor) => factor.key === "rating_diff")?.weight).toBeLessThanOrEqual(0.35);
   });
 
+  it("lets real aligned matchup signal carry some reserved weight when one critical feed is missing", () => {
+    const result = predictGame(makeNBAContext({
+      homeElo: 1580,
+      awayElo: 1480,
+      homeForm: { results: ["W", "W", "W", "W", "W", "W", "W", "W", "L", "W"], formString: "W-W-W-W-W-W-W-W-L-W", streak: 1, avgScore: 118, avgAllowed: 106, wins: 9, losses: 1 },
+      awayForm: { results: ["L", "L", "L", "W", "L", "L", "L", "W", "L", "L"], formString: "L-L-L-W-L-L-L-W-L-L", streak: -2, avgScore: 104, avgAllowed: 116, wins: 2, losses: 8 },
+      homeExtended: { homeRecord: { wins: 25, losses: 8 }, awayRecord: { wins: 19, losses: 14 }, lastGameDate: "2026-04-13", avgScoreLast5: 118, avgScoreLast10: 117, scoringTrend: 0.1, defenseTrend: 0.1, headToHeadResults: [], strengthOfSchedule: 0.58, restDays: 3, consecutiveAwayGames: 0 },
+      awayExtended: { homeRecord: { wins: 16, losses: 17 }, awayRecord: { wins: 12, losses: 21 }, lastGameDate: "2026-04-15", avgScoreLast5: 104, avgScoreLast10: 105, scoringTrend: -0.1, defenseTrend: -0.1, headToHeadResults: [], strengthOfSchedule: 0.48, restDays: 1, consecutiveAwayGames: 4 },
+      homeInjuries: { out: [], doubtful: [], questionable: [], totalOut: 0, totalDoubtful: 0, totalQuestionable: 0, source: "unavailable" } as any,
+      awayInjuries: { out: [], doubtful: [], questionable: [], totalOut: 0, totalDoubtful: 0, totalQuestionable: 0, source: "unavailable" } as any,
+      homeAdvanced: { offensiveRating: 121, defensiveRating: 109 },
+      awayAdvanced: { offensiveRating: 108, defensiveRating: 119 },
+    }));
+
+    const guard = result.factors.find((factor) => factor.key === "data_quality_guard");
+    const netRating = result.factors.find((factor) => factor.key === "net_rating");
+
+    expect(result.predictedWinner?.teamId).toBe("1");
+    expect(result.confidence).toBeGreaterThan(58);
+    expect(guard?.weight ?? 1).toBeLessThan(0.1);
+    expect(netRating?.weight ?? 0).toBeGreaterThan(0.14);
+  });
+
   it("reconciles public projection probabilities and score to the final pick", () => {
     const reconciled = reconcileProjectionToFinal({
       sport: "NBA",
@@ -257,7 +282,7 @@ describe("canonical prediction result", () => {
     expect(reconciled.signals[0]?.key).toBe("orchestrator-projection-reconciliation");
   });
 
-  it("keeps rounded tennis score projections aligned to the final pick", () => {
+  it("projects a tennis set score aligned to the final pick (away favorite, best-of-3)", () => {
     const reconciled = reconcileProjectionToFinal({
       sport: "TENNIS",
       projection: projection({
@@ -271,9 +296,11 @@ describe("canonical prediction result", () => {
       finalProbabilities: { home: 0.46, away: 0.54 },
     });
 
-    expect(reconciled.projectedSpread).toBeLessThan(0);
+    // away is the pick → wins 2 sets (best-of-3); a close 54% match → loser takes 1.
+    expect(reconciled.projectedAwayScore).toBe(2);
+    expect(reconciled.projectedHomeScore).toBe(1);
     expect(reconciled.projectedAwayScore).toBeGreaterThan(reconciled.projectedHomeScore);
-    expect(Math.abs(reconciled.projectedSpread)).toBeGreaterThanOrEqual(0.2);
+    expect(reconciled.projectedTotal).toBe(3);
   });
 
   it("keeps rounded football score projections above the sport threshold", () => {
@@ -294,7 +321,7 @@ describe("canonical prediction result", () => {
     expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
   });
 
-  it("normalizes projection spread and total from the displayed scoreline", () => {
+  it("projects a consistent tennis set score (home favorite, best-of-3)", () => {
     const reconciled = reconcileProjectionToFinal({
       sport: "TENNIS",
       projection: projection({
@@ -308,9 +335,12 @@ describe("canonical prediction result", () => {
       finalProbabilities: { home: 0.54, away: 0.46 },
     });
 
-    expect(reconciled.projectedSpread).toBeCloseTo(0.1, 1);
-    expect(reconciled.projectedTotal).toBeCloseTo(2.9, 1);
-    expect(reconciled.projectedHomeScore).toBeGreaterThan(reconciled.projectedAwayScore);
+    // home is the pick → 2 sets; close 54% match → away takes 1. Whole numbers,
+    // arithmetically consistent.
+    expect(reconciled.projectedHomeScore).toBe(2);
+    expect(reconciled.projectedAwayScore).toBe(1);
+    expect(reconciled.projectedTotal).toBe(3);
+    expect(reconciled.projectedSpread).toBe(1);
   });
 
   it("preserves sub-engine disagreement while returning one final orchestrator pick", () => {
