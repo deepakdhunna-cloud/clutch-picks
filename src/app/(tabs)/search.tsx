@@ -2365,22 +2365,22 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
 }
 
 // ─── MATCHUP CARD (collapsible) ───
-const MATCHUP_CARD_BACKGROUND = '#0D131B';
-const MATCHUP_CARD_BORDER = 'rgba(152,185,211,0.17)';
-const MATCHUP_RANK_BACKGROUND = 'rgba(122,157,184,0.10)';
-const MATCHUP_RANK_BORDER = 'rgba(122,157,184,0.16)';
-const MATCHUP_CHIP_BACKGROUND = 'rgba(5,9,14,0.42)';
-const MATCHUP_CHIP_BORDER = 'rgba(152,185,211,0.14)';
-const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.08)';
-const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.16)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 24;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 20;
+const MATCHUP_CARD_BACKGROUND = '#0F1620';
+const MATCHUP_CARD_BORDER = 'rgba(122,157,184,0.22)';
+const MATCHUP_RANK_BACKGROUND = 'rgba(122,157,184,0.14)';
+const MATCHUP_RANK_BORDER = 'rgba(122,157,184,0.28)';
+const MATCHUP_CHIP_BACKGROUND = 'rgba(122,157,184,0.08)';
+const MATCHUP_CHIP_BORDER = 'rgba(122,157,184,0.18)';
+const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.10)';
+const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.22)';
+const MATCHUP_CARD_CONTENT_PADDING_X = 18;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 16;
 const MATCHUP_CARD_MIN_HEIGHT = 0;
-const MATCHUP_RANK_SIZE = 30;
-const MATCHUP_RANK_GAP = 12;
-const MATCHUP_ACTION_SIZE = 30;
-const MATCHUP_ACTION_GAP = 10;
-const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;
+const MATCHUP_RANK_SIZE = 28;
+const MATCHUP_RANK_GAP = 10;
+const MATCHUP_ACTION_SIZE = 26;
+const MATCHUP_ACTION_GAP = 8;
+const MATCHUP_ACCENT_COLOR = '#A8D0E6';
 
 const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, resetSignal }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; resetSignal?: number }) {
   const { openGame, warmGame } = useGameDetailActions();
@@ -2394,7 +2394,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
   }, [game.id, resetSignal]);
 
   return (
-    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 18, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', minHeight: MATCHUP_CARD_MIN_HEIGHT, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 14, elevation: 5 }}>
+    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 14, borderWidth: 1.2, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', shadowColor: 'rgba(122,157,184,0.3)', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 4 }}>
       <Pressable
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
         accessibilityRole="button"
@@ -2408,28 +2408,28 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
         })}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 999, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
-            <Text style={{ fontSize: 10.2, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
+          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 999, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1.2, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP, marginTop: 2 }}>
+            <Text style={{ fontSize: 10.5, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 13, lineHeight: 17.5, fontWeight: '700', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 6 }} numberOfLines={expanded ? undefined : 2}>
-              <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
-              <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
+            <Text adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={2} style={{ fontSize: 14, lineHeight: 18.5, fontWeight: '600', color: 'rgba(255,255,255,0.92)', letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 11, lineHeight: 15, fontWeight: '500', color: 'rgba(152,185,211,0.7)', marginTop: 5 }} numberOfLines={expanded ? undefined : 2}>
+              <Text style={{ color: MATCHUP_ACCENT_COLOR, fontWeight: '700' }}>{startTime}</Text>
+              <Text style={{ color: 'rgba(152,185,211,0.4)' }}>{' · '}</Text>
               {headline}
             </Text>
             {tags.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
-                  <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 8, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 5 }}>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 8.8, lineHeight: 11.5, fontWeight: '800', color: i === 0 ? MATCHUP_ACCENT_COLOR : TEXT_MUTED, letterSpacing: 0.35, includeFontPadding: false }}>{tg}</Text>
+                  <View key={`${tg}-${i}`} style={{ backgroundColor: i === 0 ? 'rgba(168,208,230,0.1)' : MATCHUP_CHIP_BACKGROUND, borderRadius: 6, borderWidth: 1, borderColor: i === 0 ? 'rgba(168,208,230,0.25)' : MATCHUP_CHIP_BORDER, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9, lineHeight: 12, fontWeight: '800', color: i === 0 ? MATCHUP_ACCENT_COLOR : 'rgba(152,185,211,0.6)', letterSpacing: 0.4, includeFontPadding: false }}>{tg}</Text>
                   </View>
                 ))}
               </View>
             ) : null}
           </View>
-          <View style={{ width: MATCHUP_ACTION_SIZE, height: MATCHUP_ACTION_SIZE, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(122,157,184,0.06)', borderWidth: 1, borderColor: 'rgba(152,185,211,0.12)', flexShrink: 0, marginLeft: MATCHUP_ACTION_GAP }}>
-            <ChevronRight size={14} color={TEXT_MUTED} strokeWidth={2.5} />
+          <View style={{ width: MATCHUP_ACTION_SIZE, height: MATCHUP_ACTION_SIZE, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: MATCHUP_ACTION_GAP, marginTop: 2 }}>
+            <ChevronRight size={13} color={'rgba(152,185,211,0.4)'} strokeWidth={2} />
           </View>
         </View>
       </Pressable>
@@ -2866,7 +2866,7 @@ const PREP_SUBTAB_GAP = 4;
 const PREP_SUBTAB_TRACK_INNER_PADDING = 3;
 const MATCHUP_CARD_CTA_HEIGHT = 40;
 const MATCHUP_TAG_ROW_GAP = 5;
-const PREP_MATCHUP_CARD_GAP = 10;
+const PREP_MATCHUP_CARD_GAP = 12;
 
 // ─── PREP MODE ───
 const Prep = memo(function Prep({
