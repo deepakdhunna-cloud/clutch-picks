@@ -1272,9 +1272,10 @@ const LiveCard = memo(function LiveCard({
   const pickStatusColor = !pick ? '#6b7280' : lead ? '#4ade80' : ps === os ? '#facc15' : LIVE_RED;
   const pickStatusText = !pick ? 'No pick set' : lead ? `Up ${scoreGap}` : ps === os ? 'Even' : `Down ${scoreGap}`;
   const innerPadX = 14;
+  const borderWidth = 2.5;
   const bodyGap = 8;
   const scoreColumnWidth = Math.min(130, Math.max(110, cardWidth * 0.36));
-  const teamColumnWidth = (cardWidth - innerPadX * 2 - scoreColumnWidth - bodyGap * 2) / 2;
+  const teamColumnWidth = (cardWidth - borderWidth * 2 - innerPadX * 2 - scoreColumnWidth - bodyGap * 2) / 2;
   const renderCricketTeamMeta = (
     scoreLabel: string | null,
     role: 'BATTING' | 'BOWLING' | null,
@@ -2372,8 +2373,8 @@ const MATCHUP_CHIP_BACKGROUND = 'rgba(5,9,14,0.42)';
 const MATCHUP_CHIP_BORDER = 'rgba(152,185,211,0.14)';
 const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.08)';
 const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.16)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 20;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
+const MATCHUP_CARD_CONTENT_PADDING_X = 24;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 20;
 const MATCHUP_CARD_MIN_HEIGHT = 148;
 const MATCHUP_RANK_SIZE = 30;
 const MATCHUP_RANK_GAP = 12;
@@ -2411,8 +2412,8 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
             <Text style={{ fontSize: 10.2, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 15.8, lineHeight: 20.8, fontWeight: '800', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 12.8, lineHeight: 19, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 10 }} numberOfLines={expanded ? undefined : 2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 14.5, lineHeight: 19.5, fontWeight: '800', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 12, lineHeight: 17, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 8 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
               {headline}
@@ -2559,10 +2560,10 @@ const ReviewSummaryCard = memo(function ReviewSummaryCard({
 });
 
 // ─── GAME DAY ───
-const LIVE_CARD_SIDE_PEEK = 28;
+const LIVE_CARD_SIDE_PEEK = 6;
 const LIVE_CARD_SIDE_SPACE = ARENA_CARD_GAP + LIVE_CARD_SIDE_PEEK;
 const LIVE_CARD_MIN_W = 260;
-const LIVE_RAIL_VISUAL_CENTER_CORRECTION = 11;
+const LIVE_RAIL_VISUAL_CENTER_CORRECTION = 3;
 
 const GameDay = memo(function GameDay({
   live,
@@ -2665,17 +2666,11 @@ const GameDay = memo(function GameDay({
     });
   }, [filteredLive.length, focusedIdx, liveCardSnapInterval]);
 
-  const snapLiveRail = useCallback((e: any, animated = true) => {
+  const updateFocusedIdx = useCallback((e: any) => {
     if (!filteredLive.length) return;
     const rawOffset = Number(e?.nativeEvent?.contentOffset?.x ?? 0);
     const idx = Math.max(0, Math.min(filteredLive.length - 1, Math.round(rawOffset / liveCardSnapInterval)));
-    const exactOffset = idx * liveCardSnapInterval;
     setFocusedIdx((current) => idx === current ? current : idx);
-    if (Math.abs(rawOffset - exactOffset) > 0.5) {
-      requestAnimationFrame(() => {
-        liveRailRef.current?.scrollToOffset?.({ offset: exactOffset, animated });
-      });
-    }
   }, [filteredLive.length, liveCardSnapInterval]);
 
   // No live games
@@ -2800,7 +2795,7 @@ const GameDay = memo(function GameDay({
       ) : (
         <View onLayout={onLiveRailLayout} style={{ width: '100%', overflow: 'visible' }}>
           <FlatList
-            key={`live-rail-${Math.round(liveCardWidth)}-${liveSportFilter}-${liveSearch.trim()}`}
+            key={`live-rail-${Math.round(liveCardWidth)}`}
             ref={liveRailRef}
             data={filteredLive}
             horizontal
@@ -2830,11 +2825,11 @@ const GameDay = memo(function GameDay({
             style={{flexGrow:0}}
             onScrollBeginDrag={markLiveRailScrollStart}
             onScrollEndDrag={(event) => {
-              snapLiveRail(event, true);
+              updateFocusedIdx(event);
               markLiveRailScrollEnd();
             }}
             onMomentumScrollEnd={(event) => {
-              snapLiveRail(event, true);
+              updateFocusedIdx(event);
               markLiveRailScrollEnd();
             }}
           />
@@ -3419,7 +3414,6 @@ export default function MyArenaScreen() {
           style={{ flex: 1 }}
           initialPage={am}
           scrollEnabled
-          overdrag
           offscreenPageLimit={1}
           onPageSelected={onArenaPageSelected}
         >
