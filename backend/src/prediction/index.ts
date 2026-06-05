@@ -116,30 +116,30 @@ function applyWeakSportCalibration(
   if (ctx.sport === "MLB") {
     const starter = factorByKey(factors, "starting_pitcher");
     const positionInjuries = factorByKey(factors, "injuries_mlb");
+    const formAvailable = ctx.homeForm.results.length >= 5 && ctx.awayForm.results.length >= 5;
 
-    // Live calibration showed MLB was generating too many 60%+ reads from
-    // noisy team-level context. If the starter matchup is missing, pull the
-    // rating edge back toward pick'em instead of letting that weight amplify Elo.
+    // Only compress significantly when BOTH starter AND form are missing.
+    // If we have solid form data, the Elo + form signal is still valuable.
     if (!starter?.available) {
-      multiplier *= 0.72;
+      multiplier *= formAvailable ? 0.88 : 0.72;
       warnings.push("MLB starter matchup missing; confidence compressed toward pick'em.");
     } else if (Math.abs(starter.homeDelta) < 18) {
-      multiplier *= 0.88;
+      multiplier *= 0.92;
       warnings.push("MLB starter matchup is close; avoiding a team-stats overclaim.");
     }
 
     if (!positionInjuries?.available) {
-      multiplier *= 0.94;
+      multiplier *= formAvailable ? 0.97 : 0.94;
     }
     if (!ctx.marketConsensus) {
-      multiplier *= 0.95;
+      multiplier *= 0.96;
     }
-    if (coverage < 0.78) {
+    if (coverage < 0.78 && !formAvailable) {
       multiplier *= 0.92;
       warnings.push("MLB data coverage is thin; confidence compressed.");
     }
 
-    multiplier = Math.max(0.58, multiplier);
+    multiplier = Math.max(0.72, multiplier);
   } else if (ctx.sport === "TENNIS") {
     const ranking = factorByKey(factors, "tennis_ranking_edge");
     const form = factorByKey(factors, "tennis_recent_form");
@@ -203,7 +203,8 @@ function finalOutcomeFromProbabilities(
   draw?: number,
 ): ProjectionOutcome {
   if (draw !== undefined && draw >= home && draw >= away) return "draw";
-  if (draw === undefined && Math.abs(home - away) < 0.001) return "none";
+  // Only return "none" for true dead-heat (< 0.1pp difference = 50.0% vs 50.0%)
+  if (draw === undefined && Math.abs(home - away) < 0.005) return "none";
   return home >= away ? "home" : "away";
 }
 
@@ -1131,6 +1132,17 @@ function applyLeagueReliabilityGuards(
     return factors;
   }
 
+  // If we have solid form data (both teams have 5+ results), the Elo + form
+  // signal is meaningful even without critical sport-specific factors.
+  // In this case, only apply the guard if MOST critical factors are missing.
+  const formAvailable = ctx.homeForm.results.length >= 5 && ctx.awayForm.results.length >= 5;
+  const formFactor = factors.find((f) => f.key === "form" || f.key === "recent_form");
+  const hasFormSignal = formAvailable || (formFactor?.available && formFactor?.hasSignal);
+  if (hasFormSignal && criticalMissing.length <= 2 && !thinSignal) {
+    // Form + Elo is enough to make a pick — skip the heavy guard
+    return factors;
+  }
+
   const ratingCap = RATING_WEIGHT_CAP_WHEN_THIN[ctx.sport] ?? 0.32;
   if (rating.weight <= ratingCap) {
     return factors;
@@ -1251,7 +1263,10 @@ export function sumRatingDelta(factors: FactorContribution[]): number {
   if (!isFullScaleRatingEnabled()) {
     let total = 0;
     for (const factor of factors) {
-      if (factor.available) total += factor.homeDelta * factor.weight;
+      if (factor.available) {
+        const delta = factor.homeDelta * factor.weight;
+        if (Number.isFinite(delta)) total += delta;
+      }
     }
     return total;
   }
@@ -1260,7 +1275,10 @@ export function sumRatingDelta(factors: FactorContribution[]): number {
   let adjustments = 0;
   for (const factor of factors) {
     if (factor.key === "rating_diff") continue;
-    if (factor.available) adjustments += factor.homeDelta * factor.weight;
+    if (factor.available) {
+      const delta = factor.homeDelta * factor.weight;
+      if (Number.isFinite(delta)) adjustments += delta;
+    }
   }
   if (!ratingFactor?.available) return adjustments;
 
