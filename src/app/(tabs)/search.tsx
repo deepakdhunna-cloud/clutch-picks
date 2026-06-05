@@ -71,10 +71,7 @@ const MODE_SEGMENT_GAP = 8;
 const MODES = ['Game Day', 'Prep Mode', 'Review'] as const;
 type LiveIntelType = 'alert' | 'shift' | 'trend' | 'pulse';
 type LiveIntelItem = { type: LiveIntelType; title: string; body: string };
-type ArenaHorizontalGestureGuard = {
-  onHorizontalGestureStart?: () => void;
-  onHorizontalGestureEnd?: () => void;
-};
+
 
 function getArenaBottomPadding(bottomInset: number) {
   return GLASS_BOTTOM_NAV_HEIGHT
@@ -460,8 +457,6 @@ const SportPills = memo(function SportPills({
   alwaysShowSpecialSports = true,
   sidePadding = ARENA_SIDE_PADDING,
   bottomMargin = 14,
-  onHorizontalGestureStart,
-  onHorizontalGestureEnd,
 }: {
   selected: string;
   onSelect: (s: string) => void;
@@ -471,7 +466,7 @@ const SportPills = memo(function SportPills({
   alwaysShowSpecialSports?: boolean;
   sidePadding?: number;
   bottomMargin?: number;
-} & ArenaHorizontalGestureGuard) {
+}) {
   // Hide chips for sports with zero games on the current slate so users
   // don't dead-end into empty filters (e.g. CFB during the off-season).
   // 'All' always stays. When `available` is undefined (loading or no data),
@@ -494,9 +489,7 @@ const SportPills = memo(function SportPills({
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0, marginBottom: bottomMargin }}
       contentContainerStyle={{ paddingLeft: sidePadding, paddingRight: sidePadding, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
-      onScrollBeginDrag={onHorizontalGestureStart}
-      onScrollEndDrag={onHorizontalGestureEnd}
-      onMomentumScrollEnd={onHorizontalGestureEnd}
+
     >
       {visible.map((s, index) => {
         const on = selected === s;
@@ -652,8 +645,6 @@ const ArenaChrome = memo(function ArenaChrome({
   active,
   onChange,
   hasLive,
-  onHorizontalGestureStart,
-  onHorizontalGestureEnd,
 }: {
   selected: string;
   onSelect: (s: string) => void;
@@ -662,7 +653,7 @@ const ArenaChrome = memo(function ArenaChrome({
   active: number;
   onChange: (n: number) => void;
   hasLive: boolean;
-} & ArenaHorizontalGestureGuard) {
+}) {
   return (
     <>
       <SearchBar />
@@ -673,8 +664,6 @@ const ArenaChrome = memo(function ArenaChrome({
         available={available}
         compact={showModes}
         bottomMargin={showModes ? 10 : 14}
-        onHorizontalGestureStart={onHorizontalGestureStart}
-        onHorizontalGestureEnd={onHorizontalGestureEnd}
       />
     </>
   );
@@ -803,7 +792,6 @@ const ArenaScrollView = memo(function ArenaScrollView({
       onScroll={sh}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
-      nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
@@ -997,9 +985,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
 // ─── YOUR GAMES ───
 const YourGames = memo(function YourGames({
   games,
-  onHorizontalGestureStart,
-  onHorizontalGestureEnd,
-}: { games: GameWithPrediction[] } & ArenaHorizontalGestureGuard) {
+}: { games: GameWithPrediction[] }) {
   const router = useRouter();
   const orderedGames = useMemo(() => {
     const priority = (game: GameWithPrediction) =>
@@ -1096,9 +1082,6 @@ const YourGames = memo(function YourGames({
         renderItem={({ item }) => <FollowedCard game={item} />}
         getItemLayout={(_, index) => ({ length: FOLLOWED_CARD_W + ARENA_CARD_GAP, offset: (FOLLOWED_CARD_W + ARENA_CARD_GAP) * index, index })}
         style={{ flexGrow: 0 }}
-        onScrollBeginDrag={onHorizontalGestureStart}
-        onScrollEndDrag={onHorizontalGestureEnd}
-        onMomentumScrollEnd={onHorizontalGestureEnd}
       />
     </View>
   );
@@ -2389,13 +2372,13 @@ const MATCHUP_CHIP_BACKGROUND = 'rgba(5,9,14,0.42)';
 const MATCHUP_CHIP_BORDER = 'rgba(152,185,211,0.14)';
 const MATCHUP_CTA_BACKGROUND = 'rgba(122,157,184,0.08)';
 const MATCHUP_CTA_BORDER = 'rgba(122,157,184,0.16)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 22;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 16;
-const MATCHUP_CARD_MIN_HEIGHT = 0;
-const MATCHUP_RANK_SIZE = 26;
-const MATCHUP_RANK_GAP = 10;
-const MATCHUP_ACTION_SIZE = 28;
-const MATCHUP_ACTION_GAP = 8;
+const MATCHUP_CARD_CONTENT_PADDING_X = 20;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
+const MATCHUP_CARD_MIN_HEIGHT = 148;
+const MATCHUP_RANK_SIZE = 30;
+const MATCHUP_RANK_GAP = 12;
+const MATCHUP_ACTION_SIZE = 30;
+const MATCHUP_ACTION_GAP = 10;
 const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;
 
 const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, resetSignal }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; resetSignal?: number }) {
@@ -2410,7 +2393,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
   }, [game.id, resetSignal]);
 
   return (
-    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 14, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }}>
+    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: 18, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', minHeight: MATCHUP_CARD_MIN_HEIGHT, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 14, elevation: 5 }}>
       <Pressable
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
         accessibilityRole="button"
@@ -2419,7 +2402,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
         style={({ pressed }) => ({
           paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X,
           paddingVertical: MATCHUP_CARD_CONTENT_PADDING_Y,
-          
+          minHeight: expanded ? undefined : MATCHUP_CARD_MIN_HEIGHT,
           opacity: pressed ? 0.92 : 1,
         })}
       >
@@ -2428,14 +2411,14 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
             <Text style={{ fontSize: 10.2, lineHeight: 13, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 13, lineHeight: 17.5, fontWeight: '700', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 11.2, lineHeight: 15.5, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 5 }} numberOfLines={expanded ? undefined : 2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.76} numberOfLines={2} style={{ fontSize: 15.8, lineHeight: 20.8, fontWeight: '800', color: WHITE }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 12.8, lineHeight: 19, fontWeight: '600', color: TEXT_SECONDARY, marginTop: 10 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: TEXT_MUTED, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{' · '}</Text>
               {headline}
             </Text>
             {tags.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 8 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 13 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
                   <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 8, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 5 }}>
                     <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 8.8, lineHeight: 11.5, fontWeight: '800', color: i === 0 ? MATCHUP_ACCENT_COLOR : TEXT_MUTED, letterSpacing: 0.35, includeFontPadding: false }}>{tg}</Text>
@@ -2594,7 +2577,6 @@ const GameDay = memo(function GameDay({
   afterContent,
   liveIntelLocked = false,
   onProPress,
-  horizontalGestureGuard,
   resetSignal,
 }: {
   live: GameWithPrediction[];
@@ -2609,7 +2591,6 @@ const GameDay = memo(function GameDay({
   afterContent?: React.ReactNode;
   liveIntelLocked?: boolean;
   onProPress?: () => void;
-  horizontalGestureGuard?: ArenaHorizontalGestureGuard;
   resetSignal?: number;
 }) {
   const pm = useMemo(() => { const m = new Map<string, UserPick>(); picks.forEach(p => m.set(p.gameId, p)); return m; }, [picks]);
@@ -2657,12 +2638,10 @@ const GameDay = memo(function GameDay({
   const canOpenLiveCard = liveRailPressGuard.canPress;
   const markLiveRailScrollStart = useCallback(() => {
     liveRailPressGuard.onScrollBeginDrag();
-    horizontalGestureGuard?.onHorizontalGestureStart?.();
-  }, [horizontalGestureGuard, liveRailPressGuard.onScrollBeginDrag]);
+  }, [liveRailPressGuard.onScrollBeginDrag]);
   const markLiveRailScrollEnd = useCallback(() => {
     liveRailPressGuard.onScrollEndDrag();
-    horizontalGestureGuard?.onHorizontalGestureEnd?.();
-  }, [horizontalGestureGuard, liveRailPressGuard.onScrollEndDrag]);
+  }, [liveRailPressGuard.onScrollEndDrag]);
   useEffect(() => {
     if (liveSportFilter !== 'All' && !liveSports.has(liveSportFilter)) setLiveSportFilter('All');
   }, [liveSportFilter, liveSports]);
@@ -2704,7 +2683,7 @@ const GameDay = memo(function GameDay({
     <ArenaScrollView sh={sh} onR={onR} isR={isR} bottomPadding={bottomPadding} resetSignal={resetSignal}>
       {top}
       <GameDayTitleBanner liveCount={live.length} />
-      <YourGames games={followed} {...horizontalGestureGuard} />
+      <YourGames games={followed} />
       <View style={{alignItems:'center', paddingTop:28, paddingBottom:24}}><Text style={{fontSize:14, color:TEXT_MUTED}}>No games on the board right now</Text></View>
       {afterContent}
       <Disclaimer />
@@ -2719,7 +2698,7 @@ const GameDay = memo(function GameDay({
       <GameDayTitleBanner liveCount={live.length} />
 
       {/* 2. Your Games */}
-      <YourGames games={followed} {...horizontalGestureGuard} />
+      <YourGames games={followed} />
 
       {/* 3. Live intelligence search */}
       <View style={{paddingHorizontal:ARENA_SIDE_PADDING, marginTop:0, marginBottom:14}}>
@@ -2797,7 +2776,6 @@ const GameDay = memo(function GameDay({
               alwaysShowSpecialSports={false}
               sidePadding={0}
               bottomMargin={0}
-              {...horizontalGestureGuard}
             />
           </View>
         ) : null}
@@ -2893,7 +2871,7 @@ const PREP_SUBTAB_GAP = 4;
 const PREP_SUBTAB_TRACK_INNER_PADDING = 3;
 const MATCHUP_CARD_CTA_HEIGHT = 40;
 const MATCHUP_TAG_ROW_GAP = 5;
-const PREP_MATCHUP_CARD_GAP = 12;
+const PREP_MATCHUP_CARD_GAP = 10;
 
 // ─── PREP MODE ───
 const Prep = memo(function Prep({
@@ -2905,7 +2883,6 @@ const Prep = memo(function Prep({
   isR,
   bottomPadding,
   top,
-  horizontalGestureGuard,
   resetSignal,
 }: {
   sched: GameWithPrediction[];
@@ -2916,7 +2893,6 @@ const Prep = memo(function Prep({
   isR: boolean;
   bottomPadding: number;
   top?: React.ReactNode;
-  horizontalGestureGuard?: ArenaHorizontalGestureGuard;
   resetSignal?: number;
 }) {
   const [prepTab, setPrepTab] = useState<0|1>(0);
@@ -3257,11 +3233,9 @@ export default function MyArenaScreen() {
   const { isPremium } = useSubscription();
   const insets = useSafeAreaInsets();
   const pagerRef = useRef<React.ElementRef<typeof PagerView>>(null);
-  const pagerUnlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sf, setSf] = useState('All');
   const [am, setAm] = useState(0);
   const [arenaPageResetKey, setArenaPageResetKey] = useState<number>(0);
-  const [arenaPagerEnabled, setArenaPagerEnabled] = useState(true);
   const [contentReady, setContentReady] = useState(false);
   const [fgi, setFgi] = useState<Set<string>>(new Set());
   const {data:allGames, isLoading, isError, refetch} = useGames({
@@ -3326,9 +3300,7 @@ export default function MyArenaScreen() {
     };
   }, [loadFollowedGames]));
 
-  useEffect(() => () => {
-    if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
-  }, []);
+
 
   const games = useMemo(() => { if (!allGames) return []; return sf==='All'?allGames:allGames.filter(g=>g.sport===sf); }, [allGames, sf]);
   const availableSports = useMemo(() => new Set((allGames ?? []).map(g => g.sport)), [allGames]);
@@ -3337,22 +3309,7 @@ export default function MyArenaScreen() {
   const sched = useMemo(() => games.filter(g=>g.status===GameStatus.SCHEDULED), [games]);
   const final = useMemo(() => games.filter(g=>g.status===GameStatus.FINAL), [games]);
 
-  const lockArenaPager = useCallback(() => {
-    if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
-    setArenaPagerEnabled((current) => current ? false : current);
-  }, []);
-
-  const unlockArenaPager = useCallback(() => {
-    if (pagerUnlockTimer.current) clearTimeout(pagerUnlockTimer.current);
-    pagerUnlockTimer.current = setTimeout(() => {
-      setArenaPagerEnabled((current) => current ? current : true);
-    }, 50);
-  }, []);
-
-  const horizontalGestureGuard = useMemo<ArenaHorizontalGestureGuard>(() => ({
-    onHorizontalGestureStart: lockArenaPager,
-    onHorizontalGestureEnd: unlockArenaPager,
-  }), [lockArenaPager, unlockArenaPager]);
+  
 
   const resetArenaPagePlacement = useCallback(() => {
     setArenaPageResetKey((key) => key + 1);
@@ -3388,9 +3345,8 @@ export default function MyArenaScreen() {
       active={am}
       onChange={hmc}
       hasLive={live.length>0}
-      {...horizontalGestureGuard}
     />
-  ), [am, availableSports, handleSportSelect, hmc, horizontalGestureGuard, live.length, sf]);
+  ), [am, availableSports, handleSportSelect, hmc, live.length, sf]);
   const isInitialArenaLoading = isLoading && !(allGames?.length);
 
   if (isInitialArenaLoading || !contentReady) {
@@ -3462,7 +3418,7 @@ export default function MyArenaScreen() {
           ref={pagerRef}
           style={{ flex: 1 }}
           initialPage={am}
-          scrollEnabled={arenaPagerEnabled}
+          scrollEnabled
           overdrag
           offscreenPageLimit={1}
           onPageSelected={onArenaPageSelected}
@@ -3477,7 +3433,6 @@ export default function MyArenaScreen() {
               onR={onR}
               isR={isR}
               bottomPadding={arenaBottomPadding}
-              horizontalGestureGuard={horizontalGestureGuard}
               resetSignal={am === 0 ? arenaPageResetKey : undefined}
             />
           </View>
@@ -3490,7 +3445,6 @@ export default function MyArenaScreen() {
               onR={onR}
               isR={isR}
               bottomPadding={arenaBottomPadding}
-              horizontalGestureGuard={horizontalGestureGuard}
               resetSignal={am === 1 ? arenaPageResetKey : undefined}
             />
           </View>
