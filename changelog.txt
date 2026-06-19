@@ -875,3 +875,4 @@
 - Changes made by agent 2026-03-16T01:04:53Z
 - Changes made by agent 2026-03-19T12:26:51Z
 - Changes made by agent 2026-03-19T18:06:30Z
+- Apple Sign-In: add secret-safe diagnostics endpoint + production config warning (2026-06-19T19:03:12Z)
