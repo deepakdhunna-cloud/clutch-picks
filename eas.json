@@ -42,7 +42,7 @@
         "EXPO_PUBLIC_REVENUECAT_TEST_KEY": "test_ySGTdedRmOLfYFyuTHWENpeZmiX",
         "EXPO_PUBLIC_BACKEND_URL": "https://clutch-picks-production.up.railway.app",
         "BACKEND_URL": "https://clutch-picks-production.up.railway.app",
-        "EXPO_IOS_BUILD_NUMBER": "47"
+        "EXPO_IOS_BUILD_NUMBER": "54"
       },
       "ios": {
         "distribution": "store",
