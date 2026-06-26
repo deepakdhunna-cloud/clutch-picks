@@ -886,6 +886,11 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
     case Sport.UCL:
       colors = UCL_TEAM_COLORS[abbreviation];
       break;
+    case Sport.WORLDCUP:
+      // National teams: prefer EPL/UCL club maps if a code overlaps,
+      // otherwise fall through to ESPN-provided color below.
+      colors = undefined;
+      break;
     case Sport.IPL:
       colors = IPL_TEAM_COLORS[abbreviation];
       break;

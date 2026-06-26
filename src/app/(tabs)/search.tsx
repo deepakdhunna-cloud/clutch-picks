@@ -54,9 +54,9 @@ import { ArenaScoreboard as SharedArenaScoreboard } from '@/components/sports/Ar
 const ERROR_DIM = 'rgba(239,68,68,0.10)';
 
 const { width: SW } = Dimensions.get('window');
-const SPORTS = ['All', 'NBA', 'NFL', 'MLB', 'NHL', 'IPL', 'TENNIS', 'NCAAF', 'NCAAB', 'MLS', 'EPL', 'UCL'] as const;
+const SPORTS = ['All', 'NBA', 'NFL', 'MLB', 'NHL', 'IPL', 'TENNIS', 'NCAAF', 'NCAAB', 'MLS', 'EPL', 'UCL', 'WORLDCUP'] as const;
 const ALWAYS_VISIBLE_SPORT_FILTERS = new Set<string>(['IPL', 'TENNIS']);
-const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENNIS: 'Tennis' };
+const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENNIS: 'Tennis', WORLDCUP: 'World Cup' };
 const ARENA_SIDE_PADDING = 20;
 const ARENA_SECTION_GAP = 28;
 const ARENA_CARD_GAP = 18;
@@ -509,7 +509,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
     game.sport === Sport.TENNIS ? 'First Serve' :
     game.sport === Sport.NBA || game.sport === Sport.NCAAB ? 'Tipoff' :
     game.sport === Sport.NHL ? 'Puck Drop' :
-    game.sport === Sport.MLS || game.sport === Sport.EPL || game.sport === Sport.UCL ? 'Kickoff' :
+    game.sport === Sport.MLS || game.sport === Sport.EPL || game.sport === Sport.UCL || game.sport === Sport.WORLDCUP ? 'Kickoff' :
     'Starts';
   const centerLabel = live ? (formatGameTime(game.sport, game.quarter, game.clock) ?? 'Live Now') : final ? 'Final' : startLabel;
   const finalOutcomeLabel = winningTeam ? `${winningTeam.abbreviation} WINS` : tiedFinal ? 'DRAW' : null;
@@ -1546,7 +1546,7 @@ const LiveCard = memo(function LiveCard({
 function scoreUnit(sport: Sport, scoreDiff: number): string {
   const plural = scoreDiff === 1 ? '' : 's';
   if (sport === Sport.MLB || sport === Sport.IPL) return `run${plural}`;
-  if (sport === Sport.NHL || sport === Sport.MLS || sport === Sport.EPL || sport === Sport.UCL) return `goal${plural}`;
+  if (sport === Sport.NHL || sport === Sport.MLS || sport === Sport.EPL || sport === Sport.UCL || sport === Sport.WORLDCUP) return `goal${plural}`;
   if (sport === Sport.TENNIS) return `point${plural}`;
   return `point${plural}`;
 }
@@ -1600,7 +1600,7 @@ function pressurePointBody(game: GameWithPrediction, leader: GameWithPrediction[
       : `${trailer?.abbreviation ?? 'The trailing player'} needs a break window soon; ${leader?.abbreviation ?? 'the leader'} is trying to keep every point on serve.`;
   }
 
-  if (game.sport === Sport.MLS || game.sport === Sport.EPL || game.sport === Sport.UCL) {
+  if (game.sport === Sport.MLS || game.sport === Sport.EPL || game.sport === Sport.UCL || game.sport === Sport.WORLDCUP) {
     return isTied
       ? 'Set pieces, turnovers in midfield, and the next transition chance are where this one opens up.'
       : `${trailer?.abbreviation ?? 'The trailing side'} has to commit numbers forward without giving ${leader?.abbreviation ?? 'the leader'} the counter.`;

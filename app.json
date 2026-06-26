@@ -4,6 +4,13 @@
     "slug": "clutch-picks",
     "scheme": "vibecode",
     "version": "1.1.1",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b5cf834a-3d27-4472-a672-21c09c4c40e2",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "default",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,

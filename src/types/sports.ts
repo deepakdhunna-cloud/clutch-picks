@@ -10,10 +10,10 @@ export enum Sport {
   NCAAB = 'NCAAB',
   EPL = 'EPL',
   UCL = 'UCL',
+  WORLDCUP = 'WORLDCUP',
   IPL = 'IPL',
   TENNIS = 'TENNIS',
 }
-
 export enum League {
   // Pro Leagues
   NFL = 'NFL',
@@ -23,6 +23,7 @@ export enum League {
   MLS = 'MLS',
   EPL = 'EPL',
   UCL = 'UCL',
+  WORLDCUP = 'WORLDCUP',
   IPL = 'IPL',
   TENNIS = 'TENNIS',
   // College
@@ -397,6 +398,14 @@ export const SPORT_META: Record<Sport, SportMeta> = {
     name: 'Champions League',
     icon: 'soccer-ball',
     color: '#1A2A6C',
+    accentColor: '#FFFFFF',
+    isCollege: false,
+  },
+  [Sport.WORLDCUP]: {
+    sport: Sport.WORLDCUP,
+    name: 'World Cup',
+    icon: 'soccer-ball',
+    color: '#1F8A4C',
     accentColor: '#FFFFFF',
     isCollege: false,
   },
