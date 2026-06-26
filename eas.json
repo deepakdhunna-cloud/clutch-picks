@@ -45,8 +45,7 @@
         "EXPO_IOS_BUILD_NUMBER": "54"
       },
       "ios": {
-        "distribution": "store",
-        "image": "latest"
+        "distribution": "store"
       },
       "android": {
         "distribution": "store"
