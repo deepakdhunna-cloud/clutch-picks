@@ -202,19 +202,19 @@ function RootLayoutNav({
           <Stack.Screen name="(tabs)" options={{ freezeOnBlur: false, gestureEnabled: false, fullScreenGestureEnabled: false }} />
           <Stack.Screen name="game/[id]" options={{ freezeOnBlur: false }} />
           <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="edit-profile" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="privacy-policy" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="terms" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="settings" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="notifications-settings" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="game-analysis" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="edit-profile" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="privacy-policy" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="terms" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="settings" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="notifications-settings" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="game-analysis" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
           <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: false, freezeOnBlur: true }} />
-          <Stack.Screen name="model-accuracy" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="confidence-explained" options={{ freezeOnBlur: false }} />
+          <Stack.Screen name="model-accuracy" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="confidence-explained" options={{ freezeOnBlur: false, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="search-explore" options={{ freezeOnBlur: true, animation: 'fade' }} />
-          <Stack.Screen name="picks-history" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="confidence-tiers" options={{ freezeOnBlur: false }} />
+          <Stack.Screen name="picks-history" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="confidence-tiers" options={{ freezeOnBlur: false, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="live-games" options={{ freezeOnBlur: true, gestureEnabled: false, animation: 'slide_from_right', animationDuration: 200 }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', freezeOnBlur: true, animation: 'slide_from_bottom', animationDuration: 250 }} />
         </Stack>

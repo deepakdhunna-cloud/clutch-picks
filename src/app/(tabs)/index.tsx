@@ -335,6 +335,7 @@ interface HomeHeaderProps {
   showAllLive: boolean;
   onViewAll: () => void;
   gameCounts: Partial<Record<Sport, number>>;
+  totalGameCounts: Partial<Record<Sport, number>>;
   isLoadingGames: boolean;
   onOpenLiveGames: () => void;
   onOpenGame: (game: GameWithPrediction) => void;
@@ -468,6 +469,7 @@ const HomeHeader = React.memo(function HomeHeader({
   showAllLive,
   onViewAll,
   gameCounts,
+  totalGameCounts,
   isLoadingGames,
   onOpenLiveGames,
   onOpenGame,
@@ -476,8 +478,23 @@ const HomeHeader = React.memo(function HomeHeader({
   statusFilter,
 }: HomeHeaderProps) {
   const sortedSports = useMemo(
-    () => [...allSports].sort((a, b) => (gameCounts?.[b] ?? 0) - (gameCounts?.[a] ?? 0)),
-    [gameCounts]
+    () => {
+      const enumOrder = new Map(allSports.map((s, i) => [s, i]));
+      // Order tiles by a status-agnostic total (live + scheduled + final across
+      // the loaded window) so an in-season league like the World Cup surfaces on
+      // page 1 even when its games fall on tomorrow rather than today.
+      const orderCount = (s: Sport) => totalGameCounts?.[s] ?? gameCounts?.[s] ?? 0;
+      return [...allSports].sort((a, b) => {
+        const hasA = orderCount(a) > 0 ? 1 : 0;
+        const hasB = orderCount(b) > 0 ? 1 : 0;
+        if (hasA !== hasB) return hasB - hasA;
+        const countDiff = orderCount(b) - orderCount(a);
+        if (countDiff !== 0) return countDiff;
+        // Stable tie-break by enum order so tile positions stay consistent.
+        return (enumOrder.get(a) ?? 0) - (enumOrder.get(b) ?? 0);
+      });
+    },
+    [gameCounts, totalGameCounts]
   );
   const {
     onTouchStart: onLiveChipTouchStart,
@@ -1080,6 +1097,20 @@ export default function HomeScreen() {
     return counts;
   }, [todaysGames, deferredStatusFilter, todayStr, scheduledDateKeys, getLocalDateStr]);
 
+  // Status-agnostic totals per sport (every non-cancelled game in the loaded
+  // window). Used only to order the sport tiles so an in-season league surfaces
+  // on page 1 regardless of which tab/day its games fall on.
+  const totalGameCounts = useMemo(() => {
+    const counts: Partial<Record<Sport, number>> = {};
+    if (!todaysGames) return counts;
+    todaysGames.forEach((game) => {
+      if (game.status === GameStatus.CANCELLED || game.status === GameStatus.POSTPONED) return;
+      const sport = game.sport as Sport;
+      counts[sport] = (counts[sport] || 0) + 1;
+    });
+    return counts;
+  }, [todaysGames]);
+
   // Search results: filter todaysGames by query — includes FINAL, excludes POSTPONED/CANCELLED
   // Order: LIVE first, then SCHEDULED, then FINAL at the bottom
   const searchResults = useMemo<GameWithPrediction[]>(() => {
@@ -1434,6 +1465,7 @@ export default function HomeScreen() {
         showAllLive={showAllLive}
         onViewAll={scrollToHomeBoard}
         gameCounts={gameCounts}
+        totalGameCounts={totalGameCounts}
         isLoadingGames={isInitialHomeLoading}
         onOpenLiveGames={handleOpenLiveGames}
         onOpenGame={handleOpenGame}
@@ -1487,6 +1519,7 @@ export default function HomeScreen() {
     availableLiveSports,
     filteredLiveGames,
     gameCounts,
+    totalGameCounts,
     handleOpenLiveGames,
     handleOpenGame,
     handleWarmGame,
