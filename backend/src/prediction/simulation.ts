@@ -17,7 +17,7 @@ import {
   getSportSimulationProfile,
 } from "./simulators/profiles";
 
-const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
+const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL", "WORLDCUP"]);
 
 const ITERATIONS = 50000;
 

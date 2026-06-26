@@ -60,17 +60,20 @@ const SPORT_FACTORS: Record<string, (ctx: GameContext) => FactorContribution[]> 
   MLS: (ctx) => computeMLSFactors(ctx, ctx.homeXg, ctx.awayXg),
   EPL: (ctx) => computeEPLFactors(ctx, ctx.homeXg, ctx.awayXg),
   UCL: (ctx) => computeUCLFactors(ctx, ctx.homeXg, ctx.awayXg),
+  // World Cup is national-team play; reuse the UCL elite-soccer factor model
+  // (closest analog: high-stakes, mixed-quality knockout/group football).
+  WORLDCUP: (ctx) => computeUCLFactors(ctx, ctx.homeXg, ctx.awayXg),
   IPL: computeIPLFactors,
   TENNIS: (ctx) => computeTennisFactors(ctx, ctx.surfaceAdjustment),
   NCAAF: computeNCAAFBFactors,
   NCAAB: computeNCAAMBFactors,
 };
 
-const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL"]);
+const SOCCER_LEAGUES = new Set(["MLS", "EPL", "UCL", "WORLDCUP"]);
 // Sports whose projected scores stay as ONE decimal (the real expected value):
 // runs/goals are small, so the projected margin is often sub-1 and rounding to a
 // whole number would either collapse the lean to a tie or distort the total.
-const LOW_SCORING_SPORTS = new Set(["MLB", "NHL", "MLS", "EPL", "UCL"]);
+const LOW_SCORING_SPORTS = new Set(["MLB", "NHL", "MLS", "EPL", "UCL", "WORLDCUP"]);
 
 type ConsensusOutcome = "home" | "away" | "draw";
 type ProjectionOutcome = ConsensusOutcome | "none";
@@ -851,6 +854,7 @@ function marketWeightForSport(sport: string): number {
     case "MLS":
     case "EPL":
     case "UCL":
+    case "WORLDCUP":
       return 0.6;
     case "NHL":
       return 0.4;

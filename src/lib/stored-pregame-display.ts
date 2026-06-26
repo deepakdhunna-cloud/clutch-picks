@@ -31,6 +31,7 @@ const SPORT_BASELINES: Record<string, SportProjectionBaseline> = {
   MLS: { total: 2.8, minTotal: 1.2, maxTotal: 5.5, marginScale: 1.2, minMargin: 0.2 },
   EPL: { total: 2.8, minTotal: 1.2, maxTotal: 5.5, marginScale: 1.2, minMargin: 0.2 },
   UCL: { total: 3, minTotal: 1.2, maxTotal: 5.8, marginScale: 1.3, minMargin: 0.2 },
+  WORLDCUP: { total: 2.7, minTotal: 1.0, maxTotal: 5.5, marginScale: 1.25, minMargin: 0.2 },
   IPL: { total: 335, minTotal: 220, maxTotal: 440, marginScale: 28, minMargin: 6 },
   TENNIS: { total: 24, minTotal: 16, maxTotal: 38, marginScale: 8, minMargin: 0.8 },
 };

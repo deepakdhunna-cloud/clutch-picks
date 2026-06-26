@@ -34,6 +34,7 @@ const SPORT_PATHS: Record<string, string> = {
   EPL: "soccer/eng.1",
   MLS: "soccer/usa.1",
   UCL: "soccer/uefa.champions",
+  WORLDCUP: "soccer/fifa.world",
   IPL: "cricket/8048",
 };
 

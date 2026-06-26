@@ -235,7 +235,7 @@ export async function computeAndStoreCalibration(
  * Returns one entry per league plus "ALL".
  */
 export async function getLatestCalibration(): Promise<CalibrationMetrics[]> {
-  const LEAGUES = ["NBA", "NFL", "MLB", "NHL", "MLS", "EPL", "UCL", "IPL", "TENNIS", "NCAAF", "NCAAB", "ALL"];
+  const LEAGUES = ["NBA", "NFL", "MLB", "NHL", "MLS", "EPL", "UCL", "WORLDCUP", "IPL", "TENNIS", "NCAAF", "NCAAB", "ALL"];
   const results: CalibrationMetrics[] = [];
 
   for (const league of LEAGUES) {

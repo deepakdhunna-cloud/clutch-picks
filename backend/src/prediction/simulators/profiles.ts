@@ -375,6 +375,31 @@ const PROFILES: Record<string, SportSimulationProfile> = {
       factorStatus("ucl_travel", "UCL travel", false),
     ],
   },
+  WORLDCUP: {
+    sport: "WORLDCUP",
+    engineLabel: "World Cup national-team xG/draw-risk proxy",
+    scoringUnit: "goals",
+    // International tournament football: slightly lower-scoring and tighter than
+    // UCL (cagier knockout/group games, ~2.6-2.8 goals/game historically).
+    baseline: { total: 2.7, totalMin: 1.2, totalMax: 4.6, marginSd: 1.6, totalSd: 1.15, minScore: 0, granularity: 1 },
+    marginPer100Elo: 0.58,
+    ratingPriorBlendWithScoreBaseline: 0.42,
+    ratingPriorBlendWithoutScoreBaseline: 1,
+    meaningfulMarginThreshold: 0.12,
+    minMean: 0.15,
+    netRatingShiftDivisor: 60,
+    netRatingShiftCap: 0.9,
+    trendMarginMultiplier: 1.1,
+    trendMarginCap: 1,
+    venueSplitMultiplier: 1.2,
+    venueSplitCap: 1,
+    maxVarianceMultiplier: 1.3,
+    featureChecks: [
+      ...commonScoreChecks,
+      factorStatus("ucl_pedigree", "Tournament pedigree", true),
+      factorStatus("ucl_travel", "Travel/altitude", false),
+    ],
+  },
   IPL: {
     sport: "IPL",
     engineLabel: "IPL T20 innings/run-rate model",

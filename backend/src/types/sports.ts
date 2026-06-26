@@ -13,6 +13,7 @@ export enum Sport {
   MLS = "MLS",
   EPL = "EPL",
   UCL = "UCL",
+  WORLDCUP = "WORLDCUP",
   IPL = "IPL",
   TENNIS = "TENNIS",
 }

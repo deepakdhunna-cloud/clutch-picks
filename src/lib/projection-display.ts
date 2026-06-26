@@ -68,7 +68,7 @@ function isCricketSport(sport: string | undefined): boolean {
 // Must match LOW_SCORING_SPORTS in backend/src/prediction/index.ts.
 function isLowScoringSport(sport: string | undefined): boolean {
   const s = String(sport ?? '').toUpperCase();
-  return s === 'MLB' || s === 'NHL' || s === 'MLS' || s === 'EPL' || s === 'UCL';
+  return s === 'MLB' || s === 'NHL' || s === 'MLS' || s === 'EPL' || s === 'UCL' || s === 'WORLDCUP';
 }
 
 export function cleanProjectionCopy(text: string | null | undefined): string {

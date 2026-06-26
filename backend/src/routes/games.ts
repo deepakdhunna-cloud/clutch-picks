@@ -41,6 +41,7 @@ const ESPN_ENDPOINTS = {
   NCAAB: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
   EPL: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
   UCL: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+  WORLDCUP: "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
   IPL: "https://site.api.espn.com/apis/site/v2/sports/cricket/8048/scoreboard",
   TENNIS: "https://www.espn.com/tennis/scoreboard/_/date",
 } as const;
@@ -172,7 +173,7 @@ export interface GamePrediction {
 
 export interface Game {
   id: string;
-  sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL" | "UCL" | "IPL" | "TENNIS";
+  sport: "NFL" | "NBA" | "MLB" | "NHL" | "MLS" | "NCAAF" | "NCAAB" | "EPL" | "UCL" | "WORLDCUP" | "IPL" | "TENNIS";
   source?: "espn" | "tennis-explorer";
   homeTeam: GameTeam;
   awayTeam: GameTeam;
@@ -733,6 +734,7 @@ const TOP_PICK_SPORT_ORDER: Game["sport"][] = [
   "MLS",
   "EPL",
   "UCL",
+  "WORLDCUP",
 ];
 
 // Every quality gate a featured pick must clear, parameterized only by the
@@ -1562,11 +1564,12 @@ const SPORT_REGULATION_SECONDS: Record<string, number> = {
   MLS:   90 * 60,
   EPL:   90 * 60,
   UCL:  90 * 60,
+  WORLDCUP: 90 * 60,
   IPL:  40 * 6 * 60,    // T20: two 20-over innings, roughly six minutes per over
   TENNIS: 3 * 45 * 60,  // best-of-three proxy for live probability blending
 };
 
-const LIVE_SOCCER_SPORTS = new Set(["MLS", "EPL", "UCL"]);
+const LIVE_SOCCER_SPORTS = new Set(["MLS", "EPL", "UCL", "WORLDCUP"]);
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -1770,6 +1773,7 @@ function computeLiveScoreImpliedProb(
     MLS: 0.033,  // ~2.5 goals/90 min
     EPL: 0.033,
     UCL: 0.033,
+    WORLDCUP: 0.030,  // ~2.7 goals/90 min (international tournament)
     IPL: 1.35,    // ~160 runs per innings across roughly 120 minutes
     TENNIS: 0.02, // set-based scoring; live score is useful but intentionally dampened
   };
@@ -2044,7 +2048,7 @@ function projectionSpreadMoveThreshold(sport: string): number {
   if (sport === "NBA" || sport === "NCAAB") return 2.5;
   if (sport === "NFL" || sport === "NCAAF") return 1.5;
   if (sport === "IPL") return 8;
-  if (sport === "MLB" || sport === "NHL" || sport === "MLS" || sport === "EPL" || sport === "UCL") return 0.5;
+  if (sport === "MLB" || sport === "NHL" || sport === "MLS" || sport === "EPL" || sport === "UCL" || sport === "WORLDCUP") return 0.5;
   if (sport === "TENNIS") return 0.25;
   return 1;
 }
@@ -2054,7 +2058,7 @@ function projectionTotalMoveThreshold(sport: string): number {
   if (sport === "NFL" || sport === "NCAAF") return 3;
   if (sport === "IPL") return 15;
   if (sport === "MLB") return 1;
-  if (sport === "NHL" || sport === "MLS" || sport === "EPL" || sport === "UCL") return 0.75;
+  if (sport === "NHL" || sport === "MLS" || sport === "EPL" || sport === "UCL" || sport === "WORLDCUP") return 0.75;
   if (sport === "TENNIS") return 0.25;
   return 2;
 }
@@ -2289,7 +2293,7 @@ function getPeriodDisplay(status: ESPNStatus, sport: SportKey): string | undefin
     const detail = status.type.shortDetail || "";
     return detail;
   }
-  if (sport === "MLS" || sport === "EPL" || sport === "UCL") {
+  if (sport === "MLS" || sport === "EPL" || sport === "UCL" || sport === "WORLDCUP") {
     const detail = status.type.shortDetail || "";
     return detail;
   }
@@ -3354,7 +3358,7 @@ async function fetchAllGames(date?: string): Promise<Game[]> {
   if (existing) return existing;
 
   const promise = (async () => {
-    const sports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL", "IPL", "TENNIS"];
+    const sports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL", "WORLDCUP", "IPL", "TENNIS"];
 
     const allGamesPromises: Promise<Game[]>[] = [];
     for (const sport of sports) {
@@ -3825,7 +3829,7 @@ gamesRouter.get("/:sport", async (c) => {
     return c.json(
       {
         error: {
-          message: `Invalid sport: ${rawSportParam}. Valid options: NFL, NBA, MLB, NHL, MLS, NCAAF, NCAAB, EPL, UCL, IPL, TENNIS`,
+          message: `Invalid sport: ${rawSportParam}. Valid options: NFL, NBA, MLB, NHL, MLS, NCAAF, NCAAB, EPL, UCL, WORLDCUP, IPL, TENNIS`,
           code: "INVALID_SPORT",
         },
       },
@@ -3900,7 +3904,7 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
     return liveGamesCache.data;
   }
 
-  const allSports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL", "IPL", "TENNIS"];
+  const allSports: SportKey[] = ["NFL", "NBA", "MLB", "NHL", "MLS", "NCAAF", "NCAAB", "EPL", "UCL", "WORLDCUP", "IPL", "TENNIS"];
 
   // Poll sports known to have live games every tick; do a bounded full scan to
   // discover newly-started games without hammering every league when nothing is live.

@@ -108,6 +108,7 @@ export function sportEnumToJersey(sport: string | undefined): JerseySport {
     case 'soccer':
     case 'MLS':
     case 'EPL':
+    case 'WORLDCUP':
       return 'soccer';
     case 'UCL':
       return 'ucl';

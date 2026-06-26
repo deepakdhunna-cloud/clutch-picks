@@ -376,6 +376,24 @@ export function deriveSeasonContext(
     }
   }
 
+  if (sport === "WORLDCUP") {
+    // Knockout phase typically begins after the group stage concludes.
+    if (inRange(md, { month: 6, day: 28 }, { month: 7, day: 31 })) {
+      return context(
+        "tournament",
+        "World Cup knockout window",
+        "This falls in the World Cup knockout window, so group-stage results are background and the pick should be framed around matchup edges in a single-elimination, neutral-venue tie.",
+        "date",
+      );
+    }
+    return context(
+      "group_stage",
+      "World Cup group stage",
+      "This is World Cup group-stage context at a neutral venue, so current matchup data, squad quality, and one-match variance should guide the analysis rather than home advantage.",
+      "date",
+    );
+  }
+
   if (sport === "IPL") {
     if (inRange(md, { month: 3, day: 20 }, { month: 5, day: 31 })) {
       return context(

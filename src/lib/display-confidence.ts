@@ -28,6 +28,7 @@ export function displaySport(sport: string): string {
   if (sport === 'NCAAF') return 'CFB';
   if (sport === 'NCAAB') return 'CBB';
   if (sport === 'TENNIS') return 'Tennis';
+  if (sport === 'WORLDCUP') return 'World Cup';
   return sport;
 }
 
@@ -61,6 +62,7 @@ export function formatGameTime(sport: string, quarter?: string, clock?: string):
     case 'EPL':
     case 'MLS':
     case 'UCL':
+    case 'WORLDCUP':
       // Soccer: show clock as match minute, no period needed
       if (clock) return clock;
       return quarter || null;

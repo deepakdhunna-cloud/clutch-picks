@@ -21,7 +21,7 @@ import { isTennisRankReclaimEnabled } from "../flags";
 // diff turns into nonsense like "247 days rest vs 246 days rest". Rather than
 // feeding that into the factor pipeline we mark it no-signal; blendFactors()
 // will pool the 0.05 weight onto rating_diff.
-const SOCCER_SPORTS = new Set(["EPL", "MLS", "UCL"]);
+const SOCCER_SPORTS = new Set(["EPL", "MLS", "UCL", "WORLDCUP"]);
 const NON_SOCCER_REST_CAP_DAYS = 14;
 const SOCCER_REST_CAP_DAYS = 10;
 const warnedStaleRest = new Set<string>();

@@ -31,6 +31,7 @@ const K_FACTORS: Record<string, number> = {
   MLS:   20,
   EPL:   20,
   UCL:  20,
+  WORLDCUP: 40,
   IPL:  12,
   TENNIS: 14,
 };
@@ -50,6 +51,10 @@ const HOME_BONUSES: Record<string, number> = {
   MLS:   55,
   EPL:   40,
   UCL:  40,
+  // World Cup games are played at neutral venues (no true home team), so the
+  // home-field bonus is near-zero. A small 8-pt nudge is kept only for the rare
+  // host-nation match; national-team Elo seeding carries the real signal.
+  WORLDCUP: 8,
   IPL:  18,
   TENNIS: 0,
 };
@@ -66,6 +71,7 @@ const MOV_CAPS: Record<string, number> = {
   MLS:   2.0,
   EPL:   2.0,
   UCL:  2.0,
+  WORLDCUP: 2.0,
   IPL:  1.7,
   TENNIS: 1.4,
 };
@@ -79,10 +85,10 @@ const MOV_CAPS: Record<string, number> = {
 export function movMultiplier(margin: number | undefined, sport: string): number {
   if (margin === undefined || margin === 0) {
     // Soccer draws: reduced K so draws don't swing ratings as much
-    return (sport === "MLS" || sport === "EPL" || sport === "UCL") ? 0.5 : 1.0;
+    return (sport === "MLS" || sport === "EPL" || sport === "UCL" || sport === "WORLDCUP") ? 0.5 : 1.0;
   }
   // Soccer-specific: gentle scaling because a 3-0 is a blowout but only 3 goals
-  if (sport === "MLS" || sport === "EPL" || sport === "UCL") {
+  if (sport === "MLS" || sport === "EPL" || sport === "UCL" || sport === "WORLDCUP") {
     const m = Math.abs(margin);
     if (m === 1) return 1.0;
     if (m === 2) return 1.2;

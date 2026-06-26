@@ -218,7 +218,7 @@ export async function buildGameContext(
     game.seasonContext ??
     deriveSeasonContext({ sport, gameTime: game.gameTime });
 
-  const isSoccer = ["EPL", "MLS", "UCL"].includes(sport);
+  const isSoccer = ["EPL", "MLS", "UCL", "WORLDCUP"].includes(sport);
 
   // PlayerAvailability recency window — rows older than 72h are treated as
   // stale (the ingestion pipeline writes expiresAt at +48h, so 72h is a
@@ -317,10 +317,10 @@ export async function buildGameContext(
         },
       })
       .catch(() => [] as Array<{ playerName: string; status: string }>),
-    sport === "UCL"
+    sport === "UCL" || sport === "WORLDCUP"
       ? lookupUclPedigreePair(game.homeTeam.name, game.awayTeam.name)
       : Promise.resolve(null),
-    sport === "UCL"
+    sport === "UCL" || sport === "WORLDCUP"
       ? lookupUclTravelInfo(game.homeTeam.name, game.awayTeam.name)
       : Promise.resolve(null),
     sport === "TENNIS"

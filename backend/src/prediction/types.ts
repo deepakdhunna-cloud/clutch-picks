@@ -307,6 +307,7 @@ export type LeagueKey =
   | "MLS"
   | "EPL"
   | "UCL"
+  | "WORLDCUP"
   | "IPL"
   | "TENNIS"
   | "NCAAF"

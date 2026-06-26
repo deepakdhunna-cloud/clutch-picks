@@ -29,7 +29,8 @@ type SupportedSport =
   | "NCAAB"
   | "EPL"
   | "MLS"
-  | "UCL";
+  | "UCL"
+  | "WORLDCUP";
 
 type FeedKind = "scores" | "stats";
 

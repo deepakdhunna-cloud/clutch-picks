@@ -228,6 +228,7 @@ function homeVenueEdge(input: NarrativeInput): string {
       return "home field";
     case "EPL":
     case "UCL":
+    case "WORLDCUP":
       return "home ground";
     case "IPL":
       return "home venue";
@@ -251,6 +252,7 @@ function homeAdjustmentLabel(input: NarrativeInput): string {
       return "home-field adjustment";
     case "EPL":
     case "UCL":
+    case "WORLDCUP":
       return "home-ground adjustment";
     case "IPL":
       return "venue adjustment";
