@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
-  View, Text, ActivityIndicator, Image, ScrollView, Share, RefreshControl,
+  View, Text, ActivityIndicator, ScrollView, Share, RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -714,7 +715,7 @@ export default function ProfileScreen() {
                   <LinearGradient colors={[C.MAROON, C.TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 36 }} />
                   <View style={{ flex: 1, borderRadius: 33, backgroundColor: C.BG, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                     {userImage ? (
-                      <Image source={{ uri: userImage }} style={{ width: '100%', height: '100%' }} />
+                      <Image source={{ uri: userImage }} style={{ width: '100%', height: '100%' }} cachePolicy="memory-disk" transition={150} />
                     ) : (
                       <Text style={{ fontSize: 24, fontWeight: '800', color: C.TEXT_PRIMARY }}>{initial}</Text>
                     )}

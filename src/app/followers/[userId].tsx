@@ -1,4 +1,6 @@
-import { View, Text, FlatList, Image, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
+import { memo, useCallback } from 'react';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,7 +33,7 @@ interface UserItemProps {
   onNavigateToProfile: (userId: string) => void;
 }
 
-function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
+const UserItem = memo(function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
   const isOwnProfile = currentUserId === user.id;
   const { data: isFollowing, isLoading: isFollowingLoading } = useIsFollowing(
     isOwnProfile ? undefined : user.id
@@ -79,6 +81,8 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
           <Image
             source={{ uri: user.image }}
             style={{ width: '100%', height: '100%' }}
+            cachePolicy="memory-disk"
+            transition={150}
           />
         ) : (
           <User size={24} color="#FFFFFF" />
@@ -136,7 +140,7 @@ function UserItem({ user, currentUserId, onNavigateToProfile }: UserItemProps) {
       ) : null}
     </HapticPressable>
   );
-}
+});
 
 export default function FollowersScreen() {
   const router = useRouter();
@@ -169,13 +173,21 @@ export default function FollowersScreen() {
   const refetch = activeTab === 'followers' ? refetchFollowers : refetchFollowing;
   const data = activeTab === 'followers' ? followers : following;
 
-  const handleNavigateToProfile = (id: string) => {
+  const handleNavigateToProfile = useCallback((id: string) => {
     if (id === currentUserId) {
       router.replace('/(tabs)/profile' as any);
     } else {
       guardedPush(`/user/${id}` as any);
     }
-  };
+  }, [currentUserId, router, guardedPush]);
+
+  const renderUserItem = useCallback(({ item }: { item: SocialUser }) => (
+    <UserItem
+      user={item}
+      currentUserId={currentUserId}
+      onNavigateToProfile={handleNavigateToProfile}
+    />
+  ), [currentUserId, handleNavigateToProfile]);
 
   const renderEmptyState = () => (
     <View className="flex-1 items-center justify-center py-20">
@@ -317,13 +329,7 @@ export default function FollowersScreen() {
             <FlatList
               data={data || []}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <UserItem
-                  user={item}
-                  currentUserId={currentUserId}
-                  onNavigateToProfile={handleNavigateToProfile}
-                />
-              )}
+              renderItem={renderUserItem}
               ListEmptyComponent={renderEmptyState}
               contentContainerStyle={{
                 flexGrow: 1,

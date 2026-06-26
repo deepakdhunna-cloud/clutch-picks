@@ -4,9 +4,9 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Image,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -209,6 +209,8 @@ export default function ProfileSetupScreen() {
                     <Image
                       source={{ uri: profileImage }}
                       style={{ width: 100, height: 100, borderRadius: 50 }}
+                      cachePolicy="memory-disk"
+                      transition={150}
                     />
                     {/* Edit pencil overlay */}
                     <View

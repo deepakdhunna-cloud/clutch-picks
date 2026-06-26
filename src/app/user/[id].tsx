@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -299,7 +300,7 @@ export default function UserProfileScreen() {
                   }}
                 >
                   {profile.image ? (
-                    <Image source={{ uri: profile.image }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+                    <Image source={{ uri: profile.image }} style={{ width: 80, height: 80, borderRadius: 40 }} cachePolicy="memory-disk" transition={150} />
                   ) : (
                     <Text style={{ color: '#FFFFFF', fontSize: 26, fontWeight: '800' }}>{displayInitials}</Text>
                   )}

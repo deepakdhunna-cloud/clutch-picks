@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TextInput, Image, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { HapticPressable } from '@/components/HapticPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -226,6 +227,8 @@ export default function EditProfileScreen() {
                   <Image
                     source={{ uri: displayImage }}
                     style={{ width: 114, height: 114, borderRadius: 57 }}
+                    cachePolicy="memory-disk"
+                    transition={150}
                   />
                 ) : (
                   <User size={56} color={TEXT_MUTED} />
