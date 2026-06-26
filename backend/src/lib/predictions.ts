@@ -7,6 +7,12 @@ import type { Game, Prediction, PredictionFactor, Team } from "../types/sports";
 import { fetchTeamRecentForm, fetchTeamExtendedStats, fetchTeamSeasonResults, fetchAdvancedMetrics, fetchStartingLineup, fetchGameWeather, getSRSRatings, srsToBlendfactor, type TeamRecentForm, type TeamExtendedStats, type TeamInjuryReport, type TeamAdvancedMetrics, type StartingLineup, type WeatherData, type GameResultForSRS } from "./espnStats";
 import { fetchGameInjuries, toTeamInjuryReport } from "./espnInjuries";
 import { getEloRating, getEloPrediction, initializeEloFromSchedule, DEFAULT_RATING } from "./elo";
+import { getWorldCupSeedRating, isWorldCup } from "./worldCupSeeds";
+
+/** World Cup-aware Elo fallback: national-team seed for WORLDCUP, else default. */
+function getWorldCupSeedFallback(sport: string, name?: string, abbreviation?: string): number {
+  return isWorldCup(sport) ? getWorldCupSeedRating(name, abbreviation) : DEFAULT_RATING;
+}
 import { env } from "../env";
 import { prisma } from "../prisma";
 import { enqueueWrite } from "./writeQueue";
@@ -1349,10 +1355,19 @@ export async function generatePrediction(
   const srsRatings = getSRSRatings(sportKey, srsGames);
 
 
-  const eloRatings = await initializeEloFromSchedule(sportKey, allTeamGames);
+  // For sports like the World Cup where ESPN exposes too little game history,
+  // pass team name/abbreviation so Elo can start from a national-team strength
+  // seed instead of a flat 1500 (which would make every match a toss-up).
+  const teamMeta = new Map<string, { name?: string; abbreviation?: string }>([
+    [game.homeTeam.id, { name: game.homeTeam.name, abbreviation: game.homeTeam.abbreviation }],
+    [game.awayTeam.id, { name: game.awayTeam.name, abbreviation: game.awayTeam.abbreviation }],
+  ]);
+  const eloRatings = await initializeEloFromSchedule(sportKey, allTeamGames, teamMeta);
 
-  const homeEloRating = eloRatings.get(game.homeTeam.id) ?? DEFAULT_RATING;
-  const awayEloRating = eloRatings.get(game.awayTeam.id) ?? DEFAULT_RATING;
+  const homeEloRating = eloRatings.get(game.homeTeam.id)
+    ?? getWorldCupSeedFallback(sportKey, game.homeTeam.name, game.homeTeam.abbreviation);
+  const awayEloRating = eloRatings.get(game.awayTeam.id)
+    ?? getWorldCupSeedFallback(sportKey, game.awayTeam.name, game.awayTeam.abbreviation);
 
   const eloPrediction = getEloPrediction(homeEloRating, awayEloRating, sportKey);
   const eloHomeWinProb = eloPrediction.homeWinProb;

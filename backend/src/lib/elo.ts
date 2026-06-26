@@ -6,6 +6,13 @@
 
 import { prisma } from "../prisma";
 import { enqueueWrite } from "./writeQueue";
+import { getWorldCupSeedRating, isWorldCup } from "./worldCupSeeds";
+
+/** Optional per-team metadata used to seed strength priors (e.g. World Cup national teams). */
+export interface TeamSeedMeta {
+  name?: string;
+  abbreviation?: string;
+}
 
 export const DEFAULT_RATING = 1500;
 
@@ -126,7 +133,15 @@ function shortErrorMessage(err: unknown): string {
  * Get the current Elo rating for a team.
  * Checks in-memory cache first, then database, then returns DEFAULT_RATING.
  */
-export async function getEloRating(teamId: string, sport: string): Promise<number> {
+export async function getEloRating(
+  teamId: string,
+  sport: string,
+  // Optional team identity used only to derive a strength seed when no stored
+  // rating exists yet. Required for the World Cup, where ESPN provides too few
+  // completed games to build Elo, so an unseeded team would otherwise sit at a
+  // flat 1500 and make every match a 50/50 toss-up.
+  seedMeta?: TeamSeedMeta,
+): Promise<number> {
   const key = eloKey(teamId, sport);
 
   const cached = eloCache.get(key);
@@ -151,6 +166,12 @@ export async function getEloRating(teamId: string, sport: string): Promise<numbe
     }
   }
 
+  // No stored rating: for the World Cup, fall back to the national-team strength
+  // seed so favorites/underdogs differentiate immediately. All other sports use
+  // the neutral default.
+  if (isWorldCup(sport)) {
+    return getWorldCupSeedRating(seedMeta?.name, seedMeta?.abbreviation);
+  }
   return DEFAULT_RATING;
 }
 
@@ -260,7 +281,11 @@ export async function initializeEloFromSchedule(
     isDraw?: boolean;
     date: string;
     margin?: number;  // winner score - loser score; undefined = no MOV adjustment
-  }>
+  }>,
+  // Optional map of teamId -> {name, abbreviation}. Used for sports (World Cup)
+  // where ESPN exposes too little game history to build meaningful Elo, so each
+  // team must start from a strength-based seed prior instead of flat 1500.
+  teamMeta?: Map<string, TeamSeedMeta>
 ): Promise<Map<string, number>> {
   // Collect every unique team id appearing in the game list
   const teamIds = new Set<string>();
@@ -276,9 +301,17 @@ export async function initializeEloFromSchedule(
     Array.from(teamIds).map(async (id) => {
       const key = eloKey(id, sport);
       const row = await prisma.eloRating.findUnique({ where: { id: key } });
-      const seed = row
-        ? row.rating * 0.75 + DEFAULT_RATING * 0.25
+      // Base prior: stored rating regressed toward the mean, else the sport's
+      // default. For the World Cup, the "default" is a national-team strength
+      // seed (not 1500) so favorites/underdogs differentiate even when ESPN
+      // returns almost no completed games to replay.
+      const meta = teamMeta?.get(id);
+      const basePrior = isWorldCup(sport)
+        ? getWorldCupSeedRating(meta?.name, meta?.abbreviation)
         : DEFAULT_RATING;
+      const seed = row
+        ? row.rating * 0.75 + basePrior * 0.25
+        : basePrior;
       ratings.set(id, seed);
     })
   );
@@ -316,8 +349,8 @@ export async function initializeEloFromSchedule(
     if (processed.has(dedupeKey)) continue;
     processed.add(dedupeKey);
 
-    const rA = ratings.get(game.teamId)  ?? DEFAULT_RATING;
-    const rB = ratings.get(game.opponentId) ?? DEFAULT_RATING;
+    const rA = ratings.get(game.teamId)  ?? (isWorldCup(sport) ? getWorldCupSeedRating(teamMeta?.get(game.teamId)?.name, teamMeta?.get(game.teamId)?.abbreviation) : DEFAULT_RATING);
+    const rB = ratings.get(game.opponentId) ?? (isWorldCup(sport) ? getWorldCupSeedRating(teamMeta?.get(game.opponentId)?.name, teamMeta?.get(game.opponentId)?.abbreviation) : DEFAULT_RATING);
     const isDraw = game.isDraw ?? false;
     const K  = getK(sport) * movMultiplier(isDraw ? 0 : game.margin, sport);
 

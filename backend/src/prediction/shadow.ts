@@ -249,8 +249,8 @@ export async function buildGameContext(
     homeTennisProfile, awayTennisProfile,
     iplVenueSplit,
   ] = await Promise.all([
-    getEloRating(game.homeTeam.id, sport),
-    getEloRating(game.awayTeam.id, sport),
+    getEloRating(game.homeTeam.id, sport, { name: game.homeTeam.name, abbreviation: game.homeTeam.abbreviation }),
+    getEloRating(game.awayTeam.id, sport, { name: game.awayTeam.name, abbreviation: game.awayTeam.abbreviation }),
     fetchTeamRecentForm(game.homeTeam.id, sport, 10, gameDate),
     fetchTeamRecentForm(game.awayTeam.id, sport, 10, gameDate),
     fetchTeamExtendedStats(game.homeTeam.id, sport, game.awayTeam.id, gameDate),
