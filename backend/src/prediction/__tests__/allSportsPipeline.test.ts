@@ -261,6 +261,7 @@ const projectionBounds: Record<Sport, { min: number; max: number }> = {
   [Sport.MLS]: { min: 1.4, max: 4.4 },
   [Sport.EPL]: { min: 1.4, max: 4.5 },
   [Sport.UCL]: { min: 1.5, max: 4.8 },
+  [Sport.WORLDCUP]: { min: 1.4, max: 4.8 },
   [Sport.IPL]: { min: 245, max: 430 },
   [Sport.TENNIS]: { min: 2, max: 5 }, // set score: best-of-3 (2-3) or best-of-5 (3-5)
 };
@@ -275,6 +276,7 @@ const thinDataRatingCaps: Record<Sport, number> = {
   [Sport.MLS]: 0.30,
   [Sport.EPL]: 0.30,
   [Sport.UCL]: 0.30,
+  [Sport.WORLDCUP]: 0.30,
   [Sport.IPL]: 0.32,
   [Sport.TENNIS]: 0.25,
 };

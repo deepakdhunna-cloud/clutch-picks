@@ -36,6 +36,7 @@ const LEAGUES = [
   { id: 'MLS', name: 'MLS' },
   { id: 'EPL', name: 'EPL' },
   { id: 'UCL', name: 'Champions League' },
+  { id: 'WORLDCUP', name: 'World Cup' },
   { id: 'NCAAF', name: 'CFB' },
   { id: 'NCAAB', name: 'CBB' },
 ];

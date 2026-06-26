@@ -17,6 +17,14 @@ import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { guardedRouterPush } from '@/lib/navigation-guard';
 import Svg, { Path, Circle, Rect, Defs, Pattern, Line, Ellipse, RadialGradient, Stop, G } from 'react-native-svg';
 
+// Short label for width-constrained LED/dot-matrix tiles. Most sports already
+// have a compact code via displaySport (e.g. CFB/CBB); WORLDCUP's display name
+// "World Cup" is too wide for the 86px tile, so use a tight code there only.
+function tileAbbrev(sport: string): string {
+  if (sport === 'WORLDCUP') return 'WC';
+  return displaySport(sport);
+}
+
 // ─── JUMBOTRON COLORS ──────────────────────────────────────────
 const JB = {
   blue: '#7A9DB8',
@@ -154,6 +162,7 @@ const SPORT_PIXEL_ICONS: Record<string, number[][]> = {
   MLS: SOCCER_ICON,
   EPL: SOCCER_ICON,
   UCL: SOCCER_ICON,
+  WORLDCUP: SOCCER_ICON,
   IPL: iconRows([
     '....##.....',
     '....##.....',
@@ -532,7 +541,7 @@ export const LedTilePanel = memo(function LedTilePanel({ sport, gameCount, size 
   const iconCols = iconMetrics.colCount;
   const iconRows = iconMetrics.rowCount;
 
-  const abbrText = displaySport(sport);
+  const abbrText = tileAbbrev(sport);
   const abbr = measureLedText(abbrText);
   const countText = String(gameCount);
   const cnt = measureLedText(countText);
@@ -1257,6 +1266,7 @@ export function getSportIcon(sport: Sport, size: number, color: string) {
     case Sport.MLS: return <SoccerCleatIcon size={size} color={color} />;
     case Sport.EPL: return <PremierLeagueIcon size={size} color={color} />;
     case Sport.UCL: return <PremierLeagueIcon size={size} color={color} />;
+    case Sport.WORLDCUP: return <SoccerCleatIcon size={size} color={color} />;
     case Sport.IPL: return <CricketBatIcon size={size} color={color} />;
     case Sport.TENNIS: return <TennisRacketIcon size={size} color={color} />;
     case Sport.NCAAF: return <CollegeFootballIcon size={size} color={color} />;
@@ -1458,7 +1468,7 @@ export const SportCard = memo(function SportCard({
               <View style={{ height: 22, overflow: 'visible' as const, justifyContent: 'center' as const }}>
                 <DotMatrixIcon sport={sport} litColor={isLit ? '#FFFFFF' : '#3a4a58'} pixelSize={2} />
               </View>
-              <DotMatrixText text={displaySport(sport)} litColor={isLit ? '#9BB8CF' : '#4a5a68'} pixelSize={2} />
+              <DotMatrixText text={tileAbbrev(sport)} litColor={isLit ? '#9BB8CF' : '#4a5a68'} pixelSize={2} />
             </View>
             <DotMatrixText text={String(gameCount)} litColor={isLit ? '#FFFFFF' : '#4a5a68'} pixelSize={2} />
           </View>
@@ -1553,7 +1563,7 @@ export const SportCard = memo(function SportCard({
 // Ticket color helper — used by index.tsx for Today's Games bar
 export const TICKET_COLORS = ['#8B0A1F', '#8B0A1F', '#8B0A1F'];
 export const TICKET_COLOR_MAP: Record<string, number> = {
-  NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, UCL: 0, IPL: 1, TENNIS: 2, NCAAF: 0, NCAAB: 1,
+  NBA: 0, NFL: 1, MLB: 2, NHL: 0, MLS: 1, EPL: 2, UCL: 0, WORLDCUP: 2, IPL: 1, TENNIS: 2, NCAAF: 0, NCAAB: 1,
 };
 export function getTicketColor(sport: string): string {
   return TICKET_COLORS[TICKET_COLOR_MAP[sport] ?? 0];

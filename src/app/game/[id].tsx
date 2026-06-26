@@ -430,7 +430,7 @@ interface GamePrediction {
 
 interface Game {
   id: string;
-  sport: 'NFL' | 'NBA' | 'MLB' | 'NHL' | 'MLS' | 'NCAAF' | 'NCAAB' | 'EPL' | 'UCL' | 'IPL' | 'TENNIS';
+  sport: 'NFL' | 'NBA' | 'MLB' | 'NHL' | 'MLS' | 'NCAAF' | 'NCAAB' | 'EPL' | 'UCL' | 'WORLDCUP' | 'IPL' | 'TENNIS';
   homeTeam: GameTeam;
   awayTeam: GameTeam;
   gameTime: string;
@@ -595,7 +595,7 @@ function getPeriodConfig(sport: Game['sport'], periodCount: number): { headers: 
     }
     return { headers, totalLabel: 'T' };
   }
-  if (sport === 'NCAAB' || sport === 'MLS' || sport === 'EPL' || sport === 'UCL') {
+  if (sport === 'NCAAB' || sport === 'MLS' || sport === 'EPL' || sport === 'UCL' || sport === 'WORLDCUP') {
     const reg = Math.max(2, periodCount);
     const headers: string[] = [];
     for (let i = 0; i < reg; i++) {
