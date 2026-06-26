@@ -87,6 +87,10 @@ const envSchema = z.object({
   // fall back to CALIBRATION_ADMIN_KEY so a single admin key still works.
   CALIBRATION_ADMIN_KEY: z.string().optional(),
   INGESTION_ADMIN_KEY: z.string().optional(),
+  // Optional dedicated key for the read-only Apple Sign-In diagnostics route.
+  // Falls back to CALIBRATION_ADMIN_KEY. Only gates extra non-secret detail;
+  // the base diagnostics payload is always secret-safe.
+  APPLE_DIAGNOSTICS_KEY: z.string().optional(),
 
   // ─── Feature flags ────────────────────────────────────────────────────
   USE_NEW_PREDICTION_ENGINE: z.string().optional(),
@@ -148,6 +152,28 @@ const envSchema = z.object({
         path: [key],
         message: `${key} is required in production`,
       });
+    }
+  }
+
+  // Non-fatal production warnings. These are STRONGLY recommended but are not
+  // hard boot blockers, so a missing value degrades a feature instead of
+  // taking the whole service offline.
+  //
+  // APPLE_APP_BUNDLE_IDENTIFIER: native iOS Apple identity tokens carry
+  // `aud` = the app bundle id. Better Auth verifies `aud` against
+  // appBundleIdentifier first, then falls back to APPLE_CLIENT_ID. If this is
+  // unset, auth.ts still defaults it to the known bundle id, but relying on
+  // that default is fragile — set it explicitly in production.
+  const recommendedInProduction: Array<keyof typeof value> = [
+    "APPLE_APP_BUNDLE_IDENTIFIER",
+  ];
+  for (const key of recommendedInProduction) {
+    const current = value[key];
+    if (typeof current !== "string" || current.trim().length === 0) {
+      console.warn(
+        `⚠️  ${key} is not set in production — strongly recommended for native Apple Sign-In. ` +
+          `auth.ts will fall back to its built-in default, but set it explicitly to avoid silent login failures.`,
+      );
     }
   }
 });
