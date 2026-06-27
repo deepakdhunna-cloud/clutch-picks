@@ -1,4 +1,4 @@
-import { View, Text, Pressable, Linking, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Linking, StyleSheet, ActivityIndicator } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -1402,6 +1402,64 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
                     </View>
                   </View>
                 </LinearGradient>
+              </Pressable>
+            )
+          ) : isUpcoming ? (
+            isPremium ? (
+              /* Prediction not generated yet for this upcoming game — show a
+                 subtle placeholder so the card never looks empty. The client
+                 re-polls every few seconds and the real pick replaces this. */
+              <View
+                style={{
+                  position: 'relative',
+                  zIndex: 2,
+                  backgroundColor: 'rgba(2,3,8,0.92)',
+                  borderRadius: 10,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.10)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <ActivityIndicator size="small" color="#7A9DB8" />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: '#7A9DB8', fontSize: 9, fontWeight: '800', letterSpacing: 0.8 }}>
+                    CLUTCH READ
+                  </Text>
+                  <Text numberOfLines={1} style={{ color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '700', marginTop: 2 }}>
+                    Generating pick…
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Preview Pro: ${game.awayTeam.name} at ${game.homeTeam.name}`}
+                accessibilityHint="Opens Clutch Picks Pro"
+                onPress={() => guardedRouterPush(router, '/paywall')}
+                style={{
+                  position: 'relative',
+                  zIndex: 2,
+                  backgroundColor: 'rgba(2,3,8,0.92)',
+                  borderRadius: 10,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: 'rgba(180,211,235,0.20)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <View style={{ width: 30, height: 30, borderRadius: 11, backgroundColor: 'rgba(122,157,184,0.11)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.28)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Lock size={14} color="#9AB8CC" strokeWidth={2.6} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ color: '#B4D3EB', fontSize: 8.5, lineHeight: 11, fontWeight: '900', letterSpacing: 1.5 }}>CLUTCH PRO</Text>
+                  <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 13, lineHeight: 16, fontWeight: '900', marginTop: 2 }}>Full matchup read</Text>
+                </View>
+                <ChevronRight size={15} color="#9AB8CC" strokeWidth={2.8} />
               </Pressable>
             )
           ) : null}
