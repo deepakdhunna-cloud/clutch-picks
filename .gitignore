@@ -58,3 +58,5 @@ private/
 
 # Timestamped backtest scratch artifacts (regenerable). Keep only -latest.json.
 backend/backtest-results/current-engine-historical-2*.json
+
+private_keys/
