@@ -422,6 +422,23 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     {displaySport(game.sport)}
                   </Text>
                 </View>
+                {game.competitionLabel ? (
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(215,162,30,0.18)',
+                      paddingHorizontal: 7,
+                      paddingVertical: 3,
+                      borderRadius: 5,
+                      marginRight: 6,
+                      borderWidth: 1,
+                      borderColor: 'rgba(215,162,30,0.45)',
+                    }}
+                  >
+                    <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }}>
+                      {game.competitionLabel}
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={{ alignItems: 'flex-start' }}>
                   <PulsingLiveBadge label={suspended ? suspendedLabel(game).toUpperCase() : 'LIVE'} />
                   {suspended ? (
@@ -983,6 +1000,23 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
                   {displaySport(game.sport)}
                 </Text>
               </View>
+              {game.competitionLabel ? (
+                <View
+                  style={{
+                    backgroundColor: 'rgba(215,162,30,0.18)',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    marginRight: 6,
+                    borderWidth: 1,
+                    borderColor: 'rgba(215,162,30,0.45)',
+                  }}
+                >
+                  <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+                    {game.competitionLabel}
+                  </Text>
+                </View>
+              ) : null}
               {/* Pick Badge — shows the app's predicted winner so the chip
                   matches the Strong/Solid/Lock tier and the detail page. */}
               {isPremium && hasPrediction ? (

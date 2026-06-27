@@ -805,7 +805,7 @@ const ArenaScrollView = memo(function ArenaScrollView({
 });
 
 type FinalTeamResult = 'winner' | 'loser' | 'neutral';
-const FOLLOWED_CARD_W = Math.min(344, Math.max(298, SW - 50));
+const FOLLOWED_CARD_W = Math.min(360, Math.max(320, SW - 36));
 const FOLLOWED_CARD_SIDE_PADDING = Math.max(ARENA_SIDE_PADDING, (SW - FOLLOWED_CARD_W) / 2);
 
 const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPrediction }) {
@@ -922,11 +922,10 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
         width: FOLLOWED_CARD_W,
         borderRadius: 30,
         overflow: 'hidden',
-        borderWidth: 2,
-        // Same cool-blue hue as the Game Day banner border, but more visible so it
-        // reads as a real edge on these smaller cards. Same for every state (no red
-        // on live) — the team identity comes through the color wash.
-        borderColor: 'rgba(180,211,235,0.7)',
+        // Skinny hairline edge — a single cool-blue line that reads as a crisp
+        // border without the heavy 2px frame.
+        borderWidth: 1,
+        borderColor: 'rgba(180,211,235,0.38)',
         backgroundColor: '#0b1119',
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 13 },
@@ -2376,13 +2375,15 @@ const MATCHUP_CHIP_BACKGROUND = 'rgba(255,255,255,0.04)';
 const MATCHUP_CHIP_BORDER = 'rgba(255,255,255,0.10)';
 const MATCHUP_CTA_BACKGROUND = 'rgba(255,255,255,0.05)';
 const MATCHUP_CTA_BORDER = 'rgba(255,255,255,0.12)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 16;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 15;
-const MATCHUP_CARD_MIN_HEIGHT = 0;
-const MATCHUP_RANK_SIZE = 26;
-const MATCHUP_RANK_GAP = 11;
-const MATCHUP_ACTION_SIZE = 22;
-const MATCHUP_ACTION_GAP = 8;
+const MATCHUP_CARD_CONTENT_PADDING_X = 20;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 20;
+// Minimum collapsed-card height so cards feel substantial and never skinny.
+// Content is vertically centered within this footprint via the Pressable.
+const MATCHUP_CARD_MIN_HEIGHT = 96;
+const MATCHUP_RANK_SIZE = 30;
+const MATCHUP_RANK_GAP = 13;
+const MATCHUP_ACTION_SIZE = 24;
+const MATCHUP_ACTION_GAP = 10;
 const MATCHUP_ACCENT_COLOR = '#A8D0E6';
 const MATCHUP_ACCENT_RAIL = MAROON;
 const MATCHUP_CARD_RADIUS = 16;
@@ -2412,7 +2413,8 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
           paddingLeft: MATCHUP_CARD_CONTENT_PADDING_X + MATCHUP_ACCENT_RAIL_WIDTH,
           paddingRight: MATCHUP_CARD_CONTENT_PADDING_X,
           paddingVertical: MATCHUP_CARD_CONTENT_PADDING_Y,
-          minHeight: undefined,
+          minHeight: expanded ? undefined : MATCHUP_CARD_MIN_HEIGHT,
+          justifyContent: 'center',
           opacity: pressed ? 0.92 : 1,
         })}
       >
@@ -2430,8 +2432,8 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
             {tags.length > 0 ? (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
-                  <View key={`${tg}-${i}`} style={{ backgroundColor: i === 0 ? hexWithAlpha(MAROON, 0.14) : MATCHUP_CHIP_BACKGROUND, borderRadius: 7, borderWidth: 1, borderColor: i === 0 ? hexWithAlpha(MAROON, 0.30) : MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 4.5 }}>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: i === 0 ? '#E8A0AE' : TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}>{tg}</Text>
+                  <View key={`${tg}-${i}`} style={{ backgroundColor: i === 0 ? hexWithAlpha(MAROON, 0.85) : MATCHUP_CHIP_BACKGROUND, borderRadius: 7, borderWidth: 1, borderColor: i === 0 ? hexWithAlpha(MAROON, 0.95) : MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 5 }}>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: i === 0 ? '#FFFFFF' : TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}>{tg}</Text>
                   </View>
                 ))}
               </View>
@@ -2876,7 +2878,7 @@ const PREP_SUBTAB_GAP = 4;
 const PREP_SUBTAB_TRACK_INNER_PADDING = 3;
 const MATCHUP_CARD_CTA_HEIGHT = 40;
 const MATCHUP_TAG_ROW_GAP = 5;
-const PREP_MATCHUP_CARD_GAP = 12;
+const PREP_MATCHUP_CARD_GAP = 14;
 
 // ─── PREP MODE ───
 const Prep = memo(function Prep({
@@ -2927,9 +2929,26 @@ const Prep = memo(function Prep({
   const upsetPlays = useMemo(() => {
     return ranked
       .filter(r => {
-        const profile = r.game.prediction?.canonicalResult?.decisionProfile;
-        return profile?.tags.includes('upset-watch') || (r.game.prediction?.projection?.upsetRisk ?? 0) >= 0.42;
+        // Genuine upsets only. A real upset spot needs (a) the model to flag
+        // meaningful upset volatility, AND (b) an actual favorite/underdog
+        // structure — i.e. the model leans one side with enough confidence that
+        // the OTHER side winning would be an upset. This filters out coin-flip
+        // games (which aren't upsets, just toss-ups) and avoids exaggerating a
+        // routine spot into an "upset".
+        const pred = r.game.prediction;
+        if (!pred) return false;
+        const profile = pred.canonicalResult?.decisionProfile;
+        const risk = pred.projection?.upsetRisk ?? 0;
+        const conf = getCanonicalConfidence(pred);
+        const flagged = profile?.tags.includes('upset-watch') || risk >= 0.45;
+        // Require a clear favorite (conf >= 58) so there is a real underdog to
+        // upset, but not a runaway lock (conf <= 80) where calling it an upset
+        // would be exaggerated. Toss-ups (conf < 55) are excluded entirely.
+        const hasFavoriteStructure = conf >= 58 && conf <= 80;
+        return flagged && hasFavoriteStructure;
       })
+      // Strongest upset profiles first.
+      .sort((a, b) => (b.game.prediction?.projection?.upsetRisk ?? 0) - (a.game.prediction?.projection?.upsetRisk ?? 0))
       .map(r => {
         const pick = getCanonicalFinalPick(r.game.prediction);
         const conf = Math.round(getCanonicalConfidence(r.game.prediction));
@@ -3029,7 +3048,6 @@ const Prep = memo(function Prep({
         <Text style={{fontSize:12.5, fontWeight:'600', color:TEXT_SECONDARY, lineHeight:18}}>{tonightNarrative}</Text>
       </View>
 
-      <AccBySport picks={picks} />
       <StreakCard stats={stats} />
       <Disclaimer />
     </ArenaScrollView>

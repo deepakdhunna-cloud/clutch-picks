@@ -34,7 +34,7 @@ import {
 import { arenaStepButtonLabel } from '@/lib/onboarding-presentation';
 import { PAYWALL_COPY } from '@/lib/subscription-config';
 import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
-import { guardedRouterReplace } from '@/lib/navigation-guard';
+import { guardedRouterReplace, guardedResetTo } from '@/lib/navigation-guard';
 
 const { width: W } = Dimensions.get('window');
 
@@ -1310,7 +1310,7 @@ export default function OnboardingScreen() {
     if (step === 5) return;
     if (step === 3 && tutorialReplay) {
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-      guardedRouterReplace(router, '/(tabs)');
+      guardedResetTo(router, '/(tabs)');
     } else {
       if (step === 3) setArenaSubPage(0);
       setStep(step + 1);
@@ -1334,7 +1334,7 @@ export default function OnboardingScreen() {
 
   const skip = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    guardedRouterReplace(router, '/(tabs)');
+    guardedResetTo(router, '/(tabs)');
   }, [router]);
 
   const saveProfile = async () => {
@@ -1370,7 +1370,7 @@ export default function OnboardingScreen() {
 
   const skipPaywall = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    guardedRouterReplace(router, '/(tabs)');
+    guardedResetTo(router, '/(tabs)');
   }, [router]);
 
   const handlePhotoPress = () => {

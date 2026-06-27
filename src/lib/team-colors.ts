@@ -859,6 +859,27 @@ function resolveAccentColor(primary: string, secondary: string, explicitAccent?:
 // render — the key includes all inputs, so cached values are always correct.
 const teamColorsCache = new Map<string, ResolvedTeamColors>();
 
+// Deterministically map an arbitrary identifier (team abbreviation or player
+// surname) to a vivid, readable jersey color. Same input always yields the same
+// color, and different inputs spread across the hue wheel so two competitors in
+// the same match get visibly different jerseys. Saturation/lightness are kept in
+// a band that stays vibrant on dark cards and survives contrast enforcement.
+function hashIdentifierToColor(identifier: string): string {
+  let hash = 0;
+  const key = identifier.trim().toUpperCase();
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  const hue = hash % 360;
+  // Avoid the muddy yellow-green band (60-150) that reads poorly on dark UI by
+  // nudging those hues toward cyan/blue.
+  const adjustedHue = hue >= 60 && hue <= 150 ? (hue + 150) % 360 : hue;
+  const saturation = 0.62;
+  const lightness = 0.5;
+  const { r, g, b } = hslToRgb(adjustedHue / 360, saturation, lightness);
+  return rgbToHex(r, g, b);
+}
+
 export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: string): ResolvedTeamColors {
   const cacheKey = `${sport}:${abbreviation}:${espnColor ?? ''}`;
   const cachedColors = teamColorsCache.get(cacheKey);
@@ -906,11 +927,21 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
       colors = undefined;
   }
 
-  // If colors weren't found, use ESPN color if available, otherwise default
+  // If colors weren't found, use ESPN color if available, otherwise derive a
+  // stable, distinct color from the team/player identifier. This matters most
+  // for sports where competitors aren't in a fixed color map (e.g. tennis
+  // players): without it, BOTH sides fall back to the same generic blue and the
+  // two jerseys look identical on the game card. Hashing the abbreviation gives
+  // each competitor its own consistent hue on both the card and the detail page.
   if (!colors) {
     if (espnColor && espnColor.length >= 4) {
       colors = {
         primary: espnColor.startsWith('#') ? espnColor : `#${espnColor}`,
+        secondary: '#FFFFFF',
+      };
+    } else if (abbreviation && abbreviation.trim().length > 0) {
+      colors = {
+        primary: hashIdentifierToColor(abbreviation),
         secondary: '#FFFFFF',
       };
     } else {

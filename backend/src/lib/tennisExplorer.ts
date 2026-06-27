@@ -84,6 +84,34 @@ function numericText(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// Parse a single tennis set's games-won from a TennisExplorer "score" cell.
+//
+// TennisExplorer renders a tiebreak set as the games count followed by a
+// superscript with the tiebreak points, e.g. `7<sup>4</sup>` for 7-6(4) or
+// `6<sup>1</sup>`. The old numericText() stripped all tags and then removed
+// non-digits, which FUSED the games count and the tiebreak digits into a bogus
+// number like `74` or `61` (this is the source of the "61" seen in the box
+// score). A set's games-won is always a single small integer, so we:
+//   1. Drop superscript/sub content (the tiebreak points) before flattening.
+//   2. Take only the FIRST integer token.
+//   3. Clamp to the valid tennis range (0..7); anything else is a parse
+//      artifact and is discarded.
+function tennisGameScore(value: string | undefined): number | null {
+  if (!value) return null;
+  // Remove tiebreak superscripts / subscripts entirely so their digits can't
+  // bleed into the games count.
+  const withoutSup = value.replace(/<sup\b[^>]*>[\s\S]*?<\/sup>/gi, " ").replace(/<sub\b[^>]*>[\s\S]*?<\/sub>/gi, " ");
+  const flat = stripTags(withoutSup);
+  const firstToken = flat.match(/\d+/);
+  if (!firstToken) return null;
+  const parsed = Number(firstToken[0]);
+  if (!Number.isFinite(parsed)) return null;
+  // A standard set is won 6-x (or 7-x with a tiebreak). Clamp out-of-range
+  // values rather than display nonsense.
+  if (parsed < 0 || parsed > 7) return null;
+  return parsed;
+}
+
 function extractCells(rowHtml: string, className: string): string[] {
   const cells: string[] = [];
   const cellPattern = /<td\b([^>]*)>([\s\S]*?)<\/td>/gi;
@@ -178,8 +206,8 @@ export function parseTennisExplorerMatchRows(html: string, tour: TennisTour, sou
     const parsedHomeSets = numericText(resultCellsHome[0]);
     const parsedAwaySets = numericText(resultCellsAway[0]);
 
-    const scoreCellsHome = extractCells(row, "score").map(numericText).filter((value): value is number => value !== null);
-    const scoreCellsAway = extractCells(nextRow, "score").map(numericText).filter((value): value is number => value !== null);
+    const scoreCellsHome = extractCells(row, "score").map(tennisGameScore).filter((value): value is number => value !== null);
+    const scoreCellsAway = extractCells(nextRow, "score").map(tennisGameScore).filter((value): value is number => value !== null);
     const hasPartialScore = scoreCellsHome.length > 0 || scoreCellsAway.length > 0;
     const hasSetTotals = parsedHomeSets !== null && parsedAwaySets !== null;
     const looksCompleted = (parsedHomeSets ?? 0) >= 2 || (parsedAwaySets ?? 0) >= 2;

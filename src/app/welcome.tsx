@@ -22,7 +22,7 @@ import { withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
-import { guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
+import { guardedRouterPush, guardedResetTo } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
 const TEAL = '#7A9DB8';
@@ -76,7 +76,9 @@ export default function WelcomeScreen() {
       throw appleSignInIncompleteError();
     }
     const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
-    guardedRouterReplace(router, onboarded === 'true' ? '/(tabs)' : '/onboarding');
+    // Reset the stack so the auth screens are flushed and Home can't be
+    // back-swiped to Welcome / onboarding.
+    guardedResetTo(router, onboarded === 'true' ? '/(tabs)' : '/onboarding');
   };
 
   const appleFullName = (fullName: AppleAuthentication.AppleAuthenticationFullName | null): string | null => {

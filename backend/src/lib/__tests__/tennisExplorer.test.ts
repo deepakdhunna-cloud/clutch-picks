@@ -37,6 +37,39 @@ describe("Tennis Explorer supplemental live parser", () => {
     expect(rows[0]?.awayLinescores).toEqual([5]);
   });
 
+  test("does not fuse tiebreak superscripts into the set games score", () => {
+    // A set won 7-6 with a tiebreak renders the games count (7) followed by a
+    // <sup> tiebreak count. The old parser stripped tags and concatenated the
+    // digits, producing a bogus value like 74 / 61. The fixed parser must keep
+    // only the games count and clamp to the valid 0..7 range.
+    const html = `
+      <tr class="head flags">
+        <td class="t-name" colspan="2"><a href="/atp/2026/atp-men/">ATP Event</a></td>
+      </tr>
+      <tr id="r1" class="one bott">
+        <td class="first time" rowspan="2">06:30</td>
+        <td class="t-name"><a href="/player/a/">Martinez B.</a></td>
+        <td class="result">1</td>
+        <td class="score">7<sup>4</sup></td>
+        <td class="score">6<sup>1</sup></td>
+        <td rowspan="2"><a href="/match-detail/?id=9001">info</a></td>
+      </tr>
+      <tr id="r1b" class="one">
+        <td class="t-name"><a href="/player/b/">Salazar D.</a></td>
+        <td class="result">0</td>
+        <td class="score">6<sup>2</sup></td>
+        <td class="score">3</td>
+      </tr>
+    `;
+
+    const rows = parseTennisExplorerMatchRows(html, "ATP", "2026-05-18");
+
+    expect(rows).toHaveLength(1);
+    // Games counts only — no fused tiebreak digits, all within 0..7.
+    expect(rows[0]?.homeLinescores).toEqual([7, 6]);
+    expect(rows[0]?.awayLinescores).toEqual([6, 3]);
+  });
+
   test("finds near-term scheduled rows before scores exist", () => {
     const rows = parseTennisExplorerMatchRows(`
       <tr class="head flags">

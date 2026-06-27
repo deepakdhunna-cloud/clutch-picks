@@ -27,6 +27,7 @@ import {
   type TennisTour,
 } from "../lib/tennisStats";
 import { fetchTennisExplorerLiveMatches, type TennisExplorerLiveMatch } from "../lib/tennisExplorer";
+import { fetchActiveCricketLeagues, cricketFormatLabel, IPL_LEAGUE_ID, type CricketLeague } from "../lib/cricketLeagues";
 import { fetchIPLStandings, type IPLStandingEntry } from "../lib/iplStandings";
 import { prisma } from "../prisma";
 
@@ -200,6 +201,10 @@ export interface Game {
     source?: string;
   };
   seasonContext?: NarrativeSeasonContext | null;
+  // Short label identifying the specific competition/format for a game. Used on
+  // cricket cards to distinguish IPL vs Women's T20 vs ODI vs Test vs BBL, etc.
+  // (e.g. "IPL", "Women's T20", "T20I", "ODI", "Test", "Big Bash").
+  competitionLabel?: string;
   homeLinescores?: number[];
   awayLinescores?: number[];
   cricketState?: CricketScoreState;
@@ -439,6 +444,12 @@ interface ESPNEvent {
 
 interface ESPNScoreboardResponse {
   events: ESPNEvent[];
+  leagues?: Array<{
+    id?: string | number;
+    name?: string;
+    abbreviation?: string;
+    slug?: string;
+  }>;
 }
 
 interface ESPNFitTennisState {
@@ -2141,7 +2152,15 @@ async function addPredictionToGame(game: Game): Promise<Game> {
     return attachPredictionToGame(game, storedPregamePrediction);
   }
 
-  if (game.status !== "SCHEDULED") {
+  // Generate a first prediction for SCHEDULED games and for LIVE games that were
+  // never seen pregame (and therefore have no cached/stored prediction). The
+  // latter is common for tennis matches that only surface once already in
+  // progress (e.g. tennis-explorer supplemental matches) — without this they
+  // would render with NO prediction at all. We never run for FINAL games.
+  // Bettor-safety is preserved: shouldPromotePredictionUpdate() only promotes
+  // updates while SCHEDULED, so this first LIVE prediction is generated once and
+  // then locked (no chasing live noise).
+  if (game.status !== "SCHEDULED" && game.status !== "LIVE") {
     return game;
   }
 
@@ -2170,7 +2189,12 @@ async function addPredictionToGame(game: Game): Promise<Game> {
 
 // Background prediction generation - non-blocking
 function generatePredictionsInBackground(games: Game[]): void {
-  const gamesNeedingPredictions = games.filter(g => !g.prediction && g.status === "SCHEDULED");
+  // Cover SCHEDULED games and LIVE games that have no prediction yet (e.g. tennis
+  // matches first seen in progress). addPredictionToGame() enforces the same
+  // status gate and only generates a one-time locked prediction for LIVE games.
+  const gamesNeedingPredictions = games.filter(
+    (g) => !g.prediction && (g.status === "SCHEDULED" || g.status === "LIVE"),
+  );
   if (gamesNeedingPredictions.length === 0) return;
 
   // Run in background, don't await
@@ -2484,12 +2508,20 @@ export function extractESPNLinescores(
   sport: SportKey,
 ): number[] | undefined {
   if (!competitor.linescores || competitor.linescores.length === 0) return undefined;
-  return competitor.linescores.map((line) => (
+  const mapped = competitor.linescores.map((line) => (
     sport === "IPL" && typeof line.runs === "number" ? line.runs :
     typeof line.value === "number" ? line.value :
     typeof line.runs === "number" ? line.runs :
     0
   ));
+  // For tennis, each linescore entry is a single set's games-won, which is
+  // always 0..7. ESPN can occasionally pack a tiebreak count into the value
+  // (producing values like 64 / 71); drop any entry outside the valid range so
+  // the box score never shows a fused/nonsense set score.
+  if (sport === "TENNIS") {
+    return mapped.filter((value) => Number.isFinite(value) && value >= 0 && value <= 7);
+  }
+  return mapped;
 }
 
 function parseMlbLiveState({
@@ -2565,7 +2597,11 @@ function parseMlbLiveState({
   }
 }
 
-async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Game | null> {
+async function transformESPNEvent(
+  event: ESPNEvent,
+  sport: SportKey,
+  cricketContext?: { leagueId: string; competitionLabel?: string },
+): Promise<Game | null> {
   const competition = event.competitions[0];
   if (!competition) return null;
 
@@ -2575,10 +2611,16 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
 
   const homeTeam = homeCompetitor.team;
   const awayTeam = awayCompetitor.team;
-  const iplStandings = sport === "IPL" ? await fetchIPLStandings() : null;
+  // The "IPL" sport key is the broad Cricket league. Real IPL standings only
+  // exist for the actual IPL competition; other cricket competitions (Women's
+  // T20, ODI tours, Test series, BBL, ...) have no IPL standings table, so we
+  // only fetch/apply standings when this game is genuinely IPL.
+  const isCricket = sport === "IPL";
+  const isActualIPL = isCricket && (cricketContext?.leagueId ?? IPL_LEAGUE_ID) === IPL_LEAGUE_ID;
+  const iplStandings = isActualIPL ? await fetchIPLStandings() : null;
 
   const getStanding = (competitor: ESPNCompetitor): IPLStandingEntry | undefined => {
-    if (sport !== "IPL") return undefined;
+    if (!isActualIPL) return undefined;
     const teamId = competitor.team.id.toUpperCase();
     const abbr = competitor.team.abbreviation.toUpperCase();
     return iplStandings?.get(teamId) ?? iplStandings?.get(abbr);
@@ -2729,6 +2771,7 @@ async function transformESPNEvent(event: ESPNEvent, sport: SportKey): Promise<Ga
     statusDetail: sport === "IPL" ? cricketState?.summary ?? suspension?.resumeText : suspension?.resumeText,
     suspension,
     seasonContext,
+    competitionLabel: isCricket ? cricketContext?.competitionLabel : undefined,
     homeLinescores,
     awayLinescores,
     cricketState,
@@ -2968,8 +3011,15 @@ export function tennisAbbreviation(name: string, roster?: TennisRosterPlayer[]):
 
 function tennisLineValue(line: TennisLineScore | undefined): number | null {
   if (!line) return null;
-  const parsed = Number(line.v);
-  return Number.isFinite(parsed) ? parsed : null;
+  // `line.v` is a single set's games-won. The tiebreak points live separately on
+  // `line.t` and must NOT be folded into the games count. Take only the integer
+  // part of `v` and clamp to the valid tennis range (0..7) so a malformed/packed
+  // value (e.g. "6(1)" -> 61) can never surface as a bogus set score.
+  const raw = typeof line.v === "string" ? (line.v.match(/\d+/)?.[0] ?? line.v) : line.v;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 0 || parsed > 7) return null;
+  return parsed;
 }
 
 function tennisSetScores(competitor: TennisCompetitor): number[] | undefined {
@@ -3220,6 +3270,80 @@ async function fetchTennisGamesFromESPN(date?: string): Promise<Game[]> {
   }
 }
 
+// Fetch ALL cricket matches across every currently active competition, not just
+// IPL. We discover active league ids, fetch each league's scoreboard, transform
+// events with the shared cricket pipeline, and tag each game with a short
+// competition/format label (IPL, Women's T20, ODI, Test, Big Bash, ...).
+async function fetchCricketGamesFromESPN(date?: string, fullList = false): Promise<Game[]> {
+  if (!circuitAllowsRequest()) {
+    return [];
+  }
+
+  const leagues = await fetchActiveCricketLeagues().catch(() => [
+    { id: IPL_LEAGUE_ID, name: "Indian Premier League", abbreviation: "IPL", eventCount: 0 },
+  ]);
+
+  const formattedDate = date ? date.replace(/-/g, "") : undefined;
+  const limit = fullList ? "100" : "25";
+
+  const fetchLeague = async (league: CricketLeague): Promise<Game[]> => {
+    const params = new URLSearchParams();
+    if (formattedDate) params.set("dates", formattedDate);
+    params.set("limit", limit);
+    const baseUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${league.id}/scoreboard`;
+    const url = `${baseUrl}?${params.toString()}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        recordESPNFailure();
+        return [];
+      }
+      const data = (await response.json()) as ESPNScoreboardResponse;
+      if (!data.events || !Array.isArray(data.events) || data.events.length === 0) {
+        return [];
+      }
+      recordESPNSuccess();
+      // Prefer the league name reported in the scoreboard payload (more precise
+      // than the header listing), falling back to the discovered name.
+      const sbLeague = data.leagues?.[0];
+      const leagueName = (sbLeague?.name ?? league.name).trim();
+      const leagueAbbr = sbLeague?.abbreviation ?? league.abbreviation;
+      const competitionLabel = cricketFormatLabel(leagueName, leagueAbbr);
+      const resolved = await batchProcess(
+        data.events,
+        (event) => transformESPNEvent(event, "IPL", { leagueId: league.id, competitionLabel }),
+        8,
+      );
+      return resolved.filter((g): g is Game => g !== null);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === "AbortError") {
+        console.warn(`[ESPN] cricket fetch timed out for league ${league.id}:`, url);
+      }
+      recordESPNFailure();
+      return [];
+    }
+  };
+
+  // Cap concurrency so a large cricket calendar doesn't overwhelm ESPN.
+  const leagueResults = await batchProcess(leagues, fetchLeague, 5);
+  const allGames = leagueResults.flat();
+
+  // De-duplicate (a match can appear under multiple league listings) and verify.
+  const unique = Array.from(new Map(allGames.map((g) => [g.id, g])).values());
+  const games = filterVerifiedScoreboardGames(unique).sort(
+    (a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime(),
+  );
+  for (const game of games) {
+    gameIdToSport.set(game.id, "IPL");
+  }
+  return games;
+}
+
 // ─── Circuit breaker for ESPN API ────────────────────────────────────────────
 const CIRCUIT_FAILURE_THRESHOLD = 5;   // open after this many consecutive failures
 const CIRCUIT_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
@@ -3275,6 +3399,10 @@ async function fetchGamesFromESPN(sport: SportKey, date?: string, fullList = fal
     return fetchTennisGamesFromESPN(date);
   }
 
+  if (sport === "IPL") {
+    return fetchCricketGamesFromESPN(date, fullList);
+  }
+
   const baseUrl = ESPN_ENDPOINTS[sport];
   const params = new URLSearchParams();
 
@@ -3291,9 +3419,8 @@ async function fetchGamesFromESPN(sport: SportKey, date?: string, fullList = fal
   } else if (sport === "NCAAF") {
     params.set("groups", "80");
     params.set("limit", fullList ? "300" : "50");
-  } else if (sport === "IPL") {
-    params.set("limit", fullList ? "100" : "25");
   }
+  // NOTE: cricket (sport key "IPL") is handled earlier by fetchCricketGamesFromESPN.
 
   const queryString = params.toString();
   const url = queryString ? `${baseUrl}?${queryString}` : baseUrl;

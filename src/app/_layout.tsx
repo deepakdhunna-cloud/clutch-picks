@@ -22,7 +22,7 @@ import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useLiveScores } from '@/hooks/useLiveScores';
-import { guardedRouterReplace } from '@/lib/navigation-guard';
+import { guardedResetTo } from '@/lib/navigation-guard';
 import { Image as ExpoImage } from 'expo-image';
 
 
@@ -177,14 +177,17 @@ function RootLayoutNav({
     if (isLoading || !onboardingChecked) return;
 
     if (hasUser && inAuthGroup && segment !== 'onboarding') {
-      // Check if onboarding is complete — if not, send to onboarding first
+      // Check if onboarding is complete — if not, send to onboarding first.
+      // Use guardedResetTo so welcome/sign-in/onboarding are flushed from the
+      // native back stack; otherwise an iOS edge back-swipe on Home could pop
+      // back to Welcome and re-trigger onboarding.
       if (!onboardingDone) {
-        guardedRouterReplace(router, '/onboarding');
+        guardedResetTo(router, '/onboarding');
       } else {
-        guardedRouterReplace(router, '/(tabs)');
+        guardedResetTo(router, '/(tabs)');
       }
     } else if (!hasUser && !inAuthGroup && !inPublicGroup) {
-      guardedRouterReplace(router, '/welcome');
+      guardedResetTo(router, '/welcome');
     }
   }, [hasUser, isLoading, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup, router]);
 
