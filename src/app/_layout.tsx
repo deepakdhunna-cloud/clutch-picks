@@ -23,6 +23,7 @@ import { VT323_400Regular } from '@expo-google-fonts/vt323';
 import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useLiveScores } from '@/hooks/useLiveScores';
 import { guardedRouterReplace } from '@/lib/navigation-guard';
+import { Image as ExpoImage } from 'expo-image';
 
 
 enableScreens(true);
@@ -60,6 +61,9 @@ const queryClient = new QueryClient({
       gcTime: 10 * 60 * 1000, // 10 minutes
       // Enable structural sharing to reduce unnecessary re-renders
       structuralSharing: true,
+      // Keep showing the previous data while refetching so screens never flash empty
+      // on focus/param changes — improves perceived speed without changing visuals.
+      placeholderData: (previousData: unknown) => previousData,
     },
   },
 });
@@ -80,6 +84,15 @@ function RootLayoutNav({
   const [onboardingDone, setOnboardingDone] = useState(false);
 
   useRevenueCatIdentity(session?.user);
+
+  // Warm the disk/memory cache for the user's avatar as soon as the session is
+  // known, so Profile / Edit Profile render the avatar instantly with no flash.
+  const sessionAvatarUri = (session?.user as { image?: string | null } | undefined)?.image ?? null;
+  useEffect(() => {
+    if (sessionAvatarUri) {
+      ExpoImage.prefetch(sessionAvatarUri, 'memory-disk').catch(() => {});
+    }
+  }, [sessionAvatarUri]);
 
   // Register push notifications when user is signed in and permission exists.
   useNotificationRegistration(session?.user?.id);
@@ -200,8 +213,8 @@ function RootLayoutNav({
           <Stack.Screen name="sign-up" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="verify-otp" options={{ freezeOnBlur: true }} />
           <Stack.Screen name="(tabs)" options={{ freezeOnBlur: false, gestureEnabled: false, fullScreenGestureEnabled: false }} />
-          <Stack.Screen name="game/[id]" options={{ freezeOnBlur: false }} />
-          <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="game/[id]" options={{ freezeOnBlur: false, fullScreenGestureEnabled: true }} />
+          <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="edit-profile" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="privacy-policy" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="terms" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />
