@@ -1803,13 +1803,18 @@ function GameDetailContent() {
       </View>
       <View pointerEvents="box-none" style={[styles.floatingDetailControls, { top: detailFloatingTop }]}>
         <Pressable
-          onPress={() => guardedRouterBack(router)}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            guardedRouterBack(router);
+          }}
           accessibilityRole="button"
           accessibilityLabel="Back"
           hitSlop={12}
           style={[styles.backBtn, styles.floatingBackBtn]}
         >
-          <Text style={{ fontSize: 20, color: '#fff', lineHeight: 22 }}>‹</Text>
+          <BlurView pointerEvents="none" intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.58)' }]} />
+          <Text style={{ fontSize: 22, color: '#fff', lineHeight: 24, includeFontPadding: false }}>‹</Text>
         </Pressable>
         <View style={styles.floatingDetailPill}>
           <BlurView pointerEvents="none" intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
@@ -2031,12 +2036,12 @@ function GameDetailContent() {
                       const dateLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                       const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                       return (
-                        <>
-                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.scoreClockStatus}>
+                        <View style={styles.scheduledHero}>
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.scheduledHeroStatus}>
                             Scheduled
                           </Text>
-                          <Text style={styles.scoreClockSub}>{`${dateLabel} · ${timeLabel}`}</Text>
-                        </>
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.scheduledHeroTime}>{`${dateLabel} · ${timeLabel}`}</Text>
+                        </View>
                       );
                     }
                     return <Text style={styles.scoreClock}>{game.status}</Text>;
@@ -2208,7 +2213,7 @@ export default function GameDetailScreen() {
 
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
-  backBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.68)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   floatingDetailControls: { position: 'absolute', left: 0, right: 0, zIndex: 110, elevation: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   floatingBackBtn: { position: 'absolute', left: 16 },
   floatingDetailPill: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.68)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 22, paddingHorizontal: 14, overflow: 'hidden' },
@@ -2268,6 +2273,9 @@ const styles = StyleSheet.create({
   tennisHeroClock: { marginTop: 12, fontSize: 21, lineHeight: 24, textAlign: 'center' },
   scoreClockStatus: { minWidth: 116, fontSize: 20, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 1.2, textAlign: 'center', textTransform: 'uppercase' },
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
+  scheduledHero: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', marginTop: 10, paddingHorizontal: 8 },
+  scheduledHeroStatus: { fontSize: 40, lineHeight: 44, color: '#FFFFFF', fontFamily: 'VT323_400Regular', letterSpacing: 4, textAlign: 'center', textTransform: 'uppercase' },
+  scheduledHeroTime: { fontSize: 26, lineHeight: 30, color: 'rgba(255,255,255,0.72)', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 3, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLineAbove: { maxWidth: 220, color: '#FFFFFF', fontSize: 11.5, lineHeight: 14, fontWeight: '900', letterSpacing: 1.4, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },

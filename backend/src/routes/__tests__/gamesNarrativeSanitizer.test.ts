@@ -472,18 +472,22 @@ describe("selectTopPicksForDisplay", () => {
     expect(selected.map((game) => game.id)).toEqual(["nba-1", "mlb-2", "nhl-1"]);
   });
 
-  test("never surfaces a blocked/low-conviction pick, even when a sport has no other pick", () => {
+  test("surfaces every league's best pick regardless of conviction (Option B), dropping only non-displayable games", () => {
     const nba = attachTopPick(makeSportGame("nba-1", "NBA", "LAL", "OKC"), 62);
-    // NHL's only pick carries a low-conviction blocked tag. The old ungated
-    // fallback surfaced it (a defect); the relaxed fallback must still reject it
-    // so the sport contributes no pick rather than one the engine distrusts.
+    // NHL's only pick carries a low-conviction tag and MLB's only pick is below
+    // the relaxed floor. Per the product decision (Option B), each in-season
+    // league must still surface its single best scheduled pick — the board favors
+    // full league coverage over hiding softer reads.
     const nhlBlocked = attachTopPick(makeSportGame("nhl-1", "NHL", "DAL", "EDM"), 53, ["low-conviction"]);
-    // A below-floor clean pick (52, < relaxed floor 53) is also not surfaced.
     const mlbBelowFloor = attachTopPick(makeSportGame("mlb-1", "MLB", "NYY", "BOS"), 52);
+    // A genuinely non-displayable game (no prediction attached) is the only kind
+    // that gets dropped, since there is nothing valid to show.
+    const tennisNoPick = makeSportGame("tennis-1", "TENNIS", "AAA", "BBB");
 
-    const selected = selectTopPicksForDisplay([nba, nhlBlocked, mlbBelowFloor]);
+    const selected = selectTopPicksForDisplay([nba, nhlBlocked, mlbBelowFloor, tennisNoPick]);
 
-    expect(selected.map((game) => game.id)).toEqual(["nba-1"]);
+    // Ordered by TOP_PICK_SPORT_ORDER: NBA, MLB, NHL. Tennis (no prediction) drops.
+    expect(selected.map((game) => game.id)).toEqual(["nba-1", "mlb-1", "nhl-1"]);
   });
 });
 

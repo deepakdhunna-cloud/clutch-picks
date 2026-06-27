@@ -696,9 +696,9 @@ const TopPickCard = memo(function TopPickCard({
                       borderColor: 'rgba(122,157,184,0.25)',
                     })}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: TEAL }}>Full breakdown</Text>
-                    <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
-                      <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" />
+                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: TEAL, includeFontPadding: false }}>Full breakdown</Text>
+                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" style={{ marginTop: 0.5 }}>
+                      <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
                   </Pressable>
                 </View>

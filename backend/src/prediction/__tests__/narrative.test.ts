@@ -233,7 +233,7 @@ describe("buildDeterministicNarrative", () => {
     );
     const text = buildDeterministicNarrative(input).toLowerCase();
 
-    expect(text).toMatch(/question|hinge|interesting|clean edge|story|fun part|juice|spicy|comes down|carry the night|keep an eye|under the lights/);
+    expect(text).toMatch(/question|hinge|interesting|clean edge|story|fun part|juice|spicy|comes down|carry the night|keep an eye|under the lights|watch the|track it|stay close|whole thesis|whole watch|put under the lights|their shot here|live angle|makes it watchable|how upsets start|whole read shifts|travels its strengths|harden or evaporate/);
     expect(text).not.toContain("game 7");
     expect(text).not.toContain("series lead");
   });
@@ -389,6 +389,12 @@ function extractCounterpointSentence(text: string): string | null {
     "The one thing that gives me pause:",
     "What could flip it:",
     "Not all one-way though —",
+    "The hole in the case:",
+    "Where it could go sideways —",
+    "Reason to hedge a little:",
+    "The counter you can't ignore:",
+    "Don't sleep on the other side, though —",
+    "One crack in it:",
   ];
   let idx = -1;
   for (const m of markers) {

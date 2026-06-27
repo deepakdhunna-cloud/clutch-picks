@@ -458,6 +458,8 @@ function renderFanAngle(
         `The fun part: whether ${teamSubject(input, opposingAbbr)} can turn ${readableFactorLabel(counterpoint)} into real pressure with the ${seasonContext.label} stakes cranked up.`,
         `This one's got juice because ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} can absolutely pull it back.`,
         `Big question in the ${seasonContext.label}: does ${teamPossessive(input, winnerAbbr!)} top edge hold up with ${readableFactorLabel(counterpoint)} pushing back?`,
+        `What makes it watchable: ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} is exactly the thing that flips ${seasonContext.label} games.`,
+        `Keep an eye on ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)} — under ${seasonContext.label} lights, that's how upsets start.`,
       ],
       `${seed}|fan-season-counter`,
     );
@@ -469,6 +471,8 @@ function renderFanAngle(
         `The ${seasonContext.label} turns the volume up — these matchup edges matter way more than a random calendar night.`,
         `In the ${seasonContext.label}, the question is which of these edges actually shows up when it counts.`,
         `This is the kind of spot where the cleanest edges get put under the lights.`,
+        `${seasonContext.label} games reward the team that travels its strengths — that's the whole watch here.`,
+        `When the ${seasonContext.label} pressure hits, edges either harden or evaporate; this one tells you which.`,
       ],
       `${seed}|fan-season`,
     );
@@ -480,6 +484,8 @@ function renderFanAngle(
         `${sentenceStart(teamSubject(input, opposingAbbr))} still have a path if ${readableFactorLabel(counterpoint)} shows up — that's what keeps it spicy.`,
         `${sentenceStart(teamSubject(input, opposingAbbr))} have one real way to make this uncomfortable, so the upset isn't crazy.`,
         `It comes down to whether ${teamPossessive(input, winnerAbbr)} main edge outmuscles ${teamPossessive(input, opposingAbbr)} best counter.`,
+        `Give ${teamSubject(input, opposingAbbr)} their shot here — if ${readableFactorLabel(counterpoint)} lands, the whole read shifts.`,
+        `The live angle is ${teamPossessive(input, opposingAbbr)} ${readableFactorLabel(counterpoint)}; that's the lever that makes it close.`,
       ],
       `${seed}|fan-counter`,
     );
@@ -494,6 +500,10 @@ function renderFanAngle(
         ? `${sentenceStart(leadLabel)} gets it started, and ${supportLabel} is the next thing to keep an eye on.`
         : `This basically rides on whether ${leadLabel} is as real as the numbers say.`,
       `One clean edge could tell the whole story early.`,
+      `Watch the ${leadLabel} early — if it travels, this one's chalk; if not, it gets interesting.`,
+      supportLabel
+        ? `If both the ${leadLabel} and ${supportLabel} show up together, it won't stay close for long.`
+        : `The ${leadLabel} is the whole thesis here, so track it from the opening minutes.`,
     ],
     `${seed}|fan-basic`,
   );
@@ -508,13 +518,23 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
 
   const parts: string[] = [];
   const injuryLines = formatInjuryNotes(injuries);
-  const seed = `${sport}|${homeTeamAbbr}|${awayTeamAbbr}|${winnerAbbr ?? "pickem"}|${leadFactor.key}|${supportingFactors.map((f) => f.key).join(",")}`;
+  // Salt the seed with the full team names and confidence band so two different
+  // matchups that happen to share the same lead factor don't collapse onto the
+  // same variant index. This spreads games across the (now much larger) phrasing
+  // pools, which is what actually removes the "recycled narrative" feel — the
+  // copy itself is unchanged, only which variant a given game lands on.
+  const nameSalt = `${input.homeTeamName ?? homeTeamAbbr}|${input.awayTeamName ?? awayTeamAbbr}`;
+  const seed = `${sport}|${homeTeamAbbr}|${awayTeamAbbr}|${winnerAbbr ?? "pickem"}|${confidenceBand}|${leadFactor.key}|${supportingFactors.map((f) => f.key).join(",")}|${nameSalt}`;
   const seasonLead = seasonContext
     ? pickVariant(
       [
         `${seasonContext.label} stakes here. `,
         `It's a ${seasonContext.label} spot. `,
         `Big ${seasonContext.label} energy. `,
+        `${seasonContext.label} lights are on. `,
+        `This one carries ${seasonContext.label} weight. `,
+        `Pure ${seasonContext.label} pressure here. `,
+        `${seasonContext.label} stage, so it matters more. `,
       ],
       `${seed}|season`,
     )
@@ -529,6 +549,9 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
           `Real talk, ${homeTeamAbbr}-${awayTeamAbbr} is a coin flip — no need to force a side here.`,
           `${homeTeamAbbr} vs ${awayTeamAbbr} is too close to call cleanly, and the honest read is there's no real edge.`,
           `This one's a true pick'em between ${homeTeamAbbr} and ${awayTeamAbbr} — it could legit go either way.`,
+          `${homeTeamAbbr}-${awayTeamAbbr} grades out dead even; anyone selling you a strong side is guessing.`,
+          `No edge worth chasing in ${homeTeamAbbr} vs ${awayTeamAbbr} — it's as close to 50/50 as these get.`,
+          `${homeTeamAbbr} and ${awayTeamAbbr} cancel out on paper; this is a hands-off, watch-and-enjoy spot.`,
         ],
         `${seed}|pickem`,
       ),
@@ -569,6 +592,13 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
             `${sentenceStart(teamSubject(input, winnerAbbr))} get the slight lean over ${teamSubject(input, loserAbbr)}, but real talk this is basically a coin flip.`,
             `If you're picking, give it to ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} — but barely; it's a true toss-up vibe.`,
             `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick, but keep it light: this is a coin-flip spot, not a statement against ${teamSubject(input, loserAbbr)}.`,
+            `Flip a coin and you've about got it — ${teamSubject(input, winnerAbbr)} edge ${teamSubject(input, loserAbbr)} by a whisker, nothing more.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the side, but I'm not married to it; ${teamSubject(input, loserAbbr)} are right there.`,
+            `Honestly this one's a dead heat — the needle barely tips to ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}.`,
+            `Call it ${teamSubject(input, winnerAbbr)} if you're forced to, but ${teamSubject(input, loserAbbr)} could just as easily take it.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} nose ahead of ${teamSubject(input, loserAbbr)}, though "ahead" is doing a lot of work in a spot this tight.`,
+            `Splitting hairs here — ${teamSubject(input, winnerAbbr)} get the faint nod, but treat ${teamSubject(input, loserAbbr)} as a live dog.`,
+            `No clean edge in this one; ${teamSubject(input, winnerAbbr)} are the lean over ${teamSubject(input, loserAbbr)} and that's about all you can say.`,
           ],
           `${seed}|coinflip`,
         ),
@@ -582,6 +612,13 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
             `${sentenceStart(teamSubject(input, winnerAbbr))} are the side over ${teamSubject(input, loserAbbr)} — the matchup tilts their way, just not by a ton.`,
             `Leaning ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} here; the edge is real but it's a thin one.`,
             `The read nudges toward ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)} — there's an edge, just don't oversell it.`,
+            `Give me ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}, but it's a modest lean, not a hammer.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} have the better of it against ${teamSubject(input, loserAbbr)} — slim margin, but it's there.`,
+            `Slight tilt to ${teamSubject(input, winnerAbbr)} here; ${teamSubject(input, loserAbbr)} keep it close enough to respect.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} grade out a touch ahead of ${teamSubject(input, loserAbbr)} — enough to side with, not enough to lean on hard.`,
+            `The edge points to ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}, but it's the kind you'd want to double-check at the number.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the pick over ${teamSubject(input, loserAbbr)}, just know the gap is narrow.`,
+            `A small but honest edge to ${teamSubject(input, winnerAbbr)} here — ${teamSubject(input, loserAbbr)} aren't far off.`,
           ],
           `${seed}|slight`,
         ),
@@ -595,6 +632,13 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
             `${sentenceStart(teamSubject(input, winnerAbbr))} are the play over ${teamSubject(input, loserAbbr)}, and the matchup genuinely sets up in their favor.`,
             `${sentenceStart(teamSubject(input, winnerAbbr))} have the better case against ${teamSubject(input, loserAbbr)} — the key pieces all point the same way.`,
             `${sentenceStart(teamSubject(input, winnerAbbr))} are cooking in this spot against ${teamSubject(input, loserAbbr)}; the read likes them with room to work.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the side I want over ${teamSubject(input, loserAbbr)} — this matchup fits them well.`,
+            `Comfortable with ${teamSubject(input, winnerAbbr)} here; the profile against ${teamSubject(input, loserAbbr)} is a clean one.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} check the boxes that matter against ${teamSubject(input, loserAbbr)}, and it shows in the read.`,
+            `This sets up nicely for ${teamSubject(input, winnerAbbr)} — enough separation from ${teamSubject(input, loserAbbr)} to back it with some conviction.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} have the cleaner path against ${teamSubject(input, loserAbbr)}, and the numbers back the eye test.`,
+            `Solid spot for ${teamSubject(input, winnerAbbr)}; the gap on ${teamSubject(input, loserAbbr)} is real and repeatable.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the stronger team in the ways that count tonight against ${teamSubject(input, loserAbbr)}.`,
           ],
           `${seed}|clear`,
         ),
@@ -608,6 +652,13 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
             `${sentenceStart(teamSubject(input, winnerAbbr))} are the clear side here, and it's not just one thing carrying it.`,
             `${sentenceStart(teamSubject(input, winnerAbbr))} look built different in this spot — multiple signals stacked their way over ${teamSubject(input, loserAbbr)}.`,
             `${sentenceStart(teamSubject(input, winnerAbbr))} are the strong read against ${teamSubject(input, loserAbbr)}, with the biggest factors all lined up.`,
+            `This is one of the cleaner reads on the board — ${teamSubject(input, winnerAbbr)} over ${teamSubject(input, loserAbbr)}, and it's not close on paper.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are a confident side against ${teamSubject(input, loserAbbr)}; just about everything points their way.`,
+            `Hard to talk yourself onto ${teamSubject(input, loserAbbr)} here — ${teamSubject(input, winnerAbbr)} have too much going for them.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the kind of spot you circle: layered edges over ${teamSubject(input, loserAbbr)}, not a one-trick read.`,
+            `Everything that matters tilts ${teamSubject(input, winnerAbbr)} tonight, and ${teamSubject(input, loserAbbr)} don't have an obvious answer.`,
+            `${sentenceStart(teamSubject(input, winnerAbbr))} are the strong play; the case against ${teamSubject(input, loserAbbr)} is stacked on multiple fronts.`,
+            `This one reads decisive — ${teamSubject(input, winnerAbbr)} have separation on ${teamSubject(input, loserAbbr)} in the areas that decide games.`,
           ],
           `${seed}|strong`,
         ),
@@ -623,6 +674,12 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
         `The main thing: ${leadInsight}.`,
         `Where it really starts — ${leadInsight}.`,
         `What's driving it: ${leadInsight}.`,
+        `Start here: ${leadInsight}.`,
+        `The engine of it is ${leadInsight}.`,
+        `Biggest lever in the read — ${leadInsight}.`,
+        `What tips it: ${leadInsight}.`,
+        `The core of the case is ${leadInsight}.`,
+        `Top of the list: ${leadInsight}.`,
       ],
       `${seed}|lead`,
     ),
@@ -635,12 +692,18 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
       .join("; ");
     parts.push(
       pickVariant(
-        [
-          `It's backed up too: ${supportText}.`,
-          `And there's more on the stack: ${supportText}.`,
-          `The next layer's in their corner too: ${supportText}.`,
-        ],
-        `${seed}|support`,
+      [
+        `It's backed up too: ${supportText}.`,
+        `And there's more on the stack: ${supportText}.`,
+        `The next layer's in their corner too: ${supportText}.`,
+        `There's reinforcement behind it: ${supportText}.`,
+        `It doesn't stop there — ${supportText}.`,
+        `More working in their favor: ${supportText}.`,
+        `The supporting case holds up too: ${supportText}.`,
+        `Stacked on top of that: ${supportText}.`,
+        `And the secondary read agrees: ${supportText}.`,
+      ],
+      `${seed}|support`,
       ),
     );
   }
@@ -672,12 +735,18 @@ export function buildDeterministicNarrative(input: NarrativeInput): string {
     );
     parts.push(
       pickVariant(
-        [
-          `The one thing that gives me pause: ${counterInsight}.`,
-          `What could flip it: ${counterInsight}.`,
-          `Not all one-way though — ${counterInsight}.`,
-        ],
-        `${seed}|counter`,
+      [
+        `The one thing that gives me pause: ${counterInsight}.`,
+        `What could flip it: ${counterInsight}.`,
+        `Not all one-way though — ${counterInsight}.`,
+        `The hole in the case: ${counterInsight}.`,
+        `Where it could go sideways — ${counterInsight}.`,
+        `Reason to hedge a little: ${counterInsight}.`,
+        `The counter you can't ignore: ${counterInsight}.`,
+        `Don't sleep on the other side, though — ${counterInsight}.`,
+        `One crack in it: ${counterInsight}.`,
+      ],
+      `${seed}|counter`,
       ),
     );
   }

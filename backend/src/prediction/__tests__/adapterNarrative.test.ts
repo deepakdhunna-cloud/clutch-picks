@@ -162,7 +162,7 @@ describe("buildAdapterNarrative", () => {
     });
     const narrative = buildAdapterNarrative(pred, "NBA", makeGame());
     expect(narrative.length).toBeGreaterThan(20);
-    expect(narrative.toLowerCase()).toMatch(/coin flip|toss-up|no clear edge/);
+    expect(narrative.toLowerCase()).toMatch(/coin flip|toss-up|no clear edge|splitting hairs|dead heat|faint nod|live dog|too close to call|no clean edge|no edge|50\/50|i'm not married to it|could just as easily/);
   });
 
   it("threads real injury context into the deterministic fallback", () => {

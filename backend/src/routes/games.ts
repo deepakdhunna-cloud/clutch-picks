@@ -716,7 +716,7 @@ const TOP_PICK_MIN_CONFIDENCE = 56;
 // high-conviction read. This keeps the board populated on thin/offseason slates
 // without ever surfacing a pick the engine itself flagged as unreliable.
 const TOP_PICK_RELAXED_MIN_CONFIDENCE = 53;
-const TOP_PICK_LIMIT = 8;
+const TOP_PICK_LIMIT = 12;
 const TOP_PICK_MAX_CANDIDATES = 48;
 const TOP_PICK_MAX_CANDIDATES_PER_SPORT = 6;
 const TOP_PICK_BLOCKED_DECISION_TAGS = new Set(["thin-data", "low-conviction"]);
@@ -820,10 +820,15 @@ export function selectTopPicksForDisplay(games: Game[]): Game[] {
   return [...gamesBySport.entries()]
     .map(([sport, sportGames]) => {
       const strict = sportGames.filter(isTopPickEligible);
-      // Fallback to relaxed-but-still-clean picks (never the ungated sportGames,
-      // which let blocked/low-data/below-coin-flip picks through). A sport with
-      // no acceptable pick contributes none rather than a pick we distrust.
-      const pool = strict.length > 0 ? strict : sportGames.filter(isRelaxedTopPickEligible);
+      const relaxed = sportGames.filter(isRelaxedTopPickEligible);
+      // Every in-season league always surfaces its single best scheduled pick.
+      // Preference order: strict-eligible (high conviction) > relaxed-clean lean
+      // > the best remaining displayable candidate for the sport. We only ever
+      // drop a sport when it has NO displayable candidate at all (e.g. all games
+      // are TBD/no-prediction), which is handled by the upstream
+      // isDisplayableTopPickCandidate filter. This guarantees league coverage on
+      // the board rather than hiding leagues whose best read is a softer lean.
+      const pool = strict.length > 0 ? strict : relaxed.length > 0 ? relaxed : sportGames;
       const best = [...pool].sort((a, b) => topPickScore(b) - topPickScore(a))[0];
       return { sport, game: best };
     })
