@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Camera, Pencil } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigationContainerRef } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { api } from '@/lib/api/api';
@@ -20,7 +20,7 @@ import { FeedbackModal } from '@/components/FeedbackModal';
 import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
-import { guardedRouterReplace } from '@/lib/navigation-guard';
+import { guardedResetTo } from '@/lib/navigation-guard';
 
 const BG = '#040608';
 const CORAL = '#8B0A1F';
@@ -51,6 +51,7 @@ interface UserProfile {
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
+  const navigationRef = useNavigationContainerRef();
   const [displayName, setDisplayName] = useState('');
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -104,8 +105,9 @@ export default function ProfileSetupScreen() {
       // Mark onboarding complete
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
 
-      // Navigate to home
-      guardedRouterReplace(router, '/(tabs)');
+      // Navigate to home with a full stack reset so onboarding/welcome can't
+      // remain beneath Home (which would let an iOS edge back-swipe pop to it).
+      guardedResetTo(router, '/(tabs)', { navigationRef });
     } catch {
       setFeedback({
         title: 'Profile Not Saved',

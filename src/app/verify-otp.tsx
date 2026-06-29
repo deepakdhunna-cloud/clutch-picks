@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, Pressable, StyleSheet,
   StatusBar, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useNavigationContainerRef } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,7 +15,7 @@ import { useFinalizeAuthSession } from '@/lib/auth/use-session';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
 import { BG, TEAL, MAROON } from '@/lib/theme';
-import { guardedRouterBack, guardedRouterReplace } from '@/lib/navigation-guard';
+import { guardedRouterBack, guardedResetTo } from '@/lib/navigation-guard';
 
 const CODE_LENGTH = 6;
 
@@ -44,6 +44,7 @@ function ShieldCheckIcon({ size = 36 }: { size?: number }) {
 
 export default function VerifyOTP() {
   const router = useRouter();
+  const navigationRef = useNavigationContainerRef();
   const { email, otp: initialOtp, mode } = useLocalSearchParams<{ email: string; otp?: string; mode?: string }>();
   const finalizeAuthSession = useFinalizeAuthSession();
   const isSignIn = mode === 'signin';
@@ -105,9 +106,9 @@ export default function VerifyOTP() {
       // account walks through the intro even on a device where a previous
       // user had completed it.
       if (isSignIn && onboarded === 'true') {
-        guardedRouterReplace(router, '/(tabs)');
+        guardedResetTo(router, '/(tabs)', { navigationRef });
       } else {
-        guardedRouterReplace(router, '/onboarding');
+        guardedResetTo(router, '/onboarding', { navigationRef });
       }
     } catch (requestError) {
       setError(authRequestErrorMessage(

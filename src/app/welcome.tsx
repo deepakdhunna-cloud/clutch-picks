@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, StyleSheet, StatusBar, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useNavigationContainerRef } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Haptics from 'expo-haptics';
@@ -30,6 +30,7 @@ const BG = '#040608';
 
 export default function WelcomeScreen() {
   const finalizeAuthSession = useFinalizeAuthSession();
+  const navigationRef = useNavigationContainerRef();
   const { width } = useWindowDimensions();
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleAvailable, setIsAppleAvailable] = useState(false);
@@ -78,7 +79,7 @@ export default function WelcomeScreen() {
     const onboarded = await AsyncStorage.getItem('clutch_onboarding_complete');
     // Reset the stack so the auth screens are flushed and Home can't be
     // back-swiped to Welcome / onboarding.
-    guardedResetTo(router, onboarded === 'true' ? '/(tabs)' : '/onboarding');
+    guardedResetTo(router, onboarded === 'true' ? '/(tabs)' : '/onboarding', { navigationRef });
   };
 
   const appleFullName = (fullName: AppleAuthentication.AppleAuthenticationFullName | null): string | null => {

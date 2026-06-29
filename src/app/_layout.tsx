@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useNavigationContainerRef } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -78,6 +78,10 @@ function RootLayoutNav({
   const { data: session, isLoading } = useSession();
   const router = useRouter();
   const segments = useSegments();
+  // Root navigation container ref — used to dispatch a true stack reset on
+  // auth-state transitions so Welcome/onboarding can never remain beneath Home
+  // in the native back stack (otherwise an iOS edge back-swipe pops back to it).
+  const navigationRef = useNavigationContainerRef();
   const [appIsReady, setAppIsReady] = useState(false);
   const { markAnimationComplete, splashAnimationComplete } = useSplash();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -182,14 +186,14 @@ function RootLayoutNav({
       // native back stack; otherwise an iOS edge back-swipe on Home could pop
       // back to Welcome and re-trigger onboarding.
       if (!onboardingDone) {
-        guardedResetTo(router, '/onboarding');
+        guardedResetTo(router, '/onboarding', { navigationRef });
       } else {
-        guardedResetTo(router, '/(tabs)');
+        guardedResetTo(router, '/(tabs)', { navigationRef });
       }
     } else if (!hasUser && !inAuthGroup && !inPublicGroup) {
-      guardedResetTo(router, '/welcome');
+      guardedResetTo(router, '/welcome', { navigationRef });
     }
-  }, [hasUser, isLoading, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup, router]);
+  }, [hasUser, isLoading, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup, router, navigationRef]);
 
   // Callback when splash animation completes
   const handleAnimationComplete = useCallback(() => {

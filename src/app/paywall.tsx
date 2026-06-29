@@ -9,7 +9,7 @@ import {
   View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Dimensions, Linking, TextInput,
 } from 'react-native';
 import { api } from '@/lib/api/api';
-import { router } from 'expo-router';
+import { router, useNavigationContainerRef } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate, cancelAnimation } from 'react-native-reanimated';
@@ -40,7 +40,7 @@ import {
   REVENUECAT_PACKAGE_IDS,
 } from '@/lib/subscription-config';
 import { FeedbackModal } from '@/components/FeedbackModal';
-import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
+import { guardedRouterBack, guardedRouterPush, guardedRouterReplace, guardedResetTo } from '@/lib/navigation-guard';
 
 import { BG, MAROON, TEAL } from '@/lib/theme';
 
@@ -209,6 +209,7 @@ const shouldAdvertiseThreeDayTrial = (pkg: PurchasesPackage | null) => {
 // MAIN
 // ═════════════════════════════════════════════════════════════════
 export default function PaywallScreen() {
+  const navigationRef = useNavigationContainerRef();
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -287,8 +288,9 @@ export default function PaywallScreen() {
     }
     // RevenueCat can deliver entitlement updates through its listener before
     // the purchase promise resolves, especially on the simulator App Store sheet.
-    guardedRouterReplace(router, '/(tabs)');
-  }, [isPremium, isPurchasing, isRestoring, promoLoading]);
+    // Reset the stack so onboarding/welcome can't be back-swiped to from Home.
+    guardedResetTo(router, '/(tabs)', { navigationRef });
+  }, [isPremium, isPurchasing, isRestoring, promoLoading, navigationRef]);
 
   const loadOfferings = async (): Promise<PurchasesPackage | null> => {
     if (loadOfferingsInFlightRef.current) return monthlyPackage;
@@ -374,9 +376,9 @@ export default function PaywallScreen() {
         await checkSubscription();
         if (customerInfoHasPremium(result.data)) {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-          // router.replace (not router.back) — onboarding+paywall users would
+          // guardedResetTo (not router.back) — onboarding+paywall users would
           // otherwise pop back to onboarding and re-trigger the paywall, looping.
-          guardedRouterReplace(router, '/(tabs)');
+          guardedResetTo(router, '/(tabs)', { navigationRef });
         } else {
           setFeedback({
             title: 'Purchase Pending',
@@ -428,7 +430,7 @@ export default function PaywallScreen() {
             title: 'Restored',
             message: 'Your subscription has been restored.',
             variant: 'success',
-            onDismiss: () => guardedRouterReplace(router, '/(tabs)'),
+            onDismiss: () => guardedResetTo(router, '/(tabs)', { navigationRef }),
           });
         } else {
           setFeedback({
@@ -495,7 +497,7 @@ export default function PaywallScreen() {
         title: 'Code Applied',
         message: result.message,
         variant: 'success',
-        onDismiss: () => guardedRouterReplace(router, '/(tabs)'),
+        onDismiss: () => guardedResetTo(router, '/(tabs)', { navigationRef }),
       });
     } catch (error: any) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});

@@ -4,7 +4,7 @@ import {
   ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigationContainerRef } from 'expo-router';
 import Animated, {
   FadeIn, FadeInDown,
   useSharedValue, useAnimatedStyle,
@@ -1251,6 +1251,7 @@ function PaywallStep({ onSubscribe, onSkip, onBack }: { onSubscribe: () => void;
 // ─── MAIN ─────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const router = useRouter();
+  const navigationRef = useNavigationContainerRef();
   const { replay } = useLocalSearchParams<{ replay?: string | string[] }>();
   const [step, setStep] = useState(0);
   const [arenaSubPage, setArenaSubPage] = useState(0);
@@ -1310,12 +1311,12 @@ export default function OnboardingScreen() {
     if (step === 5) return;
     if (step === 3 && tutorialReplay) {
       await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-      guardedResetTo(router, '/(tabs)');
+      guardedResetTo(router, '/(tabs)', { navigationRef });
     } else {
       if (step === 3) setArenaSubPage(0);
       setStep(step + 1);
     }
-  }, [step, arenaSubPage, tutorialReplay, router]);
+  }, [step, arenaSubPage, tutorialReplay, router, navigationRef]);
 
   const goBack = useCallback(() => {
     if (step === 3 && arenaSubPage > 0) {
@@ -1334,8 +1335,8 @@ export default function OnboardingScreen() {
 
   const skip = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    guardedResetTo(router, '/(tabs)');
-  }, [router]);
+    guardedResetTo(router, '/(tabs)', { navigationRef });
+  }, [router, navigationRef]);
 
   const saveProfile = async () => {
     if (isSavingProfile || saveProfileInFlightRef.current) return;
@@ -1370,8 +1371,8 @@ export default function OnboardingScreen() {
 
   const skipPaywall = useCallback(async () => {
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
-    guardedResetTo(router, '/(tabs)');
-  }, [router]);
+    guardedResetTo(router, '/(tabs)', { navigationRef });
+  }, [router, navigationRef]);
 
   const handlePhotoPress = () => {
     if (isUploading) return;
