@@ -669,7 +669,10 @@ const TopPickCard = memo(function TopPickCard({
                 </View>
                 <ExpandableText text={displayPredictionAnalysis(game)} />
 
-                {/* View details CTA */}
+                {/* View details CTA. The label and chevron are a single inline
+                    Text unit (chevron is a nested Text glyph), so the arrow can
+                    never wrap onto its own line below the words regardless of how
+                    flex sizes the row. */}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
                   <Pressable
                     accessibilityRole="button"
@@ -685,11 +688,7 @@ const TopPickCard = memo(function TopPickCard({
                       onPressIn?.(game);
                     }}
                     style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      flexWrap: 'nowrap',
                       alignSelf: 'flex-end',
-                      alignItems: 'center',
-                      gap: 4,
                       backgroundColor: pressed ? 'rgba(122,157,184,0.16)' : 'rgba(122,157,184,0.08)',
                       paddingHorizontal: 12,
                       paddingVertical: 8,
@@ -698,10 +697,10 @@ const TopPickCard = memo(function TopPickCard({
                       borderColor: 'rgba(122,157,184,0.25)',
                     })}
                   >
-                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: TEAL, includeFontPadding: false, flexShrink: 0 }}>Full breakdown</Text>
-                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" style={{ marginTop: 0.5, flexShrink: 0 }}>
-                      <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
+                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: TEAL, includeFontPadding: false }}>
+                      Full breakdown{'  '}
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: TEAL }}>{'\u203A'}</Text>
+                    </Text>
                   </Pressable>
                 </View>
               </View>
