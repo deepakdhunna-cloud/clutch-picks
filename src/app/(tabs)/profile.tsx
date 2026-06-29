@@ -433,7 +433,7 @@ type RecentPickTileData = {
   gameId: string;
   abbreviation: string;
   opponentAbbr: string;
-  color: string;
+  color?: string;
   result: 'win' | 'loss' | 'pending';
   sport: string;
   game?: GameWithPrediction;
@@ -617,7 +617,10 @@ export default function ProfileScreen() {
           gameId: p.gameId,
           abbreviation: pickedAbbr,
           opponentAbbr,
-          color: pickedTeamObj?.color ?? '#5A7A8A',
+          // Pass the real team color when present; otherwise leave undefined so
+          // getTeamColors derives a distinct per-team hue from the abbreviation
+          // instead of forcing every colorless pick to the same slate-blue.
+          color: pickedTeamObj?.color ?? undefined,
           result: p.result ?? 'pending',
           sport,
           game,

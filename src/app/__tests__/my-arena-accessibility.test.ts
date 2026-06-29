@@ -206,7 +206,7 @@ describe('my arena accessibility', () => {
     const cardEnd = arenaSource.indexOf('// ─── ACCURACY BY SPORT ───', cardStart);
     const cardSource = arenaSource.slice(cardStart, cardEnd);
 
-    expect(cardSource).toContain("const MATCHUP_CARD_BACKGROUND = '#0D131B';");
+    expect(cardSource).toContain("const MATCHUP_CARD_BACKGROUND = '#000000';");
     expect(cardSource).toContain('const MATCHUP_RANK_BACKGROUND =');
     expect(cardSource).toContain('const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;');
     expect(cardSource).toContain('backgroundColor: MATCHUP_CARD_BACKGROUND');
@@ -238,11 +238,13 @@ describe('my arena accessibility', () => {
     const prepSource = arenaSource.slice(prepStart, prepEnd);
     const subtabIndex = prepSource.indexOf('{/* Sub-tab toggle: Ranked / Upsets */}');
     const boardIndex = prepSource.indexOf('{/* Ranked tab content */}');
-    const contextIndex = prepSource.indexOf('{/* Slate context card */}');
 
     expect(subtabIndex).toBeGreaterThan(0);
     expect(boardIndex).toBeGreaterThan(subtabIndex);
-    expect(contextIndex).toBeGreaterThan(boardIndex);
+    // Slate Context and Current Run supporting sections were removed from Prep Mode;
+    // the matchup board is now the terminal content of the page.
+    expect(prepSource).not.toContain('{/* Slate context card */}');
+    expect(prepSource).not.toContain('SLATE CONTEXT');
     expect(prepSource).not.toContain('Open a matchup for factors and context');
     expect(prepSource).toContain('marginBottom:12');
   });

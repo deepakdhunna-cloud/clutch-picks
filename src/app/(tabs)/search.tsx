@@ -26,7 +26,6 @@ import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displayConfidence, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import { isLiveGameLike, isSuspendedGame, sortSuspendedGamesLast, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
-import { generateTonightNarrative } from '@/lib/tonight-narrative';
 import { cricketLedScoreText, cricketOversText, cricketPlayersCompactText, cricketRequiredText, cricketRoleText, teamScoreText } from '@/lib/cricket-score';
 import {
   getCanonicalConfidence,
@@ -2367,7 +2366,7 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
 // Redesigned to match the Signature Calls (Profile) / Review summary look:
 // near-black panel, subtle white hairline border, a thin accent rail on the
 // left edge, and a tight, properly-aligned internal grid.
-const MATCHUP_CARD_BACKGROUND = '#0D131B';
+const MATCHUP_CARD_BACKGROUND = '#000000';
 const MATCHUP_CARD_BORDER = 'rgba(255,255,255,0.12)';
 const MATCHUP_RANK_BACKGROUND = 'rgba(255,255,255,0.05)';
 const MATCHUP_RANK_BORDER = 'rgba(255,255,255,0.12)';
@@ -2507,11 +2506,6 @@ const AccBySport = memo(function AccBySport({ picks }: { picks: UserPick[] }) {
       })}
     </View>
   );
-});
-
-// ─── STREAK CARD ───
-const StreakCard = memo(function StreakCard({ stats }: { stats: UserStats|undefined }) {
-  return <View style={{backgroundColor:PANEL_DARK, borderWidth:2, borderColor:'rgba(139,10,31,0.12)', borderRadius:18, padding:18, marginHorizontal:20, marginBottom:ARENA_SECTION_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:11 }, shadowOpacity:0.28, shadowRadius:20, elevation:10}}><Text style={{fontSize:9, fontWeight:'700', color:MAROON, letterSpacing:1.5, marginBottom:6}}>CURRENT RUN</Text><Text style={{fontSize:26, fontWeight:'800', color:WHITE}}>{stats?.currentStreak??0} straight correct</Text><Text style={{fontSize:11, color:TEXT_MUTED, marginTop:4}}>Resolved picks update here as final scores close.</Text></View>;
 });
 
 // ─── RESULT CARD ───
@@ -2907,7 +2901,6 @@ const Prep = memo(function Prep({
   resetSignal?: number;
 }) {
   const [prepTab, setPrepTab] = useState<0|1>(0);
-  const tonightNarrative = useMemo(() => generateTonightNarrative(sched), [sched]);
   const ranked = useMemo(() => {
     // Dedupe ONLY on identical game id (guards against a duplicate id colliding React
     // keys). A real MLB doubleheader has TWO distinct ids → both kept and told apart by
@@ -3046,13 +3039,6 @@ const Prep = memo(function Prep({
         </View>
       ) : null}
 
-      {/* Slate context card */}
-      <View style={{backgroundColor:PANEL_DARK, borderRadius:15, borderWidth:1.5, borderColor:BORDER_MED, padding:14, marginHorizontal:ARENA_SIDE_PADDING, marginBottom:ARENA_SECTION_GAP, shadowColor:'#000000', shadowOffset:{ width:0, height:8 }, shadowOpacity:0.22, shadowRadius:14, elevation:7}}>
-        <Text style={{fontSize:8.8, fontWeight:'800', color:MAROON, letterSpacing:1.4, marginBottom:7}}>SLATE CONTEXT</Text>
-        <Text style={{fontSize:12.5, fontWeight:'600', color:TEXT_SECONDARY, lineHeight:18}}>{tonightNarrative}</Text>
-      </View>
-
-      <StreakCard stats={stats} />
       <Disclaimer />
     </ArenaScrollView>
   );
