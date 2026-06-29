@@ -864,6 +864,27 @@ const teamColorsCache = new Map<string, ResolvedTeamColors>();
 // color, and different inputs spread across the hue wheel so two competitors in
 // the same match get visibly different jerseys. Saturation/lightness are kept in
 // a band that stays vibrant on dark cards and survives contrast enforcement.
+// ESPN frequently returns no color for cricket (and some other) teams; the
+// backend normalizes that absence to a placeholder dark gray (#333333). It can
+// also return near-black/near-white/low-saturation grays that render as flat,
+// indistinguishable jerseys. Detect those so we fall back to a distinct hashed
+// hue instead of painting both teams gray.
+function isPlaceholderColor(hex: string | undefined): boolean {
+  if (!hex) return true;
+  const rgb = hexToRgb(hex);
+  if (!rgb) return true;
+  const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  void h;
+  // Known backend placeholder.
+  const normalized = (hex.startsWith('#') ? hex : `#${hex}`).toUpperCase();
+  if (normalized === '#333333' || normalized === '#000000' || normalized === '#FFFFFF') return true;
+  // Low-saturation grays at any lightness, plus very dark / very light colors
+  // that read as black/white on the card.
+  if (s < 0.12) return true;
+  if (l < 0.08 || l > 0.94) return true;
+  return false;
+}
+
 function hashIdentifierToColor(identifier: string): string {
   let hash = 0;
   const key = identifier.trim().toUpperCase();
@@ -934,7 +955,7 @@ export function getTeamColors(abbreviation: string, sport: Sport, espnColor?: st
   // two jerseys look identical on the game card. Hashing the abbreviation gives
   // each competitor its own consistent hue on both the card and the detail page.
   if (!colors) {
-    if (espnColor && espnColor.length >= 4) {
+    if (espnColor && espnColor.length >= 4 && !isPlaceholderColor(espnColor)) {
       colors = {
         primary: espnColor.startsWith('#') ? espnColor : `#${espnColor}`,
         secondary: '#FFFFFF',

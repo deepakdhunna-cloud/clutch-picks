@@ -463,6 +463,8 @@ interface Game {
     detail: string;
     source: string;
   } | null;
+  competitionLabel?: string;
+  isWomens?: boolean;
   homeLinescores?: number[];
   awayLinescores?: number[];
   cricketState?: {
@@ -1833,6 +1835,20 @@ function GameDetailContent() {
               {displaySport(game.sport)}
             </Text>
           </View>
+          {game.sport === 'IPL' && (game.competitionLabel || game.isWomens) ? (
+            <>
+              <View style={styles.floatingDetailDivider} />
+              <View style={styles.floatingSportBadge}>
+                <Text style={styles.floatingSportText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {game.isWomens
+                    ? (game.competitionLabel && !/women/i.test(game.competitionLabel)
+                        ? `Women's ${game.competitionLabel}`
+                        : game.competitionLabel || "Women's")
+                    : game.competitionLabel}
+                </Text>
+              </View>
+            </>
+          ) : null}
           <View style={styles.floatingDetailDivider} />
           <Pressable
             onPress={toggleFollow}

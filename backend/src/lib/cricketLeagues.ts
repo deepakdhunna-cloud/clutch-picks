@@ -74,6 +74,12 @@ export async function fetchActiveCricketLeagues(): Promise<CricketLeague[]> {
         const eventCount = Array.isArray(league.events) ? league.events.length : 0;
         // Only include competitions that actually have games to show.
         if (eventCount <= 0) continue;
+        // The app exposes a single "T20" cricket league. Exclude Test, ODI and
+        // multi-day bilateral tours so non-T20 cricket never leaks in. IPL id is
+        // always re-added below regardless.
+        if (id !== IPL_LEAGUE_ID && !isT20Competition(league.name ?? "", league.abbreviation)) {
+          continue;
+        }
         seen.add(id);
         leagues.push({
           id,
@@ -105,6 +111,51 @@ function fallbackLeagues(): CricketLeague[] {
   ];
   cachedLeagues = { data: fallback, timestamp: Date.now() };
   return fallback;
+}
+
+/**
+ * Detect whether a cricket league name refers to a women's competition.
+ */
+export function isWomensCompetition(leagueName: string, abbreviation?: string): boolean {
+  const text = `${leagueName ?? ""} ${abbreviation ?? ""}`.toLowerCase();
+  return /\bwomen('s)?\b|\bwomens\b|\bwt20\b|\bwbbl\b|\bwpl\b|ladies|\(w\)/.test(text);
+}
+
+/**
+ * Detect whether a cricket competition is played in the T20 (twenty-over)
+ * format. Returns true for branded T20 leagues (IPL, Big Bash, PSL, The
+ * Hundred, ...) and explicit T20 markers; returns false for Test, ODI,
+ * first-class, list-A and multi-day tour competitions.
+ */
+export function isT20Competition(leagueName: string, abbreviation?: string): boolean {
+  const text = `${leagueName ?? ""} ${abbreviation ?? ""}`.toLowerCase();
+  if (!text.trim()) return false;
+
+  // Explicit non-T20 formats are excluded outright.
+  if (/\btest\b|test match|test championship|first[- ]class|\bfc\b|multi[- ]day|four[- ]day|\b4[- ]day\b/.test(text)) {
+    return false;
+  }
+  if (/\bodi\b|one[- ]day|list a|\b50[- ]over|fifty[- ]over|\bod\b cup/.test(text)) {
+    return false;
+  }
+  if (/the hundred|\bthe 100\b/.test(text)) return true; // 100-ball is T20-adjacent; keep it.
+
+  // Branded T20 competitions.
+  if (/indian premier league|\bipl\b|big bash|\bbbl\b|\bwbbl\b|pakistan super league|\bpsl\b|major league cricket|\bmlc\b|caribbean premier league|\bcpl\b|vitality blast|t20 blast|twenty20 cup|super smash|\bsa20\b|\bilt20\b|\blpl\b|\bbpl\b|\bwpl\b/.test(text)) {
+    return true;
+  }
+
+  // Explicit T20 markers.
+  if (/\bt20i?\b|twenty20|twenty 20|\bt20\d|\btg20\b|\bg20\b|eleven twenty20|t20 trophy|t20 cup/.test(text)) {
+    return true;
+  }
+  // League names embedding a "...20" branding (TG20, SA20, ILT20) are T20.
+  if (/\b[a-z]{1,4}20\b/.test(text)) return true;
+  // T20 World Cup.
+  if (/world cup/.test(text) && /t20|twenty20/.test(text)) return true;
+
+  // Unknown / ambiguous competitions are treated as non-T20 so we stay strict.
+  return false;
 }
 
 /**

@@ -159,6 +159,9 @@ export interface Game {
   // Short competition/format label for cricket games (e.g. "IPL", "Women's T20",
   // "ODI", "Test", "Big Bash"). Used to render a small pill on cricket cards.
   competitionLabel?: string;
+  // True for women's cricket competitions. Drives the "Women's" pill on cards
+  // and a note on the game detail page.
+  isWomens?: boolean;
   homeLinescores?: number[];
   awayLinescores?: number[];
   cricketState?: CricketScoreState;
@@ -417,7 +420,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
   },
   [Sport.IPL]: {
     sport: Sport.IPL,
-    name: 'Cricket',
+    name: 'T20',
     icon: 'cricket',
     color: '#D7A21E',
     accentColor: '#FFFFFF',

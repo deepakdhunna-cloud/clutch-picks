@@ -61,7 +61,7 @@ const ERROR_DIM = 'rgba(239,68,68,0.10)';
 const { width: SW } = Dimensions.get('window');
 const SPORTS = ['All', 'NBA', 'NFL', 'MLB', 'NHL', 'IPL', 'TENNIS', 'NCAAF', 'NCAAB', 'MLS', 'EPL', 'UCL', 'WORLDCUP'] as const;
 const ALWAYS_VISIBLE_SPORT_FILTERS = new Set<string>(['IPL', 'TENNIS']);
-const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENNIS: 'Tennis', WORLDCUP: 'World Cup', IPL: 'Cricket' };
+const SPORT_DISPLAY: Record<string, string> = { NCAAF: 'CFB', NCAAB: 'CBB', TENNIS: 'Tennis', WORLDCUP: 'World Cup', IPL: 'T20' };
 const ARENA_SIDE_PADDING = 20;
 const ARENA_SECTION_GAP = 28;
 const ARENA_CARD_GAP = 18;
@@ -2375,15 +2375,20 @@ const MATCHUP_CHIP_BACKGROUND = 'rgba(255,255,255,0.04)';
 const MATCHUP_CHIP_BORDER = 'rgba(255,255,255,0.10)';
 const MATCHUP_CTA_BACKGROUND = 'rgba(255,255,255,0.05)';
 const MATCHUP_CTA_BORDER = 'rgba(255,255,255,0.12)';
-const MATCHUP_CARD_CONTENT_PADDING_X = 20;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 20;
+// Generous interior padding so card content (rank chip, headline, tag chips,
+// chevron) never crowds the rounded border. X padding is intentionally larger
+// than the maroon accent rail width so text starts clear of the rail.
+const MATCHUP_CARD_CONTENT_PADDING_X = 24;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
 // Minimum collapsed-card height so cards feel substantial and never skinny.
-// Content is vertically centered within this footprint via the Pressable.
-const MATCHUP_CARD_MIN_HEIGHT = 96;
-const MATCHUP_RANK_SIZE = 30;
-const MATCHUP_RANK_GAP = 13;
-const MATCHUP_ACTION_SIZE = 24;
-const MATCHUP_ACTION_GAP = 10;
+// Content is vertically centered within this footprint via the Pressable. Sized
+// to comfortably contain the rank chip + two-line headline + a tag row with
+// breathing room above and below.
+const MATCHUP_CARD_MIN_HEIGHT = 120;
+const MATCHUP_RANK_SIZE = 34;
+const MATCHUP_RANK_GAP = 14;
+const MATCHUP_ACTION_SIZE = 26;
+const MATCHUP_ACTION_GAP = 12;
 const MATCHUP_ACCENT_COLOR = '#A8D0E6';
 const MATCHUP_ACCENT_RAIL = MAROON;
 const MATCHUP_CARD_RADIUS = 16;
@@ -2418,29 +2423,29 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
           opacity: pressed ? 0.92 : 1,
         })}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 8, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
-            <Text style={{ fontSize: 11, lineHeight: 14, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 9, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
+            <Text style={{ fontSize: 12, lineHeight: 15, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
-          <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={2} style={{ fontSize: 14.5, lineHeight: 19, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 11.5, lineHeight: 16, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 5 }} numberOfLines={expanded ? undefined : 2}>
+          <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={2} style={{ fontSize: 15, lineHeight: 20, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 11.5, lineHeight: 16.5, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 6 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: MATCHUP_ACCENT_COLOR, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{'  ·  '}</Text>
               {headline}
             </Text>
             {tags.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 11 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
-                  <View key={`${tg}-${i}`} style={{ backgroundColor: i === 0 ? hexWithAlpha(MAROON, 0.85) : MATCHUP_CHIP_BACKGROUND, borderRadius: 7, borderWidth: 1, borderColor: i === 0 ? hexWithAlpha(MAROON, 0.95) : MATCHUP_CHIP_BORDER, paddingHorizontal: 9, paddingVertical: 5 }}>
+                  <View key={`${tg}-${i}`} style={{ backgroundColor: i === 0 ? hexWithAlpha(MAROON, 0.85) : MATCHUP_CHIP_BACKGROUND, borderRadius: 7, borderWidth: 1, borderColor: i === 0 ? hexWithAlpha(MAROON, 0.95) : MATCHUP_CHIP_BORDER, paddingHorizontal: 10, paddingVertical: 6 }}>
                     <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: i === 0 ? '#FFFFFF' : TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}>{tg}</Text>
                   </View>
                 ))}
               </View>
             ) : null}
           </View>
-          <View style={{ width: MATCHUP_ACTION_SIZE, height: MATCHUP_ACTION_SIZE, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: MATCHUP_ACTION_GAP, transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
-            <ChevronRight size={15} color={TEXT_MUTED} strokeWidth={2.4} />
+          <View style={{ width: MATCHUP_ACTION_SIZE, height: MATCHUP_ACTION_SIZE, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: MATCHUP_ACTION_GAP, marginTop: 2, transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
+            <ChevronRight size={16} color={TEXT_MUTED} strokeWidth={2.4} />
           </View>
         </View>
       </Pressable>

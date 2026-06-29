@@ -31,7 +31,7 @@ const LEAGUES = [
   { id: 'NFL', name: 'NFL' },
   { id: 'MLB', name: 'MLB' },
   { id: 'NHL', name: 'NHL' },
-  { id: 'IPL', name: 'Cricket' },
+  { id: 'IPL', name: 'T20' },
   { id: 'TENNIS', name: 'Tennis' },
   { id: 'MLS', name: 'MLS' },
   { id: 'EPL', name: 'EPL' },

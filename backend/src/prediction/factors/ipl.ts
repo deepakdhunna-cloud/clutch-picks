@@ -1,14 +1,20 @@
 /**
  * IPL / T20 cricket specific factors.
  *
- * Weight budget: 0.42 (remaining after 0.58 base).
- * Breakdown:
- *   - Table strength / net run rate: 0.14
- *   - Batting run trend: 0.08
- *   - Bowling / fielding trend: 0.08
- *   - Venue split: 0.06
- *   - Head-to-head matchup: 0.03
+ * Sport-factor weights (relative; the engine normalizes all factor weights to
+ * sum to 1 after unavailable-data redistribution, so these are relative
+ * importances rather than a fixed budget):
+ *   - Table strength / net run rate: 0.14  (real IPL standings only)
+ *   - Season win rate (from record):  0.10  (works for ALL T20 competitions)
+ *   - Batting run trend:               0.08
+ *   - Bowling / fielding trend:        0.08
+ *   - Venue split:                     0.06
+ *   - Head-to-head matchup:            0.03
  *   - Weather / conditions volatility: 0.03
+ *
+ * The season-win-rate factor is the key signal for non-IPL T20 competitions
+ * (domestic leagues, bilateral tours, women's T20) where IPL standings, NRR and
+ * trend data do not exist; it keeps those predictions from collapsing to ~50%.
  *
  * ESPN's cricket feed has lighter team-level data than the US leagues, so
  * these factors intentionally use only already-fetched schedule/form context.
@@ -26,6 +32,38 @@ function splitWinPct(record: { wins: number; losses: number }): number | null {
   const games = record.wins + record.losses;
   if (games < 3) return null;
   return record.wins / games;
+}
+
+// Derive a team's season win% from whatever record shape the context carries.
+// The route layer stores cricket records as a "W-L" (optionally "W-L-T") string,
+// while other layers use a {wins,losses} object. Returns null when the record is
+// missing or the sample is too small to be meaningful — never invents a value.
+function seasonWinPctFromRecord(
+  record: unknown,
+): { winPct: number; games: number } | null {
+  let wins: number | null = null;
+  let losses: number | null = null;
+  let ties = 0;
+
+  if (typeof record === "string") {
+    const m = record.trim().match(/^(\d+)\s*-\s*(\d+)(?:\s*-\s*(\d+))?$/);
+    if (m) {
+      wins = Number(m[1]);
+      losses = Number(m[2]);
+      ties = m[3] !== undefined ? Number(m[3]) : 0;
+    }
+  } else if (record && typeof record === "object") {
+    const r = record as { wins?: unknown; losses?: unknown; ties?: unknown };
+    if (typeof r.wins === "number") wins = r.wins;
+    if (typeof r.losses === "number") losses = r.losses;
+    if (typeof r.ties === "number") ties = r.ties;
+  }
+
+  if (wins === null || losses === null) return null;
+  const games = wins + losses + ties;
+  if (games < 3) return null;
+  // Ties count as half-wins (rare in T20, but possible via super-over/abandon).
+  return { winPct: (wins + ties * 0.5) / games, games };
 }
 
 function numericTeamField(
@@ -206,6 +244,43 @@ export function computeIPLFactors(ctx: GameContext): FactorContribution[] {
     available: conditionsAvailable,
     hasSignal: conditionsAvailable && conditionsDelta !== 0,
     evidence: conditionsEvidence,
+  });
+
+  // Season win-rate from each team's competition record. This is the most
+  // reliably populated cricket signal for non-IPL T20 competitions (domestic
+  // leagues, tours, women's T20) where IPL standings, NRR and trend data are
+  // unavailable — without it those predictions collapse toward 50/50. ESPN
+  // supplies a W-L record on the scoreboard for most active T20 teams. The
+  // factor only fires when BOTH teams have a real record sample, so nothing is
+  // invented; when records are missing it redistributes through the engine.
+  const homeSeason = seasonWinPctFromRecord(
+    (ctx.game.homeTeam as unknown as Record<string, unknown>).record,
+  );
+  const awaySeason = seasonWinPctFromRecord(
+    (ctx.game.awayTeam as unknown as Record<string, unknown>).record,
+  );
+  const seasonAvailable = homeSeason !== null && awaySeason !== null;
+  // Shrink toward the league mean (0.5) by sample size so a 3-0 team isn't
+  // treated as a certainty. Effective sample uses the smaller of the two so a
+  // thin opponent record can't over-amplify the edge.
+  const seasonDelta = seasonAvailable
+    ? (() => {
+        const minGames = Math.min(homeSeason!.games, awaySeason!.games);
+        const shrink = minGames / (minGames + 6); // 0..1, ~0.5 at 6 games
+        const raw = (homeSeason!.winPct - awaySeason!.winPct) * 90;
+        return clamp(raw * shrink, -60, 60);
+      })()
+    : 0;
+  factors.push({
+    key: "ipl_season_record",
+    label: "Season win rate",
+    homeDelta: seasonDelta,
+    weight: 0.1,
+    available: seasonAvailable,
+    hasSignal: seasonAvailable && seasonDelta !== 0,
+    evidence: seasonAvailable
+      ? `${ctx.game.homeTeam.abbreviation} ${(homeSeason!.winPct * 100).toFixed(0)}% win rate (${homeSeason!.games} games) vs ${ctx.game.awayTeam.abbreviation} ${(awaySeason!.winPct * 100).toFixed(0)}% (${awaySeason!.games} games)`
+      : "Season records unavailable for both teams",
   });
 
   return factors;

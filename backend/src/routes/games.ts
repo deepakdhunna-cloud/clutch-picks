@@ -27,7 +27,7 @@ import {
   type TennisTour,
 } from "../lib/tennisStats";
 import { fetchTennisExplorerLiveMatches, type TennisExplorerLiveMatch } from "../lib/tennisExplorer";
-import { fetchActiveCricketLeagues, cricketFormatLabel, IPL_LEAGUE_ID, type CricketLeague } from "../lib/cricketLeagues";
+import { fetchActiveCricketLeagues, cricketFormatLabel, isWomensCompetition, IPL_LEAGUE_ID, type CricketLeague } from "../lib/cricketLeagues";
 import { fetchIPLStandings, type IPLStandingEntry } from "../lib/iplStandings";
 import { prisma } from "../prisma";
 
@@ -205,6 +205,9 @@ export interface Game {
   // cricket cards to distinguish IPL vs Women's T20 vs ODI vs Test vs BBL, etc.
   // (e.g. "IPL", "Women's T20", "T20I", "ODI", "Test", "Big Bash").
   competitionLabel?: string;
+  // True when this is a women's competition (cricket). Drives the "Women's" pill
+  // on the card and a note on the game detail page.
+  isWomens?: boolean;
   homeLinescores?: number[];
   awayLinescores?: number[];
   cricketState?: CricketScoreState;
@@ -2491,6 +2494,18 @@ export function buildCricketScoreState(
   };
 }
 
+// True only when a cricket game has genuine in-progress scoring data. ESPN marks
+// some cricket events as state="in" (LIVE) during toss / pre-match before any
+// ball is bowled, which leaks scheduled games into Live Now. We treat a cricket
+// game as truly live only when at least one side has real innings data (runs or
+// overs recorded).
+export function cricketHasLiveData(cricketState: CricketScoreState | undefined): boolean {
+  if (!cricketState) return false;
+  const sideHasPlay = (s?: CricketInningsScore): boolean =>
+    !!s && (typeof s.runs === "number" || (typeof s.overs === "number" && s.overs > 0));
+  return sideHasPlay(cricketState.home) || sideHasPlay(cricketState.away);
+}
+
 function cricketStatusLine(
   cricketState: CricketScoreState | undefined,
   homeAbbr: string,
@@ -2600,7 +2615,7 @@ function parseMlbLiveState({
 async function transformESPNEvent(
   event: ESPNEvent,
   sport: SportKey,
-  cricketContext?: { leagueId: string; competitionLabel?: string },
+  cricketContext?: { leagueId: string; competitionLabel?: string; isWomens?: boolean },
 ): Promise<Game | null> {
   const competition = event.competitions[0];
   if (!competition) return null;
@@ -2690,6 +2705,13 @@ async function transformESPNEvent(
   const cricketState = sport === "IPL"
     ? buildCricketScoreState(homeCompetitor, awayCompetitor, competition.status)
     : undefined;
+  // ESPN marks some cricket games LIVE (state="in") during toss / pre-match
+  // before any ball is bowled. Treat such games as SCHEDULED until they have
+  // genuine innings data, so they don't leak into Live Now.
+  const effectiveStatus: typeof gameStatus =
+    sport === "IPL" && gameStatus === "LIVE" && !cricketHasLiveData(cricketState)
+      ? "SCHEDULED"
+      : gameStatus;
   const cricketHomeScore = cricketState?.home?.runs;
   const cricketAwayScore = cricketState?.away?.runs;
   const cricketClock = sport === "IPL"
@@ -2754,7 +2776,7 @@ async function transformESPNEvent(
       matchesPlayed: awayStanding?.matchesPlayed ?? undefined,
     },
     gameTime: event.date,
-    status: gameStatus,
+    status: effectiveStatus,
     venue: competition.venue?.fullName || "TBD",
     tvChannel,
     watchSources,
@@ -2766,12 +2788,13 @@ async function transformESPNEvent(
     overUnder,
     marketFavorite,
     quarter,
-    clock: sport === "IPL" ? cricketClock ?? clock : clock,
+    clock: effectiveStatus === "SCHEDULED" ? undefined : sport === "IPL" ? cricketClock ?? clock : clock,
     statusLabel: suspension?.display,
     statusDetail: sport === "IPL" ? cricketState?.summary ?? suspension?.resumeText : suspension?.resumeText,
     suspension,
     seasonContext,
     competitionLabel: isCricket ? cricketContext?.competitionLabel : undefined,
+    isWomens: isCricket ? cricketContext?.isWomens : undefined,
     homeLinescores,
     awayLinescores,
     cricketState,
@@ -3320,9 +3343,10 @@ async function fetchCricketGamesFromESPN(date?: string, fullList = false): Promi
       if (competitionLabel === "IPL" && league.id !== IPL_LEAGUE_ID) {
         competitionLabel = leagueName && leagueName.length <= 22 ? leagueName : "Cricket";
       }
+      const isWomens = isWomensCompetition(leagueName, leagueAbbr) || isWomensCompetition(competitionLabel);
       const resolved = await batchProcess(
         data.events,
-        (event) => transformESPNEvent(event, "IPL", { leagueId: league.id, competitionLabel }),
+        (event) => transformESPNEvent(event, "IPL", { leagueId: league.id, competitionLabel, isWomens }),
         8,
       );
       return resolved.filter((g): g is Game => g !== null);
@@ -4117,7 +4141,6 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
             if (status !== "LIVE" && !(status === "FINAL" && trackedLiveGameIds.has(ev.id))) {
               return null;
             }
-            const liveStatus: LiveScore["status"] = status === "FINAL" ? "FINAL" : "LIVE";
             const suspension = getSuspensionInfoFromESPN(comp.status);
             const home = comp.competitors.find((c) => c.homeAway === "home");
             const away = comp.competitors.find((c) => c.homeAway === "away");
@@ -4125,6 +4148,12 @@ async function fetchLiveGamesOnce(): Promise<LiveScore[]> {
             const cricketState = sport === "IPL"
               ? buildCricketScoreState(home, away, comp.status)
               : undefined;
+            // Pre-match cricket (toss) is flagged LIVE by ESPN but has no innings
+            // data yet; keep it out of the live feed until play actually starts.
+            if (sport === "IPL" && status === "LIVE" && !cricketHasLiveData(cricketState)) {
+              return null;
+            }
+            const liveStatus: LiveScore["status"] = status === "FINAL" ? "FINAL" : "LIVE";
             const cricketHomeScore = cricketState?.home?.runs;
             const cricketAwayScore = cricketState?.away?.runs;
             const cricketClock = sport === "IPL"

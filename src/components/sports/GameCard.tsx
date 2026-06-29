@@ -439,6 +439,23 @@ const LiveGameLayout = memo(function LiveGameLayout({
                     </Text>
                   </View>
                 ) : null}
+                {game.isWomens ? (
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(199,107,184,0.18)',
+                      paddingHorizontal: 7,
+                      paddingVertical: 3,
+                      borderRadius: 5,
+                      marginRight: 6,
+                      borderWidth: 1,
+                      borderColor: 'rgba(199,107,184,0.5)',
+                    }}
+                  >
+                    <Text numberOfLines={1} style={{ color: '#F3D6EE', fontSize: 9, fontWeight: '700' }}>
+                      Women's
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={{ alignItems: 'flex-start' }}>
                   <PulsingLiveBadge label={suspended ? suspendedLabel(game).toUpperCase() : 'LIVE'} />
                   {suspended ? (
@@ -1014,6 +1031,23 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
                 >
                   <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
                     {game.competitionLabel}
+                  </Text>
+                </View>
+              ) : null}
+              {game.isWomens ? (
+                <View
+                  style={{
+                    backgroundColor: 'rgba(199,107,184,0.18)',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    marginRight: 6,
+                    borderWidth: 1,
+                    borderColor: 'rgba(199,107,184,0.5)',
+                  }}
+                >
+                  <Text numberOfLines={1} style={{ color: '#F3D6EE', fontSize: 10, fontWeight: '700' }}>
+                    Women's
                   </Text>
                 </View>
               ) : null}
