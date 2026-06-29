@@ -3312,7 +3312,14 @@ async function fetchCricketGamesFromESPN(date?: string, fullList = false): Promi
       const sbLeague = data.leagues?.[0];
       const leagueName = (sbLeague?.name ?? league.name).trim();
       const leagueAbbr = sbLeague?.abbreviation ?? league.abbreviation;
-      const competitionLabel = cricketFormatLabel(leagueName, leagueAbbr);
+      let competitionLabel = cricketFormatLabel(leagueName, leagueAbbr);
+      // Defensive: only the real IPL league id may carry the "IPL" pill. If a
+      // non-IPL competition's name resolved to "IPL" (e.g. a transient fallback
+      // inheriting the IPL fallback name), re-derive a generic cricket label so
+      // domestic/T20/tour matches are never mislabeled as IPL.
+      if (competitionLabel === "IPL" && league.id !== IPL_LEAGUE_ID) {
+        competitionLabel = leagueName && leagueName.length <= 22 ? leagueName : "Cricket";
+      }
       const resolved = await batchProcess(
         data.events,
         (event) => transformESPNEvent(event, "IPL", { leagueId: league.id, competitionLabel }),

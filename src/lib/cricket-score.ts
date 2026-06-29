@@ -28,6 +28,36 @@ export function isCricketGame(game: { sport: Sport | string }): boolean {
   return game.sport === Sport.IPL || String(game.sport) === 'IPL';
 }
 
+// Sentinel shown when a side has no genuine score data yet (e.g. an innings
+// that has not begun, or a feed that has not published a score). We must NOT
+// fabricate "0/0" in this case — that was the cause of the bogus "0/0 - 0/0"
+// LED board on domestic cricket matches whose ESPN feed returns empty scores.
+export const CRICKET_NO_SCORE = '—';
+
+/**
+ * Returns true when a side has any genuine score signal from the feed:
+ * a slash score display, a parsed innings score, or a numeric run total > 0.
+ * A bare numeric 0 with no innings object is treated as "no data".
+ */
+export function cricketSideHasScore(game: CricketGameLike, side: Side): boolean {
+  const display = normalizeCricketScoreText(side === 'home' ? game.homeScoreDisplay : game.awayScoreDisplay);
+  if (display && (display.includes('/') || /\d/.test(display))) return true;
+  const state = game.cricketState?.[side];
+  if (state) {
+    if (typeof state.runs === 'number') return true;
+    if (typeof state.wickets === 'number') return true;
+    if (typeof state.overs === 'number') return true;
+    if (normalizeCricketScoreText(state.scoreText)?.includes('/')) return true;
+  }
+  const numeric = side === 'home' ? game.homeScore : game.awayScore;
+  if (typeof numeric === 'number' && numeric > 0) return true;
+  return false;
+}
+
+export function cricketHasAnyScore(game: CricketGameLike): boolean {
+  return cricketSideHasScore(game, 'home') || cricketSideHasScore(game, 'away');
+}
+
 export function cricketTeamScoreText(game: CricketGameLike, side: Side): string {
   const display = normalizeCricketScoreText(side === 'home' ? game.homeScoreDisplay : game.awayScoreDisplay);
   const state = game.cricketState?.[side];
@@ -47,10 +77,10 @@ export function cricketTeamScoreText(game: CricketGameLike, side: Side): string 
 
   if (display?.includes('/')) return display;
   if (stateScore?.includes('/')) return stateScore;
-  if ((isLiveGameStatus(game.status ?? '') || game.status === 'FINAL') && (numeric === undefined || numeric === 0)) {
-    return '0/0';
-  }
-  return wicketScore ?? display ?? stateScore ?? (typeof numeric === 'number' ? String(numeric) : '0');
+  // No genuine score signal for this side — show the sentinel instead of a
+  // fabricated 0/0 so "yet to bat" / empty-feed states read cleanly.
+  if (!cricketSideHasScore(game, side)) return CRICKET_NO_SCORE;
+  return wicketScore ?? display ?? stateScore ?? (typeof numeric === 'number' ? String(numeric) : CRICKET_NO_SCORE);
 }
 
 export function teamScoreText(game: CricketGameLike, side: Side): string {
@@ -61,6 +91,7 @@ export function teamScoreText(game: CricketGameLike, side: Side): string {
 
 export function scorePairText(game: CricketGameLike): string {
   if (isCricketGame(game)) {
+    if (!cricketHasAnyScore(game)) return CRICKET_NO_SCORE;
     return `${cricketTeamScoreText(game, 'away')} - ${cricketTeamScoreText(game, 'home')}`;
   }
   return `${game.awayScore ?? 0} - ${game.homeScore ?? 0}`;
@@ -164,6 +195,9 @@ export function cricketInningsPlateText(game: CricketGameLike): string | null {
 
 export function cricketLedScoreText(game: CricketGameLike): string | null {
   if (!isCricketGame(game)) return null;
+  // No genuine score from the feed yet — let the card fall back to a clean
+  // status (e.g. "LIVE" / match time) instead of a fabricated 0/0 board.
+  if (!cricketHasAnyScore(game)) return null;
   const battingSide = cricketBattingSide(game);
   if (!battingSide) return cricketScoreboardText(game);
   return cricketTeamScoreText(game, battingSide);
@@ -304,6 +338,7 @@ export function inferCricketBattingSide(game: CricketGameLike): Side | null {
 
 export function cricketScoreboardText(game: CricketGameLike): string | null {
   if (!isCricketGame(game)) return null;
+  if (!cricketHasAnyScore(game)) return null;
   return `${cricketTeamScoreText(game, 'home')}-${cricketTeamScoreText(game, 'away')}`;
 }
 

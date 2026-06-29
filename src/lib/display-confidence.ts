@@ -29,6 +29,11 @@ export function displaySport(sport: string): string {
   if (sport === 'NCAAB') return 'CBB';
   if (sport === 'TENNIS') return 'Tennis';
   if (sport === 'WORLDCUP') return 'World Cup';
+  // The internal sport key 'IPL' now represents the broad Cricket league
+  // (IPL, T20, Women's T20, ODI, Test, BBL, tours, ...). The specific
+  // competition/format is surfaced separately via each game's competitionLabel
+  // pill, so the league itself is always shown to users as "Cricket".
+  if (sport === 'IPL') return 'Cricket';
   return sport;
 }
 

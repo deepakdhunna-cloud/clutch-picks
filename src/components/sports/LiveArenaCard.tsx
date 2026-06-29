@@ -28,6 +28,7 @@ import {
   cricketOversText,
   cricketRequiredText,
   cricketLedScoreText,
+  cricketHasAnyScore,
 } from '@/lib/cricket-score';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { deepEqual } from '@/lib/deep-equal';
@@ -267,6 +268,12 @@ export const LiveArenaCard = memo(function LiveArenaCard({
   const homeScoreLabel = isCricket ? teamScoreText(game, 'home') : null;
   const awayScoreLabel = isCricket ? teamScoreText(game, 'away') : null;
   const cricketLedScore = isCricket && !suspended ? cricketLedScoreText(game) : null;
+  // When a cricket match has no genuine score from the feed yet (common for
+  // domestic/tour matches that ESPN lists as live before publishing a score),
+  // we must not render a fabricated "0 - 0" on the LED. Show a neutral dash on
+  // the board; the live status/time and captions below convey match state.
+  const cricketNoScore = isCricket && !suspended && !cricketHasAnyScore(game);
+  const cricketLedDisplay = cricketLedScore ?? (cricketNoScore ? '-' : undefined);
 
   const innerPadX = cfg.padX;
   const bodyGap = cfg.bodyGap;
@@ -655,7 +662,7 @@ export const LiveArenaCard = memo(function LiveArenaCard({
                       homeColor={homeAccent}
                       scale={cfg.scoreScale}
                       label={suspended ? 'SUSPENDED' : undefined}
-                      displayText={cricketLedScore ?? undefined}
+                      displayText={cricketLedDisplay}
                       subLabel={suspended ? suspensionReason : undefined}
                       detailLabel={suspended ? suspensionTime : undefined}
                     />

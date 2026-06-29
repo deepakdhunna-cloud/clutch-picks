@@ -13,6 +13,9 @@ import {
   cricketScoreboardText,
   cricketStatusText,
   cricketTeamScoreText,
+  cricketHasAnyScore,
+  scorePairText,
+  CRICKET_NO_SCORE,
 } from '../cricket-score';
 
 type CricketGame = Parameters<typeof cricketScoreboardText>[0];
@@ -130,14 +133,20 @@ describe('cricket score display helpers', () => {
     expect(cricketTeamScoreText(game, 'away')).toBe('0/0');
   });
 
-  it('shows 0/0 for a live cricket side that has not batted yet', () => {
+  it('shows the no-score sentinel (not a fabricated 0/0) for a live cricket side with no feed data', () => {
     const game = makeCricketGame();
     game.status = 'LIVE';
     game.awayScore = undefined;
     game.awayScoreDisplay = undefined;
+    game.homeScore = undefined;
+    game.homeScoreDisplay = undefined;
     game.cricketState = undefined;
 
-    expect(cricketTeamScoreText(game, 'away')).toBe('0/0');
+    // A side that genuinely has no score yet must not display a made-up 0/0.
+    expect(cricketTeamScoreText(game, 'away')).toBe(CRICKET_NO_SCORE);
+    expect(cricketHasAnyScore(game)).toBe(false);
+    // And the combined pair collapses to a single neutral dash.
+    expect(scorePairText(game)).toBe(CRICKET_NO_SCORE);
   });
 
   it('labels the batting and bowling sides', () => {

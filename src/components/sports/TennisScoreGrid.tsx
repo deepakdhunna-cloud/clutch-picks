@@ -181,7 +181,18 @@ export const TennisScoreGrid = memo(function TennisScoreGrid({
   showTeams?: boolean;
 }) {
   const detailed = variant === 'detail';
-  const columns = useMemo(() => buildTennisScoreColumns(game, detailed), [game, detailed]);
+  const allColumns = useMemo(() => buildTennisScoreColumns(game, detailed), [game, detailed]);
+  // On the card face (rail/compact) we only have room for a few columns, so we
+  // keep the most recent sets visible (the ones that matter live) plus the live
+  // points column. The detail view keeps the full set-by-set breakdown.
+  const columns = useMemo(() => {
+    if (detailed) return allColumns;
+    const MAX_SET_COLUMNS = 3;
+    const pointCols = allColumns.filter((c) => c.key === 'points' || c.total);
+    const setCols = allColumns.filter((c) => c.key !== 'points' && !c.total);
+    const trimmedSets = setCols.length > MAX_SET_COLUMNS ? setCols.slice(-MAX_SET_COLUMNS) : setCols;
+    return [...trimmedSets, ...pointCols];
+  }, [allColumns, detailed]);
   if (columns.length === 0) return null;
 
   const withTeams = showTeams ?? detailed;
@@ -446,14 +457,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(180,211,235,0.16)',
   },
   railScoreCell: {
-    width: 21,
-    height: 27,
+    width: 26,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
   railActiveCell: {
-    width: 32,
-    height: 25,
+    width: 34,
+    height: 27,
     borderRadius: 10,
     backgroundColor: 'rgba(45,54,68,0.96)',
     borderWidth: 1,
@@ -467,7 +478,7 @@ const styles = StyleSheet.create({
     marginLeft: 11,
   },
   railCellGap: {
-    marginLeft: 6,
+    marginLeft: 9,
   },
   detailScoreCell: {
     width: 38,

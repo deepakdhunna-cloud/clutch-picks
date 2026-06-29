@@ -132,7 +132,10 @@ export function cricketFormatLabel(leagueName: string, abbreviation?: string): s
   if (/\btest\b|test championship|test match/.test(lower)) return isWomen ? "Women's Test" : "Test";
   if (/\bt20i\b|t20 international/.test(lower)) return isWomen ? "Women's T20I" : "T20I";
   if (/\bodi\b|one day international|one-day international/.test(lower)) return isWomen ? "Women's ODI" : "ODI";
-  if (/\bt20\b|twenty20|twenty 20/.test(lower)) return isWomen ? "Women's T20" : "T20";
+  if (/\bt20\b|twenty20|twenty 20|\bt20\d|\bg20\b|\btg20\b/.test(lower)) return isWomen ? "Women's T20" : "T20";
+  // League names that embed a "...20" branding (e.g. "TG20", "SA20", "ILT20",
+  // "LPL T20") are virtually always T20 competitions.
+  if (/\b[a-z]{1,4}20\b/.test(lower)) return isWomen ? "Women's T20" : "T20";
   if (/world cup/.test(lower)) {
     if (/t20/.test(lower)) return isWomen ? "Women's T20 WC" : "T20 World Cup";
     return isWomen ? "Women's World Cup" : "World Cup";
