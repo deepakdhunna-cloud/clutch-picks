@@ -686,6 +686,8 @@ const TopPickCard = memo(function TopPickCard({
                     }}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
+                      flexWrap: 'nowrap',
+                      alignSelf: 'flex-end',
                       alignItems: 'center',
                       gap: 4,
                       backgroundColor: pressed ? 'rgba(122,157,184,0.16)' : 'rgba(122,157,184,0.08)',
@@ -696,8 +698,8 @@ const TopPickCard = memo(function TopPickCard({
                       borderColor: 'rgba(122,157,184,0.25)',
                     })}
                   >
-                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: TEAL, includeFontPadding: false }}>Full breakdown</Text>
-                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" style={{ marginTop: 0.5 }}>
+                    <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: TEAL, includeFontPadding: false, flexShrink: 0 }}>Full breakdown</Text>
+                    <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" style={{ marginTop: 0.5, flexShrink: 0 }}>
                       <Path d="M9 18l6-6-6-6" stroke={TEAL} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
                   </Pressable>
