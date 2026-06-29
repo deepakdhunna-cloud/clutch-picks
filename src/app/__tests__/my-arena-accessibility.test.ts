@@ -191,7 +191,7 @@ describe('my arena accessibility', () => {
     expect(arenaSource).toContain('minHeight: MATCHUP_CARD_MIN_HEIGHT');
     expect(arenaSource).toContain("style={{ flexDirection: 'row', alignItems: 'flex-start' }}");
     expect(arenaSource).toContain('marginRight: MATCHUP_RANK_GAP');
-    expect(arenaSource).toContain("style={{ flex: 1, minWidth: 0 }}");
+    expect(arenaSource).toContain("style={{ flex: 1, minWidth: 0, paddingRight: 12 }}");
     expect(arenaSource).toContain('marginLeft: MATCHUP_ACTION_GAP');
     expect(arenaSource).toContain("style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 13 }}");
     expect(arenaSource).toContain('height: MATCHUP_CARD_CTA_HEIGHT');

@@ -80,6 +80,12 @@ export async function fetchActiveCricketLeagues(): Promise<CricketLeague[]> {
         if (id !== IPL_LEAGUE_ID && !isT20Competition(league.name ?? "", league.abbreviation)) {
           continue;
         }
+        // Exclude reserve / development competitions (county "Second XI"
+        // trophies, A-teams, academy sides). These are not the senior matches
+        // users expect to see and pollute the board with "2nd XI" squads.
+        if (isReserveOrDevelopmentCompetition(league.name ?? "", league.abbreviation)) {
+          continue;
+        }
         seen.add(id);
         leagues.push({
           id,
@@ -111,6 +117,30 @@ function fallbackLeagues(): CricketLeague[] {
   ];
   cachedLeagues = { data: fallback, timestamp: Date.now() };
   return fallback;
+}
+
+/**
+ * Detect whether a cricket competition is a reserve / development / second-string
+ * competition (e.g. England county "Second XI Trophy", A-team tours, academy or
+ * under-age sides). These are excluded from the app so the board only shows
+ * senior first-team matches.
+ */
+export function isReserveOrDevelopmentCompetition(leagueName: string, abbreviation?: string): boolean {
+  const text = `${leagueName ?? ""} ${abbreviation ?? ""}`.toLowerCase();
+  if (!text.trim()) return false;
+  return /\bsecond xi\b|\b2nd xi\b|\bsecond eleven\b|2nd eleven|\bdevelopment\b|\bacademy\b|under[- ]?\d{2}|\bu\d{2}\b|\ba[- ]team\b/.test(text);
+}
+
+/**
+ * Detect whether a single team name is a reserve / second-string side, such as
+ * "Hampshire 2nd XI" or "Surrey Second XI". Used as a per-game safety net.
+ */
+export function isReserveTeamName(teamName: string): boolean {
+  const text = (teamName ?? "").toLowerCase();
+  if (!text.trim()) return false;
+  // A trailing standalone "a" (e.g. "India A", "Australia A") denotes an A-team.
+  if (/\sa$/.test(text)) return true;
+  return /\b2nd xi\b|\bsecond xi\b|\b2nd xii\b|\bsecond eleven\b|\b2nd eleven\b|\ba[- ]team\b|under[- ]?\d{2}|\bu\d{2}\b/.test(text);
 }
 
 /**

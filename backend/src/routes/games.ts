@@ -27,7 +27,7 @@ import {
   type TennisTour,
 } from "../lib/tennisStats";
 import { fetchTennisExplorerLiveMatches, type TennisExplorerLiveMatch } from "../lib/tennisExplorer";
-import { fetchActiveCricketLeagues, cricketFormatLabel, isWomensCompetition, IPL_LEAGUE_ID, type CricketLeague } from "../lib/cricketLeagues";
+import { fetchActiveCricketLeagues, cricketFormatLabel, isWomensCompetition, isReserveTeamName, IPL_LEAGUE_ID, type CricketLeague } from "../lib/cricketLeagues";
 import { fetchIPLStandings, type IPLStandingEntry } from "../lib/iplStandings";
 import { prisma } from "../prisma";
 
@@ -3364,8 +3364,14 @@ async function fetchCricketGamesFromESPN(date?: string, fullList = false): Promi
   const leagueResults = await batchProcess(leagues, fetchLeague, 5);
   const allGames = leagueResults.flat();
 
+  // Safety net: drop reserve / second-string matches (e.g. "Hampshire 2nd XI")
+  // even if ESPN nested them under a broader, non-reserve league id.
+  const seniorOnly = allGames.filter(
+    (g) => !isReserveTeamName(g.homeTeam.name) && !isReserveTeamName(g.awayTeam.name),
+  );
+
   // De-duplicate (a match can appear under multiple league listings) and verify.
-  const unique = Array.from(new Map(allGames.map((g) => [g.id, g])).values());
+  const unique = Array.from(new Map(seniorOnly.map((g) => [g.id, g])).values());
   const games = filterVerifiedScoreboardGames(unique).sort(
     (a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime(),
   );
