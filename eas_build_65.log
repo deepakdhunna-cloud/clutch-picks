@@ -1,0 +1,55 @@
+nohup: ignoring input
+★ eas-cli@20.4.0 is now available.
+To upgrade, run:
+npm install -g eas-cli
+Proceeding with outdated version.
+
+(node:55542) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/
+Resolved "production" environment for the build. Learn more: https://docs.expo.dev/eas/environment-variables/#setting-the-environment-for-your-builds
+No environment variables with visibility "Plain text" and "Sensitive" found for the "production" environment on EAS.
+Environment variables loaded from the "production" build profile "env" configuration: EXPO_PUBLIC_REVENUECAT_APPLE_KEY, EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY, EXPO_PUBLIC_REVENUECAT_TEST_KEY, EXPO_PUBLIC_BACKEND_URL, BACKEND_URL, EXPO_IOS_BUILD_NUMBER.
+
+
+
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/
+✔ Using remote iOS credentials (Expo server)
+
+Distribution Certificate is not validated for non-interactive builds.
+Skipping Provisioning Profile validation on Apple Servers because we aren't authenticated.
+
+Project Credentials Configuration
+
+Project                   @deepakdhunna/clutch-picks
+Bundle Identifier         Com.vibecode.clutchpicks-xzrxme
+                          
+App Store Configuration   
+                          
+Distribution Certificate  
+Serial Number             10156989F16A2BB6D94C878967E3B716
+Expiration Date           Sun, 14 Feb 2027 03:25:38 UTC
+Apple Team                ZM77R3YN9B (Deepak Dhunna (Individual))
+Updated                   4 months ago
+                          
+Provisioning Profile      
+Developer Portal ID       YUDNL8A3WW
+Status                    active
+Expiration                Sun, 14 Feb 2027 03:25:38 UTC
+Apple Team                ZM77R3YN9B (Deepak Dhunna (Individual))
+Updated                   2 months ago
+                          
+All credentials are ready to build @deepakdhunna/clutch-picks (Com.vibecode.clutchpicks-xzrxme)
+
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+- Compressing project files
+- Uploading to EAS Build (0 / 13.5 MB)
+✔ Uploaded to EAS 
+- Computing project fingerprint
+⌛️ Computing the project fingerprint is taking longer than expected...
+⏩ To skip this step, set the environment variable: EAS_SKIP_AUTO_FINGERPRINT=1
+✔ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/deepakdhunna/projects/clutch-picks/builds/94035ab4-2677-4865-b968-f62fb47b9ab0
+
