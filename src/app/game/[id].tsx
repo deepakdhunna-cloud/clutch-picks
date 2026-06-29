@@ -2291,7 +2291,7 @@ const styles = StyleSheet.create({
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
   scheduledHero: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', marginTop: 10, paddingHorizontal: 8 },
   scheduledHeroStatus: { fontSize: 40, lineHeight: 44, color: '#FFFFFF', fontFamily: 'VT323_400Regular', letterSpacing: 4, textAlign: 'center', textTransform: 'uppercase' },
-  scheduledHeroTime: { fontSize: 40, lineHeight: 44, color: 'rgba(255,255,255,0.72)', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 3, textAlign: 'center', textTransform: 'uppercase' },
+  scheduledHeroTime: { fontSize: 52, lineHeight: 56, color: 'rgba(255,255,255,0.72)', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 3, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLineAbove: { maxWidth: 220, color: '#FFFFFF', fontSize: 11.5, lineHeight: 14, fontWeight: '900', letterSpacing: 1.4, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },
