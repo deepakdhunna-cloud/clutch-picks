@@ -38,6 +38,26 @@ import * as Haptics from 'expo-haptics';
 
 // Memoize all sports array
 const allSports = Object.values(Sport);
+// Curated default ordering for the cold-start loading window. Until real game
+// counts arrive, the count-based sort has no signal and would otherwise fall
+// back to raw enum order (NFL/NBA/MLB/NHL), which then visibly swaps to the
+// app's actual active sports once data lands. Ordering the loading placeholders
+// by the sports this app actually runs keeps the first page stable through the
+// load and eliminates the label swap.
+const ACTIVE_SPORT_PRIORITY: Sport[] = [
+  Sport.TENNIS,
+  Sport.MLB,
+  Sport.WORLDCUP,
+  Sport.IPL,
+  Sport.MLS,
+  Sport.UCL,
+  Sport.EPL,
+  Sport.NFL,
+  Sport.NBA,
+  Sport.NHL,
+  Sport.NCAAF,
+  Sport.NCAAB,
+];
 const HOME_SPORT_INITIAL_GAME_COUNT = 10;
 const HOME_SPORT_GAME_BATCH_COUNT = 10;
 const HOME_BOARD_SCROLL_OFFSET = 300;
@@ -487,6 +507,13 @@ const HomeHeader = React.memo(function HomeHeader({
   const sortedSports = useMemo(
     () => {
       const enumOrder = new Map(allSports.map((s, i) => [s, i]));
+      // Tie-break by curated active-sport priority (not raw enum order) so the
+      // cold-start loading window — where every count is 0 — shows the app's
+      // real active sports (Tennis/MLB/T20/WC) instead of NFL/NBA/MLB/NHL, and
+      // does not visibly re-order when the real counts arrive.
+      const priorityOrder = new Map(ACTIVE_SPORT_PRIORITY.map((s, i) => [s, i]));
+      const tieBreak = (s: Sport) =>
+        priorityOrder.get(s) ?? (ACTIVE_SPORT_PRIORITY.length + (enumOrder.get(s) ?? 0));
       // Order tiles by a status-agnostic total (live + scheduled + final across
       // the loaded window) so an in-season league like the World Cup surfaces on
       // page 1 even when its games fall on tomorrow rather than today.
@@ -497,8 +524,9 @@ const HomeHeader = React.memo(function HomeHeader({
         if (hasA !== hasB) return hasB - hasA;
         const countDiff = orderCount(b) - orderCount(a);
         if (countDiff !== 0) return countDiff;
-        // Stable tie-break by enum order so tile positions stay consistent.
-        return (enumOrder.get(a) ?? 0) - (enumOrder.get(b) ?? 0);
+        // Stable tie-break by curated active-sport priority so tile positions
+        // stay consistent across the load and never swap when counts arrive.
+        return tieBreak(a) - tieBreak(b);
       });
     },
     [gameCounts, totalGameCounts]
@@ -1524,12 +1552,8 @@ export default function HomeScreen() {
     index,
   }), []);
 
-  const __dbg = `g=${todaysGames?.length ?? 'nil'} c=${Object.values(gameCounts).reduce((a, b) => a + (b ?? 0), 0)} tc=${Object.values(totalGameCounts).reduce((a, b) => a + (b ?? 0), 0)} L=${isLoadingGames ? 1 : 0} F=${isFetchingGames ? 1 : 0} ever=${hasEverHadGameData ? 1 : 0} init=${isInitialHomeLoading ? 1 : 0} day=${todayStr.slice(5)}`;
   const homeListHeader = useMemo(() => (
     <>
-      <View pointerEvents="none" style={{ paddingHorizontal: 20, paddingVertical: 2 }}>
-        <Text style={{ color: '#7A9DB8', fontSize: 11, fontFamily: 'Courier' }}>{__dbg}</Text>
-      </View>
       <HomeHeader
         filteredLiveGames={filteredLiveGames}
         availableLiveSports={availableLiveSports}
@@ -1600,7 +1624,6 @@ export default function HomeScreen() {
     handleOpenGame,
     handleWarmGame,
     isInitialHomeLoading,
-    __dbg,
     liveSportCounts,
     responsive,
     scrollToHomeBoard,
