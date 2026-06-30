@@ -3777,16 +3777,23 @@ async function assembleHomeGames(): Promise<Game[]> {
 //    refresh that hasn't completed: block once on assembly, then cache it.
 // A single in-flight guard ensures only one assembly runs at a time.
 const HOME_SNAPSHOT_FRESH_MS = 8 * 1000;   // serve without refreshing
-const HOME_SNAPSHOT_MAX_MS = 5 * 60 * 1000; // hard cap: never serve older than this
-type HomeSnapshot = { data: Game[]; timestamp: number };
+// Hard cap on snapshot age. Kept tight (60s) so the board is always near-live
+// and can never lag far enough to cross a calendar day. Live scores still flow
+// over SSE / fast polling, so this only bounds first-paint staleness.
+const HOME_SNAPSHOT_MAX_MS = 60 * 1000;
+type HomeSnapshot = { data: Game[]; timestamp: number; assembledUtcDay: string };
 let homeSnapshot: HomeSnapshot | null = null;
 let homeSnapshotInFlight: Promise<Game[]> | null = null;
+
+function currentUtcDay(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function refreshHomeSnapshot(): Promise<Game[]> {
   if (homeSnapshotInFlight) return homeSnapshotInFlight;
   homeSnapshotInFlight = assembleHomeGames()
     .then((games) => {
-      homeSnapshot = { data: games, timestamp: Date.now() };
+      homeSnapshot = { data: games, timestamp: Date.now(), assembledUtcDay: currentUtcDay() };
       return games;
     })
     .finally(() => {
@@ -3808,7 +3815,13 @@ gamesRouter.get("/", async (c) => {
     const now = Date.now();
     const snapshot = homeSnapshot;
 
-    if (snapshot && now - snapshot.timestamp <= HOME_SNAPSHOT_MAX_MS) {
+    // Day-rollover guard: a snapshot assembled on a previous UTC day must never
+    // be served. The home coverage window is anchored to assembly time, so a
+    // stale-day snapshot is exactly what fed a device its "yesterday" board
+    // after the UTC date advanced. Force a fresh assembly in that case.
+    const sameUtcDay = snapshot?.assembledUtcDay === currentUtcDay();
+
+    if (snapshot && sameUtcDay && now - snapshot.timestamp <= HOME_SNAPSHOT_MAX_MS) {
       // Serve instantly. Refresh in the background once it ages past the fresh
       // window — never block this response on it.
       if (now - snapshot.timestamp > HOME_SNAPSHOT_FRESH_MS) {

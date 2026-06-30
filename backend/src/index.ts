@@ -375,13 +375,30 @@ app.delete("/api/me", async (c) => {
   }
 });
 
-// Cache-control headers for games API responses
-app.use('/api/games/*', async (c, next) => {
+// Cache-control headers for games API responses.
+//
+// The home board (/api/games) is LIVE, fast-changing market data and is also
+// timezone-/day-sensitive: a body assembled during one UTC day must never be
+// reused by a device whose local day has rolled over. Previously this set
+// `public, max-age=10, stale-while-revalidate=30`, which let the device's
+// HTTP cache (expo/fetch) and any shared/edge proxy serve a stale, day-old
+// slate (observed: a freshly reinstalled client receiving yesterday's 80-game
+// board while the origin returned today's full slate). Live data must be
+// uncacheable end to end, exactly like a real prediction-market feed.
+//
+// We therefore force `no-store` on the games surface so no layer (device,
+// proxy, or CDN) can ever hand back a stale board. This applies to the exact
+// path AND all sub-paths.
+const applyNoStore = async (c: any, next: any) => {
   await next();
   if (c.res.status === 200) {
-    c.res.headers.set('Cache-Control', 'public, max-age=10, stale-while-revalidate=30');
+    c.res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    c.res.headers.set('Pragma', 'no-cache');
+    c.res.headers.set('Expires', '0');
   }
-});
+};
+app.use('/api/games', applyNoStore);
+app.use('/api/games/*', applyNoStore);
 
 // Routes
 app.route("/api/picks", picksRouter);
