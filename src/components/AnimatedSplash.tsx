@@ -50,61 +50,73 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
     if (!isLoading && !hasStartedRef.current) {
       hasStartedRef.current = true;
 
-      const hapticTimeout = setTimeout(triggerSplashHaptic, 120);
+      // Haptic fires as the logo begins its punch — feels like impact
+      const hapticTimeout = setTimeout(triggerSplashHaptic, 200);
 
+      // ── Logo: squeeze in, hold a beat, then punch out ──────────────────────
+      // Squeeze down to 0.88 over 200ms, then punch up to 1.22 over 420ms.
+      // The hold between squeeze and punch is baked into the easing curves —
+      // the inOut cubic on the squeeze naturally decelerates into a pause.
       logoScale.value = withSequence(
-        withTiming(0.9, {
-          duration: 120,
+        withTiming(0.88, {
+          duration: 200,
           easing: Easing.inOut(Easing.cubic),
         }),
-        withTiming(1.18, {
-          duration: 240,
+        withTiming(1.22, {
+          duration: 420,
           easing: Easing.out(Easing.cubic),
         })
       );
 
+      // Logo fades out as it punches — starts a touch later so the punch
+      // registers before it dissolves. Total logo visible: ~600ms.
       logoOpacity.value = withDelay(
-        170,
+        280,
         withTiming(0, {
-          duration: 230,
+          duration: 380,
           easing: Easing.out(Easing.cubic),
         })
       );
 
+      // ── Flash ring: expands from center as the logo punches ────────────────
+      // Starts slightly after the squeeze completes, blooms outward over 560ms.
       flashScale.value = withDelay(
-        100,
+        160,
         withTiming(1, {
-          duration: 360,
+          duration: 560,
           easing: Easing.out(Easing.cubic),
         })
       );
 
+      // Flash opacity: quick rise to 0.34, then long graceful fade to 0
       flashOpacity.value = withDelay(
-        100,
+        160,
         withSequence(
           withTiming(0.34, {
-            duration: 80,
+            duration: 120,
             easing: Easing.out(Easing.quad),
           }),
           withTiming(0, {
-            duration: 280,
+            duration: 460,
             easing: Easing.out(Easing.cubic),
           })
         )
       );
 
+      // ── Background + content cross-fade ───────────────────────────────────
+      // Background starts clearing as the logo exits, content rises underneath.
       bgOpacity.value = withDelay(
-        180,
+        300,
         withTiming(0, {
-          duration: 280,
+          duration: 420,
           easing: Easing.out(Easing.cubic),
         })
       );
 
       contentOpacity.value = withDelay(
-        160,
+        280,
         withTiming(1, {
-          duration: 260,
+          duration: 400,
           easing: Easing.out(Easing.cubic),
         }, () => {
           runOnJS(onAnimationComplete)();
