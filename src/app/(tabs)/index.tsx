@@ -1015,12 +1015,44 @@ export default function HomeScreen() {
     subscribed: isFocused,
   });
   const hasHomeGameData = (todaysGames?.length ?? 0) > 0;
-  // Treat the whole "no data yet while a fetch is in flight" window as loading.
-  // React Query can settle isLoading=false the instant an empty cache resolves
-  // (cold start, prefetch race), so relying on isLoading alone flashes a
-  // misleading 0. Counting isFetching too keeps the board on '--' until the
-  // first real slate actually arrives.
-  const isInitialHomeLoading = !hasHomeGameData && (isLoadingGames || isFetchingGames);
+  // ── First-real-data latch ─────────────────────────────────────────────────
+  // The board must show calm '--' placeholders (never a misleading 0) until the
+  // first real slate actually arrives. Relying on React Query's isLoading/
+  // isFetching is not enough: on a cold start the query can settle
+  // isLoading=false AND isFetching=false with an empty result for a beat (the
+  // enabled:isFocused gate, a prefetch race, or a fast empty resolve), leaving
+  // a window where no flag is set yet hasHomeGameData is still false — which is
+  // exactly when the old code flashed 0.
+  //
+  // So we latch: once we have ever seen real game data, we are no longer in the
+  // initial-load state. Until then we stay in the loading ('--') state. A
+  // wall-clock safety cap guarantees a genuinely empty day (no games at all)
+  // still resolves from '--' to a real 0 instead of holding '--' forever.
+  const FIRST_DATA_TIMEOUT_MS = 12000;
+  const firstLoadStartedAtRef = useRef<number>(Date.now());
+  const [hasEverHadGameData, setHasEverHadGameData] = useState(false);
+  const [firstDataTimedOut, setFirstDataTimedOut] = useState(false);
+
+  // Latch "has ever had data" as state so the board re-renders from '--' to real
+  // counts the instant the first real slate lands.
+  useEffect(() => {
+    if (hasHomeGameData && !hasEverHadGameData) setHasEverHadGameData(true);
+  }, [hasHomeGameData, hasEverHadGameData]);
+
+  // Wall-clock safety cap: a genuinely empty day (no games anywhere) must still
+  // resolve from '--' to a real 0 instead of holding '--' forever.
+  useEffect(() => {
+    if (hasEverHadGameData || firstDataTimedOut) return;
+    const remaining = Math.max(0, FIRST_DATA_TIMEOUT_MS - (Date.now() - firstLoadStartedAtRef.current));
+    const t = setTimeout(() => setFirstDataTimedOut(true), remaining);
+    return () => clearTimeout(t);
+  }, [firstDataTimedOut, hasEverHadGameData]);
+
+  // Loading ('--') while: we have no data right now, have never had data, and
+  // the safety timeout hasn't fired. After the timeout (truly empty day) or
+  // once any real data has arrived, we show real counts.
+  const isInitialHomeLoading =
+    !hasHomeGameData && !hasEverHadGameData && !firstDataTimedOut;
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });
 
   // ── Empty-data self-heal ──────────────────────────────────────────────────
