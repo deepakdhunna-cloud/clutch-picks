@@ -11,6 +11,8 @@ export type GamesNetProbe = {
   finishedAt: number;
   sample?: { id?: string; sport?: string; gameTime?: string };
   error?: string;
+  encoding?: string;
+  durationMs?: number;
 };
 
 let lastGamesProbe: GamesNetProbe | null = null;

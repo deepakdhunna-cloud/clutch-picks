@@ -98,7 +98,7 @@ export function HomeDebugOverlay() {
         </Pressable>
       </View>
       <ScrollView style={{ maxHeight: 280 }}>
-        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r14')}
+        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r15')}
         {line('today (device local)', report.todayStr)}
         {(() => { const p = getGamesProbe(); return (
           <View style={{ borderTopColor: '#5A7A8A', borderTopWidth: 1, marginTop: 4, paddingTop: 4 }}>
@@ -106,6 +106,8 @@ export function HomeDebugOverlay() {
             {p ? (<>
               {line('net status', p.status, p.status !== 200)}
               {line('net raw count', p.rawCount, p.rawCount < 200)}
+              {line('net encoding', p.encoding ?? '?', (p.encoding ?? '') !== 'gzip')}
+              {line('net duration ms', p.durationMs ?? '?', (p.durationMs ?? 0) > 4000)}
               {p.error ? <Text style={{ color: '#FF6B6B', fontSize: 10 }}>net error: {p.error}</Text> : null}
               <Text style={{ color: '#9BB8CF', fontSize: 9 }}>{p.url}</Text>
               <Text style={{ color: '#9BB8CF', fontSize: 10 }}>sample: {p.sample ? `${p.sample.sport} ${p.sample.gameTime}` : 'none'}</Text>

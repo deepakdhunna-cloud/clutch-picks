@@ -36,6 +36,7 @@ const request = async <T>(
   const isGet = !options.method || options.method.toUpperCase() === "GET";
   const requestUrl = url;
 
+  const startedAt = Date.now();
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(`${baseUrl}${requestUrl}`, {
@@ -44,6 +45,11 @@ const request = async <T>(
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
         "Cache-Control": "no-cache",
+        // Explicitly request gzip. The home board is ~2.6MB uncompressed but
+        // ~250KB gzipped; without this header expo/fetch was downloading the
+        // full uncompressed body over LTE, which was slow enough to hit the
+        // 25s client timeout and feel broken. RN decodes gzip natively.
+        "Accept-Encoding": "gzip, deflate",
         ...getAuthHeaders(),
       },
       signal: controller.signal,
@@ -58,6 +64,7 @@ const request = async <T>(
         status: -1,
         rawCount: 0,
         finishedAt: Date.now(),
+        durationMs: Date.now() - startedAt,
         error: err?.name === "AbortError" ? "timeout/abort" : String(err?.message ?? err),
       });
     }
@@ -95,6 +102,8 @@ const request = async <T>(
         status: response.status,
         rawCount: arr.length,
         finishedAt: Date.now(),
+        durationMs: Date.now() - startedAt,
+        encoding: response.headers.get("content-encoding") ?? "(none)",
         sample: first ? { id: String(first.id), sport: String(first.sport), gameTime: String(first.gameTime) } : undefined,
       });
     }
