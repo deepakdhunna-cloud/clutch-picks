@@ -710,7 +710,14 @@ export function sanitizePredictionForGame(game: Game, prediction: GamePrediction
 
 export function attachPredictionToGame(game: Game, prediction: GamePrediction): Game {
   if (!predictionMatchesGame(game, prediction)) {
-    return game;
+    // For tennis, team IDs can vary between ESPN endpoints (athleteId vs uid vs name).
+    // If the gameId matches, trust the prediction regardless of team ID mismatch.
+    const gameIdMatches =
+      (prediction.gameId && prediction.gameId === game.id) ||
+      (prediction.canonicalResult?.eventId && prediction.canonicalResult.eventId === game.id);
+    if (!gameIdMatches || game.sport !== "TENNIS") {
+      return game;
+    }
   }
 
   const displayPrediction = sanitizePredictionForGame(
@@ -2186,6 +2193,9 @@ async function addPredictionToGame(game: Game): Promise<Game> {
       `[engine] New engine failed for ${game.id} (${game.sport}); no legacy fallback served:`,
       err instanceof Error ? err.message : err,
     );
+    if (err instanceof Error && err.stack) {
+      console.error(`[engine] Stack trace:`, err.stack);
+    }
     return game;
   }
 }
