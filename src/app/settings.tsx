@@ -24,6 +24,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 import { getAppVersionLabel } from '@/lib/app-version';
+import * as Updates from 'expo-updates';
 import { claimInteractionLock } from '@/lib/interaction-guard';
 import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
@@ -414,6 +415,28 @@ export default function SettingsScreen() {
           contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
           showsVerticalScrollIndicator={false}
         >
+          {/* DEV: Version / OTA Update Banner — remove before release */}
+          <View style={{
+            marginHorizontal: 20,
+            marginBottom: 16,
+            backgroundColor: 'rgba(122,157,184,0.08)',
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: 'rgba(122,157,184,0.18)',
+            padding: 12,
+          }}>
+            <Text style={{ color: '#7A9DB8', fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 }}>BUILD INFO</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontFamily: 'monospace' }}>
+              {getAppVersionLabel()}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 4, fontFamily: 'monospace' }}>
+              OTA: {Updates.updateId ? Updates.updateId.slice(0, 16) + '…' : 'embedded (no OTA)'}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2, fontFamily: 'monospace' }}>
+              Channel: {Updates.channel ?? 'n/a'}
+            </Text>
+          </View>
+
           {/* Subscription */}
           {isRevenueCatEnabled() && (
             <Animated.View entering={FadeInDown.delay(100).duration(400)}>
