@@ -3696,65 +3696,140 @@ gamesRouter.post("/refresh-predictions", async (c) => {
   return c.json({ data: { cleared: true, message: "Prediction caches cleared. New predictions will generate on next request." } });
 });
 
+// ── Whole-response home-slate assembly ─────────────────────────────────────
+// Builds the complete home board payload: fetch the rolling date window across
+// all sports, dedupe, filter to the coverage window, sort, and attach the
+// freshest cached / stored-pregame prediction to each game (never blocking the
+// response on prediction generation). This is the expensive part — it fans out
+// to the upstream scoreboard for up to four dates — so it is wrapped by a
+// stale-while-revalidate snapshot below.
+async function assembleHomeGames(): Promise<Game[]> {
+  const { fetchDates, coverageStart, scheduledCutoff } = buildHomeGamesDateWindow(new Date());
+
+  // Fetch previous UTC day + today + two days out in parallel. The previous
+  // day keeps US evening users from losing same-local-day finals after the
+  // Railway server has already crossed into tomorrow UTC.
+  const allGames = (await Promise.all(fetchDates.map((date) => fetchAllGames(date)))).flat();
+
+  // Deduplicate by game ID
+  const uniqueGames = Array.from(
+    new Map(allGames.map((game) => [game.id, game])).values()
+  );
+
+  // Keep games whose gameTime is in the rolling Home coverage window. This
+  // covers a US-PST user's "tomorrow night" slate (which spills into the UTC
+  // day-after-tomorrow) without leaking stale scheduled games into the response.
+  const filteredGames = uniqueGames.filter((game) => {
+    const gameTime = new Date(game.gameTime);
+    if (game.status === "LIVE") return true;
+    if (game.status === "FINAL") return gameTime >= coverageStart;
+    return gameTime >= coverageStart && gameTime <= scheduledCutoff;
+  });
+  filteredGames.sort(
+    (a, b) =>
+      new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
+  );
+
+  const storedPregamePredictions = await loadStoredPregamePredictionMap(filteredGames);
+
+  // Attach the stored pregame snapshot for live/final games, otherwise attach
+  // the freshest cached prediction — never block the response for
+  // generation. ALWAYS overwrite any prediction the indexed/transformed game
+  // already had: that earlier value may have been computed against an older
+  // cache snapshot, and only the current cache value is guaranteed to match
+  // what the detail endpoint will return for the same game.
+  for (let i = 0; i < filteredGames.length; i++) {
+    const game = filteredGames[i]!;
+    const storedPregamePrediction = storedPregamePredictions.get(game.id);
+    if (storedPregamePrediction) {
+      filteredGames[i] = attachPredictionToGame(game, storedPregamePrediction);
+      continue;
+    }
+    const cached = pickFreshestPredictionForGame(game);
+    if (cached) {
+      filteredGames[i] = attachPredictionToGame(game, cached);
+    }
+  }
+
+  // Generate missing predictions entirely in background — the client will
+  // pick them up on the next poll (6-10 seconds later)
+  const gamesNeedingPredictions = filteredGames.filter(g => !g.prediction);
+  if (gamesNeedingPredictions.length > 0) {
+    generatePredictionsInBackground(gamesNeedingPredictions);
+  }
+
+  return filteredGames;
+}
+
+// ── Stale-while-revalidate snapshot for GET /api/games ─────────────────────
+// The home board is the cold-start critical path. Re-assembling it on every
+// request blocks the response on the upstream scoreboard fan-out (observed
+// 2-8s TTFB), which is exactly the cold-start delay users feel. So we keep the
+// last fully-assembled slate in memory and serve it INSTANTLY, refreshing in
+// the background when it ages past the fresh window. Live scores still flow to
+// the client over SSE / fast polling, so serving a few-seconds-old board
+// snapshot for first paint is correct, not stale-in-a-bad-way.
+//
+//  - Within HOME_SNAPSHOT_FRESH_MS: serve snapshot, no refresh.
+//  - Older than fresh but within HOME_SNAPSHOT_MAX_MS: serve snapshot AND kick
+//    off a single background refresh.
+//  - No snapshot (true cold server start) or snapshot past the hard cap with a
+//    refresh that hasn't completed: block once on assembly, then cache it.
+// A single in-flight guard ensures only one assembly runs at a time.
+const HOME_SNAPSHOT_FRESH_MS = 8 * 1000;   // serve without refreshing
+const HOME_SNAPSHOT_MAX_MS = 5 * 60 * 1000; // hard cap: never serve older than this
+type HomeSnapshot = { data: Game[]; timestamp: number };
+let homeSnapshot: HomeSnapshot | null = null;
+let homeSnapshotInFlight: Promise<Game[]> | null = null;
+
+function refreshHomeSnapshot(): Promise<Game[]> {
+  if (homeSnapshotInFlight) return homeSnapshotInFlight;
+  homeSnapshotInFlight = assembleHomeGames()
+    .then((games) => {
+      homeSnapshot = { data: games, timestamp: Date.now() };
+      return games;
+    })
+    .finally(() => {
+      homeSnapshotInFlight = null;
+    });
+  return homeSnapshotInFlight;
+}
+
+// Pre-build the home snapshot at server boot so the FIRST user request after a
+// deploy / cold start is already instant instead of paying the assembly cost.
+// Fire-and-forget: never blocks startup, swallows errors (the route will
+// rebuild on demand if this warm-up fails).
+export function warmHomeGamesSnapshot(): void {
+  void refreshHomeSnapshot().catch(() => {});
+}
+
 gamesRouter.get("/", async (c) => {
   try {
-    const { fetchDates, coverageStart, scheduledCutoff } = buildHomeGamesDateWindow(new Date());
+    const now = Date.now();
+    const snapshot = homeSnapshot;
 
-    // Fetch previous UTC day + today + two days out in parallel. The previous
-    // day keeps US evening users from losing same-local-day finals after the
-    // Railway server has already crossed into tomorrow UTC.
-    const allGames = (await Promise.all(fetchDates.map((date) => fetchAllGames(date)))).flat();
-
-    // Deduplicate by game ID
-    const uniqueGames = Array.from(
-      new Map(allGames.map((game) => [game.id, game])).values()
-    );
-
-    // Keep games whose gameTime is in the rolling Home coverage window. This
-    // covers a US-PST user's "tomorrow night" slate (which spills into the UTC
-    // day-after-tomorrow) without leaking stale scheduled games into the response.
-    const filteredGames = uniqueGames.filter((game) => {
-      const gameTime = new Date(game.gameTime);
-      if (game.status === "LIVE") return true;
-      if (game.status === "FINAL") return gameTime >= coverageStart;
-      return gameTime >= coverageStart && gameTime <= scheduledCutoff;
-    });
-    filteredGames.sort(
-      (a, b) =>
-        new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()
-    );
-
-    const storedPregamePredictions = await loadStoredPregamePredictionMap(filteredGames);
-
-    // Attach the stored pregame snapshot for live/final games, otherwise attach
-    // the freshest cached prediction — never block the response for
-    // generation. ALWAYS overwrite any prediction the indexed/transformed game
-    // already had: that earlier value may have been computed against an older
-    // cache snapshot, and only the current cache value is guaranteed to match
-    // what the detail endpoint will return for the same game.
-    for (let i = 0; i < filteredGames.length; i++) {
-      const game = filteredGames[i]!;
-      const storedPregamePrediction = storedPregamePredictions.get(game.id);
-      if (storedPregamePrediction) {
-        filteredGames[i] = attachPredictionToGame(game, storedPregamePrediction);
-        continue;
+    if (snapshot && now - snapshot.timestamp <= HOME_SNAPSHOT_MAX_MS) {
+      // Serve instantly. Refresh in the background once it ages past the fresh
+      // window — never block this response on it.
+      if (now - snapshot.timestamp > HOME_SNAPSHOT_FRESH_MS) {
+        void refreshHomeSnapshot().catch(() => {});
       }
-      const cached = pickFreshestPredictionForGame(game);
-      if (cached) {
-        filteredGames[i] = attachPredictionToGame(game, cached);
-      }
+      return c.json({ data: snapshot.data });
     }
 
-    // Generate missing predictions entirely in background — the client will
-    // pick them up on the next poll (6-10 seconds later)
-    const gamesNeedingPredictions = filteredGames.filter(g => !g.prediction);
-    if (gamesNeedingPredictions.length > 0) {
-      generatePredictionsInBackground(gamesNeedingPredictions);
-    }
-
-    return c.json({ data: filteredGames });
+    // No usable snapshot (cold server start, or snapshot past the hard cap):
+    // block once on assembly. Concurrent callers share the same in-flight
+    // promise via refreshHomeSnapshot()'s guard.
+    const data = await refreshHomeSnapshot();
+    return c.json({ data });
   } catch (error) {
     console.error("Error fetching all games:", error);
+    // If assembly failed but we still hold any snapshot within the hard cap,
+    // prefer serving it over a 500 so the board never goes blank on a blip.
+    const fallback = homeSnapshot;
+    if (fallback && Date.now() - fallback.timestamp <= HOME_SNAPSHOT_MAX_MS) {
+      return c.json({ data: fallback.data });
+    }
     return c.json(
       { error: { message: "Failed to fetch games", code: "FETCH_FAILED" } },
       500

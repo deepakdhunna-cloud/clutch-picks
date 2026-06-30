@@ -16,7 +16,7 @@ import { picksRouter } from "./routes/picks";
 import { profileRouter } from "./routes/profile";
 import { socialRouter } from "./routes/social";
 import { newsRouter } from "./routes/news";
-import { gamesRouter, clearAllPredictionCaches } from "./routes/games";
+import { gamesRouter, clearAllPredictionCaches, warmHomeGamesSnapshot } from "./routes/games";
 import { intelligenceRouter } from "./routes/intelligence";
 import { accuracyRouter } from "./routes/accuracy";
 import { teamFollowsRouter } from "./routes/team-follows";
@@ -449,6 +449,10 @@ const server = Bun.serve({
   idleTimeout: 255,
 });
 logger.info({ tag: "web", port }, "HTTP server listening");
+
+// Warm the home board snapshot at boot so the first post-deploy/cold-start
+// request is already instant. Fire-and-forget; never blocks the server.
+warmHomeGamesSnapshot();
 
 async function gracefulShutdown(signal: NodeJS.Signals) {
   if (isShuttingDown) return; // Signals can repeat; only drain once.
