@@ -24,6 +24,9 @@ import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useLiveScores } from '@/hooks/useLiveScores';
 import { guardedResetTo } from '@/lib/navigation-guard';
 import { Image as ExpoImage } from 'expo-image';
+import { api } from '@/lib/api/api';
+import { prepareHomeGamesFirstPaint } from '@/lib/home-games-first-paint';
+import { HOME_GAMES_CACHE_KEY, selectPersistableHomeGames } from '@/lib/home-games-cache';
 
 
 enableScreens(true);
@@ -161,6 +164,36 @@ function RootLayoutNav({
 
   const segment = segments[0];
   const hasUser = Boolean(session?.user);
+
+  // ── Startup games prefetch ────────────────────────────────────────────────
+  // Fire the /api/games fetch immediately once the session is confirmed so the
+  // data is already in the React Query cache by the time the splash exits.
+  // The home tab's useGames hook will find the cache warm and render instantly
+  // with current data instead of showing 0 or stale content.
+  // Only fires when the user is signed in and session is settled.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!hasUser || isLoading) return;
+    // Only prefetch if the cache is empty — don’t stomp a warm cache.
+    if (queryClient.getQueryData(['games'])) return;
+    void queryClient.prefetchQuery({
+      queryKey: ['games'],
+      queryFn: async () => {
+        const games = prepareHomeGamesFirstPaint(
+          await api.get<import('@/types/sports').GameWithPrediction[]>('/api/games'),
+        );
+        if (games.length > 0) {
+          void AsyncStorage.setItem(
+            HOME_GAMES_CACHE_KEY,
+            JSON.stringify(selectPersistableHomeGames(games)),
+          ).catch(() => {});
+        }
+        return games;
+      },
+      staleTime: 30000,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUser, isLoading]);
   const inAuthGroup =
     segment === 'sign-in' ||
     segment === 'sign-up' ||
