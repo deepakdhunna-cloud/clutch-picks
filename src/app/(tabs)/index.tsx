@@ -402,9 +402,9 @@ const StatusFilterRail = memo(function StatusFilterRail({
             accessibilityRole="button"
             accessibilityLabel={`${f.label} games filter`}
             accessibilityState={{ selected: active }}
-            haptic="selection"
             onPress={() => {
               if (!shouldHandlePress()) return;
+              haptics.selection();
               setStatusFilter(active ? 'all' : f.key);
             }}
             pressRetentionOffset={6}
@@ -447,7 +447,6 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
           accessibilityRole="button"
           accessibilityLabel={selectedSportFilter ? `Clear ${displaySport(selectedSportFilter)} filter` : 'View game board'}
           accessibilityHint={selectedSportFilter ? 'Shows all sports on the game board' : 'Scrolls to the game board'}
-          haptic="tap"
           onPress={() => {
             if (selectedSportFilter) {
               setSelectedSportFilter(null);
@@ -623,9 +622,9 @@ const HomeHeader = React.memo(function HomeHeader({
                 accessibilityRole="button"
                 accessibilityLabel={`All live games filter`}
                 accessibilityState={{ selected: !selectedLiveSportFilter }}
-                haptic="selection"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
+                  haptics.selection();
                   setSelectedLiveSportFilter(null);
                 }}
                 pressRetentionOffset={6}
@@ -650,9 +649,9 @@ const HomeHeader = React.memo(function HomeHeader({
                     accessibilityRole="button"
                     accessibilityLabel={`${displayName} live games filter`}
                     accessibilityState={{ selected: isChipSelected }}
-                    haptic="selection"
                     onPress={() => {
                       if (!shouldHandleLiveChipPress()) return;
+                      haptics.selection();
                       setSelectedLiveSportFilter(isChipSelected ? null : sport);
                     }}
                     pressRetentionOffset={6}
@@ -699,7 +698,6 @@ const HomeHeader = React.memo(function HomeHeader({
                 accessibilityRole="button"
                 accessibilityLabel="View all live games"
                 accessibilityHint="Opens the live games screen"
-                haptic="tap"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
                   onOpenLiveGames();

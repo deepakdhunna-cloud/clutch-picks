@@ -310,7 +310,6 @@ const LiveGameLayout = memo(function LiveGameLayout({
         accessibilityHint="Opens game details"
         onPress={handlePress}
         onPressIn={warmGame}
-        haptic="tap"
         pressedScale={PRESS_SCALE_CARD}
         pressRetentionOffset={6}
         onTouchStart={onCardTouchStart}
@@ -905,7 +904,6 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
         accessibilityHint="Opens game details"
         onPress={handlePress}
         onPressIn={warmGame}
-        haptic="tap"
         pressedScale={PRESS_SCALE_CARD}
         style={{ flex: 1 }}
         pressRetentionOffset={6}

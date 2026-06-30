@@ -138,7 +138,6 @@ export default function LiveGamesScreen() {
             <PressableScale
               accessibilityRole="button"
               accessibilityLabel="Back"
-              haptic="tap"
               onPress={() => guardedRouterBack(router)}
               style={styles.backButton}
               hitSlop={10}
