@@ -1036,6 +1036,7 @@ export default function HomeScreen() {
     refetch: refetchGames,
     isLoading: isLoadingGames,
     isFetching: isFetchingGames,
+    isError: isGamesError,
     prefetchGame,
   } = useGames({
     enabled: isFocused,
@@ -1638,17 +1639,37 @@ export default function HomeScreen() {
         <Text className="text-zinc-200 text-xs font-semibold uppercase tracking-wider mb-3">
           Today's Games
         </Text>
-        <View className="bg-zinc-800 rounded-2xl p-8 items-center">
-          <Text className="text-zinc-200 text-center font-semibold mb-1">
-            No games today
-          </Text>
-          <Text className="text-zinc-400 text-center text-sm">
-            Tomorrow's slate will appear here when games are scheduled.
-          </Text>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 32, alignItems: 'center' }}>
+          {isGamesError ? (
+            <>
+              <Text style={{ color: 'rgba(255,255,255,0.92)', textAlign: 'center', fontWeight: '700', marginBottom: 4 }}>
+                Couldn't load games
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.45)', textAlign: 'center', fontSize: 13, lineHeight: 18, marginBottom: 16 }}>
+                Check your connection and try again.
+              </Text>
+              <PressableScale
+                onPress={() => { void refetchGames(); }}
+                haptic="tap"
+                style={{ backgroundColor: 'rgba(122,157,184,0.16)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.32)', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+              >
+                <Text style={{ color: '#9BB8CF', fontWeight: '700', fontSize: 13 }}>Try again</Text>
+              </PressableScale>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: 'rgba(255,255,255,0.92)', textAlign: 'center', fontWeight: '700', marginBottom: 4 }}>
+                No games today
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.45)', textAlign: 'center', fontSize: 13, lineHeight: 18 }}>
+                Tomorrow's slate will appear here when games are scheduled.
+              </Text>
+            </>
+          )}
         </View>
       </View>
     ) : null
-  ), [isLoadingGames, liveGamesPreview.length, nonLiveGames.length]);
+  ), [isLoadingGames, liveGamesPreview.length, nonLiveGames.length, isGamesError, refetchGames]);
 
   const homeListFooter = useMemo(() => (
     <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 }}>
