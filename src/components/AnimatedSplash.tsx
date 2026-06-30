@@ -41,9 +41,9 @@ interface AnimatedSplashProps {
 export function AnimatedSplash({ isLoading, onAnimationComplete, children }: AnimatedSplashProps) {
   const hasStartedRef = useRef(false);
 
-  // Logo starts fully visible and at rest — user sees it immediately
-  const logoScale   = useSharedValue(1);
-  const logoOpacity = useSharedValue(1);
+  // Logo starts small and invisible — arrives cinematically
+  const logoScale   = useSharedValue(0.78);
+  const logoOpacity = useSharedValue(0);
 
   // Background overlay
   const bgOpacity = useSharedValue(1);
@@ -55,35 +55,48 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
     if (!isLoading && !hasStartedRef.current) {
       hasStartedRef.current = true;
 
-      // Haptic fires immediately as the exit begins — confirms the app is ready
-      const arrivalHaptic = setTimeout(triggerArrivalHaptic, 80);
+      // ── Phase 1: Arrival (0 – 680ms) ───────────────────────────────────────
+      // Logo fades in and scales up from 0.78 → 1.0 with a gentle ease-out-back
+      // curve — just enough spring to feel alive and intentional.
+      logoOpacity.value = withTiming(1, {
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
+      });
 
-      // ── Hold (0 – 600ms) ────────────────────────────────────────────────────
-      // Logo sits at full opacity — the user gets a clean, confident brand moment.
+      logoScale.value = withTiming(1, {
+        duration: 680,
+        easing: Easing.out(Easing.back(1.08)),
+      });
 
-      // ── Exit (600 – 1100ms) ─────────────────────────────────────────────────
-      // Logo scales up slightly and fades — cinematic dissolve, not a hard cut.
+      // Haptic fires as the logo settles into place
+      const arrivalHaptic = setTimeout(triggerArrivalHaptic, 560);
+
+      // ── Phase 2: Hold (680 – 1200ms) ───────────────────────────────────────
+      // Logo sits confidently for ~520ms — the brand gets its moment.
+
+      // ── Phase 3: Exit (1200 – 1660ms) ──────────────────────────────────────
+      // Logo scales up slightly and dissolves — cinematic, not a hard cut.
       logoOpacity.value = withDelay(
-        600,
-        withTiming(0, { duration: 420, easing: Easing.in(Easing.cubic) })
+        1160,
+        withTiming(0, { duration: 380, easing: Easing.in(Easing.cubic) })
       );
 
       logoScale.value = withDelay(
-        600,
-        withTiming(1.1, { duration: 460, easing: Easing.in(Easing.cubic) })
+        1160,
+        withTiming(1.1, { duration: 420, easing: Easing.in(Easing.cubic) })
       );
 
-      const exitHaptic = setTimeout(triggerExitHaptic, 620);
+      const exitHaptic = setTimeout(triggerExitHaptic, 1180);
 
-      // Background and content cross-fade
+      // Background and content cross-fade simultaneously
       bgOpacity.value = withDelay(
-        580,
-        withTiming(0, { duration: 440, easing: Easing.out(Easing.cubic) })
+        1140,
+        withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) })
       );
 
       contentOpacity.value = withDelay(
-        620,
-        withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }, () => {
+        1180,
+        withTiming(1, { duration: 380, easing: Easing.out(Easing.cubic) }, () => {
           runOnJS(onAnimationComplete)();
         })
       );
@@ -118,7 +131,7 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
       {/* Black background overlay */}
       <Animated.View style={[styles.splashBg, bgStyle]} pointerEvents="none" />
 
-      {/* Centered logo — always visible, no fade-in delay */}
+      {/* Centered logo */}
       <Animated.View style={[styles.logoWrapper, logoStyle]} pointerEvents="none">
         <SplashLogo />
       </Animated.View>
