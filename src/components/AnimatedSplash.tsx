@@ -9,12 +9,13 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function triggerSplashHaptic() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+  // A single, deliberate brand "thunk" as the logo lands.
+  haptics.impact();
 }
 
 // Centered splash logo — uses the stacked image

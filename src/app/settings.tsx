@@ -5,7 +5,7 @@ import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Tra
 import { useRouter } from 'expo-router';
 import { useRef, useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authClient } from '@/lib/auth/auth-client';
 import { clearAuthStorage } from '@/lib/auth/auth-storage';
@@ -102,7 +102,7 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
       disabled={disabled}
       onPress={() => {
         if (!claimInteractionLock(`settings:${title}`, 700)) return;
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        haptics.tap();
         onPress?.();
       }}
       style={({ pressed }) => ({
@@ -174,14 +174,14 @@ export default function SettingsScreen() {
       const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code: code.trim(), rcUserId });
       await invalidateCustomerInfoCache();
       await checkSubscription();
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      haptics.success();
       setFeedback({
         title: 'Code Applied',
         message: result.message ?? 'Lifetime access granted.',
         variant: 'success',
       });
     } catch (error: any) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setFeedback({
         title: 'Invalid Code',
         message: error?.message || 'This code could not be applied.',
@@ -196,7 +196,7 @@ export default function SettingsScreen() {
 
   const handlePromoPress = () => {
     if (promoLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     setPromoModalVisible(true);
   };
 
@@ -292,7 +292,7 @@ export default function SettingsScreen() {
     if (signOutInFlightRef.current) return;
     signOutInFlightRef.current = true;
     setIsSigningOut(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.confirm();
 
     try {
       await unregisterCurrentDeviceForPushNotifications();
@@ -390,7 +390,7 @@ export default function SettingsScreen() {
             accessibilityLabel="Back"
             hitSlop={4}
             onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              haptics.tap();
               guardedRouterBack(router);
             }}
             style={{
@@ -558,7 +558,7 @@ export default function SettingsScreen() {
                 title="Replay Tutorial"
                 subtitle="Walk through the app intro again"
                 onPress={async () => {
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  haptics.tap();
                   await AsyncStorage.removeItem('clutch_onboarding_skip_profile');
                   guardedRouterReplace(router, '/onboarding?replay=settings');
                 }}

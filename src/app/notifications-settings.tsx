@@ -4,7 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Bell, Zap, TrendingUp, AlertTriangle, Activity } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useRef, useState, useEffect, useCallback } from 'react';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import {
   DEFAULT_NOTIFICATION_PREFS,
   type NotificationPreferences,
@@ -167,7 +167,7 @@ export default function NotificationsSettingsScreen() {
     setNotifPrefs(next);
     setSavingKey(key);
     setStatusMessage(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.selection();
 
     try {
       const pushRegistered = next[key]
@@ -181,11 +181,11 @@ export default function NotificationsSettingsScreen() {
       setStatusMessage(pushRegistered
         ? 'Could not save that notification setting. Try again in a moment.'
         : 'Notifications were not enabled. Check device permissions and try again.');
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
     } catch {
       setNotifPrefs(previous);
       setStatusMessage('Could not save that notification setting. Try again in a moment.');
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
     } finally {
       savingKeyRef.current = null;
       setSavingKey(null);
@@ -221,7 +221,7 @@ export default function NotificationsSettingsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back"
             onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              haptics.tap();
               guardedRouterBack(router);
             }}
             style={{

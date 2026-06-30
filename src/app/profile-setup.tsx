@@ -13,7 +13,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Camera, Pencil } from 'lucide-react-native';
 import { useRouter, useNavigationContainerRef } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { FeedbackModal } from '@/components/FeedbackModal';
@@ -70,12 +70,12 @@ export default function ProfileSetupScreen() {
 
   const handlePhotoPress = () => {
     if (isUploading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     profilePhotoUpload.openPhotoSource();
   };
 
   const toggleLeague = (leagueId: string) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.selection();
     setSelectedLeagues((prev) =>
       prev.includes(leagueId)
         ? prev.filter((id) => id !== leagueId)
@@ -86,7 +86,7 @@ export default function ProfileSetupScreen() {
   const handleContinue = async () => {
     if (saveInFlightRef.current) return;
     saveInFlightRef.current = true;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.confirm();
     setIsSaving(true);
 
     try {

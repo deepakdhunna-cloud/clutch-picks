@@ -16,7 +16,7 @@ import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRep
 import { X } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import {
   getOfferings,
   purchasePackage,
@@ -284,7 +284,7 @@ export default function PaywallScreen() {
     if (!isPremium || didRedirectForPremiumRef.current) return;
     didRedirectForPremiumRef.current = true;
     if (isPurchasing || isRestoring || promoLoading) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      haptics.success();
     }
     // RevenueCat can deliver entitlement updates through its listener before
     // the purchase promise resolves, especially on the simulator App Store sheet.
@@ -369,13 +369,13 @@ export default function PaywallScreen() {
       }
     }
     setIsPurchasing(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.confirm();
     try {
       const result = await purchasePackage(packageToPurchase);
       if (result.ok) {
         await checkSubscription();
         if (customerInfoHasPremium(result.data)) {
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          haptics.success();
           // guardedResetTo (not router.back) — onboarding+paywall users would
           // otherwise pop back to onboarding and re-trigger the paywall, looping.
           guardedResetTo(router, '/(tabs)', { navigationRef });
@@ -418,14 +418,14 @@ export default function PaywallScreen() {
     if (restoreInFlightRef.current || isRestoring || isPurchasing || promoLoading) return;
     restoreInFlightRef.current = true;
     setIsRestoring(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     try {
       const result = await restorePurchases();
       if (result.ok) {
         await checkSubscription({ restored: true });
         const hasActive = customerInfoHasPremium(result.data);
         if (hasActive) {
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          haptics.success();
           setFeedback({
             title: 'Restored',
             message: 'Your subscription has been restored.',
@@ -485,14 +485,14 @@ export default function PaywallScreen() {
     if (!code || promoLoading || promoInFlightRef.current) return;
     promoInFlightRef.current = true;
     setPromoLoading(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     try {
       const rcAppUserId = await getRevenueCatAppUserId();
       const rcUserId = rcAppUserId.ok ? rcAppUserId.data : undefined;
       const result = await api.post<{ success: boolean; message: string }>('/api/promo/redeem', { code, rcUserId });
       await invalidateCustomerInfoCache();
       await checkSubscription();
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      haptics.success();
       setFeedback({
         title: 'Code Applied',
         message: result.message,
@@ -500,7 +500,7 @@ export default function PaywallScreen() {
         onDismiss: () => guardedResetTo(router, '/(tabs)', { navigationRef }),
       });
     } catch (error: any) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setFeedback({
         title: 'Invalid Code',
         message: error?.message || 'This code could not be applied.',

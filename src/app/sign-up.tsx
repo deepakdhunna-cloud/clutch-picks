@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
@@ -43,7 +43,7 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     setError(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.confirm();
 
     try {
       const result = await withAuthRequestTimeout(
@@ -55,7 +55,7 @@ export default function SignUpScreen() {
       );
 
       if (result.error) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
         setError(result.error.message || 'Failed to send verification code');
         return;
       }
@@ -65,7 +65,7 @@ export default function SignUpScreen() {
         params: { email: trimmed, mode: 'signup' },
       });
     } catch (requestError) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      haptics.error();
       setError(authRequestErrorMessage(
         requestError,
         'Could not send a code. Check your connection and try again.',

@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Search, Clock, X, ChevronRight, Trophy, Radio, Flame, CalendarClock } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { GameWithPrediction, GameStatus, Sport, SPORT_META } from '@/types/sports';
@@ -45,11 +45,11 @@ function hexWithAlpha(hex: string | undefined, alpha: number): string {
 }
 
 function fireLightHaptic() {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  haptics.tap();
 }
 
 function fireSelectionHaptic() {
-  void Haptics.selectionAsync().catch(() => {});
+  haptics.selection();
 }
 
 type StatusFilter = 'all' | 'live' | 'scheduled' | 'final';

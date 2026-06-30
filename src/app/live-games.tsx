@@ -16,7 +16,8 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Zap } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
+import { PressableScale } from '@/components/shared/PressableScale';
 import { LiveArenaCard } from '@/components/sports/LiveArenaCard';
 import { Sport, SPORT_META, GameWithPrediction } from '@/types/sports';
 import { useGames } from '@/hooks/useGames';
@@ -104,7 +105,7 @@ export default function LiveGamesScreen() {
 
   const handleChipPress = useCallback((sport: Sport | null) => {
     if (!shouldHandleChipPress()) return;
-    void Haptics.selectionAsync().catch(() => {});
+    haptics.selection();
     setSelectedSport(sport);
   }, [shouldHandleChipPress]);
 
@@ -134,9 +135,10 @@ export default function LiveGamesScreen() {
         <SafeAreaView style={styles.safe} edges={['top']}>
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
-            <Pressable
+            <PressableScale
               accessibilityRole="button"
               accessibilityLabel="Back"
+              haptic="tap"
               onPress={() => guardedRouterBack(router)}
               style={styles.backButton}
               hitSlop={10}
@@ -144,7 +146,7 @@ export default function LiveGamesScreen() {
               <View style={styles.backCircle}>
                 <ChevronLeft size={24} color="#fff" />
               </View>
-            </Pressable>
+            </PressableScale>
 
             <View style={styles.titleWrap}>
               <View style={styles.titleRow}>
@@ -260,7 +262,7 @@ function ChipButton({
   onTouchCancel: (event: GestureResponderEvent) => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={`${label} live games filter`}
       accessibilityHint="Filters live games by sport"
@@ -270,7 +272,7 @@ function ChipButton({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchCancel={onTouchCancel}
-      style={({ pressed }) => [styles.chipButton, { opacity: pressed ? 0.85 : 1 }]}
+      style={styles.chipButton}
     >
       {active ? (
         <LinearGradient
@@ -289,7 +291,7 @@ function ChipButton({
           <Text style={[styles.chipText, { color: 'rgba(255,255,255,0.66)' }]}>{label}</Text>
         </View>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 

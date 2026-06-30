@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 
 type RefreshAction = () => Promise<unknown> | unknown;
 
@@ -95,11 +95,8 @@ export function useSmoothRefresh(
         const wait = Math.max(0, minVisibleMs - elapsed);
         hideTimerRef.current = setTimeout(() => {
           hideTimerRef.current = null;
-          void Haptics.notificationAsync(
-            didFail
-              ? Haptics.NotificationFeedbackType.Error
-              : Haptics.NotificationFeedbackType.Success,
-          ).catch(() => {});
+          if (didFail) haptics.error();
+          else haptics.success();
           hideRefreshing();
         }, wait);
       });

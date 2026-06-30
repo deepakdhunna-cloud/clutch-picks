@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { claimInteractionLock } from '@/lib/interaction-guard';
 
 type FeedbackVariant = 'success' | 'error' | 'info';
@@ -38,14 +38,14 @@ export function FeedbackModal({
 
   const handleActionPress = () => {
     if (!claimInteractionLock(`feedback:${title}:primary`, 700)) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     onActionPress?.();
     onDismiss();
   };
 
   const handleSecondaryPress = () => {
     if (!claimInteractionLock(`feedback:${title}:secondary`, 700)) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     onSecondaryPress?.();
     onDismiss();
   };

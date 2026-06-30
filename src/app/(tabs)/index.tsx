@@ -34,7 +34,8 @@ import { teamScoreText } from '@/lib/cricket-score';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { guardedRouterPush } from '@/lib/navigation-guard';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
-import * as Haptics from 'expo-haptics';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { haptics } from '@/lib/haptics';
 
 // Memoize all sports array
 const allSports = Object.values(Sport);
@@ -396,11 +397,12 @@ const StatusFilterRail = memo(function StatusFilterRail({
         const hasFilter = statusFilter !== 'all';
         const dimmed = hasFilter && !active;
         return (
-          <Pressable
+          <PressableScale
             key={f.key}
             accessibilityRole="button"
             accessibilityLabel={`${f.label} games filter`}
             accessibilityState={{ selected: active }}
+            haptic="selection"
             onPress={() => {
               if (!shouldHandlePress()) return;
               setStatusFilter(active ? 'all' : f.key);
@@ -414,7 +416,7 @@ const StatusFilterRail = memo(function StatusFilterRail({
             <HomeFilterPillSurface active={active}>
               <Text style={{ fontSize: 12, fontWeight: active ? '700' : '600', color: active ? '#FFFFFF' : TEAL }}>{f.label}</Text>
             </HomeFilterPillSurface>
-          </Pressable>
+          </PressableScale>
         );
       })}
     </ScrollView>
@@ -441,10 +443,11 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
   return (
     <View style={{ paddingTop: 0 }}>
       <View style={{ paddingHorizontal: responsive.isTablet ? responsive.contentPadding : 16, marginTop: 0, marginBottom: 12 }}>
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel={selectedSportFilter ? `Clear ${displaySport(selectedSportFilter)} filter` : 'View game board'}
           accessibilityHint={selectedSportFilter ? 'Shows all sports on the game board' : 'Scrolls to the game board'}
+          haptic="tap"
           onPress={() => {
             if (selectedSportFilter) {
               setSelectedSportFilter(null);
@@ -452,11 +455,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
               onViewAll();
             }
           }}
-          style={({ pressed }) => ({
-            minHeight: 44,
-            opacity: pressed ? 0.85 : 1,
-            transform: [{ scale: pressed ? 0.98 : 1 }],
-          })}
+          style={{ minHeight: 44 }}
         >
           {(() => {
             const rawCount = selectedSportFilter
@@ -479,7 +478,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
               />
             );
           })()}
-        </Pressable>
+        </PressableScale>
       </View>
     </View>
   );
@@ -620,10 +619,11 @@ const HomeHeader = React.memo(function HomeHeader({
               decelerationRate="fast"
             >
               {/* All pill */}
-              <Pressable
+              <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={`All live games filter`}
                 accessibilityState={{ selected: !selectedLiveSportFilter }}
+                haptic="selection"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
                   setSelectedLiveSportFilter(null);
@@ -637,7 +637,7 @@ const HomeHeader = React.memo(function HomeHeader({
                 <HomeFilterPillSurface active={!selectedLiveSportFilter}>
                   <Text style={{ fontSize: 12, fontWeight: !selectedLiveSportFilter ? '700' : '600', color: !selectedLiveSportFilter ? '#FFFFFF' : TEAL }}>All ({filteredLiveGames.length})</Text>
                 </HomeFilterPillSurface>
-              </Pressable>
+              </PressableScale>
 
               {/* Per-sport pills */}
               {availableLiveSports.map((sport) => {
@@ -645,11 +645,12 @@ const HomeHeader = React.memo(function HomeHeader({
                 const count = liveSportCounts.get(sport) ?? 0;
                 const displayName = displaySport(sport);
                 return (
-                  <Pressable
+                  <PressableScale
                     key={sport}
                     accessibilityRole="button"
                     accessibilityLabel={`${displayName} live games filter`}
                     accessibilityState={{ selected: isChipSelected }}
+                    haptic="selection"
                     onPress={() => {
                       if (!shouldHandleLiveChipPress()) return;
                       setSelectedLiveSportFilter(isChipSelected ? null : sport);
@@ -663,7 +664,7 @@ const HomeHeader = React.memo(function HomeHeader({
                     <HomeFilterPillSurface active={isChipSelected}>
                       <Text style={{ fontSize: 12, fontWeight: isChipSelected ? '700' : '600', color: isChipSelected ? '#FFFFFF' : TEAL }}>{displayName} ({count})</Text>
                     </HomeFilterPillSurface>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </ScrollView>
@@ -694,10 +695,11 @@ const HomeHeader = React.memo(function HomeHeader({
             onMomentumScrollBegin={liveRailPressGuard.onMomentumScrollBegin}
             onMomentumScrollEnd={liveRailPressGuard.onMomentumScrollEnd}
             ListFooterComponent={showLiveRailViewAll ? (
-              <Pressable
+              <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel="View all live games"
                 accessibilityHint="Opens the live games screen"
+                haptic="tap"
                 onPress={() => {
                   if (!shouldHandleLiveChipPress()) return;
                   onOpenLiveGames();
@@ -706,7 +708,6 @@ const HomeHeader = React.memo(function HomeHeader({
                 onTouchStart={onLiveChipTouchStart}
                 onTouchMove={onLiveChipTouchMove}
                 onTouchCancel={onLiveChipTouchCancel}
-                className="active:opacity-75"
                 style={{
                   height: 56,
                   alignSelf: 'center',
@@ -725,7 +726,7 @@ const HomeHeader = React.memo(function HomeHeader({
               >
                 <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>View All</Text>
                 <ChevronRight size={14} color="#FFFFFF" />
-              </Pressable>
+              </PressableScale>
             ) : null}
           />
         </View>
@@ -956,7 +957,7 @@ export default function HomeScreen() {
   const applySportFilter = useCallback((nextSport: Sport | null) => {
     const isChanging = nextSport !== selectedSportFilter;
     if (isChanging) {
-      void Haptics.selectionAsync().catch(() => {});
+      haptics.selection();
     }
     // Apply the filter in place — do NOT auto-scroll the board, so selecting a
     // sport never makes the page jump.

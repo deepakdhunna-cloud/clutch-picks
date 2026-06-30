@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, View, Text, Pressable } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { claimInteractionLock } from '@/lib/interaction-guard';
 
 interface ConfirmModalProps {
@@ -91,7 +91,7 @@ export function ConfirmModal({
               accessibilityLabel={cancelLabel}
               onPress={() => {
                 if (!claimInteractionLock(`confirm:${title}:cancel`, 700)) return;
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                haptics.tap();
                 onCancel();
               }}
               style={({ pressed }) => ({
@@ -120,11 +120,8 @@ export function ConfirmModal({
               accessibilityLabel={confirmLabel}
               onPress={() => {
                 if (!claimInteractionLock(`confirm:${title}:confirm`, 700)) return;
-                void Haptics.notificationAsync(
-                  destructive
-                    ? Haptics.NotificationFeedbackType.Warning
-                    : Haptics.NotificationFeedbackType.Success
-                ).catch(() => {});
+                if (destructive) haptics.warning();
+                else haptics.confirm();
                 onConfirm();
               }}
               style={({ pressed }) => ({

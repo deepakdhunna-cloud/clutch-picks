@@ -16,7 +16,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTabBarVisible } from '@/contexts/ScrollContext';
 import { MAROON } from '@/lib/theme';
@@ -84,7 +84,7 @@ export function GlassBottomNav({
             if ((options as { href?: string | null }).href === null) return null;
 
             const onPress = () => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              haptics.selection();
               const event = navigation.emit({
                 type: 'tabPress',
                 target: route.key,

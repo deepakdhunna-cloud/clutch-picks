@@ -17,7 +17,7 @@ import Svg, { Path, Line } from 'react-native-svg';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { getTeamColors } from '@/lib/team-colors';
 import { Sport } from '@/types/sports';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInvalidateSession } from '@/lib/auth/use-session';
 import { api } from '@/lib/api/api';
@@ -239,7 +239,7 @@ function PickStep({ picked, setPicked, onContinue, onSkip, onBack }: {
 
   const doPick = useCallback((team: 'home' | 'away') => {
     setPicked(team);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.selection();
     const target = team === 'home' ? homeScale : awayScale;
     const other = team === 'home' ? awayScale : homeScale;
     target.value = withSequence(withSpring(0.88, { damping: 15 }), withSpring(1.05, { damping: 12 }), withSpring(1, { damping: 10 }));
@@ -1376,7 +1376,7 @@ export default function OnboardingScreen() {
 
   const handlePhotoPress = () => {
     if (isUploading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     profilePhotoUpload.openPhotoSource();
   };
 

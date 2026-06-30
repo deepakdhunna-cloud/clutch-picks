@@ -31,12 +31,14 @@ import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Calendar, Clock, Tv, TrendingUp, ChevronRight, Lock } from 'lucide-react-native';
 import { useMakePick, useRemovePick, useGamePick, useGamePickStats } from '@/hooks/usePicks';
 import { useSubscription } from '@/lib/subscription-context';
-import * as Haptics from 'expo-haptics';
 import { usePrefetchGame } from '@/hooks/useGames';
 import { PickConfirmationModal } from '@/components/sports/PickConfirmationModal';
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { deepEqual } from '@/lib/deep-equal';
 import { guardedRouterPush } from '@/lib/navigation-guard';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { PRESS_SCALE_CARD } from '@/lib/motion';
+import { haptics } from '@/lib/haptics';
 
 interface GameCardProps {
   game: GameWithPrediction;
@@ -120,7 +122,7 @@ function getStatusBadge(status: GameStatus | string) {
 
 // Handle TV channel press
 function handleWatchSourcePress(channel: string) {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  haptics.tap();
   const url = getWatchSourceUrl(channel);
   void Linking.openURL(url).catch(() => {});
 }
@@ -180,7 +182,7 @@ const TappableJersey = memo(function TappableJersey({
   const handlePress = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
     if (isDisabled || !shouldHandlePress()) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.selection();
     scale.value = withTiming(0.95, { duration: 150, easing: Easing.out(Easing.ease) }, () => {
       scale.value = withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) });
     });
@@ -302,13 +304,14 @@ const LiveGameLayout = memo(function LiveGameLayout({
 
   return (
     <View style={{ position: 'relative', marginBottom: 16 }}>
-      <Pressable
+      <PressableScale
         accessibilityRole="button"
         accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
         accessibilityHint="Opens game details"
         onPress={handlePress}
         onPressIn={warmGame}
-        className="active:opacity-85"
+        haptic="tap"
+        pressedScale={PRESS_SCALE_CARD}
         pressRetentionOffset={6}
         onTouchStart={onCardTouchStart}
         onTouchMove={onCardTouchMove}
@@ -649,7 +652,7 @@ const LiveGameLayout = memo(function LiveGameLayout({
         </View>
         </View>
         </View>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 });
@@ -896,12 +899,14 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
         />
       )}
 
-      <Pressable
+      <PressableScale
         accessibilityRole="button"
         accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
         accessibilityHint="Opens game details"
         onPress={handlePress}
         onPressIn={warmGame}
+        haptic="tap"
+        pressedScale={PRESS_SCALE_CARD}
         style={{ flex: 1 }}
         pressRetentionOffset={6}
         onTouchStart={onCardTouchStart}
@@ -1546,7 +1551,7 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
         </View>
         </View>
       </View>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }, gameCardPropsEqual);

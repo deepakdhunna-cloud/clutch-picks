@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useNavigationContainerRef } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { authClient, setBearerToken } from '@/lib/auth/auth-client';
 import {
   appleSignInIncompleteError,
@@ -53,13 +53,13 @@ export default function WelcomeScreen() {
 
   const onGetStarted = () => {
     if (isLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.confirm();
     guardedRouterPush(router, '/sign-up' as any);
   };
 
   const onSignIn = () => {
     if (isLoading) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.confirm();
     guardedRouterPush(router, '/sign-in' as any);
   };
 
@@ -196,7 +196,7 @@ export default function WelcomeScreen() {
     } catch (e: any) {
       const message = appleSignInFallbackMessage(e);
       if (message) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        haptics.error();
         setError(message);
       }
     } finally {

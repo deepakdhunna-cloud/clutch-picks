@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { useUserPicks } from '@/hooks/usePicks';
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
@@ -113,7 +113,7 @@ const PickCard = memo(function PickCard({ item, index, canOpen }: { item: PickTi
           if (!canOpen()) return;
           if (!claimGameNavigation(item.gameId)) return;
           guardedRouterPush(router, `/game/${item.gameId}` as any);
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          haptics.tap();
         }}
         style={({ pressed }) => [s.pickCard, {
           borderColor: isWin ? 'rgba(122,157,184,0.12)' : isLoss ? 'rgba(139,10,31,0.12)' : C.BORDER,
@@ -284,7 +284,7 @@ export default function PicksHistoryScreen() {
 
   const handleFilterPress = useCallback((nextFilter: typeof filter) => {
     if (nextFilter === filter) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.selection();
     setFilter(nextFilter);
   }, [filter]);
 
