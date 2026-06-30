@@ -1814,7 +1814,7 @@ function GameDetailContent() {
         <LinearGradient colors={['transparent', '#040608']} start={{ x: 0, y: 0.5 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { top: '55%' }]} />
       </View>
       <View pointerEvents="box-none" style={[styles.floatingDetailControls, { top: detailFloatingTop }]}>
-        <Pressable
+        <PressableScale
           onPress={() => {
             guardedRouterBack(router);
           }}
@@ -1826,7 +1826,7 @@ function GameDetailContent() {
           <BlurView pointerEvents="none" intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.58)' }]} />
           <Text style={{ fontSize: 22, color: '#fff', lineHeight: 24, includeFontPadding: false }}>‹</Text>
-        </Pressable>
+        </PressableScale>
         <View style={styles.floatingDetailPill}>
           <BlurView pointerEvents="none" intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.58)' }]} />

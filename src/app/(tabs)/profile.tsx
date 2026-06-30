@@ -28,6 +28,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { unregisterCurrentDeviceForPushNotifications } from '@/hooks/useNotifications';
 import { getAppVersionLabel } from '@/lib/app-version';
+import { PressableScale } from '@/components/shared/PressableScale';
 import { claimGameNavigation } from '@/lib/game-navigation-guard';
 import { claimInteractionLock } from '@/lib/interaction-guard';
 import { guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
@@ -839,14 +840,14 @@ export default function ProfileScreen() {
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">Analyst Card</SvgText>
             <SvgText x="0" y="33" fontSize="34" fontWeight="800" fill="url(#headerGrad)" stroke="none" strokeWidth={0}>Analyst Card</SvgText>
           </Svg>
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Open settings"
             onPress={handleOpenSettings}
             hitSlop={10}
             style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
             <GearIcon size={18} color={C.TEXT_PRIMARY} />
-          </Pressable>
+          </PressableScale>
         </View>
 
         {/* ── 1. ANALYST CARD HERO ── */}
@@ -946,15 +947,15 @@ export default function ProfileScreen() {
 
         {/* ── 2. EDIT PROFILE + SHARE BUTTONS ── */}
         <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 20 }}>
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Edit profile"
             hitSlop={6}
             onPress={handleOpenEditProfile}
             style={{ flex: 1, minHeight: 44, backgroundColor: C.MAROON, borderRadius: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: C.TEXT_PRIMARY }}>Edit Profile</Text>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Share analyst card"
             hitSlop={6}
@@ -962,7 +963,7 @@ export default function ProfileScreen() {
             style={{ flex: 1, minHeight: 44, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <ShareIcon size={14} color={C.TEXT_SECONDARY} />
             <Text style={{ fontSize: 13, fontWeight: '600', color: C.TEXT_SECONDARY }}>Share Card</Text>
-          </Pressable>
+          </PressableScale>
         </Animated.View>
 
         {/* ── 3. PREDICTIONS + RECENT PICKS ROW ── */}
@@ -1084,7 +1085,7 @@ export default function ProfileScreen() {
 
         {/* ── 7. SIGN OUT + VERSION ── */}
         <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 28 }}>
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Sign out"
             accessibilityHint="Signs you out of Clutch Picks"
@@ -1092,7 +1093,7 @@ export default function ProfileScreen() {
             hitSlop={{ top: 14, bottom: 14, left: 24, right: 24 }}
             style={{ minHeight: 44, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 12, fontWeight: '600', color: C.ERROR }}>Sign Out</Text>
-          </Pressable>
+          </PressableScale>
           <Text style={{ fontSize: 9, color: '#2A3444', marginTop: 8 }}>{appVersionLabel}</Text>
         </View>
 

@@ -10,6 +10,8 @@ import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { AuthBackground } from '@/components/AuthBackground';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { PRESS_SCALE_CARD } from '@/lib/motion';
 import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
@@ -84,7 +86,7 @@ export default function SignInScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Back"
             onPress={() => guardedRouterBack(router)}
@@ -92,7 +94,7 @@ export default function SignInScreen() {
             style={s.backBtn}
           >
             <BackArrow />
-          </Pressable>
+          </PressableScale>
 
           <View style={s.hero}>
             <Text style={s.title}>Welcome Back</Text>
@@ -112,6 +114,9 @@ export default function SignInScreen() {
               autoComplete="email"
               textContentType="emailAddress"
               keyboardType="email-address"
+              returnKeyType="go"
+              onSubmitEditing={handleContinue}
+              submitBehavior="submit"
               style={s.input}
               editable={!isLoading}
             />
@@ -121,7 +126,8 @@ export default function SignInScreen() {
           <View style={{ flex: 1 }} />
 
           <View style={s.buttonWrap}>
-            <Pressable
+            <PressableScale
+              pressedScale={PRESS_SCALE_CARD}
               accessibilityRole="button"
               accessibilityLabel="Continue"
               accessibilityState={{ disabled: isLoading || !email.trim(), busy: isLoading }}
@@ -137,7 +143,7 @@ export default function SignInScreen() {
               ) : (
                 <Text style={s.continueText}>Continue</Text>
               )}
-            </Pressable>
+            </PressableScale>
             <Text style={s.disclaimer}>
               Don't have an account?{' '}
               <Text

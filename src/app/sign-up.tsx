@@ -10,6 +10,8 @@ import Svg, { Path } from 'react-native-svg';
 import { authClient } from '@/lib/auth/auth-client';
 import { authRequestErrorMessage, withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { AuthBackground } from '@/components/AuthBackground';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { PRESS_SCALE_CARD } from '@/lib/motion';
 import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
@@ -85,7 +87,7 @@ export default function SignUpScreen() {
           style={{ flex: 1 }}
         >
           {/* Back arrow */}
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Back"
             onPress={() => guardedRouterBack(router)}
@@ -93,7 +95,7 @@ export default function SignUpScreen() {
             style={s.backBtn}
           >
             <BackArrow />
-          </Pressable>
+          </PressableScale>
 
           {/* Hero */}
           <View style={s.hero}>
@@ -115,6 +117,9 @@ export default function SignUpScreen() {
               autoComplete="email"
               textContentType="emailAddress"
               keyboardType="email-address"
+              returnKeyType="go"
+              onSubmitEditing={handleContinue}
+              submitBehavior="submit"
               style={s.input}
               editable={!isLoading}
             />
@@ -126,7 +131,8 @@ export default function SignUpScreen() {
 
           {/* Continue button */}
           <View style={s.buttonWrap}>
-            <Pressable
+            <PressableScale
+              pressedScale={PRESS_SCALE_CARD}
               accessibilityRole="button"
               accessibilityLabel="Continue"
               accessibilityState={{ disabled: isLoading || !email.trim(), busy: isLoading }}
@@ -142,7 +148,7 @@ export default function SignUpScreen() {
               ) : (
                 <Text style={s.continueText}>Continue</Text>
               )}
-            </Pressable>
+            </PressableScale>
             <Text style={s.disclaimer}>
               Already have an account?{' '}
               <Text

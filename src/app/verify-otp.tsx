@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  View, Text, TextInput, StyleSheet,
   StatusBar, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useNavigationContainerRef } from 'expo-router';
@@ -14,8 +14,11 @@ import { authUserIdentityFromPayload, sessionTokenFromAuthPayload } from '@/lib/
 import { useFinalizeAuthSession } from '@/lib/auth/use-session';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { PRESS_SCALE_CARD } from '@/lib/motion';
 import { BG, TEAL, MAROON } from '@/lib/theme';
 import { guardedRouterBack, guardedResetTo } from '@/lib/navigation-guard';
+import { claimInteractionLock } from '@/lib/interaction-guard';
 
 const CODE_LENGTH = 6;
 
@@ -156,7 +159,8 @@ export default function VerifyOTP() {
   const handleVerify = () => handleVerifyCode(code);
 
   const handleResend = async () => {
-    if (!email) return;
+    if (!email || isResending) return;
+    if (!claimInteractionLock('otp:resend', 1200)) return;
     setIsResending(true);
     setError(null);
     try {
@@ -194,9 +198,9 @@ export default function VerifyOTP() {
         <View style={s.content}>
           {/* Back button */}
           <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 60, marginBottom: 32, alignSelf: 'flex-start' }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={16} style={s.backBtn}>
+            <PressableScale accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} hitSlop={16} style={s.backBtn}>
               <BackArrow />
-            </Pressable>
+            </PressableScale>
           </Animated.View>
 
           {/* Header */}
@@ -276,18 +280,19 @@ export default function VerifyOTP() {
 
           {/* Resend */}
           <Animated.View entering={FadeInDown.delay(300).duration(400)} style={s.resendRow}>
-            <Pressable
+            <PressableScale
               accessibilityRole="button"
               accessibilityLabel="Resend code"
               accessibilityState={{ disabled: isResending, busy: isResending }}
               onPress={handleResend}
               disabled={isResending}
+              hitSlop={8}
               style={{ minHeight: 44, justifyContent: 'center' }}
             >
               <Text style={[s.resendText, isResending && { color: 'rgba(255,255,255,0.25)' }]}>
                 {isResending ? 'Sending...' : 'Resend Code'}
               </Text>
-            </Pressable>
+            </PressableScale>
             <Text style={s.timerText}>· {timerDisplay}</Text>
           </Animated.View>
 
@@ -295,13 +300,14 @@ export default function VerifyOTP() {
 
           {/* Verify button */}
           <Animated.View entering={FadeInDown.delay(400).duration(400)} style={{ width: '100%' }}>
-            <Pressable
+            <PressableScale
+              pressedScale={PRESS_SCALE_CARD}
               accessibilityRole="button"
               accessibilityLabel="Verify my account"
               accessibilityState={{ disabled: !isComplete || isLoading, busy: isLoading }}
               onPress={handleVerify}
               disabled={!isComplete || isLoading}
-              style={({ pressed }) => ({ opacity: pressed ? 0.85 : !isComplete ? 0.4 : 1 })}
+              style={!isComplete ? { opacity: 0.4 } : undefined}
             >
               <View style={s.submitBtn}>
                 {isLoading ? (
@@ -313,7 +319,7 @@ export default function VerifyOTP() {
                   <Text style={s.submitBtnText}>Verify My Account</Text>
                 )}
               </View>
-            </Pressable>
+            </PressableScale>
           </Animated.View>
 
           <View style={{ height: 36 }} />

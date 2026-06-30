@@ -54,6 +54,35 @@ function dispatchRootReset(
   }
 }
 
+// Retry a true root RESET across a few frames while the container ref is not
+// yet ready. On a cold-start auth/onboarding transition the navigation
+// container often isn't ready on the first tick, which previously made
+// guardedResetTo fall straight through to the leaky dismissAll()+replace()
+// path — and that path left Welcome/onboarding sitting beneath the tabs group,
+// so an iOS edge back-swipe on Home popped back to the Welcome screen. By
+// retrying the real RESET until the ref is ready, the destination becomes the
+// ONLY root route on every entry path. Returns a cleanup canceller.
+function scheduleRootResetWhenReady(
+  navigationRef: NavigationRefLike | undefined,
+  href: unknown,
+  attempts = 30,
+): boolean {
+  if (!navigationRef) return false;
+  // Try immediately; if it worked, we're done.
+  if (dispatchRootReset(navigationRef, href)) return true;
+  // Otherwise poll on a short interval until ready or attempts exhausted.
+  let remaining = attempts;
+  const tick = () => {
+    if (remaining-- <= 0) return;
+    if (dispatchRootReset(navigationRef, href)) return;
+    setTimeout(tick, 16);
+  };
+  setTimeout(tick, 16);
+  // We have scheduled a guaranteed RESET, so the caller should NOT run the
+  // leaky fallback. Report handled.
+  return true;
+}
+
 type NavigationLike = {
   navigate?: (...args: any[]) => void;
 };
@@ -123,14 +152,19 @@ export function guardedResetTo(
   if (dispatchRootReset(options.navigationRef, href)) {
     return true;
   }
-  // Fallback (ref not ready): pop everything beneath the current screen, then
-  // replace the current screen with the destination.
+  // Ref not ready yet (common on cold-start auth/onboarding transitions). Do a
+  // best-effort immediate replace so the destination paints without delay, AND
+  // schedule a real root RESET to fire the instant the container becomes ready
+  // — so nothing is ever left beneath the destination in the native stack.
   try {
     router.dismissAll?.();
   } catch {
     // dismissAll throws if there is nothing to dismiss — safe to ignore.
   }
   router.replace?.(href);
+  if (options.navigationRef) {
+    scheduleRootResetWhenReady(options.navigationRef, href);
+  }
   return true;
 }
 

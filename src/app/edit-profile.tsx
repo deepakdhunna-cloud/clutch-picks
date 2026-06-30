@@ -14,6 +14,7 @@ import { PhotoSourceModal } from '@/components/PhotoSourceModal';
 import { ProfileAvatarImage } from '@/components/ProfileAvatarImage';
 import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
 import { guardedRouterBack } from '@/lib/navigation-guard';
+import { PressableScale } from '@/components/shared/PressableScale';
 
 // Match profile card palette
 import {
@@ -143,10 +144,11 @@ export default function EditProfileScreen() {
         entering={FadeInDown.duration(180)}
         style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Back"
           onPress={() => guardedRouterBack(router)}
+          hitSlop={8}
           style={{
             width: 44,
             height: 44,
@@ -159,14 +161,15 @@ export default function EditProfileScreen() {
           }}
         >
           <ArrowLeft size={24} color="#FFFFFF" />
-        </Pressable>
+        </PressableScale>
         <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>Edit Profile</Text>
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Save profile"
           accessibilityState={{ disabled: updateProfileMutation.isPending, busy: updateProfileMutation.isPending }}
           onPress={handleSave}
           disabled={updateProfileMutation.isPending}
+          hitSlop={8}
           style={{
             width: 44,
             height: 44,
@@ -181,7 +184,7 @@ export default function EditProfileScreen() {
           ) : (
             <Check size={24} color="#FFFFFF" />
           )}
-        </Pressable>
+        </PressableScale>
       </Animated.View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -315,7 +318,7 @@ export default function EditProfileScreen() {
             {/* Email (Read-only) */}
             <View style={{ padding: 16 }}>
               <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Email</Text>
-              <Text style={{ color: TEXT_SECONDARY, fontSize: 16 }}>
+              <Text numberOfLines={1} style={{ color: TEXT_SECONDARY, fontSize: 16 }}>
                 {user?.email || 'No email'}
               </Text>
               <Text style={{ color: 'rgba(255,255,255,0.15)', fontSize: 11, marginTop: 8 }}>

@@ -256,6 +256,34 @@ function RootLayoutNav({
     }
   }, [hasUser, isLoading, onboardingChecked, onboardingDone, segment, inAuthGroup, inPublicGroup, router, navigationRef]);
 
+  // Belt-and-suspenders stack hygiene: once an authenticated, onboarded user is
+  // on the tabs group, guarantee the root stack contains ONLY the tabs route.
+  // Some cold-start entry paths can momentarily leave welcome/onboarding beneath
+  // the tabs group (ref-not-ready timing); if that residue survives, an iOS edge
+  // back-swipe on Home pops back to Welcome. This invisibly flattens the stack
+  // (no animation, no layout change) the instant we detect leftover routes.
+  useEffect(() => {
+    if (isLoading || !onboardingChecked) return;
+    if (!hasUser || !onboardingDone) return;
+    if (segment !== '(tabs)' && segment !== undefined) return;
+    if (!navigationRef?.isReady?.()) return;
+    try {
+      const state = (navigationRef as any).getRootState?.();
+      const routes = state?.routes;
+      const needsFlatten =
+        Array.isArray(routes) &&
+        (routes.length > 1 || (routes.length === 1 && routes[0]?.name !== '(tabs)'));
+      if (needsFlatten) {
+        (navigationRef as any).dispatch?.({
+          type: 'RESET',
+          payload: { index: 0, routes: [{ name: '(tabs)' }] },
+        });
+      }
+    } catch {
+      // Non-fatal: the primary guardedResetTo path already handles the reset.
+    }
+  }, [hasUser, onboardingDone, onboardingChecked, isLoading, segment, navigationRef]);
+
   // Callback when splash animation completes
   const handleAnimationComplete = useCallback(() => {
     markAnimationComplete();
@@ -277,9 +305,9 @@ function RootLayoutNav({
         {splashAnimationComplete && session?.user ? <LiveScoreSync /> : null}
         <Stack screenOptions={{ headerShown: false, animation: 'ios_from_right', animationDuration: 200, gestureEnabled: true, fullScreenGestureEnabled: false }}>
           <Stack.Screen name="welcome" options={{ freezeOnBlur: true, gestureEnabled: false }} />
-          <Stack.Screen name="sign-in" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="sign-up" options={{ freezeOnBlur: true }} />
-          <Stack.Screen name="verify-otp" options={{ freezeOnBlur: true }} />
+          <Stack.Screen name="sign-in" options={{ freezeOnBlur: true, gestureEnabled: false }} />
+          <Stack.Screen name="sign-up" options={{ freezeOnBlur: true, gestureEnabled: false }} />
+          <Stack.Screen name="verify-otp" options={{ freezeOnBlur: true, gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" options={{ freezeOnBlur: false, gestureEnabled: false, fullScreenGestureEnabled: false }} />
           <Stack.Screen name="game/[id]" options={{ freezeOnBlur: false, fullScreenGestureEnabled: true }} />
           <Stack.Screen name="sport/[sport]" options={{ freezeOnBlur: true, fullScreenGestureEnabled: true }} />

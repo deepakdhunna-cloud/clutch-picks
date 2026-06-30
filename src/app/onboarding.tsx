@@ -35,6 +35,8 @@ import { arenaStepButtonLabel } from '@/lib/onboarding-presentation';
 import { PAYWALL_COPY } from '@/lib/subscription-config';
 import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
 import { guardedRouterReplace, guardedResetTo } from '@/lib/navigation-guard';
+import { claimInteractionLock } from '@/lib/interaction-guard';
+import { withAuthRequestTimeout } from '@/lib/auth/auth-request';
 
 const { width: W } = Dimensions.get('window');
 
@@ -1303,7 +1305,13 @@ export default function OnboardingScreen() {
     return () => clearTimeout(timer);
   }, [replayRequested]);
 
+  const advanceTo = useCallback((target: number) => {
+    if (!claimInteractionLock('onboarding:advance', 450)) return;
+    setStep(target);
+  }, []);
+
   const goNext = useCallback(async () => {
+    if (!claimInteractionLock('onboarding:next', 450)) return;
     if (step === 3 && arenaSubPage < 2) {
       setArenaSubPage(arenaSubPage + 1);
       return;
@@ -1319,6 +1327,7 @@ export default function OnboardingScreen() {
   }, [step, arenaSubPage, tutorialReplay, router, navigationRef]);
 
   const goBack = useCallback(() => {
+    if (!claimInteractionLock('onboarding:back', 350)) return;
     if (step === 3 && arenaSubPage > 0) {
       setArenaSubPage(arenaSubPage - 1);
       return;
@@ -1334,6 +1343,7 @@ export default function OnboardingScreen() {
   }, [step, arenaSubPage, tutorialReplay]);
 
   const skip = useCallback(async () => {
+    if (!claimInteractionLock('onboarding:skip', 800)) return;
     await AsyncStorage.setItem('clutch_onboarding_complete', 'true');
     guardedResetTo(router, '/(tabs)', { navigationRef });
   }, [router, navigationRef]);
@@ -1345,8 +1355,8 @@ export default function OnboardingScreen() {
     setIsSavingProfile(true);
     try {
       const name = displayName.trim();
-      await api.put('/api/profile', { name });
-      await syncSubscriberInfo({ displayName: name });
+      await withAuthRequestTimeout(api.put('/api/profile', { name }), { timeoutMs: 12_000, label: 'Onboarding profile save' });
+      await syncSubscriberInfo({ displayName: name }).catch(() => {});
       // Invalidate caches so profile page picks up changes immediately
       await queryClient.invalidateQueries({ queryKey: ['profile'] });
       await invalidateSession();
@@ -1401,9 +1411,9 @@ export default function OnboardingScreen() {
           variant={feedback?.variant}
           onDismiss={() => setFeedback(null)}
         />
-        {step === 0 ? <WelcomeStep onContinue={() => setStep(1)} motionScale={replayRequested ? REPLAY_INTRO_MOTION_SCALE : 1} /> : null}
-        {step === 1 ? <PickStep picked={picked} setPicked={setPicked} onContinue={() => setStep(2)} onSkip={skip} onBack={goBack} /> : null}
-        {step === 2 ? <AIPredictionsStep onContinue={() => setStep(3)} onSkip={skip} onBack={goBack} picked={picked} /> : null}
+        {step === 0 ? <WelcomeStep onContinue={() => advanceTo(1)} motionScale={replayRequested ? REPLAY_INTRO_MOTION_SCALE : 1} /> : null}
+        {step === 1 ? <PickStep picked={picked} setPicked={setPicked} onContinue={() => advanceTo(2)} onSkip={skip} onBack={goBack} /> : null}
+        {step === 2 ? <AIPredictionsStep onContinue={() => advanceTo(3)} onSkip={skip} onBack={goBack} picked={picked} /> : null}
         {step === 3 ? <ArenaStep subPage={arenaSubPage} onContinue={goNext} onSkip={skip} onBack={goBack} /> : null}
         {step === 4 ? <ProfileStep displayName={displayName} setDisplayName={setDisplayName} profileImage={profileImage} isUploading={isUploading} uploadProgressLabel={profilePhotoUpload.uploadProgressLabel} isSavingProfile={isSavingProfile} onPhotoPress={handlePhotoPress} onContinue={saveProfile} onBack={goBack} /> : null}
         {step === 5 ? <PaywallStep onSubscribe={goToPaywall} onSkip={skipPaywall} onBack={goBack} /> : null}

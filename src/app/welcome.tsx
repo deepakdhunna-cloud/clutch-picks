@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, StyleSheet, StatusBar, Pressable, useWindowDimensions } from 'react-native';
+import { View, Text, Image, StyleSheet, StatusBar, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useNavigationContainerRef } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +22,8 @@ import { withAuthRequestTimeout } from '@/lib/auth/auth-request';
 import { api } from '@/lib/api/api';
 import { syncSubscriberInfo } from '@/lib/revenuecatClient';
 import { AuthBackground } from '@/components/AuthBackground';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { PRESS_SCALE_CARD } from '@/lib/motion';
 import { guardedRouterPush, guardedResetTo } from '@/lib/navigation-guard';
 
 const MAROON = '#8B0A1F';
@@ -238,27 +240,29 @@ export default function WelcomeScreen() {
           ) : null}
 
           <View style={s.emailActions}>
-            <Pressable
+            <PressableScale
+              pressedScale={PRESS_SCALE_CARD}
               accessibilityRole="button"
               accessibilityLabel="Create account"
               accessibilityState={{ disabled: isLoading }}
               onPress={onGetStarted}
               disabled={isLoading}
-              style={s.signUpBtn}
+              style={[s.signUpBtn, isLoading && s.disabledControl]}
             >
               <Text style={s.signUpText}>Sign Up</Text>
-            </Pressable>
+            </PressableScale>
 
-            <Pressable
+            <PressableScale
+              pressedScale={PRESS_SCALE_CARD}
               accessibilityRole="button"
               accessibilityLabel="Sign in"
               accessibilityState={{ disabled: isLoading }}
               onPress={onSignIn}
               disabled={isLoading}
-              style={s.signInBtn}
+              style={[s.signInBtn, isLoading && s.disabledControl]}
             >
               <Text style={s.signInText}>Sign In</Text>
-            </Pressable>
+            </PressableScale>
           </View>
 
           <View style={s.dividerRow}>
@@ -268,6 +272,12 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={[s.appleBtnWrap, isLoading && s.disabledControl]} pointerEvents={isLoading ? 'none' : 'auto'}>
+            {isLoading ? (
+              <View pointerEvents="none" style={s.appleBusyOverlay}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={s.appleBusyText}>Signing you in…</Text>
+              </View>
+            ) : null}
             {isAppleAvailable ? (
               <AppleAuthentication.AppleAuthenticationButton
                 buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
@@ -277,7 +287,8 @@ export default function WelcomeScreen() {
                 onPress={onApple}
               />
             ) : (
-              <Pressable
+              <PressableScale
+                pressedScale={PRESS_SCALE_CARD}
                 accessibilityRole="button"
                 accessibilityLabel="Continue with Apple"
                 accessibilityState={{ disabled: isLoading, busy: isLoading }}
@@ -286,7 +297,7 @@ export default function WelcomeScreen() {
                 style={s.appleFallbackBtn}
               >
                 <Text style={s.appleFallbackText}>Continue with Apple</Text>
-              </Pressable>
+              </PressableScale>
             )}
           </View>
         </View>
@@ -377,7 +388,6 @@ const s = StyleSheet.create({
     backgroundColor: MAROON,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
     shadowColor: MAROON,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -427,6 +437,27 @@ const s = StyleSheet.create({
   appleBtnWrap: {
     height: 54,
     marginBottom: 8,
+    justifyContent: 'center',
+  },
+  appleBusyOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(4,6,8,0.72)',
+  },
+  appleBusyText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   appleNativeBtn: {
     width: '100%',

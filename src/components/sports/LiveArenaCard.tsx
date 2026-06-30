@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -33,6 +33,8 @@ import {
 import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { deepEqual } from '@/lib/deep-equal';
 import { TEAL, LIVE_RED } from '@/lib/theme';
+import { PressableScale } from '@/components/shared/PressableScale';
+import { PRESS_SCALE_CARD } from '@/lib/motion';
 
 // Add an alpha channel to a #rrggbb / #rgb hex color.
 function hexWithAlpha(hex: string | undefined, alpha: number): string {
@@ -527,7 +529,8 @@ export const LiveArenaCard = memo(function LiveArenaCard({
           : { width: cardWidth, marginBottom: 14 }
       }
     >
-      <Pressable
+      <PressableScale
+        pressedScale={PRESS_SCALE_CARD}
         accessibilityRole="button"
         accessibilityLabel={`Open ${game.awayTeam.name} at ${game.homeTeam.name}`}
         accessibilityHint="Opens game details"
@@ -541,7 +544,6 @@ export const LiveArenaCard = memo(function LiveArenaCard({
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchCancel={onTouchCancel}
-        className="active:opacity-90"
         style={{ width: cardWidth }}
       >
         {/* Polished glass frame — metallic specular highlights at the corners,
@@ -691,10 +693,10 @@ export const LiveArenaCard = memo(function LiveArenaCard({
               </View>
             )}
           </View>
-        </LinearGradient>
-      </Pressable>
-    </View>
-  );
+          </LinearGradient>
+        </PressableScale>
+      </View>
+    );
 }, propsEqual);
 
 export default LiveArenaCard;

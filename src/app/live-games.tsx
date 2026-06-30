@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator, StyleSheet, FlatList, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, FlatList, useWindowDimensions } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useState, useCallback, useMemo, useEffect } from 'react';
@@ -54,6 +54,40 @@ function LivePulse() {
   );
 }
 
+// Shimmering skeleton that mirrors the LiveArenaCard footprint so the loading
+// state has shape (not a lone spinner on a blank screen) and the swap to real
+// cards causes no layout pop. One shared value drives a calm opacity pulse on
+// the UI thread.
+function LiveCardSkeleton({ cardWidth, pulse }: { cardWidth: number; pulse: Animated.SharedValue<number> }) {
+  const shimmer = useAnimatedStyle(() => ({ opacity: interpolate(pulse.value, [0, 1], [0.35, 0.7]) }));
+  const Block = ({ w, h, mt = 0, radius = 6 }: { w: number; h: number; mt?: number; radius?: number }) => (
+    <Animated.View style={[{ width: w, height: h, marginTop: mt, borderRadius: radius, backgroundColor: 'rgba(255,255,255,0.07)' }, shimmer]} />
+  );
+  return (
+    <View style={{ width: cardWidth, marginBottom: 16 }}>
+      <View style={{ borderRadius: 28, padding: 3, backgroundColor: 'rgba(255,255,255,0.04)' }}>
+        <View style={{ borderRadius: 25, paddingHorizontal: 16, paddingVertical: 16, backgroundColor: 'rgba(5,8,13,0.96)', height: 210 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Block w={60} h={24} radius={12} />
+            <Block w={56} h={24} radius={12} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22 }}>
+            <View style={{ alignItems: 'center', width: 80 }}>
+              <Block w={58} h={58} radius={14} />
+              <Block w={56} h={12} mt={12} />
+            </View>
+            <Block w={112} h={58} radius={14} />
+            <View style={{ alignItems: 'center', width: 80 }}>
+              <Block w={58} h={58} radius={14} />
+              <Block w={56} h={12} mt={12} />
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function LiveGamesScreen() {
   const router = useRouter();
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
@@ -69,6 +103,13 @@ export default function LiveGamesScreen() {
   const { refreshing, onRefresh } = useSmoothRefresh(refetch);
   const { width } = useWindowDimensions();
   const cardWidth = width - 40; // list padding is 20 each side
+
+  // Calm shimmer for loading skeletons (UI thread, looped, cleaned up).
+  const skeletonPulse = useSharedValue(0);
+  useEffect(() => {
+    skeletonPulse.value = withRepeat(withTiming(1, { duration: 950, easing: Easing.inOut(Easing.ease) }), -1, true);
+    return () => cancelAnimation(skeletonPulse);
+  }, [skeletonPulse]);
 
   const onWarmGame = useCallback((game: GameWithPrediction) => {
     prefetchGame(game.id, game);
@@ -149,8 +190,8 @@ export default function LiveGamesScreen() {
 
             <View style={styles.titleWrap}>
               <View style={styles.titleRow}>
-                <LivePulse />
                 <Text style={styles.title}>LIVE NOW</Text>
+                <LivePulse />
               </View>
               <Text style={styles.subtitle}>
                 {liveGames.length} GAME{liveGames.length !== 1 ? 'S' : ''} IN PROGRESS
@@ -217,22 +258,21 @@ export default function LiveGamesScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
             }
             ListEmptyComponent={
-              <View style={styles.emptyState}>
-                {isLoading ? (
-                  <>
-                    <ActivityIndicator size="large" color={TEAL} />
-                    <Text style={styles.emptyText}>Loading live games…</Text>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.emptyIcon}>
-                      <Zap size={26} color={TEAL} />
-                    </View>
-                    <Text style={styles.emptyTitle}>No live games right now</Text>
-                    <Text style={styles.emptyText}>Check back when games tip off.</Text>
-                  </>
-                )}
-              </View>
+              isLoading ? (
+                <View>
+                  <LiveCardSkeleton cardWidth={cardWidth} pulse={skeletonPulse} />
+                  <LiveCardSkeleton cardWidth={cardWidth} pulse={skeletonPulse} />
+                  <LiveCardSkeleton cardWidth={cardWidth} pulse={skeletonPulse} />
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIcon}>
+                    <Zap size={26} color={TEAL} />
+                  </View>
+                  <Text style={styles.emptyTitle}>No live games right now</Text>
+                  <Text style={styles.emptyText}>Check back when games tip off.</Text>
+                </View>
+              )
             }
           />
         </SafeAreaView>
@@ -325,7 +365,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   titleWrap: { flex: 1 },
-  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   title: {
     color: '#FFFFFF',
     fontFamily: 'BebasNeue_400Regular',
@@ -341,13 +381,16 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Live pulse
+  // Live pulse — sits to the RIGHT of the LIVE NOW title. The left margin gives
+  // it breathing room from the wordmark; the small downward nudge optically
+  // centers the 14px dot against the Bebas cap-height (the glyph box sits high).
   pulseWrap: {
     width: 14,
     height: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 9,
+    marginLeft: 12,
+    marginTop: 6,
   },
   pulseRing: {
     position: 'absolute',

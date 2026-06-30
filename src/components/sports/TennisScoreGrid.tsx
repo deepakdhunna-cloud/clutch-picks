@@ -150,19 +150,43 @@ export const TennisHeroSetScores = memo(function TennisHeroSetScores({
   const isLive = isLiveGameStatus(game.status ?? '');
   const activeIndex = isLive ? setCount - 1 : -1;
 
+  // The set row lives inside a fixed-width hero column (80px). With 2–3 sets the
+  // natural width fits; a 4–5 set match (Grand Slam) is wider than the column
+  // and previously overflowed/clipped against the screen edge. Compute the
+  // natural content width and scale the whole row down as a unit so every set
+  // stays visible and centered — digits, spacing, and the active pill keep their
+  // exact proportions, just uniformly smaller when crowded. 2–3 sets render at
+  // scale 1 (pixel-identical to before).
+  const CELL_W = 20;
+  const ACTIVE_W = 31;
+  const GAP = 4;
+  const COLUMN_W = 80; // matches styles.tennisHeroSide width in game/[id]
+  const naturalWidth =
+    setCount * CELL_W +
+    (activeIndex >= 0 ? ACTIVE_W - CELL_W : 0) +
+    Math.max(0, setCount - 1) * GAP;
+  const scale = naturalWidth > COLUMN_W ? COLUMN_W / naturalWidth : 1;
+
   return (
     <View style={styles.heroSetRow}>
-      {Array.from({ length: setCount }).map((_, index) => {
-        const active = index === activeIndex;
-        const value = line[index] !== undefined ? String(line[index]) : '-';
-        return (
-          <View key={`${side}-set-${index}`} style={[styles.heroSetCell, active && styles.heroActiveSetCell]}>
-            <Text allowFontScaling={false} numberOfLines={1} style={[styles.heroSetText, active && styles.activeScoreText]}>
-              {value}
-            </Text>
-          </View>
-        );
-      })}
+      <View
+        style={[
+          styles.heroSetInner,
+          scale < 1 && { transform: [{ scale }] },
+        ]}
+      >
+        {Array.from({ length: setCount }).map((_, index) => {
+          const active = index === activeIndex;
+          const value = line[index] !== undefined ? String(line[index]) : '-';
+          return (
+            <View key={`${side}-set-${index}`} style={[styles.heroSetCell, active && styles.heroActiveSetCell]}>
+              <Text allowFontScaling={false} numberOfLines={1} style={[styles.heroSetText, active && styles.activeScoreText]}>
+                {value}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 });
@@ -344,9 +368,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
     marginTop: 8,
     minHeight: 28,
+    maxWidth: 80,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  heroSetInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   heroSetCell: {
     width: 20,

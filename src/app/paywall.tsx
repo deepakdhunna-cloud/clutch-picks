@@ -42,6 +42,7 @@ import {
 } from '@/lib/subscription-config';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { guardedRouterBack, guardedRouterPush, guardedRouterReplace, guardedResetTo } from '@/lib/navigation-guard';
+import { PressableScale } from '@/components/shared/PressableScale';
 
 import { BG, MAROON, TEAL } from '@/lib/theme';
 
@@ -547,14 +548,14 @@ export default function PaywallScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Close button */}
         <Animated.View entering={FadeIn.delay(100)} style={{ position: 'absolute', top: 54, right: 16, zIndex: 20 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close paywall" onPress={() => guardedRouterBack(router, { fallback: '/(tabs)' })} style={{
+          <PressableScale accessibilityRole="button" accessibilityLabel="Close paywall" onPress={() => guardedRouterBack(router, { fallback: '/(tabs)' })} style={{
             width: 44, height: 44, borderRadius: 14,
             backgroundColor: 'rgba(255,255,255,0.04)',
             borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
             alignItems: 'center', justifyContent: 'center',
           }} hitSlop={12}>
             <X size={18} color="rgba(255,255,255,0.4)" />
-          </Pressable>
+          </PressableScale>
         </Animated.View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>

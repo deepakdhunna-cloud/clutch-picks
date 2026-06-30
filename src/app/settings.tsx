@@ -27,6 +27,7 @@ import { getAppVersionLabel } from '@/lib/app-version';
 import * as Updates from 'expo-updates';
 import { claimInteractionLock } from '@/lib/interaction-guard';
 import { guardedRouterBack, guardedRouterPush, guardedRouterReplace } from '@/lib/navigation-guard';
+import { PressableScale } from '@/components/shared/PressableScale';
 
 interface SettingItemProps {
   icon: any;
@@ -94,7 +95,7 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
   }
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityHint={subtitle}
@@ -105,13 +106,10 @@ function SettingItem({ icon: Icon, title, subtitle, onPress, showArrow = true, r
         haptics.tap();
         onPress?.();
       }}
-      style={({ pressed }) => ({
-        ...baseContainerStyle,
-        opacity: pressed ? 0.7 : baseContainerStyle.opacity,
-      })}
+      style={baseContainerStyle}
     >
       {rowContent}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -385,7 +383,7 @@ export default function SettingsScreen() {
             paddingVertical: 16,
           }}
         >
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Back"
             hitSlop={4}
@@ -405,7 +403,7 @@ export default function SettingsScreen() {
             }}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
-          </Pressable>
+          </PressableScale>
           <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginLeft: 16 }}>
             Settings
           </Text>
