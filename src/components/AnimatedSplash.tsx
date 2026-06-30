@@ -5,6 +5,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
+  withSequence,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
@@ -12,16 +13,13 @@ import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function triggerArrivalHaptic() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+function triggerSplashHaptic() {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
 }
 
-function triggerExitHaptic() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-}
-
+// Centered splash logo — uses the stacked image
 function SplashLogo() {
-  const logoWidth = SCREEN_WIDTH * 0.52;
+  const logoWidth = SCREEN_WIDTH * 0.5;
   return (
     <Image
       source={require('@/assets/clutch-logo.png')}
@@ -38,68 +36,84 @@ interface AnimatedSplashProps {
 }
 
 export function AnimatedSplash({ isLoading, onAnimationComplete, children }: AnimatedSplashProps) {
-  const hasExitedRef = useRef(false);
+  const hasStartedRef = useRef(false);
 
-  // Logo is FULLY VISIBLE from frame 1 — opacity 1, scale 1.
-  // It stays visible the entire loading phase.
-  // When loading completes, it exits cinematically.
-  const logoScale   = useSharedValue(1);
+  // Keep the clutch moment, but avoid expensive blur layers during cold start.
+  const logoScale = useSharedValue(1);
   const logoOpacity = useSharedValue(1);
-
-  // Black overlay covers app content until the exit is done
   const bgOpacity = useSharedValue(1);
-
-  // App content fades in as the overlay fades out
+  const flashScale = useSharedValue(0.15);
+  const flashOpacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
 
   useEffect(() => {
-    if (!isLoading && !hasExitedRef.current) {
-      hasExitedRef.current = true;
+    if (!isLoading && !hasStartedRef.current) {
+      hasStartedRef.current = true;
 
-      // ── Arrival haptic fires immediately when loading is done ─────────────
-      // This gives the "brand moment" feel — a medium impact as the logo
-      // is about to exit, like a stamp of confidence.
-      triggerArrivalHaptic();
+      const hapticTimeout = setTimeout(triggerSplashHaptic, 120);
 
-      // ── Exit sequence ─────────────────────────────────────────────────────
-      // Hold for 600ms so the logo gets its moment, then:
-      // - Logo scales up to 1.08 and dissolves over 600ms
-      // - Background overlay fades out simultaneously
-      // - App content fades in underneath
-      // Total duration: ~1.3s — cinematic, not rushed.
+      logoScale.value = withSequence(
+        withTiming(0.9, {
+          duration: 120,
+          easing: Easing.inOut(Easing.cubic),
+        }),
+        withTiming(1.18, {
+          duration: 240,
+          easing: Easing.out(Easing.cubic),
+        })
+      );
 
-      // Light haptic fires as the exit begins (at the 600ms hold mark)
-      const exitHapticTimer = setTimeout(triggerExitHaptic, 600);
-
-      // Logo exit: hold 600ms, then scale up + fade out over 600ms
       logoOpacity.value = withDelay(
-        600,
-        withTiming(0, { duration: 600, easing: Easing.in(Easing.cubic) })
-      );
-      logoScale.value = withDelay(
-        600,
-        withTiming(1.08, { duration: 650, easing: Easing.in(Easing.cubic) })
+        170,
+        withTiming(0, {
+          duration: 230,
+          easing: Easing.out(Easing.cubic),
+        })
       );
 
-      // Background overlay fades out with the logo
+      flashScale.value = withDelay(
+        100,
+        withTiming(1, {
+          duration: 360,
+          easing: Easing.out(Easing.cubic),
+        })
+      );
+
+      flashOpacity.value = withDelay(
+        100,
+        withSequence(
+          withTiming(0.34, {
+            duration: 80,
+            easing: Easing.out(Easing.quad),
+          }),
+          withTiming(0, {
+            duration: 280,
+            easing: Easing.out(Easing.cubic),
+          })
+        )
+      );
+
       bgOpacity.value = withDelay(
-        580,
-        withTiming(0, { duration: 640, easing: Easing.out(Easing.cubic) })
+        180,
+        withTiming(0, {
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+        })
       );
 
-      // App content fades in as the overlay clears
       contentOpacity.value = withDelay(
-        620,
-        withTiming(1, { duration: 580, easing: Easing.out(Easing.cubic) }, () => {
+        160,
+        withTiming(1, {
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+        }, () => {
           runOnJS(onAnimationComplete)();
         })
       );
 
-      return () => {
-        clearTimeout(exitHapticTimer);
-      };
+      return () => clearTimeout(hapticTimeout);
     }
-  }, [bgOpacity, contentOpacity, isLoading, logoOpacity, logoScale, onAnimationComplete]);
+  }, [bgOpacity, contentOpacity, flashOpacity, flashScale, isLoading, logoOpacity, logoScale, onAnimationComplete]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -108,6 +122,11 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
 
   const bgStyle = useAnimatedStyle(() => ({
     opacity: bgOpacity.value,
+  }));
+
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: flashOpacity.value,
+    transform: [{ scale: flashScale.value }],
   }));
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -124,7 +143,12 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
       {/* Black background overlay */}
       <Animated.View style={[styles.splashBg, bgStyle]} pointerEvents="none" />
 
-      {/* Centered logo — always visible during loading */}
+      {/* Lightweight pop flash — no blur view during app startup */}
+      <Animated.View style={styles.flashCenter} pointerEvents="none">
+        <Animated.View style={[styles.flash, flashStyle]} />
+      </Animated.View>
+
+      {/* Centered logo */}
       <Animated.View style={[styles.logoWrapper, logoStyle]} pointerEvents="none">
         <SplashLogo />
       </Animated.View>
@@ -144,6 +168,18 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000000',
     zIndex: 50,
+  },
+  flashCenter: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 75,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flash: {
+    width: SCREEN_WIDTH * 1.9,
+    height: SCREEN_WIDTH * 1.9,
+    borderRadius: SCREEN_WIDTH * 0.95,
+    backgroundColor: 'rgba(122, 157, 184, 0.42)',
   },
   logoWrapper: {
     ...StyleSheet.absoluteFillObject,
