@@ -1032,6 +1032,44 @@ function RedactedSection({ title, height, onUnlock }: {
 }
 
 
+function PredictionUnavailable({ status }: { status?: string }) {
+  // Designed empty state for games that have no model prediction yet. Reuses the
+  // existing card vocabulary (radius/border/sheen) so it reads as intentional,
+  // never as a missing section. Copy adapts to whether the match is upcoming
+  // (still being prepared) or already in progress / final (none was posted).
+  const upcoming = status === 'SCHEDULED';
+  const title = upcoming ? 'Model read on the way' : 'No model read for this match';
+  const body = upcoming
+    ? 'Our projection for this matchup posts before the start. Check back shortly.'
+    : 'We didn’t post a projection for this matchup. Scores above update live.';
+  return (
+    <View style={{
+      borderRadius: 18,
+      backgroundColor: 'rgba(5,8,13,0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(122,157,184,0.14)',
+      overflow: 'hidden',
+      position: 'relative',
+      paddingVertical: 22,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+    }}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(122,157,184,0.10)', 'rgba(255,255,255,0.02)', 'rgba(5,8,13,0.95)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: 'rgba(122,157,184,0.10)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.24)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+        <AnalysisIcon size={20} color="#9AB8CC" />
+      </View>
+      <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' }}>{title}</Text>
+      <Text style={{ fontSize: 12, lineHeight: 18, color: 'rgba(180,211,235,0.55)', textAlign: 'center', marginTop: 5, maxWidth: 280 }}>{body}</Text>
+    </View>
+  );
+}
+
 function WinProbBar({ prediction, homeTeam, awayTeam, sport }: { prediction: GamePrediction; homeTeam: GameTeam; awayTeam: GameTeam; sport: Sport }) {
   const canonicalProbabilities = getCanonicalWinProbabilities(prediction as Prediction);
   const dp = displayWinProbability(canonicalProbabilities.home, canonicalProbabilities.away, canonicalProbabilities.draw);
@@ -2182,7 +2220,12 @@ function GameDetailContent() {
                 </View>
               </PressableScale>
             </>
-          ) : null}
+          ) : (
+            <View style={{ marginBottom: 28 }}>
+              <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text>
+              <PredictionUnavailable status={game.status} />
+            </View>
+          )}
           <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>
             <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)', textAlign: 'center', lineHeight: 15 }}>
               AI predictions are for entertainment purposes only. Not financial advice.

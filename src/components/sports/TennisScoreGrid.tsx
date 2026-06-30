@@ -150,37 +150,51 @@ export const TennisHeroSetScores = memo(function TennisHeroSetScores({
   const isLive = isLiveGameStatus(game.status ?? '');
   const activeIndex = isLive ? setCount - 1 : -1;
 
-  // The set row lives inside a fixed-width hero column (80px). With 2–3 sets the
-  // natural width fits; a 4–5 set match (Grand Slam) is wider than the column
-  // and previously overflowed/clipped against the screen edge. Compute the
-  // natural content width and scale the whole row down as a unit so every set
-  // stays visible and centered — digits, spacing, and the active pill keep their
-  // exact proportions, just uniformly smaller when crowded. 2–3 sets render at
-  // scale 1 (pixel-identical to before).
-  const CELL_W = 20;
-  const ACTIVE_W = 31;
-  const GAP = 4;
-  const COLUMN_W = 80; // matches styles.tennisHeroSide width in game/[id]
-  const naturalWidth =
-    setCount * CELL_W +
-    (activeIndex >= 0 ? ACTIVE_W - CELL_W : 0) +
-    Math.max(0, setCount - 1) * GAP;
-  const scale = naturalWidth > COLUMN_W ? COLUMN_W / naturalWidth : 1;
+  // The set row sits centered under the jersey inside an 80px hero column, with
+  // ~24px of screen padding on the outer edge and a wider gutter toward the
+  // center scoreboard. A best-of-5 match (Grand Slam) cannot fit 5 readable
+  // digits inside 80px, so instead of a fragile transform-scale (which doesn't
+  // shrink the layout box and was clipping at the screen edge), we size each
+  // cell DOWN as the set count grows and allow the centered row to extend a few
+  // points symmetrically into the gutters. No hard clip, no transform — every
+  // set is always fully visible. 1–3 sets keep the original size (identical look).
+  const dense = setCount >= 5 ? 'xl' : setCount === 4 ? 'lg' : 'base';
+  const cell =
+    dense === 'xl'
+      ? { w: 16, active: 22, gap: 2, font: 19, line: 23, radius: 9, h: 24 }
+      : dense === 'lg'
+      ? { w: 18, active: 26, gap: 3, font: 21, line: 25, radius: 10, h: 26 }
+      : { w: 20, active: 31, gap: 4, font: 24, line: 28, radius: 11, h: 28 };
 
   return (
-    <View style={styles.heroSetRow}>
-      <View
-        style={[
-          styles.heroSetInner,
-          scale < 1 && { transform: [{ scale }] },
-        ]}
-      >
+    <View style={styles.heroSetRow} pointerEvents="none">
+      <View style={[styles.heroSetInner, { gap: cell.gap }]}>
         {Array.from({ length: setCount }).map((_, index) => {
           const active = index === activeIndex;
           const value = line[index] !== undefined ? String(line[index]) : '-';
           return (
-            <View key={`${side}-set-${index}`} style={[styles.heroSetCell, active && styles.heroActiveSetCell]}>
-              <Text allowFontScaling={false} numberOfLines={1} style={[styles.heroSetText, active && styles.activeScoreText]}>
+            <View
+              key={`${side}-set-${index}`}
+              style={[
+                { width: cell.w, height: cell.h, alignItems: 'center', justifyContent: 'center' },
+                active && {
+                  width: cell.active,
+                  borderRadius: cell.radius,
+                  backgroundColor: 'rgba(31,37,49,0.94)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(180,211,235,0.16)',
+                },
+              ]}
+            >
+              <Text
+                allowFontScaling={false}
+                numberOfLines={1}
+                style={[
+                  styles.heroSetText,
+                  { fontSize: cell.font, lineHeight: cell.line },
+                  active && styles.activeScoreText,
+                ]}
+              >
                 {value}
               </Text>
             </View>
@@ -370,9 +384,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
     minHeight: 28,
-    maxWidth: 80,
+    // No maxWidth / overflow clip: the inner row is centered under the jersey
+    // and is allowed to extend symmetrically into the surrounding gutters so a
+    // best-of-5 score is never cut off. Cell sizing (in TennisHeroSetScores)
+    // keeps the widest 5-set row well within the available gutter envelope.
     alignSelf: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   heroSetInner: {
     flexDirection: 'row',
