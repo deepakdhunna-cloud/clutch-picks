@@ -531,7 +531,7 @@ const LED_CALENDAR_MATRIX = [
 // Layout is computed in GRID COLUMNS/ROWS so every lit core lands on the same
 // lattice as every off-pixel. The dim board is one pattern; only lit glyphs are
 // individual nodes.
-export const LedTilePanel = memo(function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; gameCount: number; size?: number }) {
+export const LedTilePanel = memo(function LedTilePanel({ sport, gameCount, size = 86 }: { sport: Sport; gameCount: number | string; size?: number }) {
   const GAP_ICON_ROWS = 3;   // ~7.2 px — must be an integer number of grid rows
   const GAP_TEXT_ROWS = 3;   // ~7.2 px
   const ICON_ROW_SPAN = 11;  // accommodate the larger, more recognizable sport pictographs
@@ -1278,7 +1278,7 @@ export function getSportIcon(sport: Sport, size: number, color: string) {
 // ─── SPORT CARD PROPS ──────────────────────────────────────────
 interface SportCardProps {
   sport: Sport;
-  gameCount: number;
+  gameCount: number | string;
   index?: number;
   compact?: boolean;
   tile?: boolean;

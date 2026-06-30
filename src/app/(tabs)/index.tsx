@@ -118,12 +118,14 @@ const SportTileCarousel = memo(function SportTileCarousel({
   selectedSportFilter,
   setSelectedSportFilter,
   responsive,
+  loadingCounts = false,
 }: {
   sports: Sport[];
   gameCounts: Partial<Record<Sport, number>>;
   selectedSportFilter: Sport | null;
   setSelectedSportFilter: (s: Sport | null) => void;
   responsive: ReturnType<typeof useResponsive>;
+  loadingCounts?: boolean;
 }) {
   const PAGE_SIZE = 4;
   const GAP = 8;
@@ -213,7 +215,7 @@ const SportTileCarousel = memo(function SportTileCarousel({
                 <SportCard
                   key={sport}
                   sport={sport}
-                  gameCount={gameCounts?.[sport] ?? 0}
+                  gameCount={loadingCounts ? '--' : (gameCounts?.[sport] ?? 0)}
                   index={idx}
                   tile
                   tileSize={tileWidth}
@@ -537,18 +539,19 @@ const HomeHeader = React.memo(function HomeHeader({
         isLoadingGames={isLoadingGames}
       />
 
-      {/* Sports Categories — paginated carousel of square LED tiles */}
-      {!isLoadingGames || Object.keys(gameCounts).length > 0 ? (
-        <View style={{ paddingTop: 0, paddingBottom: 24 }}>
-          <SportTileCarousel
-            sports={sortedSports}
-            gameCounts={gameCounts}
-            selectedSportFilter={selectedSportFilter}
-            setSelectedSportFilter={setSelectedSportFilter}
-            responsive={responsive}
-          />
-        </View>
-      ) : null}
+      {/* Sports Categories — paginated carousel of square LED tiles.
+          Always rendered so the board never collapses/pops in on cold start;
+          tiles show '--' while the first slate loads instead of a misleading 0. */}
+      <View style={{ paddingTop: 0, paddingBottom: 24 }}>
+        <SportTileCarousel
+          sports={sortedSports}
+          gameCounts={gameCounts}
+          selectedSportFilter={selectedSportFilter}
+          setSelectedSportFilter={setSelectedSportFilter}
+          responsive={responsive}
+          loadingCounts={isLoadingGames}
+        />
+      </View>
 
       {/* Live Games Section — header always shows */}
       <View style={{ marginBottom: 24, marginTop: 0 }}>
@@ -1012,7 +1015,12 @@ export default function HomeScreen() {
     subscribed: isFocused,
   });
   const hasHomeGameData = (todaysGames?.length ?? 0) > 0;
-  const isInitialHomeLoading = isLoadingGames && !hasHomeGameData;
+  // Treat the whole "no data yet while a fetch is in flight" window as loading.
+  // React Query can settle isLoading=false the instant an empty cache resolves
+  // (cold start, prefetch race), so relying on isLoading alone flashes a
+  // misleading 0. Counting isFetching too keeps the board on '--' until the
+  // first real slate actually arrives.
+  const isInitialHomeLoading = !hasHomeGameData && (isLoadingGames || isFetchingGames);
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });
 
   // ── Empty-data self-heal ──────────────────────────────────────────────────
