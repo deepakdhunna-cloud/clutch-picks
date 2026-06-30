@@ -13,13 +13,20 @@ import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function triggerSplashHaptic() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+// ─── Haptics ─────────────────────────────────────────────────────────────────
+
+function triggerArrivalHaptic() {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 }
 
-// Centered splash logo — uses the stacked image
+function triggerExitHaptic() {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+}
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
 function SplashLogo() {
-  const logoWidth = SCREEN_WIDTH * 0.5;
+  const logoWidth = SCREEN_WIDTH * 0.52;
   return (
     <Image
       source={require('@/assets/clutch-logo.png')}
@@ -28,6 +35,8 @@ function SplashLogo() {
     />
   );
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface AnimatedSplashProps {
   isLoading: boolean;
@@ -38,95 +47,123 @@ interface AnimatedSplashProps {
 export function AnimatedSplash({ isLoading, onAnimationComplete, children }: AnimatedSplashProps) {
   const hasStartedRef = useRef(false);
 
-  // Keep the clutch moment, but avoid expensive blur layers during cold start.
-  const logoScale = useSharedValue(1);
-  const logoOpacity = useSharedValue(1);
-  const bgOpacity = useSharedValue(1);
-  const flashScale = useSharedValue(0.15);
+  // Logo
+  const logoScale   = useSharedValue(0.82);
+  const logoOpacity = useSharedValue(0);
+
+  // Ambient glow ring behind logo
+  const glowScale   = useSharedValue(0.6);
+  const glowOpacity = useSharedValue(0);
+
+  // Full-screen flash on exit
   const flashOpacity = useSharedValue(0);
+
+  // Background overlay
+  const bgOpacity = useSharedValue(1);
+
+  // App content
   const contentOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (!isLoading && !hasStartedRef.current) {
       hasStartedRef.current = true;
 
-      const hapticTimeout = setTimeout(triggerSplashHaptic, 120);
+      // ── Phase 1: Logo arrives (0 – 520ms) ──────────────────────────────────
+      // Soft ease-in from slightly below scale, fades in with a gentle
+      // deceleration — feels like it floats into place.
+      logoOpacity.value = withTiming(1, {
+        duration: 480,
+        easing: Easing.out(Easing.cubic),
+      });
 
-      logoScale.value = withSequence(
-        withTiming(0.9, {
-          duration: 120,
-          easing: Easing.inOut(Easing.cubic),
-        }),
-        withTiming(1.18, {
-          duration: 240,
-          easing: Easing.out(Easing.cubic),
-        })
-      );
+      logoScale.value = withTiming(1, {
+        duration: 560,
+        easing: Easing.out(Easing.back(1.06)),
+      });
 
-      logoOpacity.value = withDelay(
-        170,
-        withTiming(0, {
-          duration: 230,
-          easing: Easing.out(Easing.cubic),
-        })
-      );
+      // Haptic fires just as the logo settles
+      const arrivalHaptic = setTimeout(triggerArrivalHaptic, 420);
 
-      flashScale.value = withDelay(
-        100,
-        withTiming(1, {
-          duration: 360,
-          easing: Easing.out(Easing.cubic),
-        })
-      );
-
-      flashOpacity.value = withDelay(
-        100,
+      // ── Phase 2: Ambient glow blooms (80 – 700ms) ──────────────────────────
+      // A soft teal ring expands behind the logo — premium, not flashy.
+      glowOpacity.value = withDelay(
+        80,
         withSequence(
-          withTiming(0.34, {
-            duration: 80,
-            easing: Easing.out(Easing.quad),
-          }),
-          withTiming(0, {
-            duration: 280,
-            easing: Easing.out(Easing.cubic),
-          })
+          withTiming(0.28, { duration: 420, easing: Easing.out(Easing.cubic) }),
+          withDelay(260, withTiming(0, { duration: 380, easing: Easing.in(Easing.cubic) }))
         )
       );
 
+      glowScale.value = withDelay(
+        80,
+        withTiming(1.15, { duration: 900, easing: Easing.out(Easing.cubic) })
+      );
+
+      // ── Phase 3: Hold (logo visible 560 – 1100ms) ──────────────────────────
+      // The logo sits confidently for ~540ms — gives the user a moment to
+      // register the brand before the exit begins.
+
+      // ── Phase 4: Exit (1100 – 1560ms) ──────────────────────────────────────
+      // Logo scales up slightly and fades — cinematic, not a hard cut.
+      // A very subtle flash punctuates the transition.
+      logoOpacity.value = withDelay(
+        1060,
+        withTiming(0, { duration: 340, easing: Easing.in(Easing.cubic) })
+      );
+
+      logoScale.value = withDelay(
+        1060,
+        withTiming(1.08, { duration: 380, easing: Easing.in(Easing.cubic) })
+      );
+
+      // Subtle exit flash — barely perceptible, just adds a premium feel
+      flashOpacity.value = withDelay(
+        1080,
+        withSequence(
+          withTiming(0.18, { duration: 60, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) })
+        )
+      );
+
+      // Haptic fires at the moment of exit flash
+      const exitHaptic = setTimeout(triggerExitHaptic, 1100);
+
+      // Background dissolves away, content fades in simultaneously
       bgOpacity.value = withDelay(
-        180,
-        withTiming(0, {
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-        })
+        1080,
+        withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) })
       );
 
       contentOpacity.value = withDelay(
-        160,
-        withTiming(1, {
-          duration: 260,
-          easing: Easing.out(Easing.cubic),
-        }, () => {
+        1100,
+        withTiming(1, { duration: 360, easing: Easing.out(Easing.cubic) }, () => {
           runOnJS(onAnimationComplete)();
         })
       );
 
-      return () => clearTimeout(hapticTimeout);
+      return () => {
+        clearTimeout(arrivalHaptic);
+        clearTimeout(exitHaptic);
+      };
     }
-  }, [bgOpacity, contentOpacity, flashOpacity, flashScale, isLoading, logoOpacity, logoScale, onAnimationComplete]);
+  }, [bgOpacity, contentOpacity, flashOpacity, glowOpacity, glowScale, isLoading, logoOpacity, logoScale, onAnimationComplete]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
     transform: [{ scale: logoScale.value }],
   }));
 
-  const bgStyle = useAnimatedStyle(() => ({
-    opacity: bgOpacity.value,
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    transform: [{ scale: glowScale.value }],
   }));
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
-    transform: [{ scale: flashScale.value }],
+  }));
+
+  const bgStyle = useAnimatedStyle(() => ({
+    opacity: bgOpacity.value,
   }));
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -143,10 +180,13 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
       {/* Black background overlay */}
       <Animated.View style={[styles.splashBg, bgStyle]} pointerEvents="none" />
 
-      {/* Lightweight pop flash — no blur view during app startup */}
-      <Animated.View style={styles.flashCenter} pointerEvents="none">
-        <Animated.View style={[styles.flash, flashStyle]} />
+      {/* Ambient glow ring — blooms behind logo on arrival */}
+      <Animated.View style={styles.glowCenter} pointerEvents="none">
+        <Animated.View style={[styles.glow, glowStyle]} />
       </Animated.View>
+
+      {/* Exit flash — full screen, very subtle */}
+      <Animated.View style={[styles.flash, flashStyle]} pointerEvents="none" />
 
       {/* Centered logo */}
       <Animated.View style={[styles.logoWrapper, logoStyle]} pointerEvents="none">
@@ -169,17 +209,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     zIndex: 50,
   },
-  flashCenter: {
+  glowCenter: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 75,
+    zIndex: 60,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  glow: {
+    width: SCREEN_WIDTH * 1.4,
+    height: SCREEN_WIDTH * 1.4,
+    borderRadius: SCREEN_WIDTH * 0.7,
+    backgroundColor: 'rgba(122, 157, 184, 0.55)',
+  },
   flash: {
-    width: SCREEN_WIDTH * 1.9,
-    height: SCREEN_WIDTH * 1.9,
-    borderRadius: SCREEN_WIDTH * 0.95,
-    backgroundColor: 'rgba(122, 157, 184, 0.42)',
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
   logoWrapper: {
     ...StyleSheet.absoluteFillObject,
