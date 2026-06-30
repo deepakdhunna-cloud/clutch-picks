@@ -230,6 +230,70 @@ async function prefetchNewsForGame(queryClient: ReturnType<typeof useQueryClient
   });
 }
 
+// ── Canonical home-games fetch ────────────────────────────────────────────
+// SINGLE source of truth for populating the ['games'] cache. Both the home
+// tab's useQuery and the startup prefetch in _layout.tsx call this exact
+// function, so there is exactly one owner of the ['games'] key. Having two
+// divergent query functions write the same key (one with merge+enrichment,
+// one without) was the root cause of the app opening with 0 data: a bare
+// startup fetch could publish a list that the real hook then refused to
+// refetch for the full staleTime window.
+//
+// Hardening rules baked in here:
+//  1. An EMPTY result NEVER overwrites a non-empty cache. A transient cold
+//     start / network blip returning [] must not wipe a good slate.
+//  2. We only persist a non-empty slate to AsyncStorage (handled by callers /
+//     publish), so the offline first-paint cache is never poisoned with [].
+//  3. Cricket live enrichment is always applied and re-published, identical
+//     to the previous in-hook behavior, so detail/live cards stay correct.
+export async function fetchHomeGames(
+  queryClient: ReturnType<typeof useQueryClient>,
+): Promise<GameWithPrediction[]> {
+  const plan = getHomeGamesRequestPlan();
+  const fullGames = prepareHomeGamesFirstPaint(
+    await api.get<GameWithPrediction[]>(plan.firstPaintPath),
+  );
+  const currentGames = queryClient.getQueryData<GameWithPrediction[]>(['games']);
+
+  // Rule 1: a fetch that yields no verified games must not clobber a slate we
+  // already have. Return the existing cache so the screen keeps showing data
+  // and React Query treats this as a successful (non-empty) result.
+  if (fullGames.length === 0 && (currentGames?.length ?? 0) > 0) {
+    return currentGames as GameWithPrediction[];
+  }
+
+  const firstPaintGames = mergeGameLists(fullGames, currentGames);
+
+  const publishGames = (games: GameWithPrediction[]) => {
+    const previous = queryClient.getQueryData<GameWithPrediction[]>(['games']);
+    const merged = mergeGameLists(games, previous);
+    // Never publish an empty list over a non-empty one.
+    if (merged.length === 0 && (previous?.length ?? 0) > 0) return previous as GameWithPrediction[];
+    queryClient.setQueryData<GameWithPrediction[]>(['games'], merged);
+    return merged;
+  };
+
+  const enrichAndPublish = (games: GameWithPrediction[]) => {
+    void enrichCricketLiveGames(games)
+      .then((enriched) => {
+        if (enriched === games) return;
+        publishGames(enriched);
+      })
+      .catch(() => {});
+  };
+
+  if (firstPaintGames.length > 0) {
+    void AsyncStorage.setItem(
+      HOME_GAMES_CACHE_KEY,
+      JSON.stringify(selectPersistableHomeGames(firstPaintGames)),
+    ).catch(() => {});
+  }
+
+  enrichAndPublish(firstPaintGames);
+
+  return firstPaintGames;
+}
+
 // Hook to fetch all games for today with auto-refresh
 export function useGames(options: QueryActivityOptions = {}) {
   const queryClient = useQueryClient();
@@ -258,38 +322,7 @@ export function useGames(options: QueryActivityOptions = {}) {
 
   const query = useQuery({
     queryKey: ['games'],
-    queryFn: async () => {
-      const plan = getHomeGamesRequestPlan();
-      const fullGames = prepareHomeGamesFirstPaint(
-        await api.get<GameWithPrediction[]>(plan.firstPaintPath),
-      );
-      const currentGames = queryClient.getQueryData<GameWithPrediction[]>(['games']);
-      const firstPaintGames = mergeGameLists(fullGames, currentGames);
-      const publishGames = (games: GameWithPrediction[]) => {
-        const merged = mergeGameLists(games, queryClient.getQueryData<GameWithPrediction[]>(['games']));
-        queryClient.setQueryData<GameWithPrediction[]>(['games'], merged);
-        return merged;
-      };
-      const enrichAndPublish = (games: GameWithPrediction[]) => {
-        void enrichCricketLiveGames(games)
-          .then((enriched) => {
-            if (enriched === games) return;
-            publishGames(enriched);
-          })
-          .catch(() => {});
-      };
-
-      if (firstPaintGames.length > 0) {
-        void AsyncStorage.setItem(
-          HOME_GAMES_CACHE_KEY,
-          JSON.stringify(selectPersistableHomeGames(firstPaintGames)),
-        ).catch(() => {});
-      }
-
-      enrichAndPublish(firstPaintGames);
-
-      return firstPaintGames;
-    },
+    queryFn: () => fetchHomeGames(queryClient),
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
     select: filterVerifiedGames,

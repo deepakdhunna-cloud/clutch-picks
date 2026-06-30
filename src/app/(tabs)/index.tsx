@@ -1001,13 +1001,39 @@ export default function HomeScreen() {
   }, [scrollToHomeBoard, statusFilter]);
 
   // Fetch games from real API - backend already returns today's slate + yesterday's live games
-  const { data: todaysGames, refetch: refetchGames, isLoading: isLoadingGames, prefetchGame } = useGames({
+  const {
+    data: todaysGames,
+    refetch: refetchGames,
+    isLoading: isLoadingGames,
+    isFetching: isFetchingGames,
+    prefetchGame,
+  } = useGames({
     enabled: isFocused,
     subscribed: isFocused,
   });
   const hasHomeGameData = (todaysGames?.length ?? 0) > 0;
   const isInitialHomeLoading = isLoadingGames && !hasHomeGameData;
   const { refreshing, onRefresh } = useSmoothRefresh(refetchGames, { minVisibleMs: 320, maxVisibleMs: 850 });
+
+  // ── Empty-data self-heal ──────────────────────────────────────────────────
+  // If the home tab is focused but ends up with no games and nothing is in
+  // flight — e.g. a cold-start prefetch failed and cleared the cache, or a
+  // transient empty response slipped through — force exactly one revalidation
+  // instead of waiting out the staleTime. This makes a momentary miss recover
+  // on its own so the user never sits looking at 0 games. A ref gates it to a
+  // single attempt per empty episode and resets once data arrives, so it can
+  // never become a refetch loop.
+  const selfHealAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (hasHomeGameData) {
+      selfHealAttemptedRef.current = false;
+      return;
+    }
+    if (!isFocused || isLoadingGames || isFetchingGames) return;
+    if (selfHealAttemptedRef.current) return;
+    selfHealAttemptedRef.current = true;
+    void refetchGames();
+  }, [hasHomeGameData, isFocused, isLoadingGames, isFetchingGames, refetchGames]);
 
   const handleOpenGame = useCallback((game: GameWithPrediction) => {
     if (!claimGameNavigation(game.id)) return;

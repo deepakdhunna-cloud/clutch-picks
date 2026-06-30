@@ -24,9 +24,7 @@ import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { useLiveScores } from '@/hooks/useLiveScores';
 import { guardedResetTo } from '@/lib/navigation-guard';
 import { Image as ExpoImage } from 'expo-image';
-import { api } from '@/lib/api/api';
-import { prepareHomeGamesFirstPaint } from '@/lib/home-games-first-paint';
-import { HOME_GAMES_CACHE_KEY, selectPersistableHomeGames } from '@/lib/home-games-cache';
+import { fetchHomeGames } from '@/hooks/useGames';
 
 
 enableScreens(true);
@@ -166,32 +164,47 @@ function RootLayoutNav({
   const hasUser = Boolean(session?.user);
 
   // ── Startup games prefetch ────────────────────────────────────────────────
-  // Fire the /api/games fetch immediately once the session is confirmed so the
-  // data is already in the React Query cache by the time the splash exits.
-  // The home tab's useGames hook will find the cache warm and render instantly
-  // with current data instead of showing 0 or stale content.
-  // Only fires when the user is signed in and session is settled.
+  // Warm the React Query cache with today's slate the instant the session is
+  // confirmed, so the home tab paints current data the moment the splash exits
+  // instead of flashing 0.
+  //
+  // CRITICAL: this uses the SAME canonical fetchHomeGames() the home tab's
+  // useGames hook uses, so there is exactly one owner of the ['games'] key. An
+  // earlier version inlined a separate, simpler fetch here; that second writer
+  // could publish a slate (or a transient empty/errored result) that useGames
+  // then refused to refetch for the full staleTime window — which is what made
+  // the app open with 0 data everywhere.
+  //
+  // It is also resilient: if the cold-start fetch fails (no token yet, network
+  // blip, timeout) we swallow the error and leave the ['games'] query untouched
+  // so useGames performs a clean first fetch on Home mount. We never leave a
+  // sticky errored/empty query behind.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!hasUser || isLoading) return;
-    // Only prefetch if the cache is empty — don’t stomp a warm cache.
-    if (queryClient.getQueryData(['games'])) return;
-    void queryClient.prefetchQuery({
-      queryKey: ['games'],
-      queryFn: async () => {
-        const games = prepareHomeGamesFirstPaint(
-          await api.get<import('@/types/sports').GameWithPrediction[]>('/api/games'),
-        );
-        if (games.length > 0) {
-          void AsyncStorage.setItem(
-            HOME_GAMES_CACHE_KEY,
-            JSON.stringify(selectPersistableHomeGames(games)),
-          ).catch(() => {});
+    // Only warm if the cache is empty — don’t stomp a warm cache.
+    const existing = queryClient.getQueryData<unknown[]>(['games']);
+    if (existing && existing.length > 0) return;
+    let cancelled = false;
+    void queryClient
+      .fetchQuery({
+        queryKey: ['games'],
+        queryFn: () => fetchHomeGames(queryClient),
+        staleTime: 30000,
+      })
+      .catch(() => {
+        // Cold-start fetch failed. Remove any empty/errored ['games'] state we
+        // may have created so useGames starts clean on Home mount rather than
+        // adopting a poisoned cache entry.
+        if (cancelled) return;
+        const current = queryClient.getQueryData<unknown[]>(['games']);
+        if (!current || current.length === 0) {
+          queryClient.removeQueries({ queryKey: ['games'], exact: true });
         }
-        return games;
-      },
-      staleTime: 30000,
-    });
+      });
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUser, isLoading]);
   const inAuthGroup =
