@@ -5,6 +5,7 @@ import { GameWithPrediction } from '@/types/sports';
 import { isVerifiedScoreboardGame } from '@/lib/verified-games';
 import { parseGameTime, getLocalDateStr } from '@/lib/game-time';
 import { OTA_REVISION } from '@/lib/app-version';
+import { getGamesProbe } from '@/lib/debug-net-probe';
 
 // TEMPORARY on-device diagnostic. Mounted on Home to report — from the real
 // device — exactly which stage drops the board to 0: fetch, verified-filter,
@@ -97,8 +98,19 @@ export function HomeDebugOverlay() {
         </Pressable>
       </View>
       <ScrollView style={{ maxHeight: 280 }}>
-        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r12')}
+        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r13')}
         {line('today (device local)', report.todayStr)}
+        {(() => { const p = getGamesProbe(); return (
+          <View style={{ borderTopColor: '#5A7A8A', borderTopWidth: 1, marginTop: 4, paddingTop: 4 }}>
+            <Text style={{ color: '#7A9DB8', fontSize: 11, fontWeight: '900' }}>RAW NETWORK FETCH</Text>
+            {p ? (<>
+              {line('net status', p.status, p.status !== 200)}
+              {line('net raw count', p.rawCount, p.rawCount < 200)}
+              <Text style={{ color: '#9BB8CF', fontSize: 9 }}>{p.url}</Text>
+              <Text style={{ color: '#9BB8CF', fontSize: 10 }}>sample: {p.sample ? `${p.sample.sport} ${p.sample.gameTime}` : 'none'}</Text>
+            </>) : (<Text style={{ color: '#FF6B6B', fontSize: 10 }}>no /api/games fetch recorded yet</Text>)}
+          </View>
+        ); })()}
         {line('raw games in cache', report.rawCount, report.rawCount === 0)}
         {line('passed verified-filter', report.verifiedCount, report.verifiedCount === 0 && report.rawCount > 0)}
         {line('valid gameTime parse', report.validDate, report.validDate === 0 && report.rawCount > 0)}

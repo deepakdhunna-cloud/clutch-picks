@@ -1,6 +1,7 @@
 import { fetch } from "expo/fetch";
 import { getAuthHeaders } from "../auth/auth-client";
 import { definedApiResult, unwrapApiResponse } from "./response";
+import { recordGamesProbe } from "../debug-net-probe";
 
 // Normalize the backend base URL: strip any trailing slash(es) so that
 // `${baseUrl}${path}` (where path starts with "/") can never produce a
@@ -79,7 +80,23 @@ const request = async <T>(
       throw new Error(apiErrorMessage(json, response.status));
     }
 
-    return definedApiResult(unwrapApiResponse<T>(json)) as T;
+    const unwrapped = definedApiResult(unwrapApiResponse<T>(json));
+
+    // TEMP diagnostic: record the raw home-games network result so the
+    // on-device overlay can show the unprocessed truth (count + sample row).
+    if (url.startsWith("/api/games") && !url.includes("/api/games/")) {
+      const arr = Array.isArray(unwrapped) ? (unwrapped as any[]) : [];
+      const first = arr[0] as any;
+      recordGamesProbe({
+        url: `${baseUrl}${requestUrl}`,
+        status: response.status,
+        rawCount: arr.length,
+        finishedAt: Date.now(),
+        sample: first ? { id: String(first.id), sport: String(first.sport), gameTime: String(first.gameTime) } : undefined,
+      });
+    }
+
+    return unwrapped as T;
   }
 
   // 3. Non-OK non-JSON: throw
