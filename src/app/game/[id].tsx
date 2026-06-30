@@ -32,7 +32,7 @@ import Animated, {
   interpolate,
   cancelAnimation,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Sport, type CanonicalPredictionResult, type Prediction } from '@/types/sports';
 import { useGamePick, useMakePick, useRemovePick } from '@/hooks/usePicks';
@@ -109,7 +109,7 @@ function WhereToWatchRow({
 
   const handleOpenPress = useCallback(() => {
     if (!watchOption) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     // If we don't have an app deep link, skip the chooser and open the web URL directly.
     if (!hasAppUrl) {
       openWatchInWeb(watchOption.name);
@@ -120,14 +120,14 @@ function WhereToWatchRow({
 
   const handleRouteApp = useCallback(() => {
     if (!watchOption) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     setRoutePickerOpen(false);
     openWatchInApp(watchOption.name);
   }, [watchOption]);
 
   const handleRouteWeb = useCallback(() => {
     if (!watchOption) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     setRoutePickerOpen(false);
     openWatchInWeb(watchOption.name);
   }, [watchOption]);
@@ -304,7 +304,7 @@ const TappableJerseyHero = React.memo(function TappableJerseyHero({
 
   const handlePress = useCallback(() => {
     if (isDisabled) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // Haptic fires in the pick action handler (onSelect) to avoid a double tick.
     scale.value = withSequence(
       withTiming(0.92, { duration: 90, easing: Easing.out(Easing.ease) }),
       withSpring(1.06, { damping: 12, stiffness: 260 }),
@@ -1282,7 +1282,7 @@ function PredictionBlock({ prediction, homeTeam, awayTeam, sport, gameId, season
                   marketType: predictionDisplay.marketType ?? 'moneyline',
                 },
               });
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              haptics.tap();
             }}
             hitSlop={8}
             style={{ minHeight: 44, flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 8 }}
@@ -1718,7 +1718,7 @@ function GameDetailContent() {
   const toggleFollow = useCallback(async () => {
     if (!gameId || followInFlightRef.current) return;
     followInFlightRef.current = true;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.selection();
     try {
       const updated = await toggleFollowedGame(gameId);
       setFollowed(updated.includes(gameId));
@@ -1734,13 +1734,13 @@ function GameDetailContent() {
   const removePick = useRemovePick();
   const { data: game, isLoading, error, refetch } = useGame(gameId) as { data: Game | null | undefined; isLoading: boolean; error: any; refetch: () => Promise<unknown> };
   const { refreshing, onRefresh } = useSmoothRefresh(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     return refetch();
   }, { minVisibleMs: 320, maxVisibleMs: 850 });
   const hasGameData = !!game;
 
   const openPickAction = useCallback((side: 'home' | 'away') => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.selection();
     setPendingPickAction(userPick?.pickedTeam === side ? 'remove' : 'pick');
     setPendingPick(side);
   }, [userPick?.pickedTeam]);
@@ -1806,7 +1806,6 @@ function GameDetailContent() {
       <View pointerEvents="box-none" style={[styles.floatingDetailControls, { top: detailFloatingTop }]}>
         <Pressable
           onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             guardedRouterBack(router);
           }}
           accessibilityRole="button"
