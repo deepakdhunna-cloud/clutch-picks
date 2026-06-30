@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
-import { useSession } from '@/lib/auth/use-session';
+import { useSession, sessionBootstrapReady } from '@/lib/auth/use-session';
 import { View, AppState, Platform } from 'react-native';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import NetInfo from '@react-native-community/netinfo';
@@ -83,9 +83,18 @@ function RootLayoutNav({
   // in the native back stack (otherwise an iOS edge back-swipe pops back to it).
   const navigationRef = useNavigationContainerRef();
   const [appIsReady, setAppIsReady] = useState(false);
+  const [sessionBootstrapDone, setSessionBootstrapDone] = useState(false);
   const { markAnimationComplete, splashAnimationComplete } = useSplash();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
+
+  // Wait for the persisted session snapshot to be read from AsyncStorage before
+  // allowing the auth redirect logic to run. Without this, on a cold launch the
+  // session query starts with no initialData, sees no user, and fires a redirect
+  // to /welcome before the snapshot resolves — causing a brief sign-out flash.
+  useEffect(() => {
+    sessionBootstrapReady.then(() => setSessionBootstrapDone(true)).catch(() => setSessionBootstrapDone(true));
+  }, []);
 
   useRevenueCatIdentity(session?.user);
 
@@ -166,15 +175,17 @@ function RootLayoutNav({
       (hasUser && inAuthGroup && segment !== 'onboarding') ||
       (!hasUser && !inAuthGroup && !inPublicGroup)
     );
-  const appFlowLoading = isLoading || !onboardingChecked || shouldRedirect;
+  const appFlowLoading = !sessionBootstrapDone || isLoading || !onboardingChecked || shouldRedirect;
 
   // Mark app as ready and hide native splash — AnimatedSplash takes over from here.
+  // We also wait for the session bootstrap so the auth redirect logic has the
+  // persisted snapshot available on the very first frame, preventing a sign-out flash.
   useEffect(() => {
-    if (fontsReady) {
+    if (fontsReady && sessionBootstrapDone) {
       setAppIsReady(true);
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsReady]);
+  }, [fontsReady, sessionBootstrapDone]);
 
   // Handle auth state changes and redirect accordingly
   useEffect(() => {

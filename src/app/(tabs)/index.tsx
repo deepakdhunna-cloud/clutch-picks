@@ -406,6 +406,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
   statusFilter,
   onViewAll,
   responsive,
+  isLoadingGames,
 }: {
   selectedSportFilter: Sport | null;
   setSelectedSportFilter: (sport: Sport | null) => void;
@@ -413,6 +414,7 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
   statusFilter: 'all' | 'upcoming' | 'final';
   onViewAll: () => void;
   responsive: ReturnType<typeof useResponsive>;
+  isLoadingGames?: boolean;
 }) {
   return (
     <View style={{ paddingTop: 0 }}>
@@ -435,9 +437,12 @@ const TodaysGamesBar = memo(function TodaysGamesBar({
           })}
         >
           {(() => {
-            const barCount = selectedSportFilter
+            const rawCount = selectedSportFilter
               ? (gameCounts?.[selectedSportFilter] ?? 0)
               : Object.values(gameCounts ?? {}).reduce((sum: number, count) => sum + (count ?? 0), 0);
+            // Show '--' while the first load is in progress so the LED board
+            // never flashes a misleading 0 before data arrives.
+            const barCount: number | string = isLoadingGames ? '--' : rawCount;
             const sportLabel = selectedSportFilter
               ? displaySport(selectedSportFilter)
               : null;
@@ -529,6 +534,7 @@ const HomeHeader = React.memo(function HomeHeader({
         statusFilter={statusFilter}
         onViewAll={onViewAll}
         responsive={responsive}
+        isLoadingGames={isLoadingGames}
       />
 
       {/* Sports Categories — paginated carousel of square LED tiles */}
