@@ -6,7 +6,7 @@ import React, { useState, useCallback, memo, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopInsetView } from '@/components/TopInsetView';
 import { useHideOnScroll } from '@/contexts/ScrollContext';
@@ -773,7 +773,7 @@ export default function ClutchPicksScreen() {
   }, [handleGameWarm, router]);
 
   const openPaywall = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     guardedRouterPush(router, '/paywall');
   }, [router]);
 

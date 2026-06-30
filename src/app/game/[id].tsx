@@ -33,6 +33,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { haptics } from '@/lib/haptics';
+import { PressableScale } from '@/components/shared/PressableScale';
 import { JerseyIcon, sportEnumToJersey } from '@/components/JerseyIcon';
 import { Sport, type CanonicalPredictionResult, type Prediction } from '@/types/sports';
 import { useGamePick, useMakePick, useRemovePick } from '@/hooks/usePicks';
@@ -2124,7 +2125,7 @@ function GameDetailContent() {
               ) : null}
               <View style={{ marginBottom: 40 }}><Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Our Prediction</Text><PredictionBlock prediction={prediction} homeTeam={homeTeam} awayTeam={awayTeam} sport={game.sport} gameId={game.id} seasonContext={game.seasonContext} /></View>
               <View style={{ marginBottom: 40 }}><RecentForm game={game} /></View>
-              <Pressable
+              <PressableScale
                 onPress={() => guardedRouterPush(router, { pathname: '/game-analysis', params: { id: game.id } })}
                 accessibilityRole="button"
                 accessibilityLabel="Open full pick analysis"
@@ -2138,7 +2139,7 @@ function GameDetailContent() {
                   <Text style={styles.analysisLinkSub}>{predictionContextSubtitle}</Text>
                 </View>
                 <Text style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', fontWeight: '600' }}>›</Text>
-              </Pressable>
+              </PressableScale>
             </>
           ) : prediction && !isPremium ? (
             <>
@@ -2152,7 +2153,7 @@ function GameDetailContent() {
               <RedactedSection title="Recent Performance" height={160} onUnlock={() => guardedRouterPush(router, '/paywall')} />
 
               {/* ═══ WHY WE MADE THIS PICK ═══ */}
-              <Pressable
+              <PressableScale
                 onPress={() => guardedRouterPush(router, '/paywall')}
                 accessibilityRole="button"
                 accessibilityLabel="Preview Pro: Why We Made This Pick"
@@ -2169,7 +2170,7 @@ function GameDetailContent() {
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(139,10,31,0.12)', borderWidth: 1, borderColor: 'rgba(139,10,31,0.2)' }}>
                   <Text style={{ fontSize: 8, fontWeight: '800', color: '#8B0A1F', letterSpacing: 0.5 }}>PRO</Text>
                 </View>
-              </Pressable>
+              </PressableScale>
             </>
           ) : null}
           <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 4 }}>

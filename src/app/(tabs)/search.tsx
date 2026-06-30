@@ -15,7 +15,7 @@ import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { Search, ChevronRight, Plus, Zap, Lock, WifiOff, RefreshCw } from 'lucide-react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSubscription } from '@/lib/subscription-context';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 
 import { useGames, usePrefetchGame } from '@/hooks/useGames';
 import { useSmoothRefresh } from '@/hooks/useSmoothRefresh';
@@ -80,11 +80,11 @@ function getArenaBottomPadding(bottomInset: number) {
 }
 
 function fireLightHaptic() {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  haptics.tap();
 }
 
 function fireSelectionHaptic() {
-  void Haptics.selectionAsync().catch(() => {});
+  haptics.selection();
 }
 
 function useGameDetailActions() {

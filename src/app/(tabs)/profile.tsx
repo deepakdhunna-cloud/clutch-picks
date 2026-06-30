@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from 'react-native-svg';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
@@ -636,7 +636,7 @@ export default function ProfileScreen() {
     if (!claimGameNavigation(gameId)) return;
     prefetchGame(gameId, game);
     guardedRouterPush(router, `/game/${gameId}` as any);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
   }, [prefetchGame, recentPickRailPressGuard.canPress, router]);
 
   // Warm the detail cache on press-in. prefetchGame tolerates an undefined
@@ -769,24 +769,24 @@ export default function ProfileScreen() {
   }, [invalidateSession, router]);
 
   const handleOpenSettings = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     guardedRouterPush(router, '/settings');
   }, [router]);
 
   const handleOpenEditProfile = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     guardedRouterPush(router, '/edit-profile');
   }, [router]);
 
   const handleOpenPicksHistory = useCallback(() => {
     if (!recentPickRailPressGuard.canPress()) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     guardedRouterPush(router, '/picks-history');
   }, [recentPickRailPressGuard.canPress, router]);
 
   const handleShareCard = useCallback(async () => {
     if (!claimInteractionLock('profile:share-card', 1200)) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     try {
       await Share.share({
         message: `Check out my Clutch Picks analyst card!\n\n${userName} — ${accuracy}% accuracy\n${wins}W - ${losses}L | ${streak} streak\n\nDownload Clutch Picks to build yours.`,

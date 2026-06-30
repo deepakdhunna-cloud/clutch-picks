@@ -8,6 +8,22 @@ import {
 
 export const SESSION_QUERY_KEY = ['auth-session'] as const;
 
+// The shape the app actually reads off the session. Better Auth's getSession()
+// is typed loosely (unknown), which previously forced every `session?.user`
+// access to error. We type the query result explicitly here so consumers get
+// safe, correct optional-chaining without changing any runtime behavior.
+export type SessionUser = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  image?: string | null;
+};
+
+export type SessionData = {
+  session?: { token?: string | null } | null;
+  user?: SessionUser | null;
+} | null;
+
 // ── Persisted session snapshot ────────────────────────────────────────────
 // On a cold launch React Query has no cached session, so the very first frame
 // would render a signed-out / empty-user state and then "restore" the real user
@@ -67,11 +83,11 @@ function persistSessionSnapshot(session: unknown): void {
 }
 
 export const useSession = () => {
-  return useQuery({
+  return useQuery<SessionData>({
     queryKey: SESSION_QUERY_KEY,
     queryFn: async () => {
       const result = await authClient.getSession();
-      const next = result.data ?? null;
+      const next = (result.data ?? null) as SessionData;
       persistSessionSnapshot(next);
       return next;
     },
@@ -80,7 +96,7 @@ export const useSession = () => {
     // signed-out / empty-user flash before the network session resolves. Only
     // provide initialData when we actually have a hydrated snapshot with a user;
     // otherwise let the query show its normal loading state.
-    initialData: () => (bootstrapHydrated && hasSessionUser(bootstrapSession) ? bootstrapSession : undefined),
+    initialData: () => (bootstrapHydrated && hasSessionUser(bootstrapSession) ? (bootstrapSession as SessionData) : undefined),
     // Treat the seeded snapshot as just-stale so React Query still revalidates
     // against the server in the background, but does not block the first frame.
     initialDataUpdatedAt: () => (bootstrapHydrated && hasSessionUser(bootstrapSession) ? Date.now() - 1000 : 0),
