@@ -12,6 +12,7 @@ import { HOME_GAMES_CACHE_KEY, selectPersistableHomeGames } from '@/lib/home-gam
 import { GAME_DETAIL_STALE_TIME_MS, shouldRefetchGameDetailOnMount } from '@/lib/game-detail-load-stability';
 import { mergeGameData, mergeGameLists } from '@/lib/game-cache-merge';
 import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
+import { parseGameTime, formatLocalDate } from '@/lib/game-time';
 
 // Polling intervals for different contexts
 const LIVE_POLLING_INTERVAL = 3000; // fast fallback when SSE drops, without hammering JS/network
@@ -189,14 +190,11 @@ function shouldBurstForMissingPrediction(game: GameWithPrediction): boolean {
     missingPredictionFirstSeen.delete(game.id);
     return false;
   }
-  if (formatLocalDate(new Date(game.gameTime)) !== formatLocalDate(new Date())) return false;
+  const scheduledAt = parseGameTime(game.gameTime);
+  if (!scheduledAt || formatLocalDate(scheduledAt) !== formatLocalDate(new Date())) return false;
   // SCHEDULED game missing a prediction: only burst while inside the
   // wall-clock window so we don't poll forever on prediction-less games.
   return withinPredictionBurstWindow(game.id, Date.now());
-}
-
-function formatLocalDate(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 // Prefetch news for a game's teams

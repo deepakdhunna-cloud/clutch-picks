@@ -28,6 +28,7 @@ import {
 } from '@/lib/revenuecatClient';
 import { useSubscription } from '@/lib/subscription-context';
 import { useGames } from '@/hooks/useGames';
+import { formatGameTimeLabel } from '@/lib/game-time';
 import { GameStatus } from '@/types/sports';
 import { isLiveGameLike } from '@/lib/game-status';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -256,7 +257,7 @@ export default function PaywallScreen() {
       league: g.sport,
       time: isLiveGameLike(g)
         ? 'LIVE'
-        : new Date(g.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        : formatGameTimeLabel(g.gameTime),
     }));
   }, [allGames]);
 

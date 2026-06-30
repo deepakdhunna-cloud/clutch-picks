@@ -16,6 +16,7 @@ import {
 } from '@/lib/canonical-result';
 import { getGamePredictionDisplay } from '@/lib/prediction-display';
 import { compareSuspendedGamePriority, isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
+import { gameTimeMs, getLocalDateStr, formatGameTimeLabel } from '@/lib/game-time';
 import { getTeamColors } from '@/lib/team-colors';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { TeamJersey } from '@/components/sports/TeamJersey';
@@ -30,9 +31,7 @@ import {
 } from '@/lib/theme';
 
 function fmtTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return 'TBD';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return formatGameTimeLabel(iso);
 }
 
 function hexWithAlpha(hex: string | undefined, alpha: number): string {
@@ -92,8 +91,8 @@ function compareExploreGames(a: GameWithPrediction, b: GameWithPrediction): numb
     if (suspendedOrder !== 0) return suspendedOrder;
   }
 
-  const aTime = new Date(a.gameTime).getTime();
-  const bTime = new Date(b.gameTime).getTime();
+  const aTime = gameTimeMs(a.gameTime);
+  const bTime = gameTimeMs(b.gameTime);
   return aRank === 2 ? bTime - aTime : aTime - bTime;
 }
 
@@ -625,9 +624,7 @@ export default function SearchExploreScreen() {
   }, []);
 
   const localDateKey = useCallback((iso: string) => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return getLocalDateStr(iso) ?? '';
   }, []);
 
   const trendingGames = useMemo(() => {
@@ -652,7 +649,7 @@ export default function SearchExploreScreen() {
     if (!allGames) return [];
     return [...allGames]
       .filter(g => g.status === GameStatus.SCHEDULED && localDateKey(g.gameTime) === todayKey)
-      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+      .sort((a, b) => gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime))
       .slice(0, 8);
   }, [allGames, localDateKey, todayKey]);
 
@@ -660,7 +657,7 @@ export default function SearchExploreScreen() {
     if (!allGames) return [];
     return [...allGames]
       .filter(g => g.status === GameStatus.FINAL)
-      .sort((a, b) => new Date(b.gameTime).getTime() - new Date(a.gameTime).getTime())
+      .sort((a, b) => gameTimeMs(b.gameTime) - gameTimeMs(a.gameTime))
       .slice(0, 6);
   }, [allGames]);
 
@@ -668,7 +665,7 @@ export default function SearchExploreScreen() {
     if (!allGames) return [];
     return [...allGames]
       .filter(g => g.status === GameStatus.SCHEDULED && localDateKey(g.gameTime) !== todayKey)
-      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+      .sort((a, b) => gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime))
       .slice(0, 6);
   }, [allGames, localDateKey, todayKey]);
 
@@ -686,7 +683,7 @@ export default function SearchExploreScreen() {
           confidence <= 53
         );
       })
-      .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
+      .sort((a, b) => gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime))
       .slice(0, 6);
   }, [allGames, isPremium]);
 

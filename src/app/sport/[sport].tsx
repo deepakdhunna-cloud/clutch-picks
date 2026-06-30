@@ -22,6 +22,7 @@ import { useTapGestureGuard } from '@/hooks/useTapGestureGuard';
 import { guardedRouterBack } from '@/lib/navigation-guard';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
+import { parseGameTime, gameTimeMs } from '@/lib/game-time';
 
 type FilterStatus = 'live' | 'today' | 'tomorrow' | 'results';
 
@@ -202,7 +203,9 @@ export default function SportDetailScreen() {
         continue;
       }
       if (game.status !== 'SCHEDULED') continue;
-      const gameDate = new Date(game.gameTime).toDateString();
+      const parsed = parseGameTime(game.gameTime);
+      if (!parsed) continue;
+      const gameDate = parsed.toDateString();
       if (gameDate === todayStr) counts.today += 1;
       if (gameDate === tomorrowStr) counts.tomorrow += 1;
     }
@@ -213,9 +216,10 @@ export default function SportDetailScreen() {
   const filteredGames = useMemo(() => {
     if (!allGames.length) return [];
     const compareGameTime = (a: GameWithPrediction, b: GameWithPrediction) =>
-      new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+      gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime);
     const filtered = allGames.filter(game => {
-      const gameDate = new Date(game.gameTime).toDateString();
+      const parsed = parseGameTime(game.gameTime);
+      const gameDate = parsed ? parsed.toDateString() : '';
       if (deferredFilter === 'live') return isLiveGameLike(game);
       if (deferredFilter === 'today') return game.status === 'SCHEDULED' && gameDate === todayStr;
       if (deferredFilter === 'tomorrow') return game.status === 'SCHEDULED' && gameDate === tomorrowStr;

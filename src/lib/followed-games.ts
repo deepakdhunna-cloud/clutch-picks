@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GameStatus, type GameWithPrediction } from '@/types/sports';
+import { parseGameTime } from '@/lib/game-time';
 
 export const FOLLOWED_GAMES_STORAGE_KEY = 'clutch_followed_games';
 
@@ -38,8 +39,8 @@ function normalizeEntries(value: unknown): FollowedGameEntry[] {
 }
 
 export function nextLocalTwoAmAfterGameDay(gameTime: string): Date | null {
-  const start = new Date(gameTime);
-  if (Number.isNaN(start.getTime())) return null;
+  const start = parseGameTime(gameTime);
+  if (!start) return null;
   const reset = new Date(start);
   reset.setDate(reset.getDate() + 1);
   reset.setHours(2, 0, 0, 0);

@@ -36,6 +36,7 @@ import { guardedRouterPush } from '@/lib/navigation-guard';
 import { SHOULD_REMOVE_CLIPPED_SCROLL_SUBVIEWS } from '@/lib/scroll-performance';
 import { PressableScale } from '@/components/shared/PressableScale';
 import { haptics } from '@/lib/haptics';
+import { getLocalDateStr as getGameLocalDateStr, gameTimeMs, parseGameTime } from '@/lib/game-time';
 
 // Memoize all sports array
 const allSports = Object.values(Sport);
@@ -767,8 +768,8 @@ const SearchGameCard = memo(function SearchGameCard({
       return formatGameTime(game.sport, game.quarter, game.clock) || 'LIVE';
     }
     if (game.status === GameStatus.FINAL) return 'Final';
-    const d = new Date(game.gameTime);
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const d = parseGameTime(game.gameTime);
+    return d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'TBD';
   }, [game, isLive]);
 
   return (
@@ -1154,8 +1155,10 @@ export default function HomeScreen() {
   // Compute game counts by sport from the games data
   // ─── Date helpers (local timezone) ───
   const getLocalDateStr = useCallback((dateStr: string) => {
-    const d = new Date(dateStr);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // Robust parse: backend emits no-seconds ISO (e.g. "2026-06-29T10:05Z")
+    // which Hermes parses to Invalid Date. getGameLocalDateStr normalizes it
+    // and returns null (never "NaN-NaN-NaN") when unparseable.
+    return getGameLocalDateStr(dateStr) ?? '';
   }, []);
 
   const todayStr = useMemo(() => {
@@ -1240,7 +1243,7 @@ export default function HomeScreen() {
         const aOrder = statusOrder[a.status] ?? 3;
         const bOrder = statusOrder[b.status] ?? 3;
         if (aOrder !== bOrder) return aOrder - bOrder;
-        return new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+        return gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime);
       });
   }, [todaysGames, debouncedQuery]);
 
@@ -1260,10 +1263,14 @@ export default function HomeScreen() {
     endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
     endOfTomorrow.setHours(23, 59, 59, 999);
 
+    const startMs = startOfYesterday.getTime();
+    const endMs = endOfTomorrow.getTime();
     return todaysGames.filter((game) => {
       if (isLiveGameLike(game)) return false;
-      const gameTime = new Date(game.gameTime);
-      return gameTime >= startOfYesterday && gameTime <= endOfTomorrow;
+      const gameTime = parseGameTime(game.gameTime);
+      if (!gameTime) return false;
+      const t = gameTime.getTime();
+      return t >= startMs && t <= endMs;
     });
   }, [todaysGames]);
 
@@ -1329,7 +1336,7 @@ export default function HomeScreen() {
     tabGames = Array.from(new Map(tabGames.map((game) => [game.id, game])).values());
 
     // Step 3: Sort by gameTime ascending
-    tabGames.sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime());
+    tabGames.sort((a, b) => gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime));
 
     // Step 4: Build FlatList items
     const items: FlatListItem[] = [];

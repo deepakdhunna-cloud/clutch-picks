@@ -26,6 +26,7 @@ import { GameWithPrediction, GameStatus, Sport } from '@/types/sports';
 import { getTeamColors } from '@/lib/team-colors';
 import { displayConfidence, displaySport, formatGameTime, getConfidenceTier } from '@/lib/display-confidence';
 import { isLiveGameLike, isSuspendedGame, sortSuspendedGamesLast, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { parseGameTime, gameTimeMs, formatGameTimeLabel } from '@/lib/game-time';
 import { cricketLedScoreText, cricketOversText, cricketPlayersCompactText, cricketRequiredText, cricketRoleText, teamScoreText } from '@/lib/cricket-score';
 import {
   getCanonicalConfidence,
@@ -820,7 +821,7 @@ const FollowedCard = memo(function FollowedCard({ game }: { game: GameWithPredic
   const awayWon = finalHasScores && awayScore > homeScore;
   const homeWon = finalHasScores && homeScore > awayScore;
   const tiedFinal = finalHasScores && awayScore === homeScore;
-  const startTime = new Date(game.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const startTime = formatGameTimeLabel(game.gameTime);
   const awayColors = getTeamColors(game.awayTeam.abbreviation, game.sport, game.awayTeam.color);
   const homeColors = getTeamColors(game.homeTeam.abbreviation, game.sport, game.homeTeam.color);
   const winningTeam = awayWon ? game.awayTeam : homeWon ? game.homeTeam : null;
@@ -994,7 +995,7 @@ const YourGames = memo(function YourGames({
     return [...games].sort((a, b) => {
       const p = priority(a) - priority(b);
       if (p !== 0) return p;
-      return new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime();
+      return gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime);
     });
   }, [games]);
 
@@ -2310,9 +2311,9 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
   if (!hl) {
     drawType = 'default';
     const formDiff = hf.wins - af.wins;
-    const gameTime = new Date(game.gameTime);
-    const isNightGame = gameTime.getHours() >= 19;
-    const isMatinee = gameTime.getHours() < 16;
+    const gameTime = parseGameTime(game.gameTime);
+    const isNightGame = gameTime ? gameTime.getHours() >= 19 : false;
+    const isMatinee = gameTime ? gameTime.getHours() < 16 : false;
 
     if (conf >= 62 && value >= 6) {
       hl = `Edge across the board — ${Math.max(homeWP, awayWP)}% to win`;
@@ -2399,7 +2400,7 @@ const MC_ACCENT        = ARENA_CHROME_ACCENT;
 const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, resetSignal }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; resetSignal?: number }) {
   const { openGame, warmGame } = useGameDetailActions();
   const [expanded, setExpanded] = useState(false);
-  const startTime = useMemo(() => new Date(game.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), [game.gameTime]);
+  const startTime = useMemo(() => formatGameTimeLabel(game.gameTime), [game.gameTime]);
 
   useEffect(() => { setExpanded(false); }, [game.id, resetSignal]);
 
@@ -3291,7 +3292,7 @@ function FreeArena({ games, sportFilter, router, sh, onR, isR, followed, bottomP
   }, [games, sportFilter]);
 
   const live = useMemo(() => sortSuspendedGamesLast(filtered.filter(isLiveGameLike)), [filtered]);
-  const sched = useMemo(() => filtered.filter(g => g.status === GameStatus.SCHEDULED).sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime()), [filtered]);
+  const sched = useMemo(() => filtered.filter(g => g.status === GameStatus.SCHEDULED).sort((a, b) => gameTimeMs(a.gameTime) - gameTimeMs(b.gameTime)), [filtered]);
   const final = useMemo(() => filtered.filter(g => g.status === GameStatus.FINAL).slice(0, 5), [filtered]);
 
   const openPaywall = useCallback(() => {

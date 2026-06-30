@@ -71,6 +71,7 @@ import {
   teamScoreText,
 } from '@/lib/cricket-score';
 import { isLiveGameLike, isSuspendedGame, suspendedLabel, suspendedReasonText, suspendedResumeText } from '@/lib/game-status';
+import { parseGameTime } from '@/lib/game-time';
 import { getFeaturedWatchOption } from '@/lib/watch-options';
 import { getWatchSourceAppUrl, getWatchSourceUrl } from '@/lib/watch-url';
 import { readFollowedGameIds, toggleFollowedGame } from '@/lib/followed-games';
@@ -1543,8 +1544,8 @@ const COUNTDOWN_WINDOW_SEC = 60 * 60;
 
 function useSecondsUntil(gameTime: string): number {
   const target = useMemo(() => {
-    const t = new Date(gameTime).getTime();
-    return Number.isNaN(t) ? null : t;
+    const parsed = parseGameTime(gameTime);
+    return parsed ? parsed.getTime() : null;
   }, [gameTime]);
   const getDisplaySeconds = useCallback(() => {
     if (target == null) return Number.POSITIVE_INFINITY;
@@ -2052,7 +2053,8 @@ function GameDetailContent() {
                     // For non-live games, show the status (SCHEDULED / FINAL / etc.)
                     // and — for scheduled games — the actual tip-off time underneath.
                     if (game.status === 'SCHEDULED') {
-                      const d = new Date(game.gameTime);
+                      const d = parseGameTime(game.gameTime);
+                      if (!d) return null;
                       const now = new Date();
                       const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
                       const isToday = d.toDateString() === now.toDateString();
