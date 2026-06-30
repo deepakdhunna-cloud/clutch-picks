@@ -1753,8 +1753,16 @@ function GameDetailContent() {
   if (!gameId || (isLoading && !game)) return <GameDetailLoading />;
   if (error || !game) return (
     <View style={{ flex: 1, backgroundColor: '#040608', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' }}>Unable to load game data.</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} style={{ marginTop: 16, minHeight: 44, justifyContent: 'center' }}><Text style={{ color: '#7A9DB8', fontSize: 14, fontWeight: '700' }}>Go Back</Text></Pressable>
+      <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, fontWeight: '700', textAlign: 'center', marginBottom: 4 }}>Couldn't load this game</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, lineHeight: 18, textAlign: 'center', marginBottom: 20 }}>Check your connection and try again.</Text>
+      <PressableScale
+        onPress={() => { void refetch(); }}
+        haptic="tap"
+        style={{ backgroundColor: 'rgba(122,157,184,0.16)', borderWidth: 1, borderColor: 'rgba(122,157,184,0.32)', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 11, minHeight: 44, justifyContent: 'center' }}
+      >
+        <Text style={{ color: '#9BB8CF', fontSize: 14, fontWeight: '700' }}>Try again</Text>
+      </PressableScale>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => guardedRouterBack(router)} style={{ marginTop: 14, minHeight: 44, justifyContent: 'center' }}><Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' }}>Go back</Text></Pressable>
     </View>
   );
   const { homeTeam, awayTeam, prediction } = game;
