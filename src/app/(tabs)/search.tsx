@@ -2424,7 +2424,7 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
           <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 9, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
             <Text style={{ fontSize: 12, lineHeight: 15, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
-          <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+          <View style={{ flex: 1, minWidth: 0, paddingRight: 12, paddingBottom: MATCHUP_CARD_CONTENT_PADDING_Y }}>
             <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={2} style={{ fontSize: 15.5, lineHeight: 21, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
             <Text style={{ fontSize: 11.5, lineHeight: 16.5, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 8 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: MATCHUP_ACCENT_COLOR, fontWeight: '800' }}>{startTime}</Text>
