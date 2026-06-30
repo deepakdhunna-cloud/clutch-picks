@@ -182,15 +182,19 @@ function RootLayoutNav({
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!hasUser || isLoading) return;
-    // Only warm if the cache is empty — don’t stomp a warm cache.
-    const existing = queryClient.getQueryData<unknown[]>(['games']);
-    if (existing && existing.length > 0) return;
+    // ALWAYS consult the network at cold start. We used to skip this when the
+    // cache was already non-empty, but the home hook seeds ['games'] from a
+    // persisted (possibly previous-day) slate before this runs — so skipping
+    // meant the live fetch never happened and the board froze on stale data.
+    // fetchHomeGames is safe to call over a warm cache: it merges and never
+    // overwrites a non-empty slate with an empty one. staleTime 0 ensures it
+    // actually hits the network rather than adopting the seed as "fresh".
     let cancelled = false;
     void queryClient
       .fetchQuery({
         queryKey: ['games'],
         queryFn: () => fetchHomeGames(queryClient),
-        staleTime: 30000,
+        staleTime: 0,
       })
       .catch(() => {
         // Cold-start fetch failed. Remove any empty/errored ['games'] state we

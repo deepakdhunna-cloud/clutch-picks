@@ -58,6 +58,17 @@ const request = async <T>(
     });
   } catch (err: any) {
     clearTimeout(timeoutId);
+    // TEMP diagnostic: record a failed home-games network attempt so the
+    // on-device overlay can distinguish "fetch never ran" from "fetch errored".
+    if (isGet && url.startsWith("/api/games") && !url.includes("/api/games/")) {
+      recordGamesProbe({
+        url: `${baseUrl}${requestUrl}`,
+        status: -1,
+        rawCount: 0,
+        finishedAt: Date.now(),
+        error: err?.name === "AbortError" ? "timeout/abort" : String(err?.message ?? err),
+      });
+    }
     if (err?.name === "AbortError") {
       throw new Error("Request timed out. Please check your connection.");
     }

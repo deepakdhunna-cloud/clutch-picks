@@ -8,7 +8,7 @@ import { enrichCricketLiveGame, enrichCricketLiveGames } from '@/lib/cricket-liv
 import { filterVerifiedGames, isUnverifiedScoreboardGame } from '@/lib/verified-games';
 import { getHomeGamesRequestPlan } from '@/lib/home-games-request-plan';
 import { prepareHomeGamesFirstPaint } from '@/lib/home-games-first-paint';
-import { HOME_GAMES_CACHE_KEY, selectPersistableHomeGames } from '@/lib/home-games-cache';
+import { HOME_GAMES_CACHE_KEY, buildHomeGamesCacheEnvelope, readFreshHomeGamesFromCache } from '@/lib/home-games-cache';
 import { GAME_DETAIL_STALE_TIME_MS, shouldRefetchGameDetailOnMount } from '@/lib/game-detail-load-stability';
 import { mergeGameData, mergeGameLists } from '@/lib/game-cache-merge';
 import { isLiveGameLike, sortSuspendedGamesLast } from '@/lib/game-status';
@@ -281,9 +281,11 @@ export async function fetchHomeGames(
   };
 
   if (firstPaintGames.length > 0) {
+    // Persist as a day-stamped envelope so this slate can only ever seed the
+    // SAME local day's first paint; a previous-day payload is discarded on load.
     void AsyncStorage.setItem(
       HOME_GAMES_CACHE_KEY,
-      JSON.stringify(selectPersistableHomeGames(firstPaintGames)),
+      JSON.stringify(buildHomeGamesCacheEnvelope(firstPaintGames)),
     ).catch(() => {});
   }
 
@@ -297,18 +299,29 @@ export function useGames(options: QueryActivityOptions = {}) {
   const queryClient = useQueryClient();
   const enabled = options.enabled ?? true;
 
+  // First-paint seed contract:
+  //  - The persisted slate is ONLY an instant-paint accelerator. It is read
+  //    through a day-stamped reader, so a previous-day payload is never shown.
+  //  - Seeding the cache must NOT suppress the live fetch. Previously the seed
+  //    filled ['games'], which (with a non-zero staleTime + keepPreviousData)
+  //    let the query treat stale disk data as a fresh result and skip the
+  //    network entirely — the board froze on yesterday's slate. We now force a
+  //    revalidation right after seeding so live data always runs and wins.
   useEffect(() => {
     let cancelled = false;
     if (queryClient.getQueryData<GameWithPrediction[]>(['games'])) return;
 
     void AsyncStorage.getItem(HOME_GAMES_CACHE_KEY)
       .then((raw) => {
-        if (cancelled || !raw) return;
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return;
-        const games = prepareHomeGamesFirstPaint(parsed as GameWithPrediction[]);
-        if (games.length > 0) {
+        if (cancelled) return;
+        const fresh = readFreshHomeGamesFromCache(raw);
+        if (fresh.length === 0) return; // stale/previous-day/empty: let the fetch populate
+        const games = prepareHomeGamesFirstPaint(fresh);
+        if (games.length > 0 && !queryClient.getQueryData<GameWithPrediction[]>(['games'])) {
           queryClient.setQueryData<GameWithPrediction[]>(['games'], games);
+          // Seeded for instant paint — but mark stale and revalidate so the
+          // live network slate replaces it immediately.
+          void queryClient.invalidateQueries({ queryKey: ['games'], exact: true });
         }
       })
       .catch(() => {});
@@ -321,7 +334,12 @@ export function useGames(options: QueryActivityOptions = {}) {
   const query = useQuery({
     queryKey: ['games'],
     queryFn: () => fetchHomeGames(queryClient),
-    staleTime: STALE_TIME,
+    // staleTime 0: the home board is live data and must always revalidate on
+    // mount/focus. The in-flight dedupe in api.get + keepPreviousData keep this
+    // smooth (no blank frame, no refetch storm), while guaranteeing a seeded or
+    // previously-cached slate is always checked against the network.
+    staleTime: 0,
+    refetchOnMount: 'always',
     placeholderData: keepPreviousData,
     select: filterVerifiedGames,
     enabled,
