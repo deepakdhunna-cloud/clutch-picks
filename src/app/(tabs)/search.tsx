@@ -2366,121 +2366,201 @@ function genMatchup(game: GameWithPrediction, usedTypes: Set<DrawType>): { tags:
 // Redesigned to match the Signature Calls (Profile) / Review summary look:
 // near-black panel, subtle white hairline border, a thin accent rail on the
 // left edge, and a tight, properly-aligned internal grid.
-const MATCHUP_CARD_BACKGROUND = '#000000';
-const MATCHUP_CARD_BORDER = 'rgba(255,255,255,0.12)';
-const MATCHUP_RANK_BACKGROUND = 'rgba(255,255,255,0.05)';
-const MATCHUP_RANK_BORDER = 'rgba(255,255,255,0.12)';
-const MATCHUP_CHIP_BACKGROUND = 'rgba(255,255,255,0.04)';
-const MATCHUP_CHIP_BORDER = 'rgba(255,255,255,0.10)';
-const MATCHUP_CTA_BACKGROUND = 'rgba(255,255,255,0.05)';
-const MATCHUP_CTA_BORDER = 'rgba(255,255,255,0.12)';
-// Generous interior padding so card content (rank chip, headline, tag chips,
-// chevron) never crowds the rounded border. X padding is intentionally larger
-// than the maroon accent rail width so text starts clear of the rail.
-const MATCHUP_CARD_CONTENT_PADDING_X = 16;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
-// Minimum collapsed-card height so cards feel substantial and never skinny.
-// Content is vertically centered within this footprint via the Pressable. Sized
-// to comfortably contain the rank chip + two-line headline + a tag row with
-// breathing room above and below.
-const MATCHUP_CARD_MIN_HEIGHT = 0;
-const MATCHUP_RANK_SIZE = 36;
-const MATCHUP_RANK_GAP = 14;
-const MATCHUP_ACTION_SIZE = 30;
-const MATCHUP_ACTION_GAP = 10;
-const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;
-const MATCHUP_ACCENT_RAIL = MAROON;
-const MATCHUP_CARD_RADIUS = 16;
-const MATCHUP_ACCENT_RAIL_WIDTH = 3;
+// ─── MATCHUP CARD ────────────────────────────────────────────────────────────
+// Clean rewrite — no patched constants, no asymmetric hacks.
+// Layout logic:
+//   • Outer card: black bg, 16px radius, 1px border, maroon 3px left rail
+//   • Pressable: 20px padding on ALL sides (top/bottom/left/right)
+//     Left padding is 20px — the rail is absolute-positioned and does NOT
+//     consume layout space, so content starts 20px from the card edge.
+//   • Row: [rank chip 34×34] [14px gap] [text block flex:1] [10px gap] [chevron]
+//   • Text block: title → 8px gap → time+headline → 12px gap → tag chips
+//   • Tag chips: paddingH 10, paddingV 6, 5px gap between chips
+
+const MC_BG            = '#000000';
+const MC_BORDER        = 'rgba(255,255,255,0.12)';
+const MC_RAIL_COLOR    = MAROON;
+const MC_RAIL_W        = 3;
+const MC_RADIUS        = 16;
+const MC_PAD           = 20;   // uniform padding on all four sides
+const MC_RANK_SIZE     = 34;
+const MC_RANK_RADIUS   = 9;
+const MC_RANK_BG       = 'rgba(255,255,255,0.05)';
+const MC_RANK_BORDER   = 'rgba(255,255,255,0.12)';
+const MC_RANK_GAP      = 14;   // gap between rank chip and text block
+const MC_CHEVRON_GAP   = 10;   // gap between text block and chevron
+const MC_CHEVRON_SIZE  = 28;
+const MC_CHIP_BG       = 'rgba(255,255,255,0.04)';
+const MC_CHIP_BORDER   = 'rgba(255,255,255,0.10)';
+const MC_CTA_BG        = 'rgba(255,255,255,0.05)';
+const MC_CTA_BORDER    = 'rgba(255,255,255,0.12)';
+const MC_ACCENT        = ARENA_CHROME_ACCENT;
 
 const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, detail, resetSignal }: { game: GameWithPrediction; rank: number; headline: string; tags: string[]; detail: string; resetSignal?: number }) {
   const { openGame, warmGame } = useGameDetailActions();
   const [expanded, setExpanded] = useState(false);
-  // Start time differentiates same-team games (e.g. an MLB doubleheader = two game
-  // IDs that would otherwise render identical titles). Always-truthful tip-off meta.
   const startTime = useMemo(() => new Date(game.gameTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), [game.gameTime]);
 
-  useEffect(() => {
-    setExpanded(false);
-  }, [game.id, resetSignal]);
+  useEffect(() => { setExpanded(false); }, [game.id, resetSignal]);
 
   return (
-    <View style={{ backgroundColor: MATCHUP_CARD_BACKGROUND, borderRadius: MATCHUP_CARD_RADIUS, borderWidth: 1, borderColor: MATCHUP_CARD_BORDER, marginBottom: PREP_MATCHUP_CARD_GAP, overflow: 'hidden', position: 'relative', shadowColor: '#000000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 8 }}>
-      {/* Left accent rail — matches the Signature Calls card treatment */}
-      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: MATCHUP_ACCENT_RAIL_WIDTH, backgroundColor: MATCHUP_ACCENT_RAIL }} />
+    <View
+      style={{
+        backgroundColor: MC_BG,
+        borderRadius: MC_RADIUS,
+        borderWidth: 1,
+        borderColor: MC_BORDER,
+        marginBottom: PREP_MATCHUP_CARD_GAP,
+        overflow: 'hidden',
+        position: 'relative',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 14,
+        elevation: 8,
+      }}
+    >
+      {/* Left accent rail — absolute, does not affect layout */}
+      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: MC_RAIL_W, backgroundColor: MC_RAIL_COLOR }} />
+
+      {/* ── Collapsed content (always visible) ── */}
       <Pressable
         onPress={() => { fireSelectionHaptic(); setExpanded(e => !e); }}
+        onPressIn={() => warmGame(game)}
         accessibilityRole="button"
-        accessibilityLabel={expanded ? `Collapse matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}` : `Expand matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}
+        accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}
         accessibilityState={{ expanded }}
         style={({ pressed }) => ({
-          paddingTop: MATCHUP_CARD_CONTENT_PADDING_Y + 6,
-          paddingBottom: MATCHUP_CARD_CONTENT_PADDING_Y + 6,
-          paddingLeft: MATCHUP_CARD_CONTENT_PADDING_X + 8,
-          paddingRight: MATCHUP_CARD_CONTENT_PADDING_X,
-          opacity: pressed ? 0.92 : 1,
+          padding: MC_PAD,
+          opacity: pressed ? 0.9 : 1,
         })}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 10, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
-            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
+
+          {/* Rank chip */}
+          <View
+            style={{
+              width: MC_RANK_SIZE,
+              height: MC_RANK_SIZE,
+              borderRadius: MC_RANK_RADIUS,
+              backgroundColor: MC_RANK_BG,
+              borderWidth: 1,
+              borderColor: MC_RANK_BORDER,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              marginRight: MC_RANK_GAP,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '900', color: MC_ACCENT, includeFontPadding: false }}>{rank}</Text>
           </View>
-          <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={2} style={{ fontSize: 15.5, lineHeight: 22, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 11.5, lineHeight: 17, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 10 }} numberOfLines={expanded ? undefined : 2}>
-              <Text style={{ color: MATCHUP_ACCENT_COLOR, fontWeight: '800' }}>{startTime}</Text>
+
+          {/* Text block */}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {/* Title */}
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              numberOfLines={2}
+              style={{ fontSize: 15.5, lineHeight: 21, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}
+            >
+              {matchupTitle(game.awayTeam.name, game.homeTeam.name)}
+            </Text>
+
+            {/* Time + headline */}
+            <Text
+              style={{ fontSize: 11.5, lineHeight: 17, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 8 }}
+              numberOfLines={expanded ? undefined : 2}
+            >
+              <Text style={{ color: MC_ACCENT, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{'  ·  '}</Text>
               {headline}
             </Text>
+
+            {/* Tag chips */}
             {tags.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 14 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 12 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
-                  <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 8, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 11, paddingVertical: 7 }}>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9.5, lineHeight: 13, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}>{tg}</Text>
+                  <View
+                    key={`${tg}-${i}`}
+                    style={{
+                      backgroundColor: MC_CHIP_BG,
+                      borderRadius: 7,
+                      borderWidth: 1,
+                      borderColor: MC_CHIP_BORDER,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <Text
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
+                      numberOfLines={1}
+                      style={{ fontSize: 9.5, lineHeight: 13, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}
+                    >
+                      {tg}
+                    </Text>
                   </View>
                 ))}
               </View>
             ) : null}
           </View>
-          <View style={{ width: MATCHUP_ACTION_SIZE, height: MATCHUP_ACTION_SIZE, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: MATCHUP_ACTION_GAP, marginTop: 2, transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
+
+          {/* Chevron */}
+          <View
+            style={{
+              width: MC_CHEVRON_SIZE,
+              height: MC_CHEVRON_SIZE,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              marginLeft: MC_CHEVRON_GAP,
+              transform: [{ rotate: expanded ? '90deg' : '0deg' }],
+            }}
+          >
             <ChevronRight size={14} color={TEXT_MUTED} strokeWidth={2.4} />
           </View>
         </View>
       </Pressable>
+
+      {/* ── Expanded detail section ── */}
       {expanded ? (
-        <View style={{ paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X, paddingBottom: MATCHUP_CARD_CONTENT_PADDING_Y }}>
-          <View style={{ marginLeft: MATCHUP_RANK_SIZE + MATCHUP_RANK_GAP, marginRight: MATCHUP_ACTION_SIZE + MATCHUP_ACTION_GAP }}>
-            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 11 }} />
-            <Text style={{ fontSize: 12, color: TEXT_SECONDARY, lineHeight: 18.5 }}>{detail}</Text>
-            <Pressable
-              onPressIn={() => warmGame(game)}
-              onPress={() => openGame(game)}
-              accessibilityRole="button"
-              accessibilityLabel={`Open game details for ${game.awayTeam.name} at ${game.homeTeam.name}`}
-              accessibilityHint="Opens game details"
-              style={({ pressed }) => ({
-                marginTop: 12,
-                opacity: pressed ? 0.88 : 1,
-                transform: [{ scale: pressed ? 0.992 : 1 }],
-              })}
+        <View
+          style={{
+            paddingLeft: MC_PAD + MC_RANK_SIZE + MC_RANK_GAP,
+            paddingRight: MC_PAD + MC_CHEVRON_SIZE + MC_CHEVRON_GAP,
+            paddingBottom: MC_PAD,
+          }}
+        >
+          <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 12 }} />
+          <Text style={{ fontSize: 12, color: TEXT_SECONDARY, lineHeight: 18.5 }}>{detail}</Text>
+          <Pressable
+            onPressIn={() => warmGame(game)}
+            onPress={() => openGame(game)}
+            accessibilityRole="button"
+            accessibilityLabel={`Open game details for ${game.awayTeam.name} at ${game.homeTeam.name}`}
+            style={({ pressed }) => ({
+              marginTop: 14,
+              opacity: pressed ? 0.88 : 1,
+              transform: [{ scale: pressed ? 0.992 : 1 }],
+            })}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: MC_CTA_BG,
+                borderWidth: 1,
+                borderColor: MC_CTA_BORDER,
+                borderRadius: 11,
+                height: 40,
+              }}
             >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: MATCHUP_CTA_BACKGROUND,
-                  borderWidth: 1,
-                  borderColor: MATCHUP_CTA_BORDER,
-                  borderRadius: 11,
-                  height: MATCHUP_CARD_CTA_HEIGHT,
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: TEXT_SECONDARY, marginRight: 4 }}>Open Game</Text>
-                <ChevronRight size={12} color={TEXT_MUTED} />
-              </View>
-            </Pressable>
-          </View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: TEXT_SECONDARY, marginRight: 4 }}>Open Game</Text>
+              <ChevronRight size={12} color={TEXT_MUTED} />
+            </View>
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -2874,8 +2954,6 @@ const PREP_MATCHUP_LIMIT = 16;
 const PREP_SUBTAB_MIN_HEIGHT = 34;
 const PREP_SUBTAB_GAP = 4;
 const PREP_SUBTAB_TRACK_INNER_PADDING = 3;
-const MATCHUP_CARD_CTA_HEIGHT = 40;
-const MATCHUP_TAG_ROW_GAP = 5;
 const PREP_MATCHUP_CARD_GAP = 10;
 
 // ─── PREP MODE ───
