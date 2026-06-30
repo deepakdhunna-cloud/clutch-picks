@@ -489,6 +489,7 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: C.TEXT,
+    fontVariant: ['tabular-nums'],
   },
   statRingLabel: {
     fontSize: 8,

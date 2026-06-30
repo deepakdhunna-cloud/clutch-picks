@@ -39,6 +39,7 @@ import { guardedRouterPush } from '@/lib/navigation-guard';
 import { PressableScale } from '@/components/shared/PressableScale';
 import { PRESS_SCALE_CARD } from '@/lib/motion';
 import { haptics } from '@/lib/haptics';
+import { TABULAR_NUMS } from '@/lib/theme';
 
 interface GameCardProps {
   game: GameWithPrediction;
@@ -1235,7 +1236,7 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: awayAccent, marginRight: 5 }} />
-                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', ...TABULAR_NUMS }}>
                       {pickStats.awayWinChance.toFixed(0)}%
                     </Text>
                     <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '600', marginLeft: 4 }}>
@@ -1252,7 +1253,7 @@ export const GameCard = memo(function GameCard({ game, index = 0, canOpen }: Gam
                     <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '600', marginRight: 4 }}>
                       {game.homeTeam.abbreviation}
                     </Text>
-                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', ...TABULAR_NUMS }}>
                       {pickStats.homeWinChance.toFixed(0)}%
                     </Text>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: homeAccent, marginLeft: 5 }} />

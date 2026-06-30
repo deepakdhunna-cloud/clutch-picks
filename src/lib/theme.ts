@@ -84,6 +84,13 @@ export const TYPOGRAPHY = {
   hero: 72,
 };
 
+// ─── Numeric figures ────────────────────────────────────────────────────
+// Use on system-font numbers that update in place (percentages, stats,
+// counts) so digits keep a fixed advance width and never shimmer/reflow as
+// the value changes. Do NOT apply to the VT323 pixel-font scores (already
+// monospace) or to the frozen scoreboard.
+export const TABULAR_NUMS = { fontVariant: ['tabular-nums' as const] };
+
 // ─── Spacing scale ──────────────────────────────────────────────────────
 export const SPACING = {
   xs: 4,

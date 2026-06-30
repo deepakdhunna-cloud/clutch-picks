@@ -392,7 +392,7 @@ function ReliabilityRow({ bucket }: { bucket: ReliabilityBucket }) {
 function StatItem({ label, value, count }: { label: string; value: string; count: number }) {
   return (
     <View style={{ flex: 1, alignItems: 'center' }}>
-      <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800' }}>{value}</Text>
+      <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{value}</Text>
       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600', marginTop: 2 }}>{label}</Text>
       <Text style={{ color: 'rgba(255,255,255,0.2)', fontSize: 9, marginTop: 1 }}>{count} games</Text>
     </View>
@@ -406,7 +406,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 16, marginTop: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   cardTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   cardSubtitle: { color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2 },
-  bigNumber: { fontSize: 40, fontWeight: '900', color: '#FFFFFF' },
+  bigNumber: { fontSize: 40, fontWeight: '900', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
   subtitle: { color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 4, textAlign: 'center' },
   statusBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
@@ -416,11 +416,11 @@ const s = StyleSheet.create({
   bucketLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '600', width: 48 },
   bucketBarBg: { flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden', marginHorizontal: 8 },
   bucketBarFill: { height: '100%', borderRadius: 4 },
-  bucketValue: { color: '#FFFFFF', fontSize: 11, fontWeight: '700', width: 32, textAlign: 'right' },
+  bucketValue: { color: '#FFFFFF', fontSize: 11, fontWeight: '700', width: 32, textAlign: 'right', fontVariant: ['tabular-nums'] },
   bucketCount: { color: 'rgba(255,255,255,0.25)', fontSize: 9, width: 30, textAlign: 'right' },
   sportRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 4 },
   sportName: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', flex: 1 },
-  sportAccuracy: { fontSize: 14, fontWeight: '800', marginRight: 8 },
+  sportAccuracy: { fontSize: 14, fontWeight: '800', marginRight: 8, fontVariant: ['tabular-nums'] },
   sportCount: { color: 'rgba(255,255,255,0.25)', fontSize: 10, width: 60, textAlign: 'right' },
   versionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 4 },
   versionName: { color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: '600', flex: 1, marginRight: 8 },
@@ -429,16 +429,16 @@ const s = StyleSheet.create({
   warningBanner: { marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)' },
   warningText: { color: '#F59E0B', fontSize: 11, lineHeight: 16, marginTop: 2 },
   calHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  calLeague: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+  calLeague: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.5, fontVariant: ['tabular-nums'] },
   calBigRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   calMetricLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: '600', marginTop: 2 },
-  calSampleSize: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  calSampleSize: { color: '#FFFFFF', fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
   calSecondary: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 },
   reliabRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   reliabLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '600', width: 42 },
   reliabBars: { flex: 1, marginHorizontal: 8 },
   reliabBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', marginVertical: 1 },
   reliabBarFill: { height: '100%', borderRadius: 3 },
-  reliabError: { fontSize: 10, fontWeight: '700', width: 46, textAlign: 'right' },
+  reliabError: { fontSize: 10, fontWeight: '700', width: 46, textAlign: 'right', fontVariant: ['tabular-nums'] },
   reliabCount: { color: 'rgba(255,255,255,0.25)', fontSize: 9, width: 30, textAlign: 'right' },
 });

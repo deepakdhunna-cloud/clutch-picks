@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Circle as SvgCircle, Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from 'react-native-svg';
 import { haptics } from '@/lib/haptics';
+import { TABULAR_NUMS } from '@/lib/theme';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useSession, useInvalidateSession } from '@/lib/auth/use-session';
@@ -358,7 +359,7 @@ const RecentPicksSummaryTile = memo(function RecentPicksSummaryTile({
             </View>
           </View>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text adjustsFontSizeToFit numberOfLines={1} style={{ maxWidth: 88, fontSize: 42, lineHeight: 46, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false }}>{totalPicks}</Text>
+            <Text adjustsFontSizeToFit numberOfLines={1} style={{ maxWidth: 88, fontSize: 42, lineHeight: 46, fontWeight: '900', color: C.TEXT_PRIMARY, includeFontPadding: false, ...TABULAR_NUMS }}>{totalPicks}</Text>
           </View>
           <View style={{ alignItems: 'center', paddingTop: 7 }}>
             <Text numberOfLines={1} style={{ fontSize: 9, lineHeight: 11, fontWeight: '900', color: C.TEXT_SECONDARY, letterSpacing: 1.2, includeFontPadding: false }}>PREDICTIONS</Text>
@@ -891,7 +892,7 @@ export default function ProfileScreen() {
                 {/* Bottom divider — visible in middle, fades outward */}
                 <LinearGradient colors={['transparent', 'rgba(122,157,184,0.06)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', bottom: 0, left: 18, right: 18, height: 1 }} />
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 52, fontWeight: '800', color: '#FFFFFF', lineHeight: 52, letterSpacing: -2 }}>{accuracy}%</Text>
+                  <Text style={{ fontSize: 52, fontWeight: '800', color: '#FFFFFF', lineHeight: 52, letterSpacing: -2, ...TABULAR_NUMS }}>{accuracy}%</Text>
                   <View style={{ alignItems: 'flex-end', paddingBottom: 4 }}>
                     <Text style={{ fontSize: 10, fontWeight: '700', color: C.TEXT_MUTED, letterSpacing: 1.5 }}>ACCURACY</Text>
                     {tierBadge ? (
