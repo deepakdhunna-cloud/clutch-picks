@@ -2377,8 +2377,8 @@ const MATCHUP_CTA_BORDER = 'rgba(255,255,255,0.12)';
 // Generous interior padding so card content (rank chip, headline, tag chips,
 // chevron) never crowds the rounded border. X padding is intentionally larger
 // than the maroon accent rail width so text starts clear of the rail.
-const MATCHUP_CARD_CONTENT_PADDING_X = 20;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 20;
+const MATCHUP_CARD_CONTENT_PADDING_X = 16;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 16;
 // Minimum collapsed-card height so cards feel substantial and never skinny.
 // Content is vertically centered within this footprint via the Pressable. Sized
 // to comfortably contain the rank chip + two-line headline + a tag row with
@@ -2414,9 +2414,10 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
         accessibilityLabel={expanded ? `Collapse matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}` : `Expand matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}
         accessibilityState={{ expanded }}
         style={({ pressed }) => ({
-          paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X,
-          paddingTop: MATCHUP_CARD_CONTENT_PADDING_Y,
-          paddingBottom: MATCHUP_CARD_CONTENT_PADDING_Y,
+          paddingLeft: MATCHUP_CARD_CONTENT_PADDING_X + 8,
+          paddingRight: MATCHUP_CARD_CONTENT_PADDING_X,
+          paddingTop: MATCHUP_CARD_CONTENT_PADDING_Y + 6,
+          paddingBottom: 0,
           opacity: pressed ? 0.92 : 1,
         })}
       >
