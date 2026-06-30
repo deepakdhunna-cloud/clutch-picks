@@ -2053,10 +2053,12 @@ function GameDetailContent() {
                       const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                       return (
                         <View style={styles.scheduledHero}>
-                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.scheduledHeroStatus}>
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={styles.scheduledHeroStatus}>
                             Scheduled
                           </Text>
-                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.scheduledHeroTime}>{`${dateLabel} · ${timeLabel}`}</Text>
+                          <View style={styles.scheduledHeroDivider} />
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55} style={styles.scheduledHeroDate}>{dateLabel}</Text>
+                          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55} style={styles.scheduledHeroTime}>{timeLabel}</Text>
                         </View>
                       );
                     }
@@ -2289,9 +2291,11 @@ const styles = StyleSheet.create({
   tennisHeroClock: { marginTop: 12, fontSize: 21, lineHeight: 24, textAlign: 'center' },
   scoreClockStatus: { minWidth: 116, fontSize: 20, color: '#FFFFFF', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 1.2, textAlign: 'center', textTransform: 'uppercase' },
   scoreClockSub: { fontSize: 16, color: 'rgba(255,255,255,0.55)', fontFamily: 'VT323_400Regular', marginTop: 2, letterSpacing: 1.5, textTransform: 'uppercase' },
-  scheduledHero: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', marginTop: 10, paddingHorizontal: 8 },
-  scheduledHeroStatus: { fontSize: 40, lineHeight: 44, color: '#FFFFFF', fontFamily: 'VT323_400Regular', letterSpacing: 4, textAlign: 'center', textTransform: 'uppercase' },
-  scheduledHeroTime: { fontSize: 52, lineHeight: 56, color: 'rgba(255,255,255,0.72)', fontFamily: 'VT323_400Regular', marginTop: 6, letterSpacing: 3, textAlign: 'center', textTransform: 'uppercase' },
+  scheduledHero: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', marginTop: 4, marginBottom: 4, paddingHorizontal: 8 },
+  scheduledHeroStatus: { fontSize: 22, lineHeight: 26, color: 'rgba(255,255,255,0.45)', fontFamily: 'VT323_400Regular', letterSpacing: 6, textAlign: 'center', textTransform: 'uppercase' },
+  scheduledHeroDivider: { width: 48, height: 1, backgroundColor: 'rgba(255,255,255,0.18)', marginVertical: 6 },
+  scheduledHeroDate: { fontSize: 32, lineHeight: 34, color: '#7A9DB8', fontFamily: 'VT323_400Regular', letterSpacing: 4, textAlign: 'center', textTransform: 'uppercase', marginBottom: 2 },
+  scheduledHeroTime: { fontSize: 72, lineHeight: 74, color: '#FFFFFF', fontFamily: 'VT323_400Regular', letterSpacing: 3, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLine: { maxWidth: 188, color: 'rgba(255,255,255,0.82)', fontSize: 10.5, lineHeight: 13, fontWeight: '900', letterSpacing: 0.4, marginTop: 2, textAlign: 'center', textTransform: 'uppercase' },
   cricketRequiredLineAbove: { maxWidth: 220, color: '#FFFFFF', fontSize: 11.5, lineHeight: 14, fontWeight: '900', letterSpacing: 1.4, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
   content: { paddingHorizontal: 16, paddingTop: 8 },
