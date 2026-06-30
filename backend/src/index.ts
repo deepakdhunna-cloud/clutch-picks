@@ -386,19 +386,26 @@ app.delete("/api/me", async (c) => {
 // board while the origin returned today's full slate). Live data must be
 // uncacheable end to end, exactly like a real prediction-market feed.
 //
-// We therefore force `no-store` on the games surface so no layer (device,
-// proxy, or CDN) can ever hand back a stale board. This applies to the exact
-// path AND all sub-paths.
-const applyNoStore = async (c: any, next: any) => {
+// FAST + FRESH policy: the server serves a perpetually-warm in-memory snapshot
+// (refreshed by a 30s background timer), so a VERY SHORT shared cache is the
+// right call. Shared proxies may coalesce bursts for a few seconds; the device
+// itself always revalidates (max-age=0) so the app never reuses a stored body.
+// The stale-day concern is now handled client-side by a day-stamped persisted
+// cache + always-revalidate-on-mount, so a 5s shared cache is safe and yields
+// instant loads instead of the 15-35s blocking we saw under no-store.
+const applyGamesCache = async (c: any, next: any) => {
   await next();
   if (c.res.status === 200) {
-    c.res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    c.res.headers.set('Pragma', 'no-cache');
-    c.res.headers.set('Expires', '0');
+    c.res.headers.set(
+      'Cache-Control',
+      'public, max-age=0, s-maxage=5, stale-while-revalidate=15, must-revalidate',
+    );
+    c.res.headers.delete('Pragma');
+    c.res.headers.delete('Expires');
   }
 };
-app.use('/api/games', applyNoStore);
-app.use('/api/games/*', applyNoStore);
+app.use('/api/games', applyGamesCache);
+app.use('/api/games/*', applyGamesCache);
 
 // Routes
 app.route("/api/picks", picksRouter);

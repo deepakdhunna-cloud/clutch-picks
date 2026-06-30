@@ -3802,12 +3802,27 @@ function refreshHomeSnapshot(): Promise<Game[]> {
   return homeSnapshotInFlight;
 }
 
-// Pre-build the home snapshot at server boot so the FIRST user request after a
-// deploy / cold start is already instant instead of paying the assembly cost.
-// Fire-and-forget: never blocks startup, swallows errors (the route will
-// rebuild on demand if this warm-up fails).
+// Background refresh cadence. The snapshot is kept perpetually warm by a timer
+// that runs INDEPENDENTLY of incoming traffic, so a user request is never the
+// thing that triggers (and blocks on) the 15-35s assembly. This is the core
+// fix for the slow /api/games: serving is always an in-memory read.
+const HOME_SNAPSHOT_REFRESH_INTERVAL_MS = 30 * 1000;
+let homeSnapshotTimer: ReturnType<typeof setInterval> | null = null;
+
+// Pre-build the home snapshot at server boot AND start the background refresher
+// so the snapshot is always warm. Fire-and-forget: never blocks startup,
+// swallows errors (the timer will retry on its next tick).
 export function warmHomeGamesSnapshot(): void {
   void refreshHomeSnapshot().catch(() => {});
+  if (!homeSnapshotTimer) {
+    homeSnapshotTimer = setInterval(() => {
+      void refreshHomeSnapshot().catch(() => {});
+    }, HOME_SNAPSHOT_REFRESH_INTERVAL_MS);
+    // Don't keep the process alive solely for this timer.
+    if (typeof homeSnapshotTimer === "object" && homeSnapshotTimer && "unref" in homeSnapshotTimer) {
+      (homeSnapshotTimer as { unref?: () => void }).unref?.();
+    }
+  }
 }
 
 gamesRouter.get("/", async (c) => {
@@ -3818,21 +3833,34 @@ gamesRouter.get("/", async (c) => {
     // Day-rollover guard: a snapshot assembled on a previous UTC day must never
     // be served. The home coverage window is anchored to assembly time, so a
     // stale-day snapshot is exactly what fed a device its "yesterday" board
-    // after the UTC date advanced. Force a fresh assembly in that case.
+    // after the UTC date advanced.
     const sameUtcDay = snapshot?.assembledUtcDay === currentUtcDay();
 
-    if (snapshot && sameUtcDay && now - snapshot.timestamp <= HOME_SNAPSHOT_MAX_MS) {
-      // Serve instantly. Refresh in the background once it ages past the fresh
-      // window — never block this response on it.
+    // SERVE-NEVER-BLOCK: if we hold ANY same-day snapshot, return it instantly
+    // and let the background timer/refresh keep it current. Serving is always an
+    // in-memory read — a user request must never wait on the 15-35s assembly.
+    // (The background refresher started in warmHomeGamesSnapshot keeps this warm
+    // regardless of traffic; we also kick a refresh here as a belt-and-braces
+    // when it has aged past the fresh window.)
+    if (snapshot && sameUtcDay) {
       if (now - snapshot.timestamp > HOME_SNAPSHOT_FRESH_MS) {
         void refreshHomeSnapshot().catch(() => {});
       }
       return c.json({ data: snapshot.data });
     }
 
-    // No usable snapshot (cold server start, or snapshot past the hard cap):
-    // block once on assembly. Concurrent callers share the same in-flight
-    // promise via refreshHomeSnapshot()'s guard.
+    // If the only snapshot we hold is from a previous UTC day, kick a refresh
+    // and serve it once IF it is still within the hard cap rather than blocking
+    // a user for 15-35s. A near-rollover board is acceptable for a single beat;
+    // the refresh replaces it within ~30s and the day-stamped client cache
+    // prevents it from sticking.
+    if (snapshot && now - snapshot.timestamp <= HOME_SNAPSHOT_MAX_MS) {
+      void refreshHomeSnapshot().catch(() => {});
+      return c.json({ data: snapshot.data });
+    }
+
+    // True cold start only (no snapshot at all): block once on assembly.
+    // Concurrent callers share the same in-flight promise.
     const data = await refreshHomeSnapshot();
     return c.json({ data });
   } catch (error) {

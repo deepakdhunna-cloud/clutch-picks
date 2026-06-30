@@ -20,19 +20,6 @@ const apiErrorMessage = (json: any, status: number) => {
   return `Request failed with status ${status}`;
 };
 
-// IMPORTANT: This sets the cookies/auth token in the headers
-// Append a cache-busting param so neither expo/fetch's underlying URL cache nor
-// any intermediary proxy can serve a stored body for a GET. expo/fetch's
-// RequestInit has no `cache` field (unlike the web Fetch API), so a unique URL
-// per request is the reliable way to guarantee a fresh network hit for live
-// data. This is what prevented a reinstalled device from getting a day-old
-// board. Combined with the backend `no-store` headers, the games board is now
-// uncacheable end to end.
-const withCacheBuster = (url: string): string => {
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}_ts=${Date.now()}`;
-};
-
 const request = async <T>(
   url: string,
   options: { method?: string; body?: string } = {}
@@ -40,9 +27,14 @@ const request = async <T>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-  // Only GETs are cache-bustable/cacheable; leave mutating requests untouched.
+  // No per-request cache-buster: a unique URL per call defeats the backend's
+  // short shared cache (s-maxage) and forced uncached re-assembly, which is what
+  // pushed /api/games to 15-35s. The backend now serves a perpetually-warm
+  // snapshot with a 5s shared cache, and we send `Cache-Control: no-cache` so
+  // the device revalidates rather than reusing a stored body. Stale-day boards
+  // are prevented by the day-stamped persisted client cache + revalidate-on-mount.
   const isGet = !options.method || options.method.toUpperCase() === "GET";
-  const requestUrl = isGet ? withCacheBuster(url) : url;
+  const requestUrl = url;
 
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
