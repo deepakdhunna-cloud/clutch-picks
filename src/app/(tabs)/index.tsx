@@ -1524,8 +1524,12 @@ export default function HomeScreen() {
     index,
   }), []);
 
+  const __dbg = `g=${todaysGames?.length ?? 'nil'} c=${Object.values(gameCounts).reduce((a, b) => a + (b ?? 0), 0)} tc=${Object.values(totalGameCounts).reduce((a, b) => a + (b ?? 0), 0)} L=${isLoadingGames ? 1 : 0} F=${isFetchingGames ? 1 : 0} ever=${hasEverHadGameData ? 1 : 0} init=${isInitialHomeLoading ? 1 : 0} day=${todayStr.slice(5)}`;
   const homeListHeader = useMemo(() => (
     <>
+      <View pointerEvents="none" style={{ paddingHorizontal: 20, paddingVertical: 2 }}>
+        <Text style={{ color: '#7A9DB8', fontSize: 11, fontFamily: 'Courier' }}>{__dbg}</Text>
+      </View>
       <HomeHeader
         filteredLiveGames={filteredLiveGames}
         availableLiveSports={availableLiveSports}
@@ -1596,6 +1600,7 @@ export default function HomeScreen() {
     handleOpenGame,
     handleWarmGame,
     isInitialHomeLoading,
+    __dbg,
     liveSportCounts,
     responsive,
     scrollToHomeBoard,
