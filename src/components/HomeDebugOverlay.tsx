@@ -97,7 +97,7 @@ export function HomeDebugOverlay() {
         </Pressable>
       </View>
       <ScrollView style={{ maxHeight: 280 }}>
-        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r11')}
+        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r12')}
         {line('today (device local)', report.todayStr)}
         {line('raw games in cache', report.rawCount, report.rawCount === 0)}
         {line('passed verified-filter', report.verifiedCount, report.verifiedCount === 0 && report.rawCount > 0)}
