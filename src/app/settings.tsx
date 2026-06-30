@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowLeft, Lock, Shield, FileText, HelpCircle, ChevronRight, Globe, Trash2, CreditCard, LogOut, Crown, RefreshCw, Gift, Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -161,6 +161,25 @@ export default function SettingsScreen() {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const signOutInFlightRef = useRef(false);
   const deleteInFlightRef = useRef(false);
+
+  // ── TEMP runtime diagnostic (remove after debugging) ──────────────────────
+  // Prints exactly what the running app sees: the resolved backend base URL
+  // and the live result of GET /api/games (status + count, or the error).
+  const baseForDiag = (process.env.EXPO_PUBLIC_BACKEND_URL ?? '(undefined)').replace('https://', '');
+  const [diag, setDiag] = useState<string>('probing…');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<any[]>('/api/games');
+        const count = Array.isArray(res) ? res.length : (res == null ? 'null' : typeof res);
+        if (!cancelled) setDiag(`games=${count}`);
+      } catch (e: any) {
+        if (!cancelled) setDiag(`ERR ${String(e?.message ?? e).slice(0, 70)}`);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const { isPremium, checkSubscription } = useSubscription();
   const invalidateSession = useInvalidateSession();
 
@@ -434,6 +453,12 @@ export default function SettingsScreen() {
             </Text>
             <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, marginTop: 2, fontFamily: 'monospace' }}>
               Channel: {Updates.channel ?? 'n/a'}
+            </Text>
+            <Text style={{ color: '#7A9DB8', fontSize: 11, marginTop: 6, fontFamily: 'monospace' }}>
+              base: {baseForDiag}
+            </Text>
+            <Text style={{ color: '#7A9DB8', fontSize: 11, marginTop: 2, fontFamily: 'monospace' }}>
+              probe: {diag}
             </Text>
           </View>
 

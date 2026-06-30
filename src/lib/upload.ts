@@ -10,7 +10,7 @@ const uploadErrorMessage = (data: any) => {
 };
 
 export async function uploadFile(uri: string, filename: string, mimeType: string): Promise<UploadResult> {
-  const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
+  const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
 
   const formData = new FormData();
   formData.append("file", { uri, type: mimeType, name: filename } as any);

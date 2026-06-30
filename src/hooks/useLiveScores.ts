@@ -29,7 +29,8 @@ export interface LiveScore {
   liveState?: GameWithPrediction['liveState'];
 }
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
+// Strip trailing slash(es) so the SSE URL join never produces a double slash.
+const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL ?? '').replace(/\/+$/, '');
 const MIN_RECONNECT_MS = 500;
 const MAX_RECONNECT_MS = 30_000;
 const LIVE_STREAM_STALE_MS = 6_500;

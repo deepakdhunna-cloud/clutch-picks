@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 // applied on device. This is independent of the native build number (which
 // only changes on a full store/TestFlight build), so it is the reliable
 // signal that an over-the-air JS update actually reached the device.
-export const OTA_REVISION = 'home-data-fix r2';
+export const OTA_REVISION = 'r4-slashfix';
 
 export function getAppVersionLabel(): string {
   const version = Constants.expoConfig?.version ?? '1.1.1';

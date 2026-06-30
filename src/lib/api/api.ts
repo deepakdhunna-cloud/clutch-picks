@@ -2,7 +2,12 @@ import { fetch } from "expo/fetch";
 import { getAuthHeaders } from "../auth/auth-client";
 import { definedApiResult, unwrapApiResponse } from "./response";
 
-const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
+// Normalize the backend base URL: strip any trailing slash(es) so that
+// `${baseUrl}${path}` (where path starts with "/") can never produce a
+// double slash like "https://host//api/games", which Hono treats as a
+// different route and returns 404 for. This makes the join robust regardless
+// of how EXPO_PUBLIC_BACKEND_URL is formatted in the build environment.
+const baseUrl = (process.env.EXPO_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
 
 // Deduplicates concurrent GET requests to the same URL
 const inflightRequests = new Map<string, Promise<any>>();
