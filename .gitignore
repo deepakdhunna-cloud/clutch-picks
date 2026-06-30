@@ -60,3 +60,6 @@ private/
 backend/backtest-results/current-engine-historical-2*.json
 
 private_keys/
+node_modules/
+pnpm-lock.yaml
+pnpm-workspace.yaml

@@ -10,8 +10,17 @@ import { recordGamesProbe } from "../debug-net-probe";
 // of how EXPO_PUBLIC_BACKEND_URL is formatted in the build environment.
 const baseUrl = (process.env.EXPO_PUBLIC_BACKEND_URL ?? "").replace(/\/+$/, "");
 
-// Deduplicates concurrent GET requests to the same URL
-const inflightRequests = new Map<string, Promise<any>>();
+const REQUEST_TIMEOUT_MS = 20000;
+
+// Deduplicates concurrent GET requests to the same URL. Each entry is stamped
+// with the time it was created so a hung/never-settling promise can NEVER
+// permanently block future requests: if an entry is older than the request
+// timeout, it is treated as dead and a fresh request is issued. The previous
+// implementation only deleted entries in `.finally()`, so a single stuck fetch
+// would pin a dead promise and every later `api.get(sameUrl)` would await it
+// forever — exactly the "fetch never completes / board stuck" failure mode.
+type InflightEntry = { promise: Promise<any>; createdAt: number };
+const inflightRequests = new Map<string, InflightEntry>();
 
 const apiErrorMessage = (json: any, status: number) => {
   if (typeof json?.error === "string") return json.error;
@@ -20,51 +29,67 @@ const apiErrorMessage = (json: any, status: number) => {
   return `Request failed with status ${status}`;
 };
 
+// Monotonic attempt counter so the on-device probe can prove a NEW request was
+// actually dispatched on each focus/retry (not a reused promise).
+let gamesAttemptSeq = 0;
+
+const isHomeGamesPath = (url: string) =>
+  url.startsWith("/api/games") && !url.includes("/api/games/");
+
 const request = async <T>(
   url: string,
   options: { method?: string; body?: string } = {}
 ): Promise<T> => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  // No per-request cache-buster: a unique URL per call defeats the backend's
-  // short shared cache (s-maxage) and forced uncached re-assembly, which is what
-  // pushed /api/games to 15-35s. The backend now serves a perpetually-warm
-  // snapshot with a 5s shared cache, and we send `Cache-Control: no-cache` so
-  // the device revalidates rather than reusing a stored body. Stale-day boards
-  // are prevented by the day-stamped persisted client cache + revalidate-on-mount.
-  const isGet = !options.method || options.method.toUpperCase() === "GET";
   const requestUrl = url;
-
+  const isHomeGames = isHomeGamesPath(url);
+  const attempt = isHomeGames ? ++gamesAttemptSeq : 0;
   const startedAt = Date.now();
+
+  // Probe: record that a home-games request was actually DISPATCHED. If the
+  // overlay shows phase "started" and it never flips to "done", the fetch is
+  // hanging in the native layer (not "never called").
+  if (isHomeGames) {
+    recordGamesProbe({
+      url: `${baseUrl}${requestUrl}`,
+      status: 0,
+      rawCount: 0,
+      finishedAt: 0,
+      phase: "started",
+      attempt,
+    });
+  }
+
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(`${baseUrl}${requestUrl}`, {
       ...options,
       credentials: "include",
+      // NOTE: We intentionally do NOT set `Accept-Encoding`. It is a
+      // forbidden/managed request header — the native networking layer sets and
+      // negotiates compression itself (the server already gzip-compresses, so
+      // the device receives ~250KB, not the 2.6MB uncompressed body). Setting it
+      // manually in expo/fetch can cause the request to be rejected or
+      // mishandled, which produced a fetch that never resolved on device.
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
-        "Cache-Control": "no-cache",
-        // Explicitly request gzip. The home board is ~2.6MB uncompressed but
-        // ~250KB gzipped; without this header expo/fetch was downloading the
-        // full uncompressed body over LTE, which was slow enough to hit the
-        // 25s client timeout and feel broken. RN decodes gzip natively.
-        "Accept-Encoding": "gzip, deflate",
         ...getAuthHeaders(),
       },
       signal: controller.signal,
     });
   } catch (err: any) {
     clearTimeout(timeoutId);
-    // TEMP diagnostic: record a failed home-games network attempt so the
-    // on-device overlay can distinguish "fetch never ran" from "fetch errored".
-    if (isGet && url.startsWith("/api/games") && !url.includes("/api/games/")) {
+    if (isHomeGames) {
       recordGamesProbe({
         url: `${baseUrl}${requestUrl}`,
         status: -1,
         rawCount: 0,
         finishedAt: Date.now(),
         durationMs: Date.now() - startedAt,
+        phase: "done",
+        attempt,
         error: err?.name === "AbortError" ? "timeout/abort" : String(err?.message ?? err),
       });
     }
@@ -83,18 +108,44 @@ const request = async <T>(
   // 2. JSON responses: parse and unwrap { data }
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) {
-    const json = await response.json();
+    let json: any;
+    try {
+      json = await response.json();
+    } catch (err: any) {
+      if (isHomeGames) {
+        recordGamesProbe({
+          url: `${baseUrl}${requestUrl}`,
+          status: response.status,
+          rawCount: 0,
+          finishedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+          phase: "done",
+          attempt,
+          error: `json-parse: ${String(err?.message ?? err)}`,
+        });
+      }
+      throw err;
+    }
 
-    // Handle error responses from the API
     if (!response.ok) {
+      if (isHomeGames) {
+        recordGamesProbe({
+          url: `${baseUrl}${requestUrl}`,
+          status: response.status,
+          rawCount: 0,
+          finishedAt: Date.now(),
+          durationMs: Date.now() - startedAt,
+          phase: "done",
+          attempt,
+          error: apiErrorMessage(json, response.status),
+        });
+      }
       throw new Error(apiErrorMessage(json, response.status));
     }
 
     const unwrapped = definedApiResult(unwrapApiResponse<T>(json));
 
-    // TEMP diagnostic: record the raw home-games network result so the
-    // on-device overlay can show the unprocessed truth (count + sample row).
-    if (url.startsWith("/api/games") && !url.includes("/api/games/")) {
+    if (isHomeGames) {
       const arr = Array.isArray(unwrapped) ? (unwrapped as any[]) : [];
       const first = arr[0] as any;
       recordGamesProbe({
@@ -103,6 +154,8 @@ const request = async <T>(
         rawCount: arr.length,
         finishedAt: Date.now(),
         durationMs: Date.now() - startedAt,
+        phase: "done",
+        attempt,
         encoding: response.headers.get("content-encoding") ?? "(none)",
         sample: first ? { id: String(first.id), sport: String(first.sport), gameTime: String(first.gameTime) } : undefined,
       });
@@ -113,6 +166,18 @@ const request = async <T>(
 
   // 3. Non-OK non-JSON: throw
   if (!response.ok) {
+    if (isHomeGames) {
+      recordGamesProbe({
+        url: `${baseUrl}${requestUrl}`,
+        status: response.status,
+        rawCount: 0,
+        finishedAt: Date.now(),
+        durationMs: Date.now() - startedAt,
+        phase: "done",
+        attempt,
+        error: `non-json status ${response.status}`,
+      });
+    }
     throw new Error(`Request failed with status ${response.status}`);
   }
 
@@ -124,11 +189,19 @@ const request = async <T>(
 export const api = {
   get: <T>(url: string): Promise<T> => {
     const existing = inflightRequests.get(url);
-    if (existing) return existing as Promise<T>;
+    // Reuse an in-flight promise ONLY if it is recent. A stale entry (older than
+    // the request timeout) means the previous request hung; drop it and start a
+    // fresh one so a single stuck fetch can never permanently block this URL.
+    if (existing && Date.now() - existing.createdAt < REQUEST_TIMEOUT_MS + 2000) {
+      return existing.promise as Promise<T>;
+    }
     const promise = request<T>(url).finally(() => {
-      inflightRequests.delete(url);
+      // Only delete if this exact promise is still the registered one (avoid
+      // deleting a newer entry that replaced a stale one).
+      const cur = inflightRequests.get(url);
+      if (cur && cur.promise === promise) inflightRequests.delete(url);
     });
-    inflightRequests.set(url, promise);
+    inflightRequests.set(url, { promise, createdAt: Date.now() });
     return promise;
   },
   post: <T>(url: string, body: any) =>

@@ -13,6 +13,11 @@ export type GamesNetProbe = {
   error?: string;
   encoding?: string;
   durationMs?: number;
+  // phase: "started" = request dispatched but not yet settled; "done" = settled
+  // (success or error). Lets the overlay distinguish "fetch never called" from
+  // "fetch called but hung/in-flight".
+  phase?: "started" | "done";
+  attempt?: number;
 };
 
 let lastGamesProbe: GamesNetProbe | null = null;

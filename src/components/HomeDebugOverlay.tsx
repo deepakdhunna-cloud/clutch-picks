@@ -98,12 +98,13 @@ export function HomeDebugOverlay() {
         </Pressable>
       </View>
       <ScrollView style={{ maxHeight: 280 }}>
-        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r15')}
+        {line('OTA running', OTA_REVISION, OTA_REVISION !== 'r16')}
         {line('today (device local)', report.todayStr)}
         {(() => { const p = getGamesProbe(); return (
           <View style={{ borderTopColor: '#5A7A8A', borderTopWidth: 1, marginTop: 4, paddingTop: 4 }}>
             <Text style={{ color: '#7A9DB8', fontSize: 11, fontWeight: '900' }}>RAW NETWORK FETCH</Text>
             {p ? (<>
+              {line('net phase', `${p.phase ?? '?'} #${p.attempt ?? 0}`, p.phase === 'started')}
               {line('net status', p.status, p.status !== 200)}
               {line('net raw count', p.rawCount, p.rawCount < 200)}
               {line('net encoding', p.encoding ?? '?', (p.encoding ?? '') !== 'gzip')}
