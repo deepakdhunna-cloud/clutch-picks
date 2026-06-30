@@ -1,6 +1,5 @@
 import { View, Text, Image, ScrollView, FlatList, RefreshControl, Pressable, Modal, TextInput, Platform, StyleSheet } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { HomeDebugOverlay } from '@/components/HomeDebugOverlay';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, {
@@ -1689,7 +1688,6 @@ export default function HomeScreen() {
 
   return (
     <TopInsetView style={{ flex: 1, backgroundColor: '#000000' }}>
-      <HomeDebugOverlay />
       <ErrorBoundary>
       {/* Logo */}
       <View style={{ alignItems: 'center', paddingTop: 16, paddingBottom: 16 }}>

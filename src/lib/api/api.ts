@@ -1,7 +1,6 @@
 import { fetch } from "expo/fetch";
 import { getAuthHeaders } from "../auth/auth-client";
 import { definedApiResult, unwrapApiResponse } from "./response";
-import { recordGamesProbe } from "../debug-net-probe";
 
 // Normalize the backend base URL: strip any trailing slash(es) so that
 // `${baseUrl}${path}` (where path starts with "/") can never produce a
@@ -15,10 +14,10 @@ const REQUEST_TIMEOUT_MS = 20000;
 // Deduplicates concurrent GET requests to the same URL. Each entry is stamped
 // with the time it was created so a hung/never-settling promise can NEVER
 // permanently block future requests: if an entry is older than the request
-// timeout, it is treated as dead and a fresh request is issued. The previous
-// implementation only deleted entries in `.finally()`, so a single stuck fetch
-// would pin a dead promise and every later `api.get(sameUrl)` would await it
-// forever — exactly the "fetch never completes / board stuck" failure mode.
+// timeout, it is treated as dead and a fresh request is issued. A naive
+// implementation that only deletes entries in `.finally()` would let a single
+// stuck fetch pin a dead promise so every later `api.get(sameUrl)` awaits it
+// forever — the "fetch never completes / board stuck" failure mode.
 type InflightEntry = { promise: Promise<any>; createdAt: number };
 const inflightRequests = new Map<string, InflightEntry>();
 
@@ -29,13 +28,6 @@ const apiErrorMessage = (json: any, status: number) => {
   return `Request failed with status ${status}`;
 };
 
-// Monotonic attempt counter so the on-device probe can prove a NEW request was
-// actually dispatched on each focus/retry (not a reused promise).
-let gamesAttemptSeq = 0;
-
-const isHomeGamesPath = (url: string) =>
-  url.startsWith("/api/games") && !url.includes("/api/games/");
-
 const request = async <T>(
   url: string,
   options: { method?: string; body?: string } = {}
@@ -43,36 +35,17 @@ const request = async <T>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const requestUrl = url;
-  const isHomeGames = isHomeGamesPath(url);
-  const attempt = isHomeGames ? ++gamesAttemptSeq : 0;
-  const startedAt = Date.now();
-
-  // Probe: record that a home-games request was actually DISPATCHED. If the
-  // overlay shows phase "started" and it never flips to "done", the fetch is
-  // hanging in the native layer (not "never called").
-  if (isHomeGames) {
-    recordGamesProbe({
-      url: `${baseUrl}${requestUrl}`,
-      status: 0,
-      rawCount: 0,
-      finishedAt: 0,
-      phase: "started",
-      attempt,
-    });
-  }
-
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
-    response = await fetch(`${baseUrl}${requestUrl}`, {
+    response = await fetch(`${baseUrl}${url}`, {
       ...options,
       credentials: "include",
       // NOTE: We intentionally do NOT set `Accept-Encoding`. It is a
       // forbidden/managed request header — the native networking layer sets and
-      // negotiates compression itself (the server already gzip-compresses, so
-      // the device receives ~250KB, not the 2.6MB uncompressed body). Setting it
+      // negotiates compression itself (the server gzip-compresses, so the
+      // device receives ~250KB, not the 2.6MB uncompressed body). Setting it
       // manually in expo/fetch can cause the request to be rejected or
-      // mishandled, which produced a fetch that never resolved on device.
+      // mishandled, producing a fetch that never resolves on device.
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...getAuthHeaders(),
@@ -81,18 +54,6 @@ const request = async <T>(
     });
   } catch (err: any) {
     clearTimeout(timeoutId);
-    if (isHomeGames) {
-      recordGamesProbe({
-        url: `${baseUrl}${requestUrl}`,
-        status: -1,
-        rawCount: 0,
-        finishedAt: Date.now(),
-        durationMs: Date.now() - startedAt,
-        phase: "done",
-        attempt,
-        error: err?.name === "AbortError" ? "timeout/abort" : String(err?.message ?? err),
-      });
-    }
     if (err?.name === "AbortError") {
       throw new Error("Request timed out. Please check your connection.");
     }
@@ -108,76 +69,17 @@ const request = async <T>(
   // 2. JSON responses: parse and unwrap { data }
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) {
-    let json: any;
-    try {
-      json = await response.json();
-    } catch (err: any) {
-      if (isHomeGames) {
-        recordGamesProbe({
-          url: `${baseUrl}${requestUrl}`,
-          status: response.status,
-          rawCount: 0,
-          finishedAt: Date.now(),
-          durationMs: Date.now() - startedAt,
-          phase: "done",
-          attempt,
-          error: `json-parse: ${String(err?.message ?? err)}`,
-        });
-      }
-      throw err;
-    }
+    const json = await response.json();
 
     if (!response.ok) {
-      if (isHomeGames) {
-        recordGamesProbe({
-          url: `${baseUrl}${requestUrl}`,
-          status: response.status,
-          rawCount: 0,
-          finishedAt: Date.now(),
-          durationMs: Date.now() - startedAt,
-          phase: "done",
-          attempt,
-          error: apiErrorMessage(json, response.status),
-        });
-      }
       throw new Error(apiErrorMessage(json, response.status));
     }
 
-    const unwrapped = definedApiResult(unwrapApiResponse<T>(json));
-
-    if (isHomeGames) {
-      const arr = Array.isArray(unwrapped) ? (unwrapped as any[]) : [];
-      const first = arr[0] as any;
-      recordGamesProbe({
-        url: `${baseUrl}${requestUrl}`,
-        status: response.status,
-        rawCount: arr.length,
-        finishedAt: Date.now(),
-        durationMs: Date.now() - startedAt,
-        phase: "done",
-        attempt,
-        encoding: response.headers.get("content-encoding") ?? "(none)",
-        sample: first ? { id: String(first.id), sport: String(first.sport), gameTime: String(first.gameTime) } : undefined,
-      });
-    }
-
-    return unwrapped as T;
+    return definedApiResult(unwrapApiResponse<T>(json)) as T;
   }
 
   // 3. Non-OK non-JSON: throw
   if (!response.ok) {
-    if (isHomeGames) {
-      recordGamesProbe({
-        url: `${baseUrl}${requestUrl}`,
-        status: response.status,
-        rawCount: 0,
-        finishedAt: Date.now(),
-        durationMs: Date.now() - startedAt,
-        phase: "done",
-        attempt,
-        error: `non-json status ${response.status}`,
-      });
-    }
     throw new Error(`Request failed with status ${response.status}`);
   }
 
