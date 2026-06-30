@@ -3846,6 +3846,9 @@ gamesRouter.get("/", async (c) => {
       if (now - snapshot.timestamp > HOME_SNAPSHOT_FRESH_MS) {
         void refreshHomeSnapshot().catch(() => {});
       }
+      c.header("X-Snapshot", "hit");
+      c.header("X-Snapshot-Age-Ms", String(now - snapshot.timestamp));
+      c.header("X-Serve-Ms", String(Date.now() - now));
       return c.json({ data: snapshot.data });
     }
 
@@ -3856,12 +3859,17 @@ gamesRouter.get("/", async (c) => {
     // prevents it from sticking.
     if (snapshot && now - snapshot.timestamp <= HOME_SNAPSHOT_MAX_MS) {
       void refreshHomeSnapshot().catch(() => {});
+      c.header("X-Snapshot", "prevday");
+      c.header("X-Snapshot-Age-Ms", String(now - snapshot.timestamp));
+      c.header("X-Serve-Ms", String(Date.now() - now));
       return c.json({ data: snapshot.data });
     }
 
     // True cold start only (no snapshot at all): block once on assembly.
     // Concurrent callers share the same in-flight promise.
     const data = await refreshHomeSnapshot();
+    c.header("X-Snapshot", snapshot ? "stale-rebuild" : "cold");
+    c.header("X-Serve-Ms", String(Date.now() - now));
     return c.json({ data });
   } catch (error) {
     console.error("Error fetching all games:", error);
