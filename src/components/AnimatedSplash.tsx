@@ -12,6 +12,10 @@ import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+function triggerArrivalHaptic() {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+}
+
 function triggerExitHaptic() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
@@ -52,38 +56,47 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
     if (!isLoading && !hasExitedRef.current) {
       hasExitedRef.current = true;
 
-      // ── Exit sequence (fires as soon as loading is done) ──────────────────
-      // Brief pause so the logo doesn't immediately vanish, then cinematic exit:
-      // logo scales up slightly and dissolves — feels premium, not abrupt.
+      // ── Arrival haptic fires immediately when loading is done ─────────────
+      // This gives the "brand moment" feel — a medium impact as the logo
+      // is about to exit, like a stamp of confidence.
+      triggerArrivalHaptic();
 
-      const hapticTimer = setTimeout(triggerExitHaptic, 80);
+      // ── Exit sequence ─────────────────────────────────────────────────────
+      // Hold for 600ms so the logo gets its moment, then:
+      // - Logo scales up to 1.08 and dissolves over 600ms
+      // - Background overlay fades out simultaneously
+      // - App content fades in underneath
+      // Total duration: ~1.3s — cinematic, not rushed.
 
-      // Logo: hold for 320ms, then scale up to 1.1 and fade out over 420ms
+      // Light haptic fires as the exit begins (at the 600ms hold mark)
+      const exitHapticTimer = setTimeout(triggerExitHaptic, 600);
+
+      // Logo exit: hold 600ms, then scale up + fade out over 600ms
       logoOpacity.value = withDelay(
-        320,
-        withTiming(0, { duration: 420, easing: Easing.in(Easing.cubic) })
+        600,
+        withTiming(0, { duration: 600, easing: Easing.in(Easing.cubic) })
       );
       logoScale.value = withDelay(
-        320,
-        withTiming(1.1, { duration: 460, easing: Easing.in(Easing.cubic) })
+        600,
+        withTiming(1.08, { duration: 650, easing: Easing.in(Easing.cubic) })
       );
 
-      // Background overlay fades out simultaneously with the logo exit
+      // Background overlay fades out with the logo
       bgOpacity.value = withDelay(
-        300,
-        withTiming(0, { duration: 440, easing: Easing.out(Easing.cubic) })
+        580,
+        withTiming(0, { duration: 640, easing: Easing.out(Easing.cubic) })
       );
 
       // App content fades in as the overlay clears
       contentOpacity.value = withDelay(
-        340,
-        withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }, () => {
+        620,
+        withTiming(1, { duration: 580, easing: Easing.out(Easing.cubic) }, () => {
           runOnJS(onAnimationComplete)();
         })
       );
 
       return () => {
-        clearTimeout(hapticTimer);
+        clearTimeout(exitHapticTimer);
       };
     }
   }, [bgOpacity, contentOpacity, isLoading, logoOpacity, logoScale, onAnimationComplete]);

@@ -2377,15 +2377,15 @@ const MATCHUP_CTA_BORDER = 'rgba(255,255,255,0.12)';
 // Generous interior padding so card content (rank chip, headline, tag chips,
 // chevron) never crowds the rounded border. X padding is intentionally larger
 // than the maroon accent rail width so text starts clear of the rail.
-const MATCHUP_CARD_CONTENT_PADDING_X = 20;
-const MATCHUP_CARD_CONTENT_PADDING_Y = 20;
+const MATCHUP_CARD_CONTENT_PADDING_X = 16;
+const MATCHUP_CARD_CONTENT_PADDING_Y = 18;
 // Minimum collapsed-card height so cards feel substantial and never skinny.
 // Content is vertically centered within this footprint via the Pressable. Sized
 // to comfortably contain the rank chip + two-line headline + a tag row with
 // breathing room above and below.
 const MATCHUP_CARD_MIN_HEIGHT = 0;
-const MATCHUP_RANK_SIZE = 30;
-const MATCHUP_RANK_GAP = 12;
+const MATCHUP_RANK_SIZE = 36;
+const MATCHUP_RANK_GAP = 14;
 const MATCHUP_ACTION_SIZE = 30;
 const MATCHUP_ACTION_GAP = 10;
 const MATCHUP_ACCENT_COLOR = ARENA_CHROME_ACCENT;
@@ -2414,27 +2414,29 @@ const MatchupCard = memo(function MatchupCard({ game, rank, headline, tags, deta
         accessibilityLabel={expanded ? `Collapse matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}` : `Expand matchup ${rank}: ${matchupTitle(game.awayTeam.name, game.homeTeam.name)}`}
         accessibilityState={{ expanded }}
         style={({ pressed }) => ({
-          paddingHorizontal: MATCHUP_CARD_CONTENT_PADDING_X,
-          paddingVertical: MATCHUP_CARD_CONTENT_PADDING_Y,
+          paddingTop: MATCHUP_CARD_CONTENT_PADDING_Y + 6,
+          paddingBottom: MATCHUP_CARD_CONTENT_PADDING_Y + 6,
+          paddingLeft: MATCHUP_CARD_CONTENT_PADDING_X + 8,
+          paddingRight: MATCHUP_CARD_CONTENT_PADDING_X,
           opacity: pressed ? 0.92 : 1,
         })}
       >
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 9, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
-            <Text style={{ fontSize: 12, lineHeight: 15, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
+          <View style={{ width: MATCHUP_RANK_SIZE, height: MATCHUP_RANK_SIZE, borderRadius: 10, backgroundColor: MATCHUP_RANK_BACKGROUND, borderWidth: 1, borderColor: MATCHUP_RANK_BORDER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: MATCHUP_RANK_GAP }}>
+            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '900', color: MATCHUP_ACCENT_COLOR, includeFontPadding: false }}>{rank}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-            <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={2} style={{ fontSize: 15.5, lineHeight: 21, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
-            <Text style={{ fontSize: 11.5, lineHeight: 16.5, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 8 }} numberOfLines={expanded ? undefined : 2}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={2} style={{ fontSize: 15.5, lineHeight: 22, fontWeight: '700', color: WHITE, letterSpacing: -0.2 }}>{matchupTitle(game.awayTeam.name, game.homeTeam.name)}</Text>
+            <Text style={{ fontSize: 11.5, lineHeight: 17, fontWeight: '500', color: TEXT_SECONDARY, marginTop: 10 }} numberOfLines={expanded ? undefined : 2}>
               <Text style={{ color: MATCHUP_ACCENT_COLOR, fontWeight: '800' }}>{startTime}</Text>
               <Text style={{ color: TEXT_MUTED }}>{'  ·  '}</Text>
               {headline}
             </Text>
             {tags.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: MATCHUP_TAG_ROW_GAP, marginTop: 14 }}>
                 {tags.slice(0, expanded ? tags.length : 2).map((tg, i) => (
-                  <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 7, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 10, paddingVertical: 6 }}>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9, lineHeight: 12, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}>{tg}</Text>
+                  <View key={`${tg}-${i}`} style={{ backgroundColor: MATCHUP_CHIP_BACKGROUND, borderRadius: 8, borderWidth: 1, borderColor: MATCHUP_CHIP_BORDER, paddingHorizontal: 11, paddingVertical: 7 }}>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={{ fontSize: 9.5, lineHeight: 13, fontWeight: '900', color: TEXT_SECONDARY, letterSpacing: 0.5, includeFontPadding: false }}>{tg}</Text>
                   </View>
                 ))}
               </View>
