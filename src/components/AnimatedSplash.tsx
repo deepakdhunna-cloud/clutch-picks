@@ -14,7 +14,7 @@ import { haptics } from '@/lib/haptics';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function triggerSplashHaptic() {
-  // A single, deliberate brand "thunk" as the logo lands.
+  // A single, deliberate brand "thunk" as the logo settles.
   haptics.impact();
 }
 
@@ -39,94 +39,72 @@ interface AnimatedSplashProps {
 export function AnimatedSplash({ isLoading, onAnimationComplete, children }: AnimatedSplashProps) {
   const hasStartedRef = useRef(false);
 
-  // Keep the clutch moment, but avoid expensive blur layers during cold start.
-  const logoScale = useSharedValue(1);
+  // Keep the exact same visual language as before — a centered logo on a black
+  // field that dissolves into the app. This pass ONLY refines the timing and
+  // easing so the moment feels slower and more satisfying, with a genuinely
+  // smooth hand-off into the app (no visible logo "jump", no abrupt cut).
+  const logoScale = useSharedValue(0.98);
   const logoOpacity = useSharedValue(1);
   const bgOpacity = useSharedValue(1);
-  const flashScale = useSharedValue(0.15);
-  const flashOpacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (!isLoading && !hasStartedRef.current) {
       hasStartedRef.current = true;
 
-      // Haptic fires as the logo begins its punch — feels like impact
-      const hapticTimeout = setTimeout(triggerSplashHaptic, 200);
+      // Haptic fires as the logo settles into place — a single, quiet brand thunk.
+      const hapticTimeout = setTimeout(triggerSplashHaptic, 260);
 
-      // ── Logo: squeeze in, hold a beat, then punch out ──────────────────────
-      // Squeeze down to 0.88 over 200ms, then punch up to 1.22 over 420ms.
-      // The hold between squeeze and punch is baked into the easing curves —
-      // the inOut cubic on the squeeze naturally decelerates into a pause.
-      logoScale.value = withSequence(
-        withTiming(0.88, {
-          duration: 200,
-          easing: Easing.inOut(Easing.cubic),
-        }),
-        withTiming(1.22, {
-          duration: 420,
-          easing: Easing.out(Easing.cubic),
-        })
-      );
+      // ── Logo: a calm, slow settle — no punch, no jump ─────────────────────
+      // Ease gently from 0.98 up to a barely-perceptible 1.03 "breath" over a
+      // long, decelerating curve, then hold. This reads as the logo confidently
+      // arriving rather than snapping. Nothing pops.
+      logoScale.value = withTiming(1.03, {
+        duration: 760,
+        easing: Easing.out(Easing.cubic),
+      });
 
-      // Logo fades out as it punches — starts a touch later so the punch
-      // registers before it dissolves. Total logo visible: ~600ms.
+      // Logo fades out gracefully, well after it has settled, so the arrival
+      // registers calmly before the dissolve begins. Long, soft fade.
       logoOpacity.value = withDelay(
-        280,
+        620,
         withTiming(0, {
-          duration: 380,
-          easing: Easing.out(Easing.cubic),
-        })
-      );
-
-      // ── Flash ring: expands from center as the logo punches ────────────────
-      // Starts slightly after the squeeze completes, blooms outward over 560ms.
-      flashScale.value = withDelay(
-        160,
-        withTiming(1, {
           duration: 560,
-          easing: Easing.out(Easing.cubic),
+          easing: Easing.inOut(Easing.quad),
         })
-      );
-
-      // Flash opacity: quick rise to 0.34, then long graceful fade to 0
-      flashOpacity.value = withDelay(
-        160,
-        withSequence(
-          withTiming(0.34, {
-            duration: 120,
-            easing: Easing.out(Easing.quad),
-          }),
-          withTiming(0, {
-            duration: 460,
-            easing: Easing.out(Easing.cubic),
-          })
-        )
       );
 
       // ── Background + content cross-fade ───────────────────────────────────
-      // Background starts clearing as the logo exits, content rises underneath.
+      // The black field clears and the app content rises underneath with
+      // matching, longer durations and symmetric inOut easing, so the hand-off
+      // is a true smooth dissolve rather than an abrupt cut. The background
+      // begins clearing slightly after the logo starts leaving, and the content
+      // fade is what signals completion.
       bgOpacity.value = withDelay(
-        300,
+        700,
         withTiming(0, {
-          duration: 420,
-          easing: Easing.out(Easing.cubic),
+          duration: 620,
+          easing: Easing.inOut(Easing.quad),
         })
       );
 
       contentOpacity.value = withDelay(
-        280,
-        withTiming(1, {
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
-        }, () => {
-          runOnJS(onAnimationComplete)();
-        })
+        680,
+        withTiming(
+          1,
+          {
+            duration: 640,
+            easing: Easing.inOut(Easing.quad),
+          },
+          () => {
+            runOnJS(onAnimationComplete)();
+          }
+        )
       );
 
       return () => clearTimeout(hapticTimeout);
     }
-  }, [bgOpacity, contentOpacity, flashOpacity, flashScale, isLoading, logoOpacity, logoScale, onAnimationComplete]);
+  }, [bgOpacity, contentOpacity, isLoading, logoOpacity, logoScale, onAnimationComplete]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -135,11 +113,6 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
 
   const bgStyle = useAnimatedStyle(() => ({
     opacity: bgOpacity.value,
-  }));
-
-  const flashStyle = useAnimatedStyle(() => ({
-    opacity: flashOpacity.value,
-    transform: [{ scale: flashScale.value }],
   }));
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -155,11 +128,6 @@ export function AnimatedSplash({ isLoading, onAnimationComplete, children }: Ani
 
       {/* Black background overlay */}
       <Animated.View style={[styles.splashBg, bgStyle]} pointerEvents="none" />
-
-      {/* Lightweight pop flash — no blur view during app startup */}
-      <Animated.View style={styles.flashCenter} pointerEvents="none">
-        <Animated.View style={[styles.flash, flashStyle]} />
-      </Animated.View>
 
       {/* Centered logo */}
       <Animated.View style={[styles.logoWrapper, logoStyle]} pointerEvents="none">
@@ -181,18 +149,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000000',
     zIndex: 50,
-  },
-  flashCenter: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 75,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  flash: {
-    width: SCREEN_WIDTH * 1.9,
-    height: SCREEN_WIDTH * 1.9,
-    borderRadius: SCREEN_WIDTH * 0.95,
-    backgroundColor: 'rgba(122, 157, 184, 0.42)',
   },
   logoWrapper: {
     ...StyleSheet.absoluteFillObject,
